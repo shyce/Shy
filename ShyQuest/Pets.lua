@@ -438,6 +438,7 @@ local function Offered()
 		if not (quest.breadcrumbFor and open[quest.breadcrumbFor]) then
 			for _, token in ipairs(quest.starts) do
 				local npc = token.kind == "n" and D.Npc(token.id)
+				if npc and not L.Friendly(npc) then npc = nil end
 				local map, x, y, yards, dungeon = W.Nearest(npc and npc.places or {})
 				if map and not dungeon and (not best or quest.level < best.quest.level
 					or (quest.level == best.quest.level and (yards or math.huge) < (best.yards or math.huge))) then

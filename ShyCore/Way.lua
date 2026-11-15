@@ -50,6 +50,7 @@ Shy.Way = {
 	Following = Nothing,
 	Flights = Empty,
 	KnowsFlight = function(...) return false end,
+	CanFly = Nothing,
 	Learn = Ignored,
 	Rides = Empty,
 	Stops = Empty,

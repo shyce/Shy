@@ -156,13 +156,13 @@ end
 -- objectives, hand it in).
 local function Written(quest, has)
 	local out = {}
-	if not has.accept then out[#out + 1] = { "accept", Visit(quest.starts[1], { type = "accept", quest = quest.id }) } end
+	if not has.accept then out[#out + 1] = { "accept", Visit(ns.Route.Usable(quest.starts), { type = "accept", quest = quest.id }) } end
 	if not has.complete and not has.collect and #quest.goals > 0 then
 		local tasks = {}
 		for n = 1, #quest.goals do tasks[n] = { type = "objective", quest = quest.id, objective = n } end
 		out[#out + 1] = { "objective", { when = { quest = quest.id, is = "active" }, tasks = tasks } }
 	end
-	if not has.turnin then out[#out + 1] = { "turnin", Visit(quest.ends[1], { type = "turnin", quest = quest.id }) } end
+	if not has.turnin then out[#out + 1] = { "turnin", Visit(ns.Route.Usable(quest.ends), { type = "turnin", quest = quest.id }) } end
 	return out
 end
 
@@ -644,7 +644,7 @@ function Run.Plan(map)
 		local quest = D.Quest(row.id)
 		if quest then
 			row.xp = quest.xp
-			row.giver, row.taker = Who(quest.starts[1]), Who(quest.ends[1])
+			row.giver, row.taker = Who(ns.Route.Usable(quest.starts)), Who(ns.Route.Usable(quest.ends))
 			row.first = First(row.id, {}, 1, { [row.id] = true })
 			if quest.next and quest.next > 0 then row.next = Row(quest.next) end
 		end

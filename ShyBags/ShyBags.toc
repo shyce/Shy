@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffBags|r
 ## Notes: One window for your bags, bank, mail, auctions and gold across every character, with search. |cff888888/shybags|r
 ## Author: Shyce Cream
-## Version: 5.0.5
+## Version: 5.0.6
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyBags\Media\ShyBags
 ## Dependencies: ShyCore

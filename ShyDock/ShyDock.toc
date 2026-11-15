@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffDock|r
 ## Notes: Action bars, chat and damage meter as one console along the bottom of the screen. |cff888888/shydock|r
 ## Author: Shyce Cream
-## Version: 5.0.5
+## Version: 5.0.6
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyDock\Media\ShyDock
 ## Dependencies: ShyCore

@@ -611,7 +611,7 @@ end
 -- someone the hover already names (`said`, Said's). The zone only where it isn't the stop's (`map`).
 local function Back(id, said, map)
 	local quest = D.Quest(id)
-	local ender = quest and quest.ends[1]
+	local ender = quest and R.Usable(quest.ends)
 	local thing = ender and D.Thing(ender.kind, ender.id)
 	if not thing or said[thing.name:lower()] then return nil end
 	local place = thing.places and thing.places[1]

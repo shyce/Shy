@@ -32,6 +32,10 @@
 --                                                      says (one at a time; nil: none)
 --   T.Flights() -> { [node] = true }                   the flight points the character knows
 --   T.KnowsFlight(name) -> bool                        ... one by its name or a part of it ("Crossroads")
+--   T.CanFly(from, to) -> bool or nil                  whether the character can take a flight to the point named
+--        `to` (its name or a part of it): one of their side they know, reached over points they know from the
+--        point at the place `from` (the one beside it, theirs by talking to its master); from nil: from anywhere.
+--        nil where that can't be told: `to` is no flight point of their side
 --   T.Learn(node [, quiet])                            ... one more (the flight master's map teaches them);
 --                                                      quiet: no SHY_TERRAIN (many at once)
 --   T.Kept(ride, seconds [, aboard])                   a ride timed from its stop to where it lands (aboard: from
@@ -186,6 +190,39 @@ function T.KnowsFlight(name)
 	for _, stop in ipairs(m.flights) do
 		if known[stop.node] and stop.name and stop.name:upper():find(wanted, 1, true) then return true end
 	end
+	return false
+end
+
+-- Whether a flight can be taken, as the journeys take them (Graph): to a point the character knows, from any point
+-- of their side (talking to its master gives it), over the points they know between (Shy.Way.Flight.Route).
+local BESIDE = 150           -- yards: a flight point this near a place is the one its flight master gives
+local function Beside(m, place, side)
+	local best, least
+	for _, stop in ipairs(m.flights) do
+		if stop.world == place.world and Mine(stop.whose, side) then
+			local yards = Straight(stop, place)
+			if yards <= BESIDE and (not least or yards < least) then best, least = stop, yards end
+		end
+	end
+	return best
+end
+
+function T.CanFly(from, to)
+	local m = Made()
+	if not (m and type(to) == "string" and to:find("%w")) then return nil end
+	local side, known, wanted = Side(), Known(), to:upper()
+	local start = from and Beside(m, from, side)
+	local named = false
+	for _, stop in ipairs(m.flights) do
+		if Mine(stop.whose, side) and stop.name and stop.name:upper():find(wanted, 1, true) then
+			named = true
+			if known[stop.node] and (not start or (start ~= stop and start.world == stop.world
+				and (not (Flight and T.data.flightPaths) or Flight.Route(start.node, stop.node, known) ~= nil))) then
+				return true
+			end
+		end
+	end
+	if not named then return nil end
 	return false
 end
 
@@ -710,13 +747,12 @@ function T.Following()
 end
 
 -- Flight points learned: every one the flight master's map shows that can be flown to; and the one beside
--- the player (HERE yards) when that map opens (it opens only at a flight master, whose point talking to
+-- the player (BESIDE yards) when that map opens (it opens only at a flight master, whose point talking to
 -- them gives, whatever the map calls it) or the game says a flight path was found.
-local HERE = 150
 local function LearnBeside()
 	local here, m = T.Here(), Made()
 	for _, stop in ipairs(here and m and m.flights or {}) do
-		if stop.world == here.world and Straight(stop, here) <= HERE then T.Learn(stop.node) end
+		if stop.world == here.world and Straight(stop, here) <= BESIDE then T.Learn(stop.node) end
 	end
 end
 -- Flight points the world map shows as known, read by continent (the map itself where it lies on none):

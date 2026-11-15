@@ -117,6 +117,26 @@ local function NearestGiver(tokens)
 	return best
 end
 
+-- Which of a quest's givers or takers (`tokens`) this character goes to: the nearest it can use, else the
+-- first it can use (where the nearest can't be told), else the first of any kind (a start item). A quest
+-- both sides have lists each side's own person: the other side's is never the one.
+function R.Usable(tokens)
+	if not tokens then return nil end
+	local near = NearestGiver(tokens)
+	for _, token in ipairs(tokens) do
+		if near and token.kind == near.kind and token.id == near.thing.id then return token end
+	end
+	for _, token in ipairs(tokens) do
+		if token.kind == "o" or token.kind == "n" then
+			local thing = D.Thing(token.kind, token.id)
+			if thing and (token.kind == "o" or L.Friendly(thing)) then return token end
+		end
+	end
+	for _, token in ipairs(tokens) do
+		if token.kind ~= "n" and token.kind ~= "o" then return token end
+	end
+end
+
 -- Nearest source of an item that starts a quest: { thing, from = "n" drops | "o" holds | "v" sells,
 -- item, chance, map, x, y, yards, dungeon }. Only sources that can be counted on (D.Sure): a long-shot
 -- drop or a rare spawn is no trip to make, so an item with nothing better is no stop until it drops

@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffMaps|r
 ## Notes: The world map with no fog, smooth zoom, the view kept between opens, and your friends on it. |cff888888/shymaps|r
 ## Author: Shyce Cream
-## Version: 5.0.5
+## Version: 5.0.6
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyMaps\Media\ShyMaps
 ## Dependencies: ShyCore

@@ -1179,6 +1179,21 @@ local function HasFlight(name)
 	return Shy.Way.KnowsFlight(name)
 end
 
+-- Whether the flight a step asks for can be taken from its flight master (the step's place), as ShyWay's
+-- journeys take flights (Shy.Way.CanFly): to a point the character knows, over points they know. nil where
+-- that can't be told (ShyWay off, or no flight point of that name).
+local function CanFly(step, name)
+	local from
+	for _, element in ipairs(step.elements) do
+		local at = element.command == "goto" and Place(element)
+		if at and at.continent and at.north then
+			from = Shy.Way.Place(at.continent, at.north, at.west)
+			break
+		end
+	end
+	return Shy.Way.CanFly(from, name and strtrim(name))
+end
+
 -- Profession skill by the guides' name ("cooking", "firstaid"); -1 when not learned.
 local function SkillLevel(name)
 	local line = name and ns.data.routeInfo and ns.data.routeInfo.skills[name:lower()]
@@ -1395,6 +1410,10 @@ local function Judge(guide, step, number, element, latched)
 	elseif command == "fp" then
 		-- Flight points are the route's to send for (Flights.lua): with it, never a step to wait on.
 		return true, latched[number] == true or ns.Flights ~= nil or HasFlight(Args(element)[1])
+	elseif command == "fly" and latched[number] ~= true and CanFly(step, Args(element)[1]) == false then
+		-- A flight the character can't take (a point they don't have yet) is never a step to wait on: the
+		-- way on is the route's, by the ways they have, and the flight point Flights.lua's to send for.
+		return true, true, "grounded"
 	elseif ONCE[command] then
 		-- A .bindlocation in the step answers for .home.
 		if command == "home" and Shape(step).binds then return false end
@@ -1447,7 +1466,7 @@ local function Evaluate(guide, step, bare)
 				end
 				if can or element.text then said = true end
 				part = { element = element, number = number, can = can and not soft, done = done and true or false,
-					soft = soft or nil, parent = shape.parent[number] }
+					soft = soft or nil, parent = shape.parent[number], grounded = how == "grounded" or nil }
 			end
 			parts[#parts + 1] = part
 			parts.of[number] = part
@@ -2974,6 +2993,10 @@ local function Words(part)
 		if said then return ("%s (%d/%d)"):format(said, have, need) end
 		-- Always a line, so a collect-only step has something to show.
 		return id and ("%s: %d/%d"):format(ItemName(id) or "Item", have, need) or nil
+	end
+	if part.grounded then
+		local to = strtrim(element.args or "")
+		return to ~= "" and ("You can't fly to %s from here yet"):format(to) or "You can't fly there from here yet"
 	end
 	if command == "accept" and id and part.can and not part.done then
 		if L.Failed(id) then return "Failed: abandon and retake " .. QuestName(id) end

@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.0.5" src="https://img.shields.io/badge/version-5.0.5-29b3ff"></a>
+  <a href="CHANGELOG.md"><img alt="version 5.0.6" src="https://img.shields.io/badge/version-5.0.6-29b3ff"></a>
   <img alt="released 15 Nov 2026" src="https://img.shields.io/badge/released-15_Nov_2026-4a5568">
-  <img alt="tests 33,833 passed" src="https://img.shields.io/badge/tests-33%2C833_passed-4ade80">
+  <img alt="tests 33,875 passed" src="https://img.shields.io/badge/tests-33%2C875_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,12 +93,11 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.0.5
+## What's new in 5.0.6
 
 ### Fixed
-- **ShyQuest:** A hunter who had already learned to tame was still sent to another race's pet trainer for their taming quests, and after Beast Training for Training the Beast. Those are skipped now, and the quest says you know it already
-- **ShySkin:** After you had arranged your screen, the messages in the middle of it, like quest progress, could stay up for good. They fade after their time again now
-- **ShySkin:** Some drop-down menus kept growing wider each time they opened, until they filled the screen. They stay the size of their choices now
+- **ShyQuest:** The guide could stop at a flight master and wait for you to fly somewhere you hadn't found the flight point for yet. It moves on now and tells you that you can't fly there from here yet
+- **ShyQuest:** Quests both factions share, like Research Access, could send you to the other side's city to pick them up or hand them in. You go to your own side's person now
 
 [Every release](CHANGELOG.md)
 

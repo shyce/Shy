@@ -308,7 +308,7 @@ end
 -- window, so nothing was heard. The guide lets the quest go as it does when a giver's list leaves it out.
 function ns.NotOffered(quest)
 	local data = ns.Data.Quest(quest)
-	local token = data and data.starts[1]
+	local token = data and R.Usable(data.starts)
 	if not token or (token.kind ~= "n" and token.kind ~= "o") then return end
 	local thing = token.kind == "n" and ns.Data.Npc(token.id) or ns.Data.Object(token.id)
 	ns.Log.NotOffered(quest, token.kind .. token.id)

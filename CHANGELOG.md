@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.0.6 (15 Nov 2026)
+
+### Fixed
+- **ShyQuest:** The guide could stop at a flight master and wait for you to fly somewhere you hadn't found the flight point for yet. It moves on now and tells you that you can't fly there from here yet
+- **ShyQuest:** Quests both factions share, like Research Access, could send you to the other side's city to pick them up or hand them in. You go to your own side's person now
+
 ## 5.0.5 (15 Nov 2026)
 
 ### Fixed

@@ -114,7 +114,7 @@ end
 -- Who takes a quest back, where that is someone other than who gives it here: "Deputy Rainer, Elwynn
 -- Forest" (the zone only where it is another).
 local function Back(quest, stop)
-	local ender = quest.ends[1]
+	local ender = R.Usable(quest.ends)
 	if not ender then return nil end
 	for _, start in ipairs(quest.starts) do
 		if start.kind == ender.kind and start.id == ender.id then return nil end

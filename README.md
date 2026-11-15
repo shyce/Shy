@@ -1,26 +1,111 @@
 # Shy
 
+<p align="center"><img src="media/hero.jpg" alt="A fight in Redridge with the whole screen set up" width="100%"></p>
+
 A family of World of Warcraft addons for WoW Forever: quests, maps, bags, unit frames, chat, the auction house
 and more, all in one look you pick once.
 
+## Questing
+
+Your next step is always on screen, with an arrow that takes you there and the route drawn on your map. Take a
+flight and the guide counts down until you land.
+
+<table>
+  <tr>
+    <td width="50%"><img src="media/route.jpg" alt="The route on the map, beside the quest log"></td>
+    <td width="50%"><img src="media/flying.jpg" alt="Flying over Westfall while the guide counts down"></td>
+  </tr>
+</table>
+
+## Dungeons
+
+Every dungeon has its map with the way through, what each boss does, and which of its drops are upgrades for you.
+
+<table>
+  <tr>
+    <td width="50%"><img src="media/dungeon.jpg" alt="The Deadmines, boss by boss, with the upgrades for you"></td>
+    <td width="50%"><img src="media/boss.jpg" alt="One boss: what it does and what it drops for you"></td>
+  </tr>
+</table>
+
+## The auction house
+
+See what's cheap against the market right now, and the best places to farm gold at your level.
+
+<table>
+  <tr>
+    <td width="50%"><img src="media/ah-deals.jpg" alt="Deals under the market, with their price trends"></td>
+    <td width="50%"><img src="media/ah-farm.jpg" alt="The best gold an hour for your level"></td>
+  </tr>
+</table>
+
+## Bags and gear
+
+Search finds an item on any of your characters, in their bags, bank or mail. Point at a piece of gear and see what
+you'd gain and what you'd lose.
+
+<table>
+  <tr>
+    <td width="50%"><img src="media/bags-search.jpg" alt="A search across every character's bags, bank and mail"></td>
+    <td width="50%"><img src="media/gear.jpg" alt="Your character next to a new chest piece, compared"></td>
+  </tr>
+</table>
+
+## Your look
+
+Over thirty themes to pick from, or make your own.
+
+<table>
+  <tr>
+    <td width="50%"><img src="media/stone.jpg" alt="The same kind of fight in another theme"></td>
+    <td width="50%"><img src="media/themes.jpg" alt="Some of the themes"></td>
+  </tr>
+</table>
+
+## Set it up once
+
+The first time you log in on a character, setup opens and walks you through it: your theme, your layout and how
+you want to play your class. It starts on what's recommended, so you can just press Finish. Your keys stay as they
+are unless you pick a layout for them, and if you do, your old hotkeys are saved so you can go back any time.
+
+<table>
+  <tr>
+    <td width="50%"><img src="media/setup.jpg" alt="Everything you picked, on one page"></td>
+    <td width="50%"><img src="media/talents.jpg" alt="Picking how to play a priest"></td>
+  </tr>
+</table>
+
+<p align="center"><img src="media/keys.jpg" alt="Your keys, laid out for how you play" width="80%"></p>
+
+## Professions
+
+Which recipes make money, which lose it, and how likely each one is to give you a skill-up.
+
+<p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
+
 ## Install
 
-Get **Shy** from CurseForge with the CurseForge app (set the game version to WoW Forever first). It brings
-**Shy Ground**, the terrain the addons find routes over, with it.
+Get **Shy** from CurseForge with the CurseForge app (set the game version to WoW Forever first). Add
+**Shy Ground** too if you want routes that follow the terrain; without it, the arrow points straight at where
+you're going.
 
-By hand: copy every folder here, and every folder of the Shy-Ground repository, into
-`World of Warcraft\_forever_\Interface\AddOns`.
+By hand: copy every folder here into `World of Warcraft\_forever_\Interface\AddOns`, and every folder of the
+Shy-Ground repository too if you want it.
 
-Type `/shy` in game to open it.
+In game:
+
+- `/shy setup` walks you through setting up the character you're on, all in one go. It opens by itself the first
+  time you log in on a character, and you can run it again whenever you want a fresh start.
+- `/shy` opens every setting, so you can change one thing at a time. Changes show right away.
 
 ## Community
 
 Questions, bug reports and what's coming next: [join the Discord](https://discord.gg/tuJ8EbDdSU).
 
-## Licence
+## License
 
 Free software under the GNU General Public License, version 3 (`LICENSE.txt` in every folder). It is built
-with others' work: `ShyCore/CREDITS.txt` names each one and its licence, and the same list is in game under
+with others' work: `ShyCore/CREDITS.txt` names each one and its license, and the same list is in game under
 `/shy`, Tools, Sources.
 
 World of Warcraft and its art belong to Blizzard Entertainment. These addons are not made or endorsed by

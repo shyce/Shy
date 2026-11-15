@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffTip|r
 ## Notes: Tooltips at your cursor as compact cards, colored by class and reaction. |cff888888/shytip|r
 ## Author: Shyce Cream
-## Version: 5.0.0
+## Version: 5.0.2
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyTip\Media\ShyTip
 ## Dependencies: ShyCore

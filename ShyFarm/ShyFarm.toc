@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffFarm|r
 ## Notes: What your grinding and fishing are worth: loot, gold an hour, drops and catches, at auction or vendor prices. |cff888888/shyfarm|r
 ## Author: Shyce Cream
-## Version: 5.0.0
+## Version: 5.0.2
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyFarm\Media\ShyFarm
 ## Dependencies: ShyCore

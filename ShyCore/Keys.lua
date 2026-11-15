@@ -872,10 +872,8 @@ end
 --                              laid out again).  -> true, or false in a fight
 --   Keys.Wanted()              whether this character's keys are laid out, or the open setup window means to
 --                              (the bars are then all there, with the flyouts: nothing of a layout hides)
---   Keys.Declined()            this character put its keys back, or said "not now": setup doesn't pick them again
 --
--- core.db.hotkeys (account-wide, kept through a reset and a change of profile) holds mode (the pick), off
--- (the characters who declined) and sets: by the bindings in use ("account" or a character's GUID), was (each
+-- core.db.hotkeys (account-wide, kept through a reset and a change of profile) holds mode (the pick) and sets: by the bindings in use ("account" or a character's GUID), was (each
 -- key changed here -> what it did before, "" for nothing), set (-> what it was set to, "" for let go), on, at.
 
 local Hot = {}
@@ -937,9 +935,9 @@ end
 -- What the core keeps of the hotkeys, account-wide.
 local function HotBook()
 	local db = Shy.core.db
-	if not db then return { sets = {}, off = {} } end   -- (asked before the saved settings are in: nothing kept)
+	if not db then return { sets = {} } end   -- (asked before the saved settings are in: nothing kept)
 	db.hotkeys = db.hotkeys or {}
-	db.hotkeys.sets, db.hotkeys.off = db.hotkeys.sets or {}, db.hotkeys.off or {}
+	db.hotkeys.sets, db.hotkeys.off = db.hotkeys.sets or {}, nil
 	return db.hotkeys
 end
 
@@ -1105,10 +1103,6 @@ function Keys.Mode()
 	local mine = watched[1]
 	if mine and Keys.Has(mine.addon) and not Hot.On() then return "own" end
 	return "shy"
-end
-
-function Keys.Declined()
-	return HotBook().off[UnitGUID("player")] == true
 end
 
 -- The hotkeys a page draws the keys for, whatever is set: "shy" (the board) or "own" (yours: as they are, or
@@ -2024,10 +2018,7 @@ function Keys.Lay(addon, jobs, opts)
 	local hot
 	if Keys.Mode() == "shy" then hot = Hot.Take(opts) end
 	local result = Keys.Apply(addon, jobs, opts)
-	if result then
-		result.hot = hot
-		HotBook().off[UnitGUID("player")] = nil
-	end
+	if result then result.hot = hot end
 	return result
 end
 
@@ -2036,7 +2027,6 @@ function Keys.Unlay(addon)
 	if InCombatLockdown() then return nil, "combat" end
 	local result = Keys.Revert(addon)
 	result.hot = Hot.Back()
-	HotBook().off[UnitGUID("player")] = true
 	return result
 end
 
@@ -3424,7 +3414,7 @@ function Keys.Panel(parent, width, plan)
 			self.status:SetText("No keys for this class yet.")
 		elseif pick == "off" then
 			self.status:SetText(laid and "Finish puts everything back: every button and hotkey as you had it."
-				or "Your keys stay as you have them. Lay them out any time from /shy keys.")
+				or "Your keys stay as you have them. Pick a layout above to give every ability a key.")
 		elseif plan then
 			self.status:SetText(laid and "Your keys are laid out. Finish keeps them, the way you pick here."
 				or "Every ability gets a key, and comes to it as you learn it. Finish lays them out, and what you have now is kept.")
@@ -4143,9 +4133,10 @@ function Keys.Room(parent, width, plan)
 end
 
 -- Setup: your keys as a tab of the talents' page (the subject they share), or a page of their own without it.
--- The pick is the hotkeys' (plan.keys.pick): "shy", the board (recommended: what a character whose keys
--- aren't laid out starts with, unless it put them back or said not now before); "own", your keys as they are;
--- "off", nothing laid out (and keys that are laid out put back). The page draws the keys for the pick and says
+-- The pick is the hotkeys' (plan.keys.pick): "shy", the board (recommended); "own", your keys as they are;
+-- "off", nothing laid out (and keys that are laid out put back). Taken, never given: a character whose keys
+-- aren't laid out starts at "off", so nobody finishes setup to find their hotkeys changed; laid out, they keep
+-- the way they are. The page draws the keys for the pick and says
 -- what of yours changes; Finish does it, with nothing to reload. (Setup is the core's own, loaded before this
 -- file; a test that leaves it out has no window to put the tab in.)
 Keys.STEP = {
@@ -4159,9 +4150,7 @@ Keys.STEP = {
 	end,
 	Plan = function(plan)
 		local mine = Keys.Mine()
-		local pick = "off"
-		if mine and (Keys.Has(mine.addon) or not Keys.Declined()) then pick = Keys.Mode() end
-		plan.keys = { pick = pick }
+		plan.keys = { pick = mine and Keys.Has(mine.addon) and Keys.Mode() or "off" }
 	end,
 	Build = function(parent, width, plan) return Keys.Room(parent, math.min(width, Keys.WIDE + 124), plan) end,
 	Lines = function(plan)
@@ -4193,7 +4182,6 @@ Keys.STEP = {
 		local laid = Keys.Has(mine.addon)
 		if pick == "off" then
 			if laid then Keys.Unlay(mine.addon) end
-			HotBook().off[UnitGUID("player")] = true
 			return false
 		end
 		Keys.SetMode(pick)       -- (keys laid out already are switched at once)

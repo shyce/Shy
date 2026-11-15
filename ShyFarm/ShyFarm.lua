@@ -42,7 +42,7 @@ local T = Shy:NewAddon(ADDON, {
 		auction = true,       -- read prices at the auction house (only when you open it)
 		autoCheck = false,    -- check what wants a price as soon as the auction house opens
 		tell = true,          -- say in chat what a lookup at the auction house found
-		loot = true,          -- looting a favorite with no session starts farming it (not one you just ended)
+		loot = true,          -- looting a favorite with no session starts farming it (not one you ended)
 		idle = 5,             -- minutes with nothing done before the clock stops (0: never)
 		rows = 6,             -- loot rows it is planned at
 		sound = true,         -- a sound when you have what you wanted
@@ -64,16 +64,21 @@ function ns.Apply()
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
--- Something changed that the piece and other addons show: said once, the frame after.
-local soon
+-- Something changed that the piece and other addons show: said the frame after, each kind of change once and in
+-- order (a farm started and stopped in one frame says both), the appliers run once.
+local whys = {}
+local function Say()
+	local said = whys
+	whys = {}
+	for _, why in ipairs(said) do Shy:Fire("SHY_FARM", why) end
+	for _, fn in ipairs(appliers) do fn() end
+end
 function ns.Changed(why)
-	if soon then return end
-	soon = true
-	C_Timer.After(0, function()
-		soon = false
-		Shy:Fire("SHY_FARM", why)
-		for _, fn in ipairs(appliers) do fn() end
-	end)
+	for _, each in ipairs(whys) do
+		if each == why then return end
+	end
+	whys[#whys + 1] = why
+	if #whys == 1 then C_Timer.After(0, Say) end
 end
 
 -- Public
@@ -147,6 +152,10 @@ function T:OnLoad()
 	ns.char = ShyFarmCharDB or {}
 	ShyFarmCharDB = ns.char
 	ns.char.history = ns.char.history or {}
+	-- What you ended farming by hand: { [item] = true } (looting it starts nothing until you farm it again).
+	local ended = ns.char.ended
+	ns.char.ended = type(ended) == "table" and ended or {}
+	if type(ended) == "number" then ns.char.ended[ended] = true end
 	self:RegisterOptions(ns.CreateOptions())
 end
 

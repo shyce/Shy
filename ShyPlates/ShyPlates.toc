@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffPlates|r
 ## Notes: Nameplates with health, cast bars, your debuffs, threat colors and combo points. |cff888888/shyplates|r
 ## Author: Shyce Cream
-## Version: 5.0.0
+## Version: 5.0.2
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyPlates\Media\ShyPlates
 ## Dependencies: ShyCore

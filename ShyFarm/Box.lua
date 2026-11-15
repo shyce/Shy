@@ -16,7 +16,8 @@ local SOURCES_FOR = 10      -- seconds such an answer is kept
 
 local function Session() return S.Current() end
 local function Sampling() return HUD.IsUnlocked() and Session() == nil end
--- (Closed by its ×, it is away for the rest of that session, which goes on counting.)
+-- (Closed by its ×, it is away for the rest of that session, which goes on counting, starting or pausing by
+-- itself; only you bring it back.)
 local function Shown()
 	local s = Session()
 	return (T.db.on and s ~= nil and not s.hidden) or Sampling()
@@ -417,12 +418,11 @@ function Card.Reached(item, goal)
 end
 
 -- Asking to start (or go on): the band in the window, a sound, and a notice a click on which starts it. Said once
--- until answered; ns.Changed paints it.
+-- until answered; ns.Changed paints it. A window you closed stays away: the notice asks.
 local function Ask(s)
 	if s.ask then return end
 	s.ask = true
 	if T.db.sound then PlaySound(SOUNDKIT.READY_CHECK) end
-	s.hidden = nil
 	local N = Shy.Notices
 	local item = s.want and s.want.item
 	if N and N.Post then
@@ -435,12 +435,12 @@ local function Ask(s)
 end
 
 -- Farming started by itself (you got there, or looted what you farm): a chime, the head says so a moment, the window
--- comes up with its band and the figures lit.
+-- shows its band and the figures lit. A window you closed stays away (/shyfarm show, or farming something, brings it).
 function Card.Started(item, how)
 	local N = Shy.Notices
 	local name = C_Item.GetItemNameByID(item) or "it"
 	local s = Session()
-	if s then s.hidden, s.there = nil, time() end
+	if s then s.there = time() end
 	if T.db.sound then PlaySound(SOUNDKIT.UI_WORLDQUEST_START) end
 	local under = how == "there" and "You're there: counting now" or how == "back" and "You're back: counting again"
 		or "You looted it: counting now"

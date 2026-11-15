@@ -3,7 +3,7 @@ Copyright (C) 2026 Shyce Cream
 
 Shy is free software: you can share it and change it under the terms of the
 GNU General Public License, version 3, as published by the Free Software
-Foundation. It comes with no warranty. The licence is LICENSE.txt in every
+Foundation. It comes with no warranty. The license is LICENSE.txt in every
 Shy folder.
 
 World of Warcraft, its art, its names and its game data belong to Blizzard
@@ -36,7 +36,7 @@ Fonts (ShyCore\Media)
     Nunito, Nunito Sans, Noto, Lilita One, Bangers, Saira Stencil One,
     Staatliches, New Rocker and Rye, from Google Fonts
     (https://github.com/google/fonts). SIL Open Font License 1.1, each
-    licence beside its font (OFL-*.txt, OFL.txt).
+    license beside its font (OFL-*.txt, OFL.txt).
 
     BigNoodle Titling Oblique (ShyFrames\Media), by James Arboghast,
     Sentinel Type, 2003. Free to use and to pass on unchanged; its notice

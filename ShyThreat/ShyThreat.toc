@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffThreat|r
 ## Notes: Who has aggro and who is about to pull it, for your group, beside the damage meter. |cff888888/shythreat|r
 ## Author: Shyce Cream
-## Version: 5.0.0
+## Version: 5.0.2
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyThreat\Media\ShyThreat
 ## Dependencies: ShyCore

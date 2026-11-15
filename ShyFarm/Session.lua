@@ -12,6 +12,7 @@
 --                       mobs = { [creature] = { name, corpses, items = { [item] = n } } }, want = { item, goal, done },
 --                       hidden, asked }
 --   ns.char.history = { { began, seconds, value, coin, kills, corpses, catches, map, want, items }, ... } newest first
+--   ns.char.ended = { [item] = true }: what you ended farming by hand, each until you farm it again
 
 local ADDON, ns = ...
 local T = ns.T
@@ -206,7 +207,7 @@ function S.Want(item, goal)
 		ns.char.session = s
 	end
 	s.want = item and { item = item, goal = goal } or nil
-	if item and item == ns.char.ended then ns.char.ended = nil end
+	if item then ns.char.ended[item] = nil end
 	s.hidden, s.asked = nil, nil   -- (farming something brings the window back, and asks again where it drops)
 	if item then
 		P.Facts(item)
@@ -240,8 +241,9 @@ function S.Stop()
 	local kept = { began = s.began, seconds = seconds, value = value, coin = s.coin, kills = S.Kills(s), corpses = s.corpses,
 		catches = s.catches, map = s.map, want = s.want and s.want.item, kind = S.Kind(s), items = s.items }
 	ns.char.session = nil
-	-- (Ended by hand: you're done with it. Looting it starts nothing until you farm it again: Looted.)
-	ns.char.ended = s.want and s.want.item or nil
+	-- (Ended by hand: you're done with it. Looting it starts nothing until you farm it again, however many others
+	-- you farm and end meanwhile: Looted.)
+	if s.want then ns.char.ended[s.want.item] = true end
 	ns.char.last = nil
 	if next(s.items) or s.coin > 0 then
 		table.insert(ns.char.history, 1, kept)
@@ -328,13 +330,13 @@ local function Fishing()
 end
 
 -- With no session, looting a favorite starts farming it, running, so this very loot counts (T.db.loot); the head says
--- so. Never what you just ended: that waits until you farm it again.
+-- so. Never what you ended: that waits until you farm it again.
 local function Looted()
 	if not T.db.loot then return end
 	for _, slot in pairs(loot.slots) do
 		local item = slot.item
 		local fav = T.db.favorites[item]
-		if fav and item ~= ns.char.ended then
+		if fav and not ns.char.ended[item] then
 			S.Want(item, fav and fav.goal or nil)
 			S.Go()
 			if ns.Card and ns.Card.Started then ns.Card.Started(item) end

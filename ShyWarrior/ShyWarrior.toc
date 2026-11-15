@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffWarrior|r
 ## Notes: Lights Overpower, Execute, Revenge and your shout on your cooldowns and bars when they're up, and a light round the screen for full rage and threat. |cff888888/shywarrior|r
 ## Author: Shyce Cream
-## Version: 5.0.0
+## Version: 5.0.2
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyWarrior\Media\ShyWarrior
 ## Dependencies: ShyCore

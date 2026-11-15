@@ -1,0 +1,3 @@
+-- Generated file. Do not edit by hand.
+local _, ns = ...
+ns.shared = {}

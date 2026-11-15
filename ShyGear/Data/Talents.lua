@@ -1,0 +1,45 @@
+-- Generated file. Do not edit by hand.
+-- Talents that change what a stat is worth, by trait entry (what a node's active entry names):
+-- { spell, name, { kind, stats or false, { amount at rank 1, 2, ... } }, ... }. Kinds: stat (percent
+-- more of the stats), armor (percent more from items), spellOf / healOf / apOf (spell damage, healing,
+-- attack power equal to a percent of the stat), crit (percent more crit damage), tap (percent more
+-- spirit after a kill), blast (Arcane Blast known).
+local _, ns = ...
+ns.TALENTS = {
+	[129376] = { 16089, "Elemental Fury", { "crit", false, { 100, 100, 100, 100, 100 } } },
+	[129404] = { 30812, "Mental Quickness", { "healOf", { "int" }, { 15, 30 } }, { "spellOf", { "int" }, { 15, 30 } } },
+	[129406] = { 16252, "Toughness", { "stat", { "sta" }, { 2, 4, 6, 8, 10 } } },
+	[129415] = { 415140, "Mental Dexterity", { "apOf", { "int" }, { 33, 66, 100 } } },
+	[129416] = { 17485, "Ancestral Knowledge", { "stat", { "int" }, { 2, 4, 6, 8, 10 } } },
+	[129426] = { 16089, "Elemental Fury", { "crit", false, { 20, 40, 60, 80, 100 } } },
+	[129442] = { 1223242, "Natural Instinct", { "crit", false, { 20, 20 } }, { "healOf", { "int" }, { 25, 25 } } },
+	[129454] = { 17003, "Heart of the Wild", { "stat", { "int" }, { 10, 10, 10, 10, 10 } } },
+	[129461] = { 16909, "Vengeance", { "crit", false, { 20, 20, 20, 20, 20 } } },
+	[129571] = { 1309631, "Living Spirit", { "stat", { "spi" }, { 5, 10, 15 } } },
+	[129592] = { 16909, "Vengeance", { "crit", false, { 20, 40, 60, 80, 100 } } },
+	[129610] = { 1223242, "Natural Instinct", { "crit", false, { 10, 20 } }, { "healOf", { "int" }, { 12, 25 } } },
+	[129618] = { 17003, "Heart of the Wild", { "stat", { "int" }, { 2, 4, 6, 8, 10 } } },
+	[129646] = { 19168, "Lightning Reflexes", { "stat", { "agi" }, { 3, 6, 9, 12, 15 } } },
+	[129666] = { 19485, "Mortal Shots", { "crit", false, { 6, 12, 18, 24, 30 } } },
+	[129672] = { 1223984, "Careful Aim", { "apOf", { "int" }, { 20, 40, 60, 80, 100 } } },
+	[130026] = { 20257, "Divine Intellect", { "stat", { "int" }, { 2, 4, 6, 8, 10 } } },
+	[130354] = { 20143, "Toughness", { "armor", false, { 2, 4, 6, 8, 10 } } },
+	[130445] = { 14128, "Lethality", { "crit", false, { 10, 20 } } },
+	[130506] = { 11207, "Ice Shards", { "crit", false, { 20, 40, 60, 80, 100 } } },
+	[130529] = { 11232, "Arcane Mind", { "stat", { "int" }, { 2, 4, 6, 8, 10 } }, { "crit", false, { 20, 40, 60, 80, 100 } } },
+	[130535] = { 400574, "Arcane Blast", { "blast", false, { 1 } } },
+	[130546] = { 15473, "Shadowform", { "crit", false, { 100 } } },
+	[130562] = { 15270, "Spirit Tap", { "tap", false, { 20, 40, 60, 80, 100 } } },
+	[130566] = { 18551, "Mental Strength", { "stat", { "int" }, { 2, 4, 6, 8, 10 } } },
+	[130582] = { 14901, "Spiritual Guidance", { "spellOf", { "spi" }, { 1, 3, 5, 6, 8 } }, { "healOf", { "spi" }, { 5, 10, 15, 20, 25 } } },
+	[130613] = { 17959, "Ruin", { "crit", false, { 20, 40, 60, 80, 100 } } },
+	[130637] = { 18697, "Demonic Embrace", { "stat", { "sta" }, { 3, 6, 9, 12, 15 } } },
+	[130647] = { 427712, "Pandemic", { "crit", false, { 33, 67, 100 } } },
+	[130677] = { 16493, "Impale", { "crit", false, { 10, 20 } } },
+	[130703] = { 12299, "Toughness", { "armor", false, { 2, 4, 6, 8, 10 } } },
+	[137392] = { 12299, "Toughness", { "armor", false, { 10 } } },
+	[137851] = { 19168, "Lightning Reflexes", { "stat", { "agi" }, { 3, 6, 9, 12, 15 } } },
+	[137853] = { 1310627, "Predator's Edge", { "crit", false, { 6, 12, 18, 24, 30 } } },
+	[137880] = { 1311084, "Champion of the Light", { "spellOf", { "int" }, { 12, 24, 36, 48, 60 } } },
+	[141292] = { 20262, "Divine Strength", { "stat", { "str" }, { 2, 4, 6, 8, 10 } } },
+}

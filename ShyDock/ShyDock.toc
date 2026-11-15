@@ -1,0 +1,36 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffDock|r
+## Notes: Action bars, chat and damage meter as one console along the bottom of the screen. |cff888888/shydock|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyDock\Media\ShyDock
+## Dependencies: ShyCore
+## OptionalDeps: ShyChat, ShySkin, ShyFrames
+## Group: ShyCore
+## SavedVariables: ShyDockDB
+## SavedVariablesPerCharacter: ShyDockCharDB
+
+ShyDock.lua
+Console.lua
+Housing.lua
+Rack.lua
+Cockpit.lua
+Layout.lua
+Vessel.lua
+Parts.lua
+Deck.lua
+Arrange.lua
+Drawers.lua
+Auras.lua
+Extras.lua
+Move.lua
+Pieces.lua
+NextSwing.lua
+Coatings.lua
+Swing.lua
+Offer.lua
+Picker.lua
+Grow.lua
+Preview.lua
+Options.lua

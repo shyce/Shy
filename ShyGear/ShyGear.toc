@@ -1,0 +1,21 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffGear|r
+## Notes: Marks gear upgrades in your bags and tooltips and picks the best quest reward. |cff888888/shygear|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyGear\Media\ShyGear
+## Dependencies: ShyCore
+## Group: ShyCore
+## SavedVariables: ShyGearDB
+## SavedVariablesPerCharacter: ShyGearCharDB
+
+ShyGear.lua
+Data\Talents.lua
+Items.lua
+Model.lua
+Mark.lua
+Rewards.lua
+Tooltip.lua
+Bags.lua
+Options.lua

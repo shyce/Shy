@@ -1,0 +1,230 @@
+-- The aura row above the name: crowd control from anyone, your debuffs, stealable buffs.
+-- Auras can be secret, so the game's aura container (Blizzard_AuraContainer) filters, sorts and lays them out.
+-- The container can't be reconfigured in combat or while auras are secret: changes wait (Auras.waiting).
+
+local ADDON, ns = ...
+local L, U = ns.Layout, ns.Units
+local UI, Skin = Shy.UI, Shy.Skin
+
+local Auras = {}
+ns.Auras = Auras
+
+local MINE, STEAL = 5, 2   -- max shown; crowd control is one
+
+-- rim: the border's color table (kept by reference so it follows the theme).
+local function Pieces(frame, w, h, rim)
+	frame:SetSize(w, h)
+	local icon = frame:CreateTexture(nil, "ARTWORK")
+	icon:SetPoint("TOPLEFT", 1, -1)
+	icon:SetPoint("BOTTOMRIGHT", -1, 1)
+	-- Crop a square icon to the button's aspect, inside the icon's own border.
+	local crop = (1 - h / w) / 2 * 0.84
+	icon:SetTexCoord(0.08, 0.92, 0.08 + crop, 0.92 - crop)
+	local cooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
+	cooldown:SetAllPoints(icon)
+	cooldown:SetReverse(true)             -- the shade grows as time runs out
+	cooldown:SetDrawEdge(false)
+	cooldown:SetDrawBling(false)
+	cooldown:SetHideCountdownNumbers(true)   -- the time is our own text
+	cooldown:SetSwipeColor(0, 0, 0, 0.55)
+	local over = CreateFrame("Frame", nil, frame)
+	over:SetAllPoints()
+	over:SetFrameLevel(cooldown:GetFrameLevel() + 1)
+	local edge = over:CreateTexture(nil, "BORDER")
+	edge:SetAllPoints()
+	edge:SetTexture(L.EDGE)
+	edge:SetTextureSliceMargins(L.EDGE_SLICE, L.EDGE_SLICE, L.EDGE_SLICE, L.EDGE_SLICE)
+	edge:SetVertexColor(rim[1], rim[2], rim[3])
+	local function Label(size, point, x, y)
+		local fs = over:CreateFontString(nil, "OVERLAY")
+		fs:SetFontObject(UI.NameFont(size, "OUTLINE"))
+		fs:SetShadowColor(0, 0, 0, 1)
+		fs:SetShadowOffset(0.8, -0.8)
+		fs:SetPoint(point, x, y)
+		return fs
+	end
+	local time = Label(9, "CENTER", 0, 0)
+	local count = Label(8, "BOTTOMRIGHT", 1, -1)
+	return { icon = icon, cooldown = cooldown, edge = edge, time = time, count = count, rim = rim }
+end
+
+-- initializeFrame for a group. EnableMouse goes last: if the game refuses it, the button is already complete.
+local function Maker(plate, scale, rim)
+	return function(button)
+		local p = Pieces(button, L.AURA_W * scale, L.AURA_H * scale, rim)
+		table.insert(plate.auraPieces, p)
+		button:SetIcon(p.icon)
+		button:SetDurationCooldown(p.cooldown)
+		button:SetDurationText(p.time)
+		button:SetApplicationCount(p.count)
+		button:EnableMouse(false)
+	end
+end
+
+local function Group(plate, scale, most, rim, filters)
+	return {
+		maxFrameCount = most,
+		initializeFrame = Maker(plate, scale, rim),
+		candidateFilters = filters,
+		sortMethod = AuraContainerSortMethod.Expiration,
+		layout = {
+			elementSpacing = L.AURA_GAP, groupSpacing = L.AURA_GAP,
+			elementWidth = L.AURA_W * scale, elementHeight = L.AURA_H * scale,
+		},
+	}
+end
+
+local GROUPS = { "control", "mine", "steal" }
+
+local function Container(plate)
+	local c = CreateFrame("AuraContainer", nil, plate.root, "CustomAuraContainerTemplate")
+	c:SetPoint("BOTTOM", plate.name, "TOP", 0, L.AURA_RISE)
+	-- The container sizes to its contents, so a single BOTTOM anchor centers the row.
+	c:SetFlowLayoutAnchorPoint("BOTTOMLEFT")
+	c:SetFlowLayoutGrowthDirection(AnchorUtil.FlowDirection.Right, AnchorUtil.FlowDirection.Up)
+	c:SetEnabled(false)
+	c:Hide()
+	c:AddAuraGroup("control", "HARMFUL|CROWD_CONTROL", Group(plate, L.CONTROL, 1, Skin.colors.lit))
+	c:AddAuraGroup("mine", "HARMFUL|PLAYER|!CROWD_CONTROL", Group(plate, 1, MINE, Skin.colors.metal))
+	c:AddAuraGroup("steal", "HELPFUL", Group(plate, 1, STEAL, UI.colors.alert, { isStealable = true }))
+	return c
+end
+
+function Auras.Build(plate)
+	if plate.read ~= U then return end   -- preview plates use Auras.Fake
+	plate.auraPieces, plate.auraSetting = {}, {}
+	plate.auras = Container(plate)
+end
+
+local function Restricted()
+	return InCombatLockdown() or C_Secrets.ShouldAurasBeSecret()
+end
+Auras.Restricted = Restricted
+
+Auras.pending = setmetatable({}, { __mode = "k" })   -- plates whose groups wait for the fight to end
+
+-- The fight is over: each plate that waited has its groups set.
+function Auras.CatchUp()
+	Auras.waiting = false
+	for plate in pairs(Auras.pending) do Auras.Arrange(plate) end
+end
+
+-- Applies settings: enabled groups and scale.
+function Auras.Arrange(plate)
+	local c, db = plate.auras, ns.T.db
+	if plate.read ~= U then
+		Auras.Fake(plate, plate.fakeAuras)
+		return
+	end
+	if not c then return end
+	if Restricted() then
+		-- Retried by Driver.lua once allowed, for this plate alone (Auras.CatchUp): a plate built in a fight
+		-- needs its own groups set, not every plate laid out again.
+		ns.Auras.waiting = true
+		Auras.pending[plate] = true
+		return
+	end
+	Auras.pending[plate] = nil
+	local want = { control = db.control, mine = db.auras, steal = db.steal, scale = db.auraSize }
+	local have = plate.auraSetting
+	for _, key in ipairs(GROUPS) do
+		if have[key] ~= want[key] then
+			c:SetAuraGroupEnabled(key, want[key])
+			have[key] = want[key]
+		end
+	end
+	if have.scale ~= want.scale then
+		c:SetScale(want.scale)
+		have.scale = want.scale
+	end
+end
+
+-- Auras show only for a non-friendly unit on a full plate.
+function Auras.Attach(plate)
+	local c, unit = plate.auras, plate.unit
+	if not c then return end
+	local db = ns.T.db
+	local wanted = unit ~= nil and plate.mode == "full" and (db.auras or db.control or db.steal) and not plate:IsFriend()
+	if not wanted then
+		Auras.Detach(plate)
+		return
+	end
+	if plate.auraUnit ~= unit then
+		c:SetUnit(unit)
+		plate.auraUnit = unit
+	end
+	if not plate.aurasOn then
+		c:SetEnabled(true)
+		c:Show()
+		plate.aurasOn = true
+	end
+end
+
+function Auras.Detach(plate)
+	local c = plate.auras
+	if not c or not plate.aurasOn then return end
+	plate.aurasOn = false
+	c:SetEnabled(false)
+	c:Hide()
+end
+
+-- Repaints borders on a theme change. Skipped while restricted: the borders catch up on the next change.
+function Auras.Paint(plate)
+	if plate.read ~= U then
+		Auras.Fake(plate, plate.fakeAuras)
+	elseif plate.auraPieces and not Restricted() then
+		for _, p in ipairs(plate.auraPieces) do
+			p.edge:SetVertexColor(p.rim[1], p.rim[2], p.rim[3])
+		end
+	end
+end
+
+-- Preview auras. list: { { icon =, time = "6", count = "3", kind = "control" | "steal" | nil } }
+
+local RIMS = { control = Skin.colors.lit, steal = UI.colors.alert }
+
+function Auras.Fake(plate, list)
+	plate.fakeAuras = list
+	local db = ns.T.db
+	local row = plate.fakeRow
+	if not row then
+		row = CreateFrame("Frame", nil, plate.root)
+		row:SetPoint("BOTTOM", plate.name, "TOP", 0, L.AURA_RISE)
+		row.frames = {}
+		plate.fakeRow = row
+	end
+	local shown, width, height = {}, 0, 1
+	if plate.mode == "full" and plate.unit and not plate:IsFriend() then
+		for _, aura in ipairs(list or {}) do
+			local on = db.auras
+			if aura.kind == "control" then on = db.control elseif aura.kind == "steal" then on = db.steal end
+			if on then shown[#shown + 1] = aura end
+		end
+	end
+	for i, frame in ipairs(row.frames) do frame:SetShown(shown[i] ~= nil) end
+	for i, aura in ipairs(shown) do
+		local scale = aura.kind == "control" and L.CONTROL or 1
+		local w, h = L.AURA_W * scale, L.AURA_H * scale
+		local frame = row.frames[i]
+		if not frame then
+			frame = CreateFrame("Frame", nil, row)
+			frame.pieces = Pieces(frame, w, h, Skin.colors.metal)
+			row.frames[i] = frame
+		end
+		local p, rim = frame.pieces, RIMS[aura.kind] or Skin.colors.metal
+		frame:SetSize(w, h)
+		frame:ClearAllPoints()
+		frame:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", width, 0)
+		p.icon:SetTexture(aura.icon)
+		p.edge:SetVertexColor(rim[1], rim[2], rim[3])
+		p.time:SetText(aura.time or "")
+		p.count:SetText(aura.count or "")
+		p.cooldown:Hide()
+		frame:Show()
+		width = width + w + L.AURA_GAP
+		height = math.max(height, h)
+	end
+	row:SetSize(math.max(1, width - L.AURA_GAP), height)
+	row:SetScale(db.auraSize)
+	row:SetShown(#shown > 0)
+end

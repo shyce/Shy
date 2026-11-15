@@ -1,0 +1,22 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffBuffs|r
+## Notes: Buffs and debuffs where you're looking in a fight: the important ones on your frame, the rest by the minimap. |cff888888/shybuffs|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyBuffs\Media\ShyBuffs
+## Dependencies: ShyCore
+## OptionalDeps: ShyFrames, ShySkin, ShyDock
+## Group: ShyCore
+## SavedVariables: ShyBuffsDB
+
+ShyBuffs.lua
+Kit.lua
+Caster.lua
+Shelf.lua
+Plates.lua
+Missing.lua
+Data\Heals.lua
+Grid.lua
+Blizzard.lua
+Options.lua

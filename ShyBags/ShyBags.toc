@@ -1,0 +1,40 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffBags|r
+## Notes: One window for your bags, bank, mail, auctions and gold across every character, with search. |cff888888/shybags|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyBags\Media\ShyBags
+## Dependencies: ShyCore
+## OptionalDeps: ShyGear
+## Group: ShyCore
+## SavedVariables: ShyBagsDB, ShyBagsStore
+
+ShyBags.lua
+Store.lua
+Scan.lua
+Mail.lua
+Auctions.lua
+Ledger.lua
+Index.lua
+Search.lua
+Marks.lua
+Room.lua
+Data\Coatings.lua
+Order.lua
+Takeover.lua
+Tile.lua
+Grid.lua
+Rows.lua
+Views.lua
+Window.lua
+Bank.lua
+Vendor.lua
+BagBar.lua
+BankWindow.lua
+AuctionWindow.lua
+Sellout.lua
+Gear.lua
+Tooltip.lua
+Check.lua
+Options.lua

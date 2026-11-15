@@ -1,0 +1,24 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffWay|r
+## Notes: Finds the quickest route anywhere, on foot or by flight, boat, zeppelin, tram or portal, for the other Shy addons.
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyWay\Media\ShyWay
+## Dependencies: ShyCore
+## Group: ShyCore
+## SavedVariables: ShyWayDB
+
+Way.lua
+Flight.lua
+Ground.lua
+Trail.lua
+Journey.lua
+Ride.lua
+Aloft.lua
+Share.lua
+Offer.lua
+Data\Lifts.lua
+Data\Falls.lua
+Data\Flights.lua
+Data\Transit.lua

@@ -1,0 +1,19 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffChat|r
+## Notes: Restyled chat windows, whisper windows, short channel names, compact lines, timestamps, clickable links, mentions and saved history. |cff888888/shychat|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyChat\Media\ShyChat
+## Dependencies: ShyCore
+## Group: ShyCore
+## SavedVariables: ShyChatDB
+## SavedVariablesPerCharacter: ShyChatHistory
+
+ShyChat.lua
+Format.lua
+Look.lua
+Window.lua
+Whispers.lua
+Bubbles.lua
+Options.lua

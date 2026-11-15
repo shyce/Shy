@@ -1,0 +1,67 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffCore|r
+## Notes: Required by every Shy addon: theme, layout mode, profiles, setup and the /shy hub. |cff888888/shy|r
+## Author: Shyce Cream
+## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyCore\Media\ShyCore
+## SavedVariables: ShyCoreDB
+## AddonCompartmentFunc: ShyCore_OnCompartmentClick
+## AddonCompartmentFuncOnEnter: ShyCore_OnCompartmentEnter
+## AddonCompartmentFuncOnLeave: ShyCore_OnCompartmentLeave
+
+Core.lua
+Errors.lua
+Waypoint.lua
+Theme.lua
+Brand.lua
+UI.lua
+Skin.lua
+Gradient.lua
+Looks\Salvage.lua
+Looks\Charred.lua
+Looks\Comic.lua
+Looks\Heritage.lua
+Looks\Stitched.lua
+Looks\Matrix.lua
+Looks\Grove.lua
+Looks\Galaxy.lua
+Model.lua
+Hover.lua
+Shop.lua
+Fold.lua
+Hub.lua
+Credits.lua
+LookAudit.lua
+Memory.lua
+Counters.lua
+HUD.lua
+Frames.lua
+Top.lua
+Notices.lua
+Alarm.lua
+Editor.lua
+Grip.lua
+Drawer.lua
+Minimap.lua
+Maps.lua
+Trip.lua
+Way.lua
+Setup.lua
+Chooser.lua
+Immersion.lua
+Screen.lua
+Voice.lua
+Away.lua
+Talk.lua
+Stage.lua
+Client.lua
+Countdown.lua
+Lineup.lua
+Keys.lua
+Data\Client.lua
+Data\Lineups.lua
+Data\KeyTalents.lua
+Data\Instances.lua
+Instances.lua

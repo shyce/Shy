@@ -1,0 +1,50 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffMaps|r
+## Notes: The world map with no fog, smooth zoom, the view kept between opens, and your friends on it. |cff888888/shymaps|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyMaps\Media\ShyMaps
+## Dependencies: ShyCore
+## OptionalDeps: ShyWay, ShyQuest, ShyGear, ShyGroup
+## Group: ShyCore
+## SavedVariables: ShyMapsDB
+
+ShyMaps.lua
+Data\Fog.lua
+Data\Overhead.lua
+Data\Travel.lua
+Data\Lod.lua
+Data\Seas.lua
+Data\Fishing.lua
+Data\Indoors.lua
+Data\Dungeons.lua
+Data\DungeonLoot.lua
+Data\DungeonFloors.lua
+Data\DungeonSets.lua
+View.lua
+Art.lua
+Terrain.lua
+Indoors.lua
+Steps.lua
+Nav.lua
+Labels.lua
+Units.lua
+Places.lua
+Rares.lua
+Travel.lua
+Friends.lua
+Controls.lua
+Shares.lua
+Notes.lua
+Overlay.lua
+Window.lua
+Dungeons.lua
+DungeonSeen.lua
+DungeonRun.lua
+DungeonLoot.lua
+DungeonBoss.lua
+DungeonFloors.lua
+DungeonWindow.lua
+Sides.lua
+Options.lua

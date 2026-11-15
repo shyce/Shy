@@ -1,0 +1,4 @@
+<Bindings>
+	<Binding name="CLICK ShyMapsOverlayKey:LeftButton" header="SHYMAPS" category="ADDONS"/>
+	<Binding name="CLICK ShyMapsWindowKey:LeftButton" category="ADDONS"/>
+</Bindings>

@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffHots|r
+## Notes: Tracks the healing your HoTs have left to tick, so unit frames show it past the end of each health bar. |cff888888/shyhots|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyHots\Media\ShyHots
+## Dependencies: ShyCore
+## Group: ShyCore
+## SavedVariables: ShyHotsDB
+
+ShyHots.lua
+Data\Hots.lua
+Track.lua
+Options.lua

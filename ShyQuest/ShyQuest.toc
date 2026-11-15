@@ -1,0 +1,92 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffQuest|r
+## Notes: Shows your next quest step, where to go and what drops what you need, plus leveling guides for levels 1 to 30. |cff888888/shyquest|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyQuest\Media\ShyQuest
+## Dependencies: ShyCore
+## OptionalDeps: ShyWay, ShyXP
+## Group: ShyCore
+## SavedVariables: ShyQuestDB
+## SavedVariablesPerCharacter: ShyQuestCharDB
+
+ShyQuest.lua
+Data\Quests.lua
+Data\Npcs.lua
+Data\Objects.lua
+Data\Items.lua
+Data\Dungeons.lua
+Data\Starts.lua
+Data\Town.lua
+Data\ByHand.lua
+Data\Escorts.lua
+Data\EscortWays.lua
+Data\Summons.lua
+Data\Looks.lua
+Data\Levels.lua
+Data\Routes.lua
+Data\Specs.lua
+Data\Supplies.lua
+Data\Kit.lua
+Data\Spots.lua
+Data\Offers.lua
+Data.lua
+World.lua
+Log.lua
+Zones.lua
+Guide.lua
+Route.lua
+Plan.lua
+Tips.lua
+XP.lua
+Marks.lua
+Card.lua
+GuideWindow.lua
+Tracker.lua
+Look.lua
+Ground.lua
+Pins.lua
+Ways.lua
+Options.lua
+Index.lua
+Yield.lua
+Wire.lua
+Party.lua
+Notice.lua
+Hover.lua
+Plates.lua
+Beside.lua
+Why.lua
+Find.lua
+OptionsWorld.lua
+GuideChecks.lua
+GuideButtons.lua
+GuideTalk.lua
+GuideTimers.lua
+GuideBank.lua
+Stash.lua
+Train.lua
+Bags.lua
+Spec.lua
+Dungeons.lua
+Run.lua
+Legacy.lua
+Supplies.lua
+Aid.lua
+Hearth.lua
+Flights.lua
+Weapons.lua
+Pets.lua
+Camp.lua
+Safety.lua
+DeathWords.lua
+Death.lua
+Spots.lua
+Escort.lua
+Glide.lua
+CardHover.lua
+Arrow.lua
+LogRows.lua
+Offer.lua
+Survey.lua

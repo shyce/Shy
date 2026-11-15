@@ -1,0 +1,21 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffMonitor|r
+## Notes: The task manager: what every addon costs your game, from all of them together down to what's behind each number. |cff888888/shymon|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyMonitor\Media\ShyMonitor
+## LoadOnDemand: 1
+## Dependencies: ShyCore
+## Group: ShyCore
+## SavedVariables: ShyMonitorDB
+
+ShyMonitor.lua
+Ring.lua
+Samples.lua
+Window.lua
+Memory.lua
+Copy.lua
+Addons.lua
+Addon.lua
+Clock.lua

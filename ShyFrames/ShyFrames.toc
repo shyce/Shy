@@ -1,0 +1,25 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffFrames|r
+## Notes: Compact unit frames for you, your target, target's target, pet, focus and party, with colored health bars and combo points. |cff888888/shyframes|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyFrames\Media\ShyFrames
+## Dependencies: ShyCore
+## OptionalDeps: ShyDock, ShySkin, ShyDots, ShyHots
+## Group: ShyCore
+## SavedVariables: ShyFramesDB
+
+ShyFrames.lua
+Layout.lua
+Units.lua
+Texts.lua
+Plate.lua
+Dots.lua
+Hots.lua
+Frames.lua
+Fader.lua
+Place.lua
+Clicks.lua
+Blizzard.lua
+Options.lua

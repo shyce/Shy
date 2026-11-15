@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="SHYGROUP_TOGGLE" header="SHYGROUP" category="ADDONS">
+		ShyGroup_Toggle();
+	</Binding>
+</Bindings>

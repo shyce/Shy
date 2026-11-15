@@ -1,0 +1,40 @@
+Where the files in this folder came from.
+
+Hatch.tga, HatchTall.tga
+    The fill of every bar that shows an amount (Shy.Skin.HATCH, and
+    Shy.Skin.HATCH_TALL for the tall plaque): a rounded bar's light crossed
+    by a weave of fine diagonal lines, one every 6 pixels, deepest through
+    the middle. 252 x 32 (60 rows tall), grey, seamless where it repeats.
+    Original work, drawn from numbers.
+
+LilitaOne.ttf
+    The display font, Latin only, for Shy's own words. SIL Open Font
+    License: OFL.txt beside it.
+
+NunitoExtraBold.ttf
+    The rounded font, for names and numbers: Nunito at weight 800, a
+    static cut of its variable font (github.com/google/fonts, ofl/nunito).
+    SIL Open Font License: OFL-Nunito.txt beside it. In Lua it is
+    Shy.FONT_ROUNDED.
+
+NunitoSansText.ttf, NunitoSansTextLarge.ttf
+    The text font, for running text such as chat lines: Nunito Sans,
+    semi-condensed, at weight 600 for sizes under 16 and 540 from 16 up
+    (400 is regular, 700 bold). Static cuts of Nunito Sans' variable font
+    (github.com/google/fonts, ofl/nunitosans), under the SIL Open Font
+    License: OFL-NunitoSans.txt beside them. In Lua they are Shy.FONT_TEXT
+    and Shy.FONT_TEXT_LARGE, and Shy.UI.TextFont picks between them.
+
+    The rounded and text fonts also carry every character a player can
+    type that isn't Chinese or Korean: Greek, Thai, more Latin and
+    Cyrillic, symbols, arrows, box drawing and one-color emoji, drawn in
+    from the Noto fonts (github.com/google/fonts: ofl/notosans,
+    notosansthai, notosanssymbols, notosanssymbols2, notosansmath,
+    notosansmono, notoemoji), under the SIL Open Font License:
+    OFL-Noto.txt beside them. Chinese and Korean come from the game's own
+    fonts through Shy.UI.NameFont.
+
+Everything else (the icons, Bar, Frame, FrameGlow, Well, PanelEdge, Bracket,
+Cap, Facet, Rib, Gloss, Glow, Sheen, Grip, GripLock, the slot, hover and
+glyph art)
+    Original to this addon.

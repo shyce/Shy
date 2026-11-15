@@ -1,0 +1,7 @@
+<Bindings>
+	<Binding name="CLICK ShyQuestTarget1:LeftButton" header="SHYQUEST" category="ADDONS"/>
+	<Binding name="CLICK ShyQuestUse1:LeftButton" category="ADDONS"/>
+	<Binding name="SHYQUEST_ARROW" category="ADDONS">
+		ShyQuestToggleArrow()
+	</Binding>
+</Bindings>

@@ -1,0 +1,19 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffXP|r
+## Notes: XP per hour, time to level, quest XP ready to turn in, kills to level and rested XP on your XP bar. |cff888888/shyxp|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyXP\Media\ShyXP
+## Dependencies: ShyCore
+## Group: ShyCore
+## SavedVariables: ShyXPDB
+## SavedVariablesPerCharacter: ShyXPCharDB
+
+ShyXP.lua
+XPBar.lua
+Bar.lua
+Box.lua
+API.lua
+Splits.lua
+Options.lua

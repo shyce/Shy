@@ -1,0 +1,53 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffSkin|r
+## Notes: Restyles the default UI in graphite and steel with your accent color. Each part toggles without a reload. |cff888888/shyskin|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShySkin\Media\ShySkin
+## Dependencies: ShyCore
+## Group: ShyCore
+## SavedVariables: ShySkinDB
+
+ShySkin.lua
+Widgets.lua
+Character.lua
+Bars.lua
+Bags.lua
+BagBar.lua
+Menu.lua
+Dropdowns.lua
+Meter.lua
+UnitFrames.lua
+CastBars.lua
+Personal.lua
+Auras.lua
+Cooldowns.lua
+Minimap.lua
+Tracking.lua
+WorldMap.lua
+EditMode.lua
+Messages.lua
+Durability.lua
+Zone.lua
+Timers.lua
+Reporter.lua
+GameMenu.lua
+Popups.lua
+Alerts.lua
+Book.lua
+Quest.lua
+Shop.lua
+Mail.lua
+Merchant.lua
+Trainer.lua
+Flights.lua
+Data\Recipes.lua
+Professions.lua
+Social.lua
+Guild.lua
+Talents.lua
+Keys.lua
+TalentWindow.lua
+Spellbook.lua
+Options.lua

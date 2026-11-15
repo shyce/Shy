@@ -1,0 +1,22 @@
+Where the files in this folder came from.
+
+The name font is someone else's, passed on unchanged. Everything else was
+made for ShyFrames. The bars' fill is ShyCore's (Shy.Skin.HATCH).
+
+BigNoodleTitling-Oblique.ttf
+    The name font.
+    By James Arboghast / Sentinel Type, 2003. Free to use and to pass on with
+    its documentation intact; not to be sold, renamed or altered without the
+    author's permission. Its notice, as the font carries it, is beside it:
+    BigNoodleTitling-README.txt.
+
+ShyFrames.tga, ShyFramesSmall.tga and their Mono twins
+    The addon's icons. Original work.
+
+RiserFill.tga, RiserEdge.tga
+    The housing on a plate's top edge, for the buff check and combo points.
+Blade.tga, BladeWell.tga, BladeGlow.tga
+    A combo point: a blade, its empty well and its glow.
+    All five are original work.
+
+Numbers are set in ShyCore\Media\NunitoExtraBold.ttf.

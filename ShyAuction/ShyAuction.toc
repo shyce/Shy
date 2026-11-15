@@ -1,0 +1,27 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffAuction|r
+## Notes: The auction house and what everything sells for: whole-house scans, one price book, your realm's prices shared. |cff888888/shyauction|r
+## Author: Shyce Cream
+## Version: 5.0.0
+## X-Date: 2026-11-15
+## IconTexture: Interface\AddOns\ShyAuction\Media\ShyAuction
+## Dependencies: ShyCore
+## OptionalDeps: ShyFarm, ShyQuest, ShyWay, ShyBags, ShyGear
+## Group: ShyCore
+## SavedVariables: ShyAuctionDB
+
+ShyAuction.lua
+Data\Shared.lua
+Data\Vendor.lua
+Book.lua
+Scan.lua
+Craft.lua
+Tooltip.lua
+Parts.lua
+Window.lua
+Foot.lua
+Buy.lua
+Sell.lua
+Auctions.lua
+FarmPage.lua
+Options.lua

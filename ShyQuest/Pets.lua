@@ -28,6 +28,7 @@ local CLASSES = { HUNTER = 4, WARLOCK = 256 }                       -- the class
 local BOUND = 30                     -- a warlock's binding quests are up to this level (later ones are no pet's)
 local CHAIN = 8                      -- quests followed along a chain to find where it leads
 local TRAINING = { 5149, 5300 }      -- Beast Training, as the client has it (SpellName)
+local TAME = { 1515 }                -- Tame Beast (SpellName)
 local LEVEL = 10                     -- a pet comes with this level
 local LISTED = 1500                  -- yards: a trainer this near gets a row while never visited
 local WORTH = 900                    -- yards of walk new ranks or a pet quest are worth, off the way (R.Passing)
@@ -350,9 +351,11 @@ local function Bound(quest, bit)
 end
 
 local quests, questsFor = nil, nil   -- the class's pet quests: [id] = true
+local after = {}                     -- of those, the ones that come after a taming or binding: [id] = true
 local function PetQuests(class)
 	if questsFor == class then return quests end
 	quests, questsFor = {}, class
+	wipe(after)
 	local bit = CLASSES[class]
 	if not bit then return quests end
 	local class = {}
@@ -375,10 +378,39 @@ local function PetQuests(class)
 		local quest = D.Quest(id)
 		for _, before in ipairs(quest.preSingle or {}) do
 			local was = D.Quest(before)
-			if was and Bound(was, bit) then quests[id] = true end
+			if was and Bound(was, bit) and not quests[id] then
+				quests[id], after[id] = true, true
+			end
 		end
 	end
 	return quests
+end
+
+-- What the rules last went by: [spell] = known. A change asks again what is on offer (SPELLS_CHANGED below).
+local knew = {}
+local function Knows(spells)
+	local any = nil
+	for _, spell in ipairs(spells) do
+		local known = C_SpellBook.IsSpellKnown(spell)
+		knew[spell] = known
+		if known and not any then any = spell end
+	end
+	return any
+end
+
+-- A hunter's pet quest whose lesson is known already (L.Taught): every race's trainer has a taming chain of
+-- their own, and a guide may pass two. One who can tame has none of them left to take, and one with Beast
+-- Training no Training the Beast.
+function L.Taught(quest)
+	if quest.classes ~= CLASSES.HUNTER or Class() ~= "HUNTER" or not PetQuests("HUNTER")[quest.id] then return nil end
+	return Knows(after[quest.id] and TRAINING or TAME)
+end
+
+local function Relearned()
+	for spell, known in pairs(knew) do
+		if C_SpellBook.IsSpellKnown(spell) ~= known then return true end
+	end
+	return false
 end
 
 -- Whether a quest is the class's taming or binding, or leads to one.
@@ -472,6 +504,10 @@ events:SetScript("OnEvent", function(_, event)
 		ReadTrainers()
 	elseif event == "MERCHANT_SHOW" then
 		ReadDemons()
+	elseif event == "SPELLS_CHANGED" and Relearned() then
+		-- (A lesson learned, Tame Beast after the last taming: what is on offer is asked again.)
+		wipe(knew)
+		ns.RefreshOffers()
 	end
 	stale = true
 	-- (What a trainer or a vendor lists is the pet errand's alone: the errands are fitted again, not the route.)

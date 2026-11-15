@@ -353,19 +353,18 @@ end
 Shy.Setup.Step({
 	id = "scale", order = 5, title = "Size", inside = "profile", atOpen = true, glyph = "size",
 	brief = function(plan) return Percent(Wanted(plan.scale)) end,
-	-- Recommended: the size you have when everything fits at it; else the suggested one.
+	-- Recommended: a size you chose stays as it is (setup opening never resizes your screen under you); on the
+	-- game's own size, the suggested one.
 	Plan = function(plan)
 		local own = Sc.Own()
 		local size = own and Sc.Size(own) or 100
 		local s = { live = true, size = size }
 		plan.scale = s
 		local suggested = Sc.Suggested()
-		if not Sc.Fits(size) and size ~= suggested then
+		if not own or size == suggested then
 			s.pick, s.size = "suggested", suggested
-		elseif size == suggested then
-			s.pick = "suggested"
 		else
-			s.pick = own and "own" or "game"
+			s.pick = "own"
 		end
 	end,
 	Build = function(parent, width, plan) return Strip(parent, width, plan.scale) end,

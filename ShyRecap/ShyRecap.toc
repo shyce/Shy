@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffRecap|r
 ## Notes: Death recap that stays after you release: who killed you, how long ago, and every blow on a click. |cff888888/shyrecap|r
 ## Author: Shyce Cream
-## Version: 5.0.2
+## Version: 5.0.5
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyRecap\Media\ShyRecap
 ## Dependencies: ShyCore

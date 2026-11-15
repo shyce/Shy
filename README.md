@@ -1,5 +1,15 @@
 # Shy
 
+<p align="center">
+  <a href="CHANGELOG.md"><img alt="version 5.0.5" src="https://img.shields.io/badge/version-5.0.5-29b3ff"></a>
+  <img alt="released 15 Nov 2026" src="https://img.shields.io/badge/released-15_Nov_2026-4a5568">
+  <img alt="tests 33,833 passed" src="https://img.shields.io/badge/tests-33%2C833_passed-4ade80">
+  <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
+  <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
+  <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
+  <a href="LICENSE.txt"><img alt="license GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-3373ff"></a>
+</p>
+
 <p align="center"><img src="media/hero.jpg" alt="A fight in Redridge with the whole screen set up" width="100%"></p>
 
 A family of World of Warcraft addons for WoW Forever: quests, maps, bags, unit frames, chat, the auction house
@@ -82,6 +92,15 @@ are unless you pick a layout for them, and if you do, your old hotkeys are saved
 Which recipes make money, which lose it, and how likely each one is to give you a skill-up.
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
+
+## What's new in 5.0.5
+
+### Fixed
+- **ShyQuest:** A hunter who had already learned to tame was still sent to another race's pet trainer for their taming quests, and after Beast Training for Training the Beast. Those are skipped now, and the quest says you know it already
+- **ShySkin:** After you had arranged your screen, the messages in the middle of it, like quest progress, could stay up for good. They fade after their time again now
+- **ShySkin:** Some drop-down menus kept growing wider each time they opened, until they filled the screen. They stay the size of their choices now
+
+[Every release](CHANGELOG.md)
 
 ## Install
 

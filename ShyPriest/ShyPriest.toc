@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffPriest|r
 ## Notes: Lays your keys out once for every level: each spell comes to its key as you learn it, and your food, water, bandage and potions are a key each. |cff888888/shypriest|r
 ## Author: Shyce Cream
-## Version: 5.0.2
+## Version: 5.0.5
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyPriest\Media\ShyPriest
 ## Dependencies: ShyCore

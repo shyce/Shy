@@ -478,7 +478,9 @@ end
 -- The card in the dungeon's theme (`guide` a run's), or back in the theme's own (nil). Asked at every layout: it
 -- changes only what differs (a docked card's housing is the deck's, so its look is left alone).
 local function Dress(card, guide, width, reach)
-	local theme = guide and Run.Theme(guide.run)
+	-- (A run's dungeon keeps its theme: looked up once for its guide.)
+	if guide and guide.theme == nil then guide.theme = Run.Theme(guide.run) or false end
+	local theme = guide and guide.theme or nil
 	local color = theme and theme.color
 	if color then
 		Theme.Scope(card, color[1], color[2], color[3])
@@ -884,20 +886,28 @@ function Run.Banner(card, y, width)
 	b.count:SetText(carried > 0 and ("%d of %d done  \194\183  %d in log"):format(done, #quests, carried)
 		or ("%d of %d quests done"):format(done, #quests))
 	local now = Phase(guide) or 1
-	local each = (width - BANNER.pad * 2 - BANNER.phaseGap * (#PHASES - 1)) / #PHASES
-	for i, phase in ipairs(b.phases) do
-		phase.bar:ClearAllPoints()
-		phase.bar:SetPoint("BOTTOMLEFT", BANNER.pad + (i - 1) * (each + BANNER.phaseGap), 8)
-		phase.bar:SetWidth(math.max(1, each))
-		if i == now then
-			UI.Paint(phase.bar, Shy.Theme.Accent)
-			UI.Ink(phase.word, Shy.Theme.Accent)
-		elseif i < now then
-			UI.Paint(phase.bar, Shy.Theme.Accent, 0.45)
-			UI.Ink(phase.word, C.text)
-		else
-			UI.Paint(phase.bar, C.dim, 0.3)
-			UI.Ink(phase.word, C.dim)
+	-- (Laid across again only for a new width, painted again only for a new phase: the theme keeps what was worn.)
+	if b.laidWidth ~= width then
+		b.laidWidth = width
+		local each = (width - BANNER.pad * 2 - BANNER.phaseGap * (#PHASES - 1)) / #PHASES
+		for i, phase in ipairs(b.phases) do
+			phase.bar:ClearAllPoints()
+			phase.bar:SetPoint("BOTTOMLEFT", BANNER.pad + (i - 1) * (each + BANNER.phaseGap), 8)
+			phase.bar:SetWidth(math.max(1, each))
+		end
+	end
+	if b.phase ~= now then
+		for i, phase in ipairs(b.phases) do
+			if i == now then
+				UI.Paint(phase.bar, Shy.Theme.Accent)
+				UI.Ink(phase.word, Shy.Theme.Accent)
+			elseif i < now then
+				UI.Paint(phase.bar, Shy.Theme.Accent, 0.45)
+				UI.Ink(phase.word, C.text)
+			else
+				UI.Paint(phase.bar, C.dim, 0.3)
+				UI.Ink(phase.word, C.dim)
+			end
 		end
 	end
 	b.phase = now

@@ -18,7 +18,7 @@ ns.Why = Why
 local STANDS = {
 	never = "skip", raid = "skip", side = "skip", race = "skip", class = "skip", log = "log", done = "done",
 	maxLevel = "missed", instead = "missed", past = "missed", led = "missed", ["until"] = "missed", giver = "missed",
-	repMax = "missed", repeatable = "soft", hidden = "soft", outgrown = "soft",
+	repMax = "missed", learned = "missed", repeatable = "soft", hidden = "soft", outgrown = "soft",
 }
 local RANK = { log = 1, done = 2, skip = 3, missed = 4, yet = 5, available = 6 }
 -- The reputation each standing starts at, Hated to Exalted (FACTION_STANDING_LABEL1 to 8).
@@ -122,6 +122,10 @@ function Why.Say(reason)
 	if what == "disabled" then return Said("Not while you have " .. Name(id), "not while you have " .. Name(id), "note", { quest = id }) end
 	if what == "spec" then return Said("A profession specialty", "needs a specialty", "book") end
 	if what == "giver" then return Said("Nobody offers it to you", "nobody offers it to you", "talk") end
+	if what == "learned" then
+		local name = C_Spell.GetSpellName(value) or "what it teaches"
+		return Said("You know " .. name .. " already", "you know " .. name, "check")
+	end
 	if what == "carry" then
 		-- One item: named. Several (any book the library takes): too many to name.
 		local item = #value == 1 and D.Item(value[1])

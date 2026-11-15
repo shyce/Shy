@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffHits|r
 ## Notes: Damage and healing numbers beside the nameplate instead of over it, colored by damage type, with healer names, and what you gain: XP, reputation, coin, skill and honor. |cff888888/shyhits|r
 ## Author: Shyce Cream
-## Version: 5.0.2
+## Version: 5.0.5
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyHits\Media\ShyHits
 ## Dependencies: ShyCore

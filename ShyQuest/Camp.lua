@@ -1,9 +1,8 @@
 -- Forever's camp as route errands: a campfire's benefits while one burns near, and cooking aboard a ship.
 --   By the fire: a campfire someone built nearby puts an aura on you (Data/Kit.lua, ns.data.camp.near).
---     While it is there, out of a fight, without the camp's benefits (or with under RENEW of them left),
---     the row asks you to sit by it: a minute sitting by a welcoming fire gives them for an hour (the
---     tent's rested experience among them, once an hour). Gone while you sit (the game's own aura counts
---     the minute) and once they are had.
+--     While it is there, out of a fight, without the camp's benefits, the row asks you to sit by it: a
+--     minute sitting by a welcoming fire gives them for an hour (the tent's rested experience among them,
+--     once an hour). Gone while you sit (the game's own aura counts the minute) and while they last.
 --   Cooking aboard: on a boat, a zeppelin or the tram (Shy.Way.Riding), with Cooking, a way to build a fire (a
 --     campfire kit in the bags, or the wood for the first one) and raw food a known recipe still raises
 --     the skill with, the row names what to cook and the points it should bring; its click opens the
@@ -21,7 +20,6 @@ ns.Camp = Camp
 
 T.defaults.camp = { on = true }      -- the campfire and cooking aboard as rows on the card
 
-local RENEW = 5 * 60         -- seconds of benefits left under which sitting again is asked
 local SLIM = 0.3             -- a recipe less likely than this to raise the skill is not worth the food
 local WORTH = 2              -- points of skill the food must be good for
 
@@ -58,13 +56,6 @@ local function Aura(spell)
 	return aura
 end
 
--- Seconds an aura has left, or nil for one that doesn't run out.
-local function Left(aura)
-	local ends = aura.expirationTime
-	if ends == nil or issecretvalue(ends) or ends == 0 then return nil end
-	return ends - GetTime()
-end
-
 -- By the fire
 
 local function Fire()
@@ -75,12 +66,10 @@ local function Fire()
 	-- (Gone from the fire: "Not now" is over. In a fight it can't be told.)
 	if near == false then put = nil end
 	if not near then return nil end
-	if put or sitting ~= false or benefits == nil then return nil end
-	local left = benefits and Left(benefits)
-	if benefits and (not left or left > RENEW) then return nil end
+	-- (Only once the benefits are gone: while they last, however little is left, there is no row.)
+	if put or sitting ~= false or benefits ~= false then return nil end
 	local rested = Aura(camp.rested)
-	local lines = { benefits and ("Your Camp Benefits run out in %d min"):format(math.max(1, math.ceil(left / 60)))
-		or "Sit a minute for an hour of Camp Benefits" }
+	local lines = { "Sit a minute for an hour of Camp Benefits" }
 	if rested == false and not GameRulesUtil.IsPlayerAtEffectiveMaxLevel() then lines[2] = "You'll earn rested XP too" end
 	return {
 		title = "Sit by the campfire",

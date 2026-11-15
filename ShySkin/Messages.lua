@@ -210,7 +210,8 @@ end
 
 local function Release(row)
 	row:Hide()
-	row.key, row.id, row.data, row.gleam = nil, nil, nil, nil
+	-- (A sample's mark goes too: a line taken again after layout mode would never leave.)
+	row.key, row.id, row.data, row.gleam, row.sample = nil, nil, nil, nil, nil
 	pool[#pool + 1] = row
 end
 

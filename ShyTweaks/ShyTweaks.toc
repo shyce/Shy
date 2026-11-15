@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffTweaks|r
 ## Notes: Quality-of-life tweaks: move windows and bags, auto-repair, hide error spam, name the caster of any buff. |cff888888/shytweaks|r
 ## Author: Shyce Cream
-## Version: 5.0.2
+## Version: 5.0.5
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyTweaks\Media\ShyTweaks
 ## Dependencies: ShyCore

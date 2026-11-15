@@ -58,7 +58,8 @@ local ARRIVED = 10                   -- yards
 local EVERY = 0.2                    -- seconds between distance updates
 
 local box, dial, title, sub
-local target                         -- { map, x, y, title, key, following, typed, among, continent, north, west, floor, up }
+local target                         -- { map, x, y, title, key, about (the route's stop it follows), following, typed, among,
+                                     --   continent, north, west, floor, up }
 local held                           -- what it pointed at when a stop that can't wait took it (a ghost's body)
 local since = 0
 
@@ -970,7 +971,7 @@ function A.Point(place)
 	if place.typed and not sign then sign, hue, mark = "go", ns.ToneColor("go"), "guide" end
 	target = {
 		map = place.map, x = place.x, y = place.y, title = place.title or "Waypoint",
-		key = place.key, following = place.following, typed = place.typed, lead = place.lead, among = place.among, found = place.found,
+		key = place.key, about = place.about, following = place.following, typed = place.typed, lead = place.lead, among = place.among, found = place.found,
 		sign = sign, hue = hue, mark = mark, tone = place.tone, leading = place.leading,
 		continent = continent, north = north, west = west, floor = place.floor, up = place.up,
 	}
@@ -989,12 +990,11 @@ local function Key(stop)
 	return ns.CardHover and ns.CardHover.Key(stop) or nil
 end
 
--- The route stop with the same key, if any.
-local function InRoute(key)
-	if not key then return nil end
-	for _, stop in ipairs(R.stops) do
-		if Key(stop) == key then return stop end
-	end
+-- The route stop with the same key, if any. With `about` (the stop followed until now), as a kept hover
+-- follows its stop (CardHover.Follow): a quest's stop whose spot moved is still that quest's stop.
+local function InRoute(key, about)
+	if not (key and ns.CardHover) then return nil end
+	return ns.CardHover.Follow(about, key)
 end
 
 -- Where a stop is on a map: its own place, or, for one the data puts on no map (a dock on a world with no
@@ -1019,7 +1019,7 @@ function A.ToStop(stop)
 	local floor, up = W.Prefer(stop)
 	local sign, hue, mark, tone = Emblem(stop)
 	local leading = Leading(stop)
-	return A.Point({ map = map, x = x, y = y, title = Named(stop, leading), key = key, following = following, leading = leading,
+	return A.Point({ map = map, x = x, y = y, title = Named(stop, leading), key = key, about = following and stop or nil, following = following, leading = leading,
 		among = following and stop.among or nil, found = R.Found(stop), sign = sign, hue = hue, mark = mark, tone = tone,
 		continent = stop.continent, north = stop.north, west = stop.west, floor = floor, up = up })
 end
@@ -1034,7 +1034,7 @@ function ToLead()
 		local leading = Leading(stop)
 		-- (The level and height the maps lead to: the arrow reads the trail they draw, and asks for no other.)
 		local floor, up = W.Prefer(stop)
-		A.Point({ map = map, x = x, y = y, title = Named(stop, leading), key = Key(stop), following = true, lead = true, leading = leading,
+		A.Point({ map = map, x = x, y = y, title = Named(stop, leading), key = Key(stop), about = stop, following = true, lead = true, leading = leading,
 			among = stop.among, found = R.Found(stop), sign = sign, hue = hue, mark = mark, tone = tone,
 			holding = held ~= nil,
 			continent = stop.continent, north = stop.north, west = stop.west, floor = floor, up = up })
@@ -1071,7 +1071,7 @@ ns.OnRoute(function(rebuilt, measured)
 	if not rebuilt then
 		-- (Measured again: the level a stop is on can say more once it is near. The arrow keeps the one the
 		-- maps lead to, so the trail it reads is theirs.)
-		local stop = measured and target and target.following and InRoute(target.key)
+		local stop = measured and target and target.following and InRoute(target.key, target.about)
 		if stop then target.floor, target.up = W.Prefer(stop) end
 		return
 	end
@@ -1082,7 +1082,7 @@ ns.OnRoute(function(rebuilt, measured)
 	if urgent and (target or A.Following()) then
 		if target and not target.lead then
 			held = { map = target.map, x = target.x, y = target.y, title = target.title, typed = target.typed, key = target.key,
-				following = target.following }
+				about = target.about, following = target.following }
 		end
 		ToLead()
 		return
@@ -1097,11 +1097,13 @@ ns.OnRoute(function(rebuilt, measured)
 		return
 	end
 	if not (target and target.following) then return end
-	local stop = InRoute(target.key)
+	local stop = InRoute(target.key, target.about)
 	if not (stop and stop.map and stop.x) then
 		A.Clear()
 		return
 	end
+	-- (Known by its key from here on, as it now is: a quest's stop moved to another spot has another.)
+	target.key, target.about = Key(stop), stop
 	if stop.map ~= target.map or stop.x ~= target.x or stop.y ~= target.y then
 		target.map, target.x, target.y = stop.map, stop.x, stop.y
 		target.continent, target.north, target.west = W.ToWorld(stop.map, stop.x, stop.y)

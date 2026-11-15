@@ -462,7 +462,6 @@ S.Step({
 		return ns.Preview.STYLES[pick.style or ns.Layout.Style()] .. ", " .. ns.Preview.NAMES[pick.size]:lower()
 	end,
 	last = true,   -- writing the layout ends in a reload, so every other step runs first
-	Settled = function() return ns.Layout.IsActive() end,
 	Plan = function(plan)
 		local keeper = Keeper()
 		plan.screen = { on = true, size = ns.Layout.Size(), style = ns.Layout.Style(), grow = Grows(), drawer = ns.T.db.menuDrawer ~= false,

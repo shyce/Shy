@@ -719,10 +719,54 @@ local function LearnBeside()
 		if stop.world == here.world and Straight(stop, here) <= HERE then T.Learn(stop.node) end
 	end
 end
+-- Flight points the world map shows as known, read by continent (the map itself where it lies on none):
+-- the ones a character starts with (the Skyborne's Stormwind) are known before any flight map opens.
+local continents             -- [map] = the continent's map, found once
+local function Continent(map)
+	continents = continents or {}
+	local found = continents[map]
+	if found then return found end
+	found = map
+	local id = map
+	while id and id > 0 do
+		local info = C_Map.GetMapInfo(id)
+		if not info then break end
+		if info.mapType == Enum.UIMapType.Continent then
+			found = id
+			break
+		end
+		id = info.parentMapID
+	end
+	continents[map] = found
+	return found
+end
+
+local function LearnShown()
+	local m = Made()
+	if not m then return end
+	local before, read = version, {}
+	for _, stop in ipairs(m.flights) do
+		local top = stop.map and Continent(stop.map)
+		if top and not read[top] then
+			read[top] = true
+			for _, node in ipairs(C_TaxiMap.GetTaxiNodesForMap(top) or {}) do
+				if not node.isUndiscovered and m.byNode[node.nodeID] then T.Learn(node.nodeID, true) end
+			end
+		end
+	end
+	if version ~= before then Shy:Fire("SHY_TERRAIN", "flights") end
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("TAXIMAP_OPENED")
 events:RegisterEvent("UI_INFO_MESSAGE")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")
+events:RegisterEvent("TAXI_NODE_STATUS_CHANGED")
 events:SetScript("OnEvent", function(_, event, _, message)
+	if event == "PLAYER_ENTERING_WORLD" or event == "TAXI_NODE_STATUS_CHANGED" then
+		LearnShown()
+		return
+	end
 	if event == "TAXIMAP_OPENED" then
 		local nodes = C_TaxiMap.GetAllTaxiNodes(GetTaxiMapID())
 		for _, node in ipairs(nodes or {}) do

@@ -682,6 +682,10 @@ function L.ForMe(quest)
 	return Mine(quest)
 end
 
+-- The spell a class quest teaches when the character knows it already, or nil: such a quest is no longer to be
+-- had (Pets.lua sets it: a hunter who can tame has no taming quest left at any race's trainer). nil: none known.
+L.Taught = nil
+
 -- Quests a quest giver was seen not to offer (see "What a quest giver offers" below):
 -- [quest] = the giver, as "n240".
 local function Unoffered()
@@ -754,6 +758,11 @@ local function Rules(quest, inHand, byData, out)
 	if not T.db.lowLevel and L.Outgrown(quest) and not Miss(out, "outgrown") then return false end
 
 	if not Mine(quest, out) and not out then return false end
+	-- What a class quest teaches is known already (L.Taught).
+	if quest.classes and L.Taught then
+		local spell = L.Taught(quest)
+		if spell and not Miss(out, "learned", nil, spell) then return false end
+	end
 
 	if NoneOf(quest) and not Miss(out, "oneOf", nil, quest.preSingle) then return false end
 	for _, before in ipairs(quest.preGroup or {}) do
@@ -822,7 +831,7 @@ end
 --   unoffered (value: the giver who didn't list it)       level, maxLevel (value)        side, race, class (value)
 --   oneOf (value: the quests, any one), before, instead, past, led, crumb, parent, until, disabled (id: a quest)
 --   spec, giver                                           skill, rep, repMax (id, value)
---   carry (value: the items, any one)
+--   carry (value: the items, any one)                     learned (value: the spell it teaches, known already)
 function L.Missing(quest)
 	local out, held = {}, false
 	for _, token in ipairs(quest.starts) do
@@ -846,7 +855,7 @@ end
 -- Worked out once for each change of availability (L.version), level or the game's gray filter.
 local CHAIN_DEEP = 25        -- links followed back: no chain is longer
 local FOR_GOOD = { maxLevel = true, instead = true, past = true, led = true, ["until"] = true, hidden = true,
-	outgrown = true, unoffered = true }
+	outgrown = true, unoffered = true, learned = true }
 local chains = { key = nil, lost = {}, kept = {}, links = {}, owed = {} }
 local NO_LINKS = {}
 

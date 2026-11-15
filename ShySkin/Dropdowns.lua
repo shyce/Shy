@@ -220,6 +220,9 @@ local function House(menu)
 	end
 	if not house then
 		house = CreateFrame("Frame", nil, menu)
+		-- The menu sizes itself round its children (a ResizeLayoutFrame): fitted to the menu, the housing would
+		-- widen it at each layout, and itself with it, until it filled the screen.
+		house.ignoreInLayout = true
 		local parts = UI.MenuHousing(house)
 		parts.accent:SetPoint("TOPLEFT", R.edge, -R.edge)
 		parts.accent:SetPoint("BOTTOMLEFT", R.edge, R.edge)

@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffQuest|r
 ## Notes: Shows your next quest step, where to go and what drops what you need, plus leveling guides for levels 1 to 30. |cff888888/shyquest|r
 ## Author: Shyce Cream
-## Version: 5.0.2
+## Version: 5.0.5
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyQuest\Media\ShyQuest
 ## Dependencies: ShyCore

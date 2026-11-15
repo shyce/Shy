@@ -1,8 +1,8 @@
 -- Shy.Setup: character setup. A window holds a few steps (profile, game settings, plus steps other
 -- addons register), each picked as recommended from the start and shown together on its overview, then
--- S.Run applies them all with at most one reload. Opens on a character's first login once its intro has
--- played, from /shy setup, and from the /shy window, where the same pieces are live sections. While it is
--- open the screen stays up and every pick goes on it as it is made.
+-- S.Run applies them all with at most one reload. Offered at every login until the character is set up
+-- (once its intro has played), and opened from /shy setup and from the /shy window, where the same pieces are
+-- live sections. While it is open the screen stays up and every pick goes on it as it is made.
 --
 --   Shy.Setup.Step{ id, order, title,     registered by the addon that owns the step
 --       glyph,                            its picture on the rail and its overview card (UI.GlyphArt's names)
@@ -27,7 +27,6 @@
 --       tab = id,                         no page of its own while that step has one: it is a tab of that
 --                                         step's page, after the step's own (a subject's steps together)
 --       tabTitle,                         its tab's name there, when its title alone would not say it
---       Settled(),                        true when this character already has it from before setup existed
 --       Later(answers),                   answers kept by S.Wait, given back after the reload
 --       Shown(plan),                      its page came up: put the plan's picks on the screen
 --       atOpen = true,                    its Shown runs as the overview comes up too (the size: the first
@@ -46,7 +45,7 @@
 --   Shy.Setup.Open(at) / Close() / IsOpen()   at: a step's id to open on, the overview unless told
 --   Shy.Setup.At()             the page on show ("overview" or a step's id); nil while it is closed
 --   Shy.Setup.Relabel()        the open page's heading again (a step whose lead changed)
---   Shy.Setup.Done()           this character has been set up
+--   Shy.Setup.Done()           this character has been set up (Finish ran for it), as its record says
 --   Shy.Setup.Untouched()      Global has only ever been used by one character
 --
 --   Shy.Setup.GAME             game settings: { key, group, title, desc, want = { cvar = value },
@@ -67,7 +66,7 @@
 --   Shy.Setup.RepairDock()     rewrites saved chat tab ranks the game can't load (runs at load): true when it did
 --
 -- Account-wide, outside profiles:
---   ShyCoreDB.setup = { untouched, chars = { [character] = { asked, done, said, left, pending, round } },
+--   ShyCoreDB.setup = { untouched, chars = { [character] = { done, settled, said, left, pending, round } },
 --                       locked = { [cvar] = true } for CVars the game refused,
 --                       refused = last ten blocked actions: { at, addon, what, during } }
 --   ShyCoreDB.game  = { [cvar] = value before it was changed here; ["cvar:index"] = "0" or "1" for a flag }
@@ -848,10 +847,22 @@ function S.Step(def)
 	return def
 end
 
+-- A step that fails to plan is reported and left out from then on: the window still opens with the others.
 function S.Plan(plan)
 	plan = plan or {}
+	local failed
 	for _, step in ipairs(steps) do
-		if step.Plan then step.Plan(plan) end
+		if step.Plan then
+			local ok, err = pcall(step.Plan, plan)
+			if not ok then
+				failed = failed or {}
+				failed[step] = true
+				geterrorhandler()(err)
+			end
+		end
+	end
+	for i = #steps, 1, -1 do
+		if failed and failed[steps[i]] then table.remove(steps, i) end
 	end
 	return plan
 end
@@ -867,15 +878,11 @@ function S.Check(plan)
 	return true
 end
 
-local function Settled()
-	for _, step in ipairs(steps) do
-		if step.Settled and step.Settled() then return true end
-	end
-	return false
-end
-
+-- Only the record says so: what a step finds on the screen can't, since the game keeps some of it (Edit Mode's
+-- layouts) where it outlasts a session whose saved variables were never written.
 function S.Done()
-	return Mine().done ~= nil or Settled()
+	local mine = Mine()
+	return mine.done ~= nil or mine.settled == true
 end
 
 -- Printed once when setup is over (after its reload, if it had one).
@@ -922,7 +929,7 @@ function S.Run(plan, held)
 	local ok, why = S.Check(plan)
 	if not ok then return false, why end
 	local mine = Mine()
-	mine.asked, mine.done, mine.said, mine.left = true, time(), nil, nil
+	mine.done, mine.said, mine.left = time(), nil, nil
 	mine.round = ROUND   -- every recommendation was on the game step's page
 	plan.act = nil
 	local reload = false
@@ -1754,33 +1761,44 @@ local function Awake(on)
 	if Shy.Immersion then Shy.Immersion.Hold("setup", on) end
 end
 
--- The window in the empty room in the screen's middle (Shy.HUD.Room), as large as fits there (never under
--- MIN_FIT), unless the player has put it somewhere. Where they put it is their screen's, not a profile's
--- (positions are a profile's, and the window opens as profiles are picked, made and switched to): it is
--- kept for the account too, and the window stands there again in any profile.
-local MIN_FIT = 0.6
+-- The window in the empty room in the screen's middle (Shy.HUD.Room), as large as fits there, unless the
+-- player has put it somewhere. Never smaller than a unit to a screen pixel (its text as large as on a 1080p
+-- screen at the game's own size): where the room is narrower it stands over the pieces around it, centred on
+-- the room as far as the screen allows, and never larger than the screen. Its size is the screen's, worked
+-- out again each time it stands. Where the player put it is their screen's, not a profile's (positions are a
+-- profile's, and the window opens as profiles are picked, made and switched to): it is kept for the account
+-- too, and the window stands there again in any profile, at the size this screen gives it.
+local MARGIN = 8   -- kept clear at the screen's edges
+local function Fit(box, l, b, r, t)
+	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+	local w, h = box:GetWidth(), box:GetHeight()
+	local _, high = GetPhysicalScreenSize()
+	local sharp = high and high > 0 and sh / high or 1   -- the scale at which a unit is a screen pixel
+	local room = math.min((r - l) / w, (t - b) / h)
+	return math.min(1, (sw - 2 * MARGIN) / w, (sh - 2 * MARGIN) / h, math.max(room, sharp))
+end
+
 local function Stand()
 	local box = win.box
 	if InCombatLockdown() then return end
 	local spot = ShyCoreDB and ShyCoreDB.setupSpot
 	if spot and not Shy.HUD.IsPlaced(box) then Shy.HUD.SetSpot(box, spot) end
-	if Shy.HUD.IsPlaced(box) then return end
 	local l, b, r, t = Shy.HUD.Room(box)
-	local w, h = box:GetWidth(), box:GetHeight()
-	local fit = math.max(MIN_FIT, math.min(1, (r - l) / w, (t - b) / h))
-	local x, y = (l + r) / 2 - UIParent:GetWidth() / 2, (b + t) / 2 - UIParent:GetHeight() / 2
-	Shy.HUD.SetHome(box, { "CENTER", "CENTER", x / fit, y / fit }, fit)
-end
-
--- Does the window still stand in the room? (A layout picked moves what closes it in.)
-local function Fits()
-	local box = win.box
-	local left, bottom = box:GetLeft(), box:GetBottom()
-	if not (left and bottom) then return true end
-	local l, b, r, t = Shy.HUD.Room(box)
-	local s = box:GetEffectiveScale() / UIParent:GetEffectiveScale()
-	return left * s >= l - 1 and bottom * s >= b - 1
-		and (left + box:GetWidth()) * s <= r + 1 and (bottom + box:GetHeight()) * s <= t + 1
+	local fit = Fit(box, l, b, r, t)
+	if Shy.HUD.IsPlaced(box) then
+		-- Its bottom left corner stays where it was put; the size is this screen's.
+		local at = Shy.HUD.Spot(box)
+		local k = (at.scale or 1) / fit
+		if math.abs(k - 1) > 0.001 then
+			Shy.HUD.SetSpot(box, { x = at.x * k, y = at.y * k, top = at.top and at.top * k, scale = fit })
+		end
+		return
+	end
+	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+	local hw, hh = box:GetWidth() * fit / 2, box:GetHeight() * fit / 2
+	local cx = math.max(MARGIN + hw, math.min(sw - MARGIN - hw, (l + r) / 2))
+	local cy = math.max(MARGIN + hh, math.min(sh - MARGIN - hh, (b + t) / 2))
+	Shy.HUD.SetHome(box, { "CENTER", "CENTER", cx - sw / 2, cy - sh / 2 }, fit)
 end
 
 -- Picks go on as they are made, so the window and the screen show them. Each step that does so hands what
@@ -1790,7 +1808,10 @@ end
 local function Worn()
 	local kept = {}
 	for _, step in ipairs(steps) do
-		if step.Worn then kept[step.id] = step.Worn() end
+		if step.Worn then
+			local ok, worn = pcall(step.Worn)
+			if ok then kept[step.id] = worn else geterrorhandler()(worn) end
+		end
 	end
 	return kept
 end
@@ -2277,6 +2298,9 @@ local function Lay(_, width, height)
 	end
 end
 
+-- When the game last closed every window itself (GetTime, the same all through a frame): see "Offered".
+local gameAt
+
 local function Build()
 	-- Secure: the Finish button reloads, so the window is hidden in a fight by a state driver and
 	-- comes back after it.
@@ -2285,17 +2309,18 @@ local function Build()
 		grip = { flow = Lay, min = { WIDTH, MADE_H }, max = { WIDTH } },
 		point = { "CENTER", "CENTER", 0, 40 }, shown = function() return win.open end, secure = true, strata = "HIGH",
 		maximize = true,
-		-- Closed by Esc. A fight hides it too (its state driver), and then it stays open to come back:
-		-- by the next frame the fight has locked things down. A cinematic taking the screen closes it
-		-- as well; that isn't the player's answer, so it is offered again once the cinematic is over.
+		-- A fight hides it (its state driver), and then it stays open to come back: by the next frame the
+		-- fight has locked things down. Closed by Esc, it is put away until the next login. Closed by the game
+		-- (a loading screen, dying, a cinematic), it is offered again once the world is back.
 		onClose = function(self)
+			local at = GetTime()
 			C_Timer.After(0, function()
 				if self:IsShown() or InCombatLockdown() or not win.open then return end
 				win.open = false
 				Awake(false)
 				PutBack()
 				Shy.HUD.Update(self)
-				if not Watching() then Mine().asked = true end
+				if at ~= gameAt and not Watching() then win.away = true end
 			end)
 		end,
 		close = function() S.Close() end,
@@ -2363,7 +2388,7 @@ local function Build()
 	rule:SetPoint("BOTTOMRIGHT", -2, FOOT)
 	local later = UI.Button(box, "Not now", 86, function() S.Close() end)
 	later:SetPoint("BOTTOMLEFT", 14, 11)
-	later:HookScript("OnEnter", function(self) UI.Tip(self, "Not now", "Closes this. /shy setup opens it again.", { side = "TOP" }) end)
+	later:HookScript("OnEnter", function(self) UI.Tip(self, "Not now", "Closes this until you next log in. /shy setup opens it any time.", { side = "TOP" }) end)
 	later:HookScript("OnLeave", function(self) UI.TipHide(self) end)
 	box.later = later
 
@@ -2428,8 +2453,7 @@ local function Build()
 	box.divider:SetSize(1, 22)
 
 	-- Combat starting or ending changes whether setup can run. A layout put on (a pick on the screen page)
-	-- or a size (the size page) moves the screen: once it has settled, the window stands again if it no
-	-- longer fits the room.
+	-- or a size (the size page) moves the screen: once it has settled, the window stands again, sized for it.
 	box:RegisterEvent("PLAYER_REGEN_DISABLED")
 	box:RegisterEvent("PLAYER_REGEN_ENABLED")
 	box:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
@@ -2445,7 +2469,7 @@ local function Build()
 		local f = win.shown and win.pages[win.shown]
 		if f and f:IsShown() then f:Refresh() end
 		C_Timer.After(0.6, function()
-			if win.open and not InCombatLockdown() and not Fits() then Stand() end
+			if win.open and not InCombatLockdown() then Stand() end
 		end)
 	end)
 	-- (A kept height may have been put on before the page was here to take it.)
@@ -2492,24 +2516,31 @@ function S.Open(at)
 	Show()
 end
 
--- Closing it is the player's answer: the window isn't offered again on its own.
+-- Closed by the player: not offered again this session. Only Finish is an answer for good.
 function S.Close()
 	if not win.box then return end
-	Mine().asked = true
+	win.away = true
 	win.open = false
 	Awake(false)
 	PutBack()
 	Shy.HUD.Update(win.box)
 end
 
--- First login, the hub and /shy setup
+-- Offered, the hub and /shy setup
+--
+-- The window is offered at every login until the character is set up (Finish), once the splash and the
+-- intro are over. Closed by the player (Esc, its ×, Not now), it isn't offered again until the next login.
+-- The game closes every window of its kind itself (CloseAllWindows) on each loading screen, on dying, as a
+-- cinematic takes the screen and as the interface comes back after it: none of that is the player's answer,
+-- so it is offered again once the world is back, never in a fight, never over a cinematic, never while dead.
 
 local WAIT = 7   -- seconds after login: the splash is gone and Edit Mode layouts are loaded
-local AFTER = 2  -- seconds after a cinematic or movie: the world is back in view
-local settled
-local offer = CreateFrame("Frame")   -- what holds the offer back ending: a fight, a cinematic, a movie
+local AFTER = 2  -- seconds after a cinematic, a movie or a loading screen: the world is back in view
+local ready      -- the login's wait is over
+local offer = CreateFrame("Frame")   -- what holds the offer back ending: a fight, a cinematic, a movie, death
+local AGAIN = { "PLAYER_REGEN_ENABLED", "CINEMATIC_STOP", "STOP_MOVIE", "PLAYER_ENTERING_WORLD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }
 
--- Once per round of recommendations: a character set up before it (or, Settled, before there was a
+-- Once per round of recommendations: a character set up before it (or found set up before there was a
 -- window, so it has seen none) is told which recommended settings of the newer rounds it doesn't have.
 local function Remind()
 	local mine = Mine()
@@ -2525,19 +2556,10 @@ local function Remind()
 		.. First() .. ": " .. Named(missing, 6) .. ". Tick " .. (#missing == 1 and "it" or "them") .. " under Game settings in /shy.")
 end
 
--- Until the character is set up or the player closes the window; never in combat or over a cinematic
--- or movie (a new character's intro), retried when they end; skipped when a step is already Settled.
 local function Offer()
-	if not settled or win.open or InCombatLockdown() or Watching() then return end
-	local mine = Mine()
-	if mine.asked or mine.done then
+	if not ready or win.open or InCombatLockdown() or Watching() or UnitIsDeadOrGhost("player") then return end
+	if S.Done() or win.away then
 		offer:UnregisterAllEvents()
-		return
-	end
-	if Settled() then
-		mine.asked = true
-		offer:UnregisterAllEvents()
-		Remind()
 		return
 	end
 	S.Open()
@@ -2549,6 +2571,16 @@ end)
 -- A movie skipped by the player ends without an event.
 MovieFrame:HookScript("OnHide", function() C_Timer.After(AFTER, Offer) end)
 
+-- The game closing every window: the events it does so on, and the interface coming back (UIParent shown
+-- again, after a cinematic or anything else that took the screen). Its own handlers run in the same frame.
+local closer = CreateFrame("Frame")
+for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_DEAD", "CINEMATIC_START" }) do closer:RegisterEvent(event) end
+closer:SetScript("OnEvent", function() gameAt = GetTime() end)
+UIParent:HookScript("OnShow", function()
+	gameAt = GetTime()
+	C_Timer.After(AFTER, Offer)
+end)
+
 Shy:On("SHY_ADDON_LOADED", function(a)
 	if a ~= core then return end
 	if core.isNew then Book().untouched = true end
@@ -2559,15 +2591,22 @@ Shy:On("SHY_LOGIN", function()
 	RepairDock()   -- again, past the chat windows' own load
 	local book, mine = Book(), Mine()
 	if next(book.chars, (next(book.chars))) then book.untouched = nil end   -- a second character exists
+	-- A record from before: `asked` with a round of recommendations and nothing done was a character found
+	-- with its screen already set up, before there was a window: set up. `asked` alone was a window closed.
+	if mine.asked then
+		if mine.round and not mine.done then mine.settled = true end
+		mine.asked = nil
+	end
 	SetPending()
+	win.away, ready = nil, nil   -- a login is a new session
 	if mine.done and not mine.said then C_Timer.After(4, Tell) end
-	if mine.asked or mine.done then
+	if S.Done() then
 		C_Timer.After(WAIT, Remind)
 		return
 	end
-	for _, event in ipairs({ "PLAYER_REGEN_ENABLED", "CINEMATIC_STOP", "STOP_MOVIE" }) do offer:RegisterEvent(event) end
+	for _, event in ipairs(AGAIN) do offer:RegisterEvent(event) end
 	C_Timer.After(WAIT, function()
-		settled = true
+		ready = true
 		Offer()
 	end)
 end)

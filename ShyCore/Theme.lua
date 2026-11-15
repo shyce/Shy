@@ -1029,16 +1029,20 @@ local function Palette(r, g, b, into)
 end
 
 -- The scope a region stands in: its nearest ancestor's. (A region on a restricted frame can't be asked: none.)
-local function ScopeOf(region)
-	if scoped == 0 then return nil end
-	local frame = region
+-- Every region painted anywhere is asked while a scope is worn, so the walk is guarded once, not at each step.
+local function Climb(frame)
 	for _ = 1, SCOPE_DEPTH do
-		local ok, parent = pcall(frame.GetParent, frame)
-		if not ok or not parent then return nil end
+		local parent = frame:GetParent()
+		if not parent then return nil end
 		local scope = scopes[parent]
 		if scope then return scope end
 		frame = parent
 	end
+end
+local function ScopeOf(region)
+	if scoped == 0 then return nil end
+	local ok, scope = pcall(Climb, region)
+	return ok and scope or nil
 end
 
 -- r, g, b, a, and whether the alpha is the color's own (a palette's opacity, which follows the theme).
@@ -1388,14 +1392,14 @@ end
 -- accent) takes the palette made from r, g, b as the theme's is made from the accent, now and when it is worn
 -- later; nil gives the frame back to the theme. (Words colored in markup, and numbers read off the tables, stay
 -- the theme's.)
+-- Asking again for the color it has changes nothing: it returns at once (a frame may ask at every layout).
 function Theme.Scope(frame, r, g, b)
 	if r then
 		local scope = scopes[frame]
-		if not (scope and scope.r == r and scope.g == g and scope.b == b) then
-			if not scope then scoped = scoped + 1 end
-			-- (A new table: what stood in the old one is laid again below.)
-			scopes[frame] = Palette(r, g, b)
-		end
+		if scope and scope.r == r and scope.g == g and scope.b == b then return end
+		if not scope then scoped = scoped + 1 end
+		-- (A new table: what stood in the old one is laid again below.)
+		scopes[frame] = Palette(r, g, b)
 	elseif scopes[frame] then
 		scopes[frame] = nil
 		scoped = scoped - 1

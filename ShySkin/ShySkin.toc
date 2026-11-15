@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffSkin|r
 ## Notes: Restyles the default UI in graphite and steel with your accent color. Each part toggles without a reload. |cff888888/shyskin|r
 ## Author: Shyce Cream
-## Version: 5.0.2
+## Version: 5.0.5
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShySkin\Media\ShySkin
 ## Dependencies: ShyCore

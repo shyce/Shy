@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffChat|r
 ## Notes: Restyled chat windows, whisper windows, short channel names, compact lines, timestamps, clickable links, mentions and saved history. |cff888888/shychat|r
 ## Author: Shyce Cream
-## Version: 5.0.2
+## Version: 5.0.5
 ## X-Date: 2026-11-15
 ## IconTexture: Interface\AddOns\ShyChat\Media\ShyChat
 ## Dependencies: ShyCore

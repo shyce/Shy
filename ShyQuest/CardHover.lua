@@ -1367,11 +1367,11 @@ function CardHover.Hide(row)
 	Shy.Hover.Hide(row)
 end
 
--- The stop a kept hover is about after a rebuild: the one with its Key; else, for a quest's stop, one for
--- the same quest (the same kind and objective first, then any: an objective done is its hand-in), the
--- nearest to where it was. A quest stop's Key holds its first quest and its spot, and both move (a quest
--- taken at a giver of several, another area of a kill nearer): matching the Key alone let it go then.
--- nil when nothing on the route is about it any more.
+-- The stop a kept hover (or the arrow, Arrow.lua) is about after a rebuild: the one with its Key; else, for
+-- a quest's stop, one for the same quest (the same kind and objective first, then any: an objective done is
+-- its hand-in), the nearest to where it was. A quest stop's Key holds its first quest and its spot, and both
+-- move (a quest taken at a giver of several, another area of a kill nearer): matching the Key alone let it
+-- go then. nil when nothing on the route is about it any more.
 local function Follow(was, key)
 	for _, stop in ipairs(R.stops) do
 		if Key(stop) == key then return stop end
@@ -1392,6 +1392,7 @@ local function Follow(was, key)
 	end
 	return best
 end
+CardHover.Follow = Follow
 
 -- After a rebuild the stop tables are new: refill the hover under the mouse, and the kept one with the
 -- stop it follows (Follow). Only a click lets a kept one go: one about nothing on the route any more stays

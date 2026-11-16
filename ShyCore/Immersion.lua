@@ -1141,14 +1141,16 @@ local function ArrowCard(parent, width, quest, Get, Set)
 		x = WELL + 2 + b.sample:GetWidth() + 2 * WELL_PAD + 14
 	end
 
-	b.switch = UI.Switch(b, ARROW.title, Get, Set, { desc = ARROW.desc })
+	-- A tick, as every setting has: the card takes the click, the box only shows it.
+	b.switch = UI.Checkbox(b, "", Get, Set)
+	b.switch:EnableMouse(false)
 	b.switch:SetPoint("RIGHT", -14, 0)
 	-- The name stands just over the card's middle and the sentence under it, so one line or two sit centred.
 	b.name = UI.Text(b, ARROW.title, 13)
 	b.name:SetPoint("BOTTOMLEFT", b, "LEFT", x, 1)
 	b.say = UI.Text(b, ARROW.say, 11, false, C.dim)
 	b.say:SetPoint("TOPLEFT", b, "LEFT", x, -3)
-	b.say:SetWidth(width - x - 72)   -- its words end before the switch
+	b.say:SetWidth(width - x - 52)   -- its words end before the tick
 	b.say:SetJustifyV("TOP")
 	b.say:SetMaxLines(2)
 
@@ -1196,14 +1198,10 @@ local function SizeCard(parent, width, Get, Set)
 	local shade = well:CreateTexture(nil, "BORDER")
 	shade:SetAllPoints()
 	UI.Paint(shade, WELL_SHADE, 0.32)
-	b.sample = well:CreateFontString(nil, "OVERLAY")
-	b.sample:SetFontObject(SampleFont(Get()))
+	b.sample = UI.Words(well, SampleFont(Get()), C.text, { wrap = false })
 	b.sample:SetPoint("LEFT", WELL_PAD, 0)
 	b.sample:SetWidth(wellW - 2 * WELL_PAD)
-	b.sample:SetJustifyH("LEFT")
-	b.sample:SetWordWrap(false)
 	b.sample:SetText(SIZE.sample)
-	UI.Ink(b.sample, C.text)
 
 	local percent = function(v) return math.floor(v + 0.5) .. "%" end
 	b.slider = UI.Slider(b, SIZE.title, I.SIZE_MIN * 100, I.SIZE_MAX * 100, I.SIZE_STEP * 100,
@@ -1499,9 +1497,9 @@ local function Run(plan)
 end
 
 S.Step({
-	id = "immersion", order = 22, title = "Immersion", glyph = "book",
-	ask = "Pick how you quest",
-	lead = "How you get quests, and how much UI stays on screen.",
+	id = "immersion", order = 22, title = "Play", glyph = "book",
+	ask = "How do you want to quest?",
+	lead = "How you pick up and hand in quests, and how much of the UI you see while you play.",
 	brief = function(plan)
 		local p = plan.immersion
 		local text = p.turnIn and "instant turn-in" or (WORD[p.text] .. " text")

@@ -199,6 +199,17 @@ function W.Start()
 		id = "shyhits-you", title = "Hits on you",
 		width = YOU.width, height = YOU.height, point = YOU.point,
 		shown = function() return false end,   -- visible in layout mode only
+		-- Its options' "On you" (and combat text with it, turned on).
+		switch = {
+			get = function() return T.db.on ~= false and T.db.you ~= false end,
+			set = function(on)
+				if on then T.db.on = true end
+				T.db.you = on
+				ns.Apply()
+				if ns.RefreshOptions then ns.RefreshOptions() end
+			end,
+			hint = "The hits and heals you take, beside you",
+		},
 	})
 	W.box = box
 	you = W.Pair()

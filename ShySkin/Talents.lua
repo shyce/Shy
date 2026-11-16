@@ -136,10 +136,7 @@ local function Points(window)
 		p.plate = CreateFrame("Frame", nil, p)
 		p.plate:SetHeight(RANK_H + 3)
 		p.plate:SetPoint("LEFT", p.label, "RIGHT", 7, 0)
-		p.number = p.plate:CreateFontString(nil, "OVERLAY")
-		p.number:SetFont(Shy.FONT_ROUNDED, 12, "")
-		p.number:SetShadowOffset(1, -1)
-		p.number:SetShadowColor(0, 0, 0, 1)
+		p.number = UI.Words(p.plate, 12)
 		p.number:SetPoint("CENTER", 0, 0)
 		own.points = p
 	end
@@ -214,10 +211,7 @@ local function RankPlate(button)
 	plate:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 6, -5)
 	plate:SetFrameLevel(button:GetFrameLevel() + 6)
 	UI.Skin(plate, C.panel, C.border)
-	local text = plate:CreateFontString(nil, "OVERLAY")
-	text:SetFont(Shy.FONT_ROUNDED, 10, "")
-	text:SetShadowOffset(1, -1)
-	text:SetShadowColor(0, 0, 0, 1)
+	local text = UI.Words(plate, 10)
 	text:SetPoint("CENTER", 0, 0)
 	return plate, text
 end

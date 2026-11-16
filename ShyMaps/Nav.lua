@@ -251,18 +251,10 @@ local function Build()
 	label.shade:SetVertexColor(0, 0, 0, 0.55)
 	label.name = label:CreateFontString(nil, "OVERLAY")
 	UI.TitleFace(label.name, 20)
-	label.name:SetShadowOffset(1, -1)
-	label.name:SetShadowColor(0, 0, 0, 1)
 	label.name:SetPoint("TOP", 0, 0)
-	label.levels = label:CreateFontString(nil, "OVERLAY")
-	label.levels:SetFontObject(UI.TextFont(12))
-	label.levels:SetShadowOffset(1, -1)
-	label.levels:SetShadowColor(0, 0, 0, 1)
+	label.levels = UI.Words(label, UI.TextFont(12))
 	label.levels:SetPoint("TOP", label.name, "BOTTOM", 0, -2)
-	label.fish = label:CreateFontString(nil, "OVERLAY")
-	label.fish:SetFontObject(UI.TextFont(12))
-	label.fish:SetShadowOffset(1, -1)
-	label.fish:SetShadowColor(0, 0, 0, 1)
+	label.fish = UI.Words(label, UI.TextFont(12))
 	label:SetAlpha(0)
 	label:EnableMouse(false)
 end
@@ -501,10 +493,8 @@ end
 local function Slash(i)
 	local text = slashes[i]
 	if not text then
-		text = row:CreateFontString(nil, "OVERLAY")
-		text:SetFontObject(UI.NameFont(CRUMB_FONT))
+		text = UI.Words(row, UI.NameFont(CRUMB_FONT), Shy.Skin.colors.idle)
 		text:SetText("/")
-		UI.Ink(text, Shy.Skin.colors.idle)
 		slashes[i] = text
 	end
 	return text

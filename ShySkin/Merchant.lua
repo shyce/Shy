@@ -1457,7 +1457,7 @@ Draw = function()
 	for i = 1, MAX_MERCHANT_CURRENCIES do Shop.PutAway(f, _G["MerchantToken" .. i]) end
 
 	local box = own.box
-	local wide, tall = box:GetWidth(), box:GetHeight()
+	local wide, tall = UI.BodySize(box)   -- (what it holds stands on its body: UI.Body)
 	if issecretvalue(wide) or not wide or wide <= 0 then wide = WIN.w end
 	if issecretvalue(tall) or not tall or tall <= 0 then tall = WIN.h end
 	-- The game's own window, empty under ours, is as wide (up to the width ours is made at): what the game opens

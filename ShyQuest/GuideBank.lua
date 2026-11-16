@@ -42,7 +42,7 @@ local function Move(containers, wanted, deposit)
 end
 
 local function AtBank()
-	if not (ns.char and T.db.guide.follow) or IsShiftKeyDown() then return end
+	if not (ns.char and ns.Following()) or IsShiftKeyDown() then return end
 	local deposit, depositing = Wanted("bankdeposit")
 	local withdraw, withdrawing = Wanted("bankwithdraw")
 	if depositing == 0 and withdrawing == 0 then return end

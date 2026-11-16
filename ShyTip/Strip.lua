@@ -271,7 +271,7 @@ function Strip.Apply()
 		return
 	end
 	Fit()
-	local on = ns.T.db.strip ~= false
+	local on = ns.T.db.strip == true
 	if on then
 		-- The cockpit tells of every change, a fight's start among them: the driver is only given a new rule.
 		if strip.driven ~= strip.rule then
@@ -287,6 +287,7 @@ function Strip.Apply()
 	end
 	strip.ruled = on
 	Shy.HUD.Update(box)
+	Shy:Fire("SHY_SWITCH", "shytip-strip")   -- its switch in layout mode follows the setting
 	Stand()
 end
 
@@ -319,6 +320,16 @@ function Strip.Start()
 		point = { "BOTTOM", "BOTTOM", 0, 300 },
 		-- The box itself only shows in layout mode; in play the secure holder is here.
 		shown = function() return false end,
+		-- Off until you turn it on (ShyTip's options, or this piece's layout panel).
+		switch = {
+			get = function() return ns.T.db.strip == true end,
+			set = function(on)
+				ns.T.db.strip = on
+				Strip.Apply()
+				if ns.RefreshOptions then ns.RefreshOptions() end
+			end,
+			hint = "Hold Shift on a target to ping or mark it",
+		},
 		docked = function(_, on)
 			docked = on
 			Strip.Apply()

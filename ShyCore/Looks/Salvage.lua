@@ -510,6 +510,13 @@ UI.LookKind("salvage", {
 	line = Line, lineAlpha = 0,
 	face = { "salvageGrime1", "salvageGrime2", "salvageGrime3", "salvageGrime4",
 		"salvageScratch1", "salvageScratch2", "salvageScratch3", "salvageScratch4", "salvageFoot", "salvageStreak" },
+	-- A chat bubble's tail (UI.LookTail): the foot's worn paint running on round it, as worn as the rest, over the
+	-- same grimy plate.
+	tail = function()
+		local level = WORN[Option("wear")] or WORN.worn
+		return "Salvage", { { layer = "Edge", color = { 1, 1, 1 }, alpha = level.wear } },
+			{ { fill = true }, { file = ART.grime, tile = GRIME, color = { 1, 1, 1 }, alpha = GRIME_A * level.grime } }
+	end,
 	edge = { "salvageRim1", "salvageRim2", "salvageRim3", "salvageRim4", "salvageKick", "salvageKickSeam", "salvageKickLit",
 		"salvageLip", "salvageCorner1", "salvageCorner2", "salvageCorner3", "salvageCorner4", "salvageWearTop",
 		"salvageWearBottom", "salvageWearLeft", "salvageWearRight", "salvageBolt", "salvageScuff" },

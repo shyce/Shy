@@ -6,9 +6,9 @@ local MEDIA = "Interface\\AddOns\\ShyDruid\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Druid",
+	category = "combat",
 	icon = MEDIA .. "ShyDruid",
 	smallIcon = MEDIA .. "ShyDruidSmall",
-	tagline = "Your keys, for every level",
 	savedVariables = "ShyDruidDB",
 	keep = { keysMade = true, keysBuild = true, keysBefore = true },   -- the macros made for your keys are no setting: a reset keeps them yours
 	defaults = {},

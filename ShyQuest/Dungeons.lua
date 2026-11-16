@@ -246,7 +246,7 @@ end
 Dungeons.Step = {
 	id = "dungeons", order = 24, title = "Dungeons", glyph = "kill",
 	ask = function() return ("Pick the dungeons you'll run, %s"):format(UnitName("player")) end,
-	lead = "Their quests go in your guide: where to pick them up, what to do inside and where to turn them in.",
+	lead = "Their quests go into your guide, with where to pick them up, what to do inside and where to hand them in.",
 	brief = function(plan)
 		local p = plan.dungeons
 		if p.plan == "never" then return "None" end

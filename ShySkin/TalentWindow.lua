@@ -244,12 +244,7 @@ end
 ---------------------------------------------------------------------------
 
 local function Text(parent, font, layer)
-	local text = parent:CreateFontString(nil, layer or "OVERLAY")
-	text:SetFontObject(font)
-	UI.Follow(text)
-	text:SetShadowOffset(1, -1)
-	text:SetShadowColor(0, 0, 0, 1)
-	return text
+	return UI.Words(parent, font, nil, { layer = layer, justify = "CENTER" })
 end
 
 local function Fill(parent, layer, sub)
@@ -490,10 +485,11 @@ local function Build()
 	local after = HEAD.pad + HEAD.icon + 6 + (head.title and math.ceil(head.title:GetStringWidth()) or 0) + 20
 	box.specs:SetPoint("BOTTOMLEFT", head, "TOPLEFT", after, -HEAD.line)
 
-	-- The foot.
+	-- The foot, on the body: clear of the look's work round the edge (UI.Body), as the cards are.
+	local body = UI.Body(box)
 	local foot = CreateFrame("Frame", nil, box)
-	foot:SetPoint("BOTTOMLEFT", M.margin, 4)
-	foot:SetPoint("BOTTOMRIGHT", -M.margin, 4)
+	foot:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", M.margin, 4)
+	foot:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -M.margin, 4)
 	foot:SetHeight(M.foot - 4)
 	box.foot = foot
 	foot.label = Text(foot, UI.TitleFont(13))
@@ -790,7 +786,9 @@ Lay = function()
 	local top = HEAD.line + UI.LINE + M.below
 	local width = 2 * M.margin + n * cardW + (n - 1) * M.gap
 	local height = top + cardH + M.below + M.foot
-	if math.abs(box:GetWidth() - width) > 0.5 or math.abs(box:GetHeight() - height) > 0.5 then Shy.HUD.Resize(box, width, height) end
+	-- (as big as the cards need, and the look's clearance round them: UI.BodyFit)
+	local fit = box.shyBodyFit
+	if not fit or math.abs(fit[1] - width) > 0.5 or math.abs(fit[2] - height) > 0.5 then UI.BodyFit(box, width, height) end
 
 	local _, class = UnitClass("player")
 	box.head.class:SetTexture(class and ("Interface\\Icons\\ClassIcon_" .. class:sub(1, 1) .. class:sub(2):lower()) or nil)
@@ -803,7 +801,7 @@ Lay = function()
 	for k, tab in ipairs(d.tabs) do
 		local card = Card(k)
 		card:ClearAllPoints()
-		card:SetPoint("TOPLEFT", box, "TOPLEFT", M.margin + (k - 1) * (cardW + M.gap), -top)
+		card:SetPoint("TOPLEFT", UI.Body(box), "TOPLEFT", M.margin + (k - 1) * (cardW + M.gap), -top)
 		card:SetSize(cardW, cardH)
 		card:Show()
 		Paint(card, k, n, cardW, cardH)

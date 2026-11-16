@@ -18,6 +18,7 @@ local WHITE, DIM, HOT, GOLD, GOOD = C.text, C.dim, C.hot, C.alert, C.good
 local MARK = 12              -- size of the mark before a quest's name
 local ROW_MARK = 16          -- a mark's seat, leading a hover's row
 local MOST_OFFERS = 4        -- quests listed for one quest giver
+local NONE = {}
 
 local H = {}
 ns.Hover = H
@@ -298,7 +299,8 @@ end
 H.CreatureID = CreatureID
 
 -- Quests the game's own lines name, by ID, each with its objective lines: { text, have, at }
--- (at: the line's place on the tooltip). nil when any of it is secret.
+-- (at: the line's place on the tooltip, only once a tooltip has drawn it). nil when any of it is
+-- secret: a line left out would read as one the game doesn't show.
 local function Named(data)
 	local named = {}
 	local lines = data.lines
@@ -316,13 +318,39 @@ local function Named(data)
 			end
 		elseif kind == LINE.QuestObjective and own then
 			local text, have, at = line.leftText, line.numFulfilled, line.lineIndex
-			if not issecretvalue(text) and not issecretvalue(have) and not issecretvalue(at)
-				and type(text) == "string" and type(at) == "number" then
-				own[#own + 1] = { text = text, have = have, at = at }
+			if issecretvalue(text) or issecretvalue(have) or issecretvalue(at) then return nil end
+			if type(text) == "string" then
+				own[#own + 1] = { text = text, have = have, at = type(at) == "number" and at or nil }
 			end
 		end
 	end
 	return named
+end
+
+-- What the game's own lines on a creature (Named) say of what it drops. The game names on a creature each
+-- quest it counts for, with every objective of it the creature counts for, finished or not. So where it
+-- names a quest of ours but no line for an unfinished objective whose item the data says the creature
+-- drops, the creature doesn't drop it; where it has the line, it does (D.NoteDrop). Only an objective whose
+-- own text names its item is judged: the game's line for it is known by that name.
+local function Learn(id, named)
+	local changed = false
+	for quest, lines in pairs(named) do
+		if #lines > 0 and L.entries[quest] then
+			for _, goal in ipairs(L.Goals(quest)) do
+				for _, token in ipairs(goal.finished and NONE or goal.tokens) do
+					local item = token.kind == "i" and D.ListsDropper(token.id, id) and D.Item(token.id)
+					if item and L.Names(goal.text, item.name) then
+						local shown = false
+						for _, line in ipairs(lines) do
+							if L.Names(line.text, item.name) then shown = true end
+						end
+						if D.NoteDrop(id, item.id, shown) then changed = true end
+					end
+				end
+			end
+		end
+	end
+	if changed then ns.Refresh() end
 end
 
 -- The main tooltip being filled with its primary data (not a comparison or an appended block).
@@ -338,15 +366,50 @@ local function OnUnit(tip, data)
 	if issecretvalue(guid) then return end
 	local id = CreatureID(guid)
 	local _, unit = tip:GetUnit()
+	local named = id and Named(data)
+	if named then Learn(id, named) end
 	if T.db.hover.units then
 		local ties = id and I.Npc(id)
-		local named = ties and Named(data)
-		if named then
+		if ties and named then
 			if Theirs("tooltips") then H.Chances(tip, ties, named) else H.Thing(tip, ties, named) end
 		end
 		if id then Glance(tip, unit) end
 	end
 	if id and Foe(unit) then Careful(tip, id) end
+end
+
+-- A creature the data says drops what an open objective asks for is read when its nameplate shows (Learn),
+-- once each until the log changes, so what it doesn't drop is known before it is hovered.
+local read, readAt = {}, nil
+local function Glimpse(_, _, unit)
+	if issecretvalue(unit) or type(unit) ~= "string" then return end
+	local guid = UnitGUID(unit)
+	if issecretvalue(guid) then return end
+	local id = CreatureID(guid)
+	if not id then return end
+	if readAt ~= L.stamp then
+		wipe(read)
+		readAt = L.stamp
+	end
+	if read[id] then return end
+	read[id] = true
+	local asks = false
+	for _, tie in ipairs(I.Npc(id) or NONE) do
+		if tie.kind == "drop" and not tie.done then asks = true end
+	end
+	if not asks then return end
+	local data = C_TooltipInfo.GetUnit(unit)
+	if issecretvalue(data) or type(data) ~= "table" then return end
+	local named = Named(data)
+	if named then Learn(id, named) end
+end
+
+if Shy.Memory then
+	Shy.Memory.Cache("Quest hover: creatures read off their plates", function() wipe(read) end, function()
+		local n = 0
+		for _ in pairs(read) do n = n + 1 end
+		return n
+	end)
 end
 
 -- One chat warning per dangerous creature targeted.
@@ -401,4 +464,7 @@ Shy:On("SHY_LOGIN", function()
 	local events = CreateFrame("Frame")
 	events:RegisterEvent("PLAYER_TARGET_CHANGED")
 	events:SetScript("OnEvent", OnTarget)
+	local plates = CreateFrame("Frame")
+	plates:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+	plates:SetScript("OnEvent", Shy.Clocked("plates: what creatures drop", Glimpse))
 end)

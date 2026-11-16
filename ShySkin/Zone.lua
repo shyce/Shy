@@ -77,14 +77,7 @@ end
 -- Drawing
 
 local function Words(parent, font)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(font)
-	UI.Follow(fs)   -- a title keeps up with the theme's font
-	fs:SetShadowOffset(1, -1)
-	fs:SetShadowColor(0, 0, 0, 1)
-	fs:SetJustifyH("CENTER")
-	fs:SetWordWrap(false)
-	return fs
+	return UI.Words(parent, font, nil, { wrap = false, justify = "CENTER" })
 end
 
 local function Even(w) return 2 * math.ceil(w / 2) end

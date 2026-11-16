@@ -538,7 +538,7 @@ end
 
 function Tips.ShowStep(owner, view, state)
 	if ns.CardHover then
-		Shy.Hover.Show(owner, ns.CardHover.StepContent(view, state), { side = "LEFT" })
+		Shy.Hover.Show(owner, ns.CardHover.StepContent(view, state), { side = "LEFT", keep = true })
 		return
 	end
 	local lines = Tips.Lines()

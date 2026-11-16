@@ -1,9 +1,10 @@
 -- The finder window, in two panes: down the left what to find (a zone's quests by how they stand with
--- you (Why.lua), your friends online as ShyMaps knows them, and the nearest of each town service:
--- innkeeper, flight master, trainers, vendors, spirit healers ...; each service with the game's own
--- picture and a star that keeps it on the map), on the right what was found under a search box that
--- looks everything up by name (a number is a quest's ID). Click shows a result on the world map
--- (ns.ShowOnMap), right-click points the arrow at it. /shyquest find [name].
+-- you (Why.lua), your friends online as ShyMaps knows them, with ShyFarm what to farm (the best farms for
+-- you and your favorites), and the nearest of each town service: innkeeper, flight master, trainers,
+-- vendors, spirit healers ...; each service with the game's own picture and a star that keeps it on the
+-- map), on the right what was found under a search box that looks everything up by name (a number is a
+-- quest's ID), or on the farm side only what you could farm. Click shows a result on the world map
+-- (ns.ShowOnMap), right-click points the arrow at it; on the farm side a click farms it. /shyquest find [name].
 
 local ADDON, ns = ...
 local T = ns.T
@@ -29,8 +30,8 @@ local NAMES = 34             -- where names begin, from a row's left
 local EACH = 14              -- most results per kind when searching
 local SPREAD = 4             -- a service that stands in more places than this is a row per place (spirit healers)
 local STOP = 34              -- a stop of your route's row height
--- An item's picture in a result's row; a favorite's row (ShyFarm), its picture and its graph.
-local FAV = { ICON = 22, ROW = 64, BIG = 36, GRAPH_W = 132, GRAPH_H = 42 }
+-- An item's picture in a result's row; a favorite's row (ShyFarm), its picture and its graph; a creature's sign.
+local FAV = { ICON = 22, ROW = 64, BIG = 36, GRAPH_W = 132, GRAPH_H = 42, SIGN = 16 }
 local KINDS = { "quests", "npcs", "objects", "items" }
 local WORD = { quests = "Quest", npcs = "Creature", objects = "Object", items = "Item" }
 
@@ -306,7 +307,8 @@ function F.Sources(id)
 	if not item then return nil end
 	local out = {}
 	for _, source in ipairs(item.sources) do
-		local thing = SOURCE_KIND[source.kind] and D.Thing(source.kind, source.id)
+		local thing = SOURCE_KIND[source.kind] and not (source.kind == "n" and D.Dropless(source.id, id))
+			and D.Thing(source.kind, source.id)
 		if thing and (source.kind ~= "v" or L.Friendly(thing)) then
 			local nearest, yards = Nearest(Points(thing.places, {}))
 			out[#out + 1] = { kind = SOURCE_KIND[source.kind], id = source.id, name = thing.name, chance = source.chance,
@@ -566,18 +568,19 @@ end
 local Fill
 local Light   -- the left pane's chosen row lit and its counts said (set below)
 
+local FarmTip, FarmMenu, Pick   -- something to farm: its hover, its menu, and farming it (the farm side, below)
+
 -- Farms an item (ShyFarm): the session is set up for it (it asks to start where it drops), to `goal` if given, and
--- the best camp to farm it (R.FarmSpot) is your active waypoint.
+-- the best camp to farm it (R.FarmSpot) is your active waypoint. (A favorite farmed again goes as any pick does: to
+-- the picker, when the window was opened as one.)
 local function FarmIt(result, goal)
-	local farm = Shy.addons.Farm
-	if farm and farm.Farm then farm:Farm(result.ids[1], goal) end
+	return Pick({ farm = { kind = "item", id = result.ids[1] } }, nil, goal)
 end
 
 -- Your favorites (ShyFarm's): a row each, taller than a result, with the item's picture, how your farming of it
 -- went, and a graph of your sessions at the right (a click on it shows the other figure). A click farms it again,
 -- to the goal you last farmed it to.
 local favRows = {}
-local Favorites   -- lists them (below, with the other lists)
 
 local function FavTip(row)
 	local farm, entry = Shy.addons.Farm, row.entry
@@ -696,6 +699,12 @@ local function Row(i)
 	row.slot = Shy.Slot.New(row, { to = row.icon, icon = row.icon, size = FAV.ICON, hover = false })
 	row.icon:Hide()
 	row.slot:Empty(true)
+	-- (A creature to farm wears the kill's sign in an empty slot.)
+	row.sign = row:CreateTexture(nil, "ARTWORK", nil, 1)
+	row.sign:SetSize(FAV.SIGN, FAV.SIGN)
+	row.sign:SetPoint("CENTER", row, "LEFT", RAIL, 0)
+	Shy.Hover.Glyph(row.sign, "kill", FAV.SIGN)
+	row.sign:Hide()
 	-- (A friend wears their class's dot, as on the map, in the mark's place.)
 	row.dot = row:CreateTexture(nil, "ARTWORK")
 	row.dot:SetAtlas("WhiteCircle-RaidBlips")
@@ -714,6 +723,11 @@ local function Row(i)
 	row.detail:SetWordWrap(false)
 	row.far = UI.Text(row, "", 12, false, C.hot)
 	row.far:SetPoint("TOPRIGHT", -10, -5)
+	-- (Something to farm: its worth over it, what that is of and how far under it.)
+	row.sub = UI.Text(row, "", 11, false, C.dim)
+	row.sub:SetPoint("TOPRIGHT", -10, -19)
+	row.sub:SetJustifyH("RIGHT")
+	row.sub:Hide()
 	-- Under the mouse the distance gives way to a + that adds the result to your route.
 	row.add = CreateFrame("Button", nil, row)
 	row.add:SetSize(20, 20)
@@ -792,8 +806,24 @@ local function Row(i)
 	row:EnableMouse(true)
 	row:SetScript("OnEnter", function(self)
 		UI.SetBorder(self, C.hot)
-		self.add:Show()
 		local farm = Shy.addons.Farm
+		-- (Something to farm is farmed with a click: only an item's star stands in for the figures.)
+		if self.result and self.result.farm then
+			self.star:ClearAllPoints()
+			self.star:SetPoint("RIGHT", -8, 0)
+			local item = self.result.farm.kind == "item" and farm ~= nil and farm.Favorite ~= nil
+			self.star:SetShown(item)
+			if item then
+				self.star.Starred(self.star)
+				self.far:Hide()
+				self.sub:Hide()
+			end
+			FarmTip(self)
+			return
+		end
+		self.star:ClearAllPoints()
+		self.star:SetPoint("RIGHT", self.farm, "LEFT", -4, 0)
+		self.add:Show()
 		self.farm:SetShown(self.result ~= nil and self.result.kind == "items" and farm ~= nil and farm.Farm ~= nil)
 		self.star:SetShown(self.farm:IsShown() and farm.Favorite ~= nil)
 		if self.star:IsShown() then self.star.Starred(self.star) end
@@ -807,9 +837,14 @@ local function Row(i)
 		self.farm:Hide()
 		self.star:Hide()
 		self.far:Show()
+		self.sub:SetShown(self.result ~= nil and self.result.farm ~= nil)
 		Tips.Close(self)
 	end)
 	row:SetScript("OnMouseUp", function(self, button)
+		if self.result and self.result.farm then
+			if button == "RightButton" then FarmMenu(self, self.result) else Pick(self.result) end
+			return
+		end
 		if button == "RightButton" then Route(self, self.result) else Show(self.result) end
 	end)
 	rows[i] = row
@@ -860,7 +895,14 @@ local function PaintHead(head, entry)
 	head:EnableMouse(entry.fold == true)
 end
 
+local PaintFarm   -- something to farm's row (below)
+
 local function PaintRow(row, result)
+	if result.farm and PaintFarm then return PaintFarm(row, result) end
+	row.sign:Hide()
+	row.sub:Hide()
+	row.name:SetWidth(row:GetWidth() - 106)
+	row.detail:SetWidth(row:GetWidth() - 56)
 	Finish(result)
 	row.result = result
 	row.name:SetText(result.name)
@@ -1123,10 +1165,357 @@ function Fill()
 	end
 end
 
+-- The farm side (ShyFarm): picked under Farm on the left, the list is the best farms for you or your favorites, and
+-- the search box looks only for what you could farm (Farmable.lua): creatures, then items, each with what it is
+-- worth. A click farms it: an item, wherever it is best had; a creature, all it drops (its menu: one of them).
+-- Opened by T:FindFarm as a picker, a pick goes to whoever asked and the window closes.
+local farmSide = false
+local picker               -- T:FindFarm's opts while the window is open for them
+local SEP = "  \194\183  "
+
+-- How often a kill gives something: "1 in 8", "35%", "1.4 a kill".
+local function Per(per)
+	if per >= 1 then return ("%.1f a kill"):format(per) end
+	if per >= 0.1 then return ("%d%%"):format(math.floor(per * 100 + 0.5)) end
+	return ("1 in %d"):format(math.floor(1 / per + 0.5))
+end
+
+local function ItemName(id)
+	return D.Name("items", id) or C_Item.GetItemNameByID(id) or ("Item " .. id)
+end
+
+local function Capital(text)
+	return text and (text:gsub("^%l", string.upper)) or nil
+end
+
+-- What is farmed now (ShyFarm's session): the creature, and the item counted.
+local function Farming()
+	local farm = Shy.addons.Farm
+	local s = farm and farm.Session and farm:Session()
+	return s and s.mob, s and s.want
+end
+
+local function FarmDetail(result)
+	local f = result.farm
+	if f.best then
+		local b = f.best
+		local words = { b.low and ((b.high and b.high ~= b.low) and ("Level %d-%d"):format(b.low, b.high) or ("Level %d"):format(b.low)) or nil }
+		local info = b.camp and C_Map.GetMapInfo(b.camp.map)
+		if info then words[#words + 1] = info.name end
+		if b.going == "working" then
+			words[#words + 1] = "finding the way there"
+		elseif b.trip then
+			words[#words + 1] = ("%d min away"):format(math.max(1, math.floor(b.trip / 60 + 0.5)))
+		end
+		return table.concat(words, SEP)
+	end
+	if f.kind == "creature" then
+		local thing = D.Npc(f.id)
+		local words = { Capital(thing and D.LevelText(thing)) or "Creature" }
+		local farm = Shy.addons.Farm
+		local best = farm and farm.KillWorth and select(2, farm:KillWorth(f.id))
+		if best and best[1] then
+			words[#words + 1] = "drops " .. ItemName(best[1].item) .. (best[2] and (", " .. ItemName(best[2].item)) or "")
+		end
+		return table.concat(words, SEP)
+	end
+	if not f.from then return "Item" end
+	if f.node then return "Gathered from " .. f.from end
+	return "From " .. f.from .. (f.chance and (SEP .. f.chance .. "%") or "")
+end
+
+-- Where it stands: the camp a best farm was weighed at; a creature's spawns; the spawns of the creatures you could
+-- farm an item from and the nodes that hold it.
+local function FarmFinish(result)
+	if result.finished then return result end
+	result.finished = true
+	local f, out = result.farm, result.points
+	if f.kind == "any" then
+		result.points, result.detail = {}, "No need to pick anything. Everything you loot counts."
+		return result
+	end
+	if not out then
+		out = {}
+		if f.kind == "creature" then
+			out = ThingPoints("npcs", result.ids)
+		else
+			local item, Fa = D.Item(f.id), ns.Farmable
+			for _, source in ipairs(item and item.sources or {}) do
+				local ok = source.kind == "o" or (source.kind == "n" and Fa ~= nil and Fa.Creature(source.id))
+				local thing = ok and D.Thing(source.kind, source.id)
+				if thing then Points(thing.places, out) end
+			end
+		end
+	end
+	result.points, result.exact = out, f.best ~= nil or #out <= 4
+	result.nearest, result.yards = Nearest(out)
+	result.detail = FarmDetail(result)
+	return result
+end
+
+-- The row's right: what it is worth (one, a kill, an hour there) over what that is of and how far; "farming now"
+-- for what you farm.
+local function FarmRight(row, result)
+	local f, farm = result.farm, Shy.addons.Farm
+	if f.kind == "any" then
+		row.far:SetText("")
+		row.sub:SetText("")
+		row.name:SetWidth(row:GetWidth() - NAMES - 20)
+		row.detail:SetWidth(row:GetWidth() - NAMES - 20)
+		return
+	end
+	local copper, what
+	if f.best then
+		copper, what = f.best.net, "an hour"
+	elseif f.kind == "creature" then
+		copper, what = farm and farm.KillWorth and farm:KillWorth(f.id), "a kill"
+	else
+		copper, what = farm and farm.Worth and farm:Worth(f.id), "each"
+	end
+	local mob, want = Farming()
+	local now = (f.kind == "creature" and mob == f.id) or (f.kind == "item" and want == f.id)
+	local far = f.best and "" or W.Yards(result.yards)
+	if copper and copper > 0 then
+		row.far:SetText(UI.Money(math.floor(copper + 0.5), true, 12, row.far))
+		UI.Ink(row.far, C.text)
+		row.sub:SetText(now and "farming now" or (far ~= "" and (what .. SEP .. far) or what))
+	else
+		row.far:SetText(now and "" or far)
+		UI.Ink(row.far, C.hot)
+		row.sub:SetText(now and "farming now" or "")
+	end
+	UI.Ink(row.sub, now and C.good or C.dim)
+	row.sub:Show()
+	-- (The name and the line under it give way to the figures at the right.)
+	local width = row:GetWidth() - NAMES
+	row.name:SetWidth(math.max(40, width - row.far:GetStringWidth() - 20))
+	row.detail:SetWidth(math.max(40, width - row.sub:GetStringWidth() - 20))
+end
+
+PaintFarm = function(row, result)
+	FarmFinish(result)
+	row.result = result
+	local f = result.farm
+	row.mark:Hide()
+	row.dot:Hide()
+	row.name:SetText(result.name)
+	row.detail:SetText(result.detail)
+	if f.kind == "item" then
+		row.icon:SetTexture(C_Item.GetItemIconByID(f.id) or QUESTION_MARK_ICON)
+		row.icon:Show()
+		row.slot:Empty(false)
+		row.sign:Hide()
+		local quality = C_Item.GetItemQualityByID(f.id)
+		if quality then
+			row.name:SetTextColor(C_Item.GetItemQualityColor(quality))
+		else
+			UI.Ink(row.name, C.text)
+		end
+	else
+		row.icon:Hide()
+		row.slot:Empty(true)
+		row.sign:Show()
+		-- (Record everything wears the bag's sign, a creature the kill's. The best of the best farms in gold, as the
+		-- auction house's farm page lights it.)
+		Shy.Hover.Glyph(row.sign, f.kind == "any" and "bag" or "kill", FAV.SIGN)
+		UI.Tint(row.sign, (f.rank == 1 or f.kind == "any") and C.alert or C.text, (f.rank == 1 or f.kind == "any") and 1 or 0.85)
+		UI.Ink(row.name, C.text)
+	end
+	FarmRight(row, result)
+end
+
+-- Farms it (or tells the picker): a creature, all it drops or `item` of it; an item, `goal` of it.
+Pick = function(result, item, goal)
+	local f, farm = result.farm, Shy.addons.Farm
+	local opts = picker
+	if opts and (opts.pick or opts.close) then F.Toggle(false) end
+	if opts and opts.pick then
+		if item then opts.pick("item", item) else opts.pick(f.kind, f.id) end
+		return
+	end
+	if not farm then return end
+	if f.kind == "any" then
+		if farm.FarmAnything then farm:FarmAnything() end
+	elseif f.kind == "creature" then
+		if farm.FarmMob then farm:FarmMob(f.id, item, goal) end
+	elseif farm.Farm then
+		farm:Farm(f.id, goal)
+	end
+end
+
+FarmTip = function(row)
+	local result = row.result
+	local f, farm = result.farm, Shy.addons.Farm
+	local lines = Tips.Lines()
+	if f.kind == "any" then
+		Tips.Line(lines, result.name, C.text)
+		Tips.Line(lines, "The clock starts now. Everything you loot counts, wherever you go.", C.dim, true)
+		Tips.Open(row, lines, { hints = { { "left", "Start recording" } } })
+		return
+	end
+	Tips.Double(lines, result.name, W.Yards(result.yards), C.text, C.hot)
+	if f.kind == "creature" then
+		local thing = D.Npc(f.id)
+		local level = thing and D.LevelText(thing)
+		if level then Tips.Line(lines, Capital(level), C.dim) end
+		if f.best then
+			Tips.Double(lines, "Kills an hour", tostring(math.floor(f.best.kills + 0.5)), C.dim, C.text)
+		end
+		local copper, best
+		if farm and farm.KillWorth then copper, best = farm:KillWorth(f.id) end
+		if copper then Tips.Double(lines, "Each kill is worth", UI.Money(math.floor(copper + 0.5), true), C.dim, C.text) end
+		for _, drop in ipairs(best or {}) do
+			Tips.Double(lines, ItemName(drop.item), Per(drop.per), C.text, C.hot, true)
+		end
+	else
+		local item, Fa = D.Item(f.id), ns.Farmable
+		local n = 0
+		for _, source in ipairs(item and item.sources or {}) do
+			local ok = source.kind == "o" or (source.kind == "n" and Fa ~= nil and Fa.Creature(source.id))
+			local thing = ok and n < 6 and D.Thing(source.kind, source.id)
+			if thing then
+				n = n + 1
+				Tips.Double(lines, (source.kind == "o" and "In " or "") .. thing.name, source.chance and (source.chance .. "%") or "",
+					C.text, C.hot, true)
+			end
+		end
+		if farm and farm.ItemLines then
+			farm:ItemLines(f.id, function(left, right) Tips.Double(lines, left, right, C.dim, C.alert, true) end)
+		end
+	end
+	Tips.Open(row, lines, { hints = { { "left", picker and picker.pick and "Pick this" or "Farm it" }, { "right", "More" } } })
+end
+
+FarmMenu = function(row, result)
+	local f, farm = result.farm, Shy.addons.Farm
+	if f.kind == "any" then return Pick(result) end
+	Shy.UI.DropMenu(row, function(root)
+		root:CreateTitle(result.name)
+		if picker and picker.pick then
+			root:CreateButton("Pick this", function() Pick(result) end)
+		elseif f.kind == "creature" then
+			root:CreateButton("Farm it", function() Pick(result) end)
+			local best = farm and farm.KillWorth and select(2, farm:KillWorth(f.id, 8))
+			if best and #best > 0 then
+				local one = root:CreateButton("Just one of its drops")
+				for _, drop in ipairs(best) do
+					one:CreateButton(ItemName(drop.item), function() Pick(result, drop.item) end):SetDetail(Per(drop.per))
+				end
+			end
+		else
+			root:CreateButton("Farm it", function() Pick(result) end)
+			local count = root:CreateButton("Farm this many")
+			for _, n in ipairs({ 5, 10, 20, 40 }) do count:CreateButton(tostring(n), function() Pick(result, nil, n) end) end
+			if farm and farm.Favorite then
+				root:CreateCheckbox("Favorite", function() return farm:IsFavorite(f.id) end, function()
+					farm:Favorite(f.id)
+					Light()
+				end)
+			end
+		end
+		root:CreateDivider()
+		root:CreateButton("Show on the map", function() Show(result) end)
+		root:CreateButton("Add to my route", function() Add(result) end)
+	end)
+end
+
+-- The best farms for you (ShyFarm's, weighed over a few frames the first time): a creature each, best first.
+-- Second: "working" while they are weighed (ShyFarm says them once, settled). Once shown the list keeps its order
+-- while it stays on screen, its rows said again in place; picked again, it is weighed again and its order taken anew.
+local BEST = {}   -- order: { [npc] = place } as first shown
+function F.BestFarms()
+	local farm = Shy.addons.Farm
+	if not (farm and farm.FarmsFor) then return {}, nil end
+	local list, working = farm:FarmsFor(nil)
+	if not list and not working then
+		farm:RankFarms()
+		list, working = farm:FarmsFor(nil)
+	end
+	if not list then return {}, "working" end
+	if not BEST.order then
+		BEST.order = {}
+		for i, each in ipairs(list) do BEST.order[each.npc] = i end
+	end
+	local held = {}
+	for _, each in ipairs(list) do held[#held + 1] = each end
+	table.sort(held, function(a, b)
+		local x, y = BEST.order[a.npc] or math.huge, BEST.order[b.npc] or math.huge
+		if x ~= y then return x < y end
+		return a.npc < b.npc
+	end)
+	list = held
+	local out = {}
+	for i, each in ipairs(list) do
+		local camp = each.camp
+		out[i] = { kind = "npcs", name = each.name, ids = { each.npc }, farm = { kind = "creature", id = each.npc, best = each, rank = i },
+			points = camp and { { map = camp.map, x = math.floor(camp.x * 10000 + 0.5), y = math.floor(camp.y * 10000 + 0.5) } } or nil }
+	end
+	return out, working and "working" or nil
+end
+
+-- What you could farm by name, creatures first, each kind under its heading.
+function F.FarmSearch(text)
+	local out, under = {}, {}
+	for _, each in ipairs(ns.Farmable and ns.Farmable.Search(text) or {}) do
+		local kind = each.kind == "item" and "items" or "npcs"
+		if not under[kind] then
+			under[kind] = { head = kind == "items" and "ITEMS" or "CREATURES", count = 0 }
+			out[#out + 1] = under[kind]
+		end
+		under[kind].count = under[kind].count + 1
+		out[#out + 1] = { kind = kind, name = each.name, ids = each.ids, farm = each }
+	end
+	return out
+end
+
+local NO_FAVORITES = "No favorites yet. Find something you farm and click its star."
+
+-- The list the farm side shows with nothing typed: your favorites, or the best farms.
+local function FarmList()
+	if chosen == "favorites" then
+		results = F.Favorites()
+		heading = NO_FAVORITES
+		return
+	end
+	local state, farms
+	farms, state = F.BestFarms()
+	heading = state == "working" and "Finding the best farms for you..." or "Nothing to farm at your level yet."
+	-- Record everything first (nothing in particular, all your loot counts), unless another window is picking one;
+	-- the best farms under their heading, which says so while they are found.
+	local farm = Shy.addons.Farm
+	if (picker and picker.pick) or not (farm and farm.FarmAnything) then
+		results = farms
+		return
+	end
+	results = { { kind = "npcs", name = "Record everything", ids = { 0 }, farm = { kind = "any" } } }
+	results[2] = { head = #farms > 0 and "BEST FARMS FOR YOU" or (state == "working" and "FINDING THE BEST FARMS FOR YOU..."
+		or "NOTHING TO FARM AT YOUR LEVEL YET"), count = #farms > 0 and #farms or "" }
+	for _, each in ipairs(farms) do results[#results + 1] = each end
+end
+
+-- Picks a Farm row on the left: its list, the search box looking only for what you could farm. (The best farms
+-- picked again: weighed again, their order taken anew.)
+local function FarmSide(key)
+	if key == "best" then
+		local farm = Shy.addons.Farm
+		local _, working = farm and farm.FarmsFor and farm:FarmsFor(nil)
+		if BEST.order and farm and farm.RankFarms and not working then farm:RankFarms() end
+		BEST.order = nil
+	end
+	query = ""
+	if not town then routeShut = true end
+	farmSide, town, chosen = true, { key = key }, key
+	if input then input:Refresh() end
+	FarmList()
+	Light()
+	Fill()
+end
 
 -- Nothing asked: the zone's quests, the one you are in unless another was picked.
 local function Browse()
 	query, town, routeShut, chosen = "", nil, false, "quests"
+	farmSide, picker = false, nil
+	if input then input:Refresh() end
 	if not picked or not browsed then browsed = W.map end
 	results = F.Zone(browsed)
 	heading = browsed and "No quests start here." or nil
@@ -1135,6 +1524,19 @@ local function Browse()
 end
 
 local function Look(text)
+	if farmSide then
+		query = text or ""
+		local typed = strtrim(query)
+		if typed == "" then
+			FarmList()
+		else
+			results = F.FarmSearch(typed)
+			heading = #typed >= 2 and "Nothing to farm by that name." or nil
+		end
+		Light()
+		Fill()
+		return
+	end
 	-- (A search begun folds your route to its heading: the results get the room.)
 	if strtrim(query) == "" and not town then routeShut = true end
 	query = text or ""
@@ -1149,21 +1551,10 @@ local function Look(text)
 	Fill()
 end
 
--- Lists your favorites (ShyFarm's).
-Favorites = function()
-	query = ""
-	if input then input:Refresh() end
-	if not town then routeShut = true end
-	town, chosen = { key = "favorites" }, "favorites"
-	results = F.Favorites()
-	heading = "No favorites yet. Search for something you farm, point at its row and click its star."
-	Light()
-	Fill()
-end
-
 -- Lists a service (or, "friends", your friends online).
 local function Nearby(key, kind, title, word, nothing, profession)
 	query = ""
+	farmSide, picker = false, nil
 	if input then input:Refresh() end
 	if not town then routeShut = true end
 	town, chosen = { key = key }, key
@@ -1213,6 +1604,13 @@ local SECTIONS = {
 			count = function() return #F.Friends() end },
 	} },
 	{ head = "FARM", when = function() local farm = Shy.addons.Farm; return farm ~= nil and farm.Favorites ~= nil end, rows = {
+		{ key = "best", label = "Best farms", sign = "coin",
+			help = "Where you'd make the most gold an hour right now, travel time included. Search for any item or creature to farm.",
+			count = function()
+				local farm = Shy.addons.Farm
+				local list = farm and farm.FarmsFor and farm:FarmsFor(nil)
+				return list and #list or 0
+			end },
 		{ key = "favorites", label = "Favorites", glyph = Shy.MEDIA .. "GlyphStar",
 			help = "What you farm again and again, with how it went and a graph of your sessions. A click farms one again.",
 			count = function() local farm = Shy.addons.Farm; return farm and farm.Favorites and #farm:Favorites() or 0 end },
@@ -1304,8 +1702,8 @@ local function Category(spec, y)
 	else
 		tile.icon = tile:CreateTexture(nil, "ARTWORK")
 		tile.icon:SetAllPoints()
-		if spec.glyph then
-			tile.icon:SetTexture(spec.glyph)
+		if spec.glyph or spec.sign then
+			if spec.sign then Shy.Hover.Glyph(tile.icon, spec.sign, TILE) else tile.icon:SetTexture(spec.glyph) end
 			UI.Tint(tile.icon, C.hot, 1)
 			tile.slot = Shy.Slot.New(tile, { size = TILE, well = false })
 			tile.slot:Empty(true)
@@ -1365,8 +1763,8 @@ local function Category(spec, y)
 			Browse()
 		elseif spec.key == "friends" then
 			Nearby("friends", nil, nil, nil, "Nobody on your friends list is online.")
-		elseif spec.key == "favorites" then
-			Favorites()
+		elseif spec.key == "favorites" or spec.key == "best" then
+			FarmSide(spec.key)
 		else
 			Nearby(spec.key, spec.title and nil or spec.key, spec.title and spec.title() or nil, spec.word, spec.nothing or NONE)
 		end
@@ -1464,17 +1862,23 @@ local function Create()
 		strata = "HIGH",
 		onClose = function() open = false end,
 		close = function() F.Toggle(false) end,
-		head = { size = "window", icon = T.smallIcon, title = "Find" },
+		head = { size = "window", icon = T.mark, title = "Find" },
 	})
 	-- Open or shut, however it happened (its lens, Esc, its ×, a command): the quest card's lens stays lit with it.
 	box:HookScript("OnShow", function() Shy:Fire("SHYQUEST_FINDER", true) end)
-	box:HookScript("OnHide", function() Shy:Fire("SHYQUEST_FINDER", false) end)
+	box:HookScript("OnHide", function()
+		-- (Shut, it was a picker for nobody any more.)
+		picker = nil
+		Shy:Fire("SHYQUEST_FINDER", false)
+	end)
 
 	local listW = WIDTH - PAD * 3 - SIDE
 	local listX = PAD + SIDE + PAD
+	-- Everything under the header stands on the body: clear of the look's work round the edge (UI.Body).
+	local body = UI.Body(box)
 
 	-- The left pane: what to find, with a hairline between it and the list.
-	side = UI.ScrollArea(box, SIDE, HEIGHT - HEADER - PAD - 8)
+	side = UI.ScrollArea(body, SIDE, HEIGHT - HEADER - PAD - 8)
 	side:SetPoint("TOPLEFT", PAD, -HEADER - 8)
 	rule = box:CreateTexture(nil, "ARTWORK")
 	rule:SetWidth(1)
@@ -1483,29 +1887,30 @@ local function Create()
 	BuildSide()
 
 	-- The right pane: the search box over the list.
-	input = UI.Input(box, nil, function() return query end, function(text) Look(text) end,
+	input = UI.Input(body, nil, function() return query end, function(text) Look(text) end,
 		{ width = listW, live = true, maxLetters = 40,
-		placeholder = function() return "Quest, creature, object, item or friend" end })
+		placeholder = function() return farmSide and "Search for an item or creature to farm" or "Quest, creature, object, item or friend" end })
 	input:SetPoint("TOPLEFT", listX, -HEADER - 10)
 	input:Refresh()
-	scroll = UI.ScrollArea(box, listW, HEIGHT - HEADER - 10 - SEARCH - 10 - PAD)
+	scroll = UI.ScrollArea(body, listW, HEIGHT - HEADER - 10 - SEARCH - 10 - PAD)
 	scroll:SetPoint("TOPLEFT", listX, -HEADER - 10 - SEARCH - 10)
 	-- The zone the list is of, in the list's head: its caret picks another.
 	zoneButton = UI.MenuButton(scroll.content, { write = ZoneMenu, width = listW - 14, height = ZONE - 6,
 		font = UI.NameFont(13), caretY = 1, inset = NAMES, menu = { fit = true } })
 	zoneButton:Hide()
-	empty = UI.Text(box, "", 13, false, C.dim)
+	empty = UI.Text(body, "", 13, false, C.dim)
 	empty:SetPoint("TOP", scroll, "TOP", 0, -40)
 	empty:SetWidth(listW - 40)
 	empty:SetJustifyH("CENTER")
 	Lay(box, WIDTH, HEIGHT)
 	Light()
 
-	-- Your farming changed (ShyFarm): the favorites' list and its count again.
+	-- Your farming changed (ShyFarm): the farm side's list again (the best farms as they are weighed, the favorites
+	-- with their stats, what you farm now), and the counts.
 	Shy:On("SHY_FARM", function()
 		if not open then return end
-		if chosen == "favorites" then
-			results = F.Favorites()
+		if farmSide then
+			if strtrim(query) == "" then FarmList() end
 			Fill()
 		end
 		Light()
@@ -1540,7 +1945,11 @@ local function Create()
 			local result = row:IsShown() and row.result
 			if result and result.points then
 				result.nearest, result.yards = Nearest(result.points)
-				row.far:SetText(result.quiet and "" or W.Yards(result.yards))
+				if result.farm then
+					FarmRight(row, result)
+				else
+					row.far:SetText(result.quiet and "" or W.Yards(result.yards))
+				end
 			end
 		end
 	end)
@@ -1561,6 +1970,17 @@ function F.Browse(map)
 	input:Refresh()
 end
 
+-- Opens the window on what you could farm (T:FindFarm): the best farms (opts.list "favorites": your favorites), the
+-- search box ready for a name. opts.pick(kind, id) is told what was picked, in place of farming it.
+function F.Farm(opts)
+	if not box then Create() end
+	open = true
+	Shy.HUD.Update(box)
+	picker = opts
+	FarmSide(opts and opts.list == "favorites" and "favorites" or "best")
+	input.box:SetFocus()
+end
+
 -- Opens or closes the window; with `text`, opens with that search. With nothing asked it lists the zone's
 -- quests; `map` lists that zone's.
 function F.Toggle(show, text, map)
@@ -1571,6 +1991,8 @@ function F.Toggle(show, text, map)
 	if open then
 		if map then browsed, picked = map, true end
 		if text and text ~= "" then
+			-- (A search asked for is of everything, whatever side the window was left on.)
+			farmSide, picker = false, nil
 			Look(text)
 			input:Refresh()
 		elseif map or (query == "" and not town) then

@@ -28,6 +28,7 @@ ns.Index = I
 
 local npcs, objects, items = {}, {}, {}
 local stamp           -- L.stamp when the lists were built
+local learned         -- D.dropsVersion then
 local offers = {}     -- "n12" / "i12" / "o:name" -> pickups (cache)
 local offered         -- L.version when that cache was built
 
@@ -54,7 +55,7 @@ end
 local function Sources(entry, goal, index, item)
 	for _, source in ipairs(item.sources) do
 		if source.kind == "n" then
-			Add(npcs, source.id, Tie(entry, "drop", goal, index, item, source.chance))
+			if not D.Dropless(source.id, item.id) then Add(npcs, source.id, Tie(entry, "drop", goal, index, item, source.chance)) end
 		elseif source.kind == "v" then
 			Add(npcs, source.id, Tie(entry, "sells", goal, index, item))
 		elseif source.kind == "o" then
@@ -63,13 +64,13 @@ local function Sources(entry, goal, index, item)
 		end
 	end
 	for _, id in ipairs(item.more or {}) do
-		Add(npcs, id, Tie(entry, "drop", goal, index, item))
+		if not D.Dropless(id, item.id) then Add(npcs, id, Tie(entry, "drop", goal, index, item)) end
 	end
 end
 
 local function Build()
-	if stamp == L.stamp then return end
-	stamp = L.stamp
+	if stamp == L.stamp and learned == D.dropsVersion then return end
+	stamp, learned = L.stamp, D.dropsVersion
 	wipe(npcs)
 	wipe(objects)
 	wipe(items)

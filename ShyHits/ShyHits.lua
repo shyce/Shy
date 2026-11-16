@@ -9,9 +9,9 @@ local MEDIA = "Interface\\AddOns\\ShyHits\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Hits",
+	category = "combat",
 	icon = MEDIA .. "ShyHits",
 	smallIcon = MEDIA .. "ShyHitsSmall",
-	tagline = "Damage and healing numbers beside the nameplate",
 	savedVariables = "ShyHitsDB",
 	defaults = {
 		on = true,
@@ -49,6 +49,7 @@ end
 function ns.Apply()
 	for _, fn in ipairs(appliers) do fn() end
 	if ns.RefreshOptions then ns.RefreshOptions() end
+	Shy:Fire("SHY_SWITCH", "shyhits-you")   -- its piece's switch in layout mode follows its setting
 end
 
 function T:Test()

@@ -30,14 +30,15 @@ local MEDIA = "Interface\\AddOns\\ShyDock\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Dock",
+	category = "interface",
 	icon = MEDIA .. "ShyDock",
 	smallIcon = MEDIA .. "ShyDockSmall",
-	tagline = "Your bars, chat and damage meter as one console",
 	savedVariables = "ShyDockDB",
 	-- cockpit: the cockpit's top edge as a percent of screen height; cockpitX: its centre, in units from the screen's.
 	-- cockpitFollow: the cockpit uses the core's background opacity (Theme.Strength); off, it is solid.
 	-- swingWas (not a default): the showSwingTimer CVar as it was before the swing row took it;
-	-- swingEditWas: Edit Mode's "Swing Timer" switch as it was.
+	-- swingEditWas: Edit Mode's "Swing Timer" switch as it was. editShownWas: Edit Mode's "Cast Bar" and "Cooldown
+	-- Viewer" switches as they were before the console turned them on (Move.lua), by setting.
 	-- cooldownsInCombat: the console's layout shows essential and utility cooldowns only in combat (Layout.lua).
 	-- menuDrawer: the micro menu and the bag bar tuck away to a pull under the minimap (Drawers.lua).
 	-- cockpitScale: the cockpit's size (0.75 to 1.5) about its top edge's middle; barsSide: the tracked bars'
@@ -168,6 +169,16 @@ Shy:On("SHY_SCREEN", function()
 	if ns.toldStale or not (ns.Layout.IsActive() and ns.Layout.IsStale()) then return end
 	ns.toldStale = true
 	T:Print("your screen changed size, so the console no longer fits it. Type /shy setup to refit it.")
+end)
+
+-- ShyXP's bars moved under the action bars, or away from there: the room kept for them is no longer the room
+-- the console was laid out with. (Not while setup is open: it fits the console itself.)
+Shy:On("SHY_XP_PLACE", function()
+	if not started or Shy.Setup.IsOpen() then return end
+	if ns.Layout.IsActive() and ns.Layout.IsStale() and not ns.toldStale then
+		ns.toldStale = true
+		T:Print("your XP bars moved, so the console no longer fits them. Type /shy setup to refit it.")
+	end
 end)
 
 -- A wing's art changed size: the layout may no longer meet it.

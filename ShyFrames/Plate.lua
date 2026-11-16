@@ -54,10 +54,7 @@ local function Font(kind, size)
 end
 
 local function NewText(parent, def)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(Font(def.font, def.size))
-	fs:SetShadowColor(0, 0, 0, 1)
-	fs:SetShadowOffset(0.8, -0.8)
+	local fs = UI.Words(parent, Font(def.font, def.size), nil, { world = true, justify = "CENTER" })
 	fs:SetNonSpaceWrap(false)
 	return fs
 end

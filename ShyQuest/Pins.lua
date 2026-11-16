@@ -169,7 +169,7 @@ local function StopsOn(map, covered)
 			for _, token in ipairs(quest.ends) do Add(token, action) end
 		end
 	end
-	if T.db.pickups then
+	if ns.Pickups() then
 		for _, quest in ipairs(L.StartsOn(map)) do
 			local action = { kind = "pickup", id = quest.id, title = quest.name, level = quest.level }
 			local offered = false

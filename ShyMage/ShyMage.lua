@@ -6,9 +6,9 @@ local MEDIA = "Interface\\AddOns\\ShyMage\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Mage",
+	category = "combat",
 	icon = MEDIA .. "ShyMage",
 	smallIcon = MEDIA .. "ShyMageSmall",
-	tagline = "Your keys, for every level",
 	savedVariables = "ShyMageDB",
 	keep = { keysMade = true, keysBuild = true, keysBefore = true },   -- the macros made for your keys are no setting: a reset keeps them yours
 	defaults = {},

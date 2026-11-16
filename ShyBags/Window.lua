@@ -34,12 +34,6 @@ local LOW = 3   -- free slots at which the count turns gold
 
 local box, win
 local P = {}                       -- the window's parts, by name
--- How much further in the look lays content (UI.LookContentIn: left, top, right, bottom): everything in the window
--- stands that much in from its edges, the window that much bigger.
-local IN = { 0, 0, 0, 0 }
-local function Inset()
-	IN[1], IN[2], IN[3], IN[4] = UI.LookContentIn(win and win.shyLook)
-end
 local left = SPINE
 local view = { guid = nil, wing = nil }
 local query, test = "", nil
@@ -54,10 +48,7 @@ local function Coins(copper)
 end
 
 local function Rounded(parent, size, color)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFont(Shy.FONT_ROUNDED, size or 11, "")
-	UI.Ink(fs, color or C.text)
-	return fs
+	return UI.Words(parent, size or 11, color, { justify = "CENTER" })
 end
 Window.Rounded = Rounded
 
@@ -649,7 +640,7 @@ end
 
 local function PlaceSeat(seat, index)
 	seat:ClearAllPoints()
-	seat:SetPoint("TOPLEFT", win, "TOPLEFT", 5 + IN[1], -(SEAT_TOP + IN[2] + (index - 1) * SEAT_STEP))
+	seat:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", 5, -(SEAT_TOP + (index - 1) * SEAT_STEP))
 end
 
 -- The rail: as many characters as fit, the rest behind a "+N" seat, and the menu button at the bottom.
@@ -715,8 +706,9 @@ end
 -- The most columns and the most rows the screen has room for.
 local function Room()
 	local scale = box:GetEffectiveScale()
-	local across = math.floor((GetScreenWidth() / scale - SPINE - RIGHT - IN[1] - IN[3] + Tile.GAP) / STEP)
-	local down = math.floor((GetScreenHeight() / scale - TOP - 24 - IN[2] - IN[4]) / STEP)
+	local l, t, r, b = UI.BodyIn(win)   -- (the look's clearance round the body: UI.Body)
+	local across = math.floor((GetScreenWidth() / scale - SPINE - RIGHT - l - r + Tile.GAP) / STEP)
+	local down = math.floor((GetScreenHeight() / scale - TOP - 24 - t - b) / STEP)
 	return math.max(1, across), math.max(1, down)
 end
 
@@ -802,10 +794,12 @@ local function Rail(mine)
 	if P.band then P.bandToggle:Lit(BandOpen()) end
 end
 
+-- Everything stands on the window's body (UI.Body): clear of the look's work round the edge, the window that much
+-- bigger (UI.BodyFit). Returns the window's whole width.
 local function Layout(columns, rows, wingWidth)
-	Inset()
+	local body = UI.Body(win)
 	local band = BandOpen()
-	local top = TOP + IN[2]
+	local top = TOP
 	local bagW = columns * STEP - Tile.GAP
 	-- The bag column stands beside the grid, a seam off, so opening it widens the window and nothing on
 	-- the left moves; a column taller than the grid makes the window taller.
@@ -815,37 +809,37 @@ local function Layout(columns, rows, wingWidth)
 		tall = math.max(tall, P.band:GetHeight() + Tile.GAP)
 	end
 	local gridH = tall - Tile.GAP
-	local gx = left + IN[1]
+	local gx = left
 	local wx = gx + bagW + colW + SEAM
 	local fy = top + tall
-	local W, H = gx + bagW + colW + (wingWidth and (SEAM + wingWidth) or 0) + RIGHT + IN[3], fy + 24 + IN[4]
+	local W, H = gx + bagW + colW + (wingWidth and (SEAM + wingWidth) or 0) + RIGHT, fy + 24
+	UI.BodyFit(win, W, H)
 	-- HUD.Resize keeps the top left corner in place.
-	Shy.HUD.Resize(box, W, H)
-	win:SetSize(W, H)
+	Shy.HUD.Resize(box, win:GetWidth(), win:GetHeight())
 
 	if P.band then
 		P.band:SetShown(band)
 		P.band:ClearAllPoints()
-		P.band:SetPoint("TOPLEFT", win, "TOPLEFT", gx + bagW + SEAM, -top)
+		P.band:SetPoint("TOPLEFT", body, "TOPLEFT", gx + bagW + SEAM, -top)
 	end
 	for _, grid in ipairs({ P.live, P.mem }) do
 		grid:ClearAllPoints()
-		grid:SetPoint("TOPLEFT", win, "TOPLEFT", gx, -top)
+		grid:SetPoint("TOPLEFT", body, "TOPLEFT", gx, -top)
 	end
 	P.foot:ClearAllPoints()
-	P.foot:SetPoint("TOPLEFT", win, "TOPLEFT", gx, -fy)
+	P.foot:SetPoint("TOPLEFT", body, "TOPLEFT", gx, -fy)
 	P.foot:SetSize(bagW + colW, FOOT)
 
-	P.spineRule:SetPoint("TOPLEFT", win, "TOPLEFT", 32 + IN[1], -30 - IN[2])
-	P.spineRule:SetSize(1, H - 35 - IN[2] - IN[4])
+	P.spineRule:SetPoint("TOPLEFT", body, "TOPLEFT", 32, -30)
+	P.spineRule:SetSize(1, H - 35)
 	-- The rail's foot: the menu, its rule and the buttons over it.
 	P.menu:ClearAllPoints()
-	P.menu:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 5 + IN[1], 7 + IN[4])
+	P.menu:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 5, 7)
 	P.divide:ClearAllPoints()
-	P.divide:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 8 + IN[1], 7 + FOOT + 4 + IN[4])
+	P.divide:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 8, 7 + FOOT + 4)
 	for _, b in ipairs({ P.sortRail, P.bandToggle }) do
 		b:ClearAllPoints()
-		b:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 4 + IN[1], b.railBottom + IN[4])
+		b:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 4, b.railBottom)
 	end
 	for index, seat in pairs(seats) do PlaceSeat(seat, index) end
 
@@ -854,16 +848,16 @@ local function Layout(columns, rows, wingWidth)
 	P.wingFoot:SetShown(wingWidth ~= nil)
 	if wingWidth then
 		P.seam:ClearAllPoints()
-		P.seam:SetPoint("TOPLEFT", win, "TOPLEFT", wx - 7, -32 - IN[2])
-		P.seam:SetSize(1, fy + FOOT - 32 - IN[2])
+		P.seam:SetPoint("TOPLEFT", body, "TOPLEFT", wx - 7, -32)
+		P.seam:SetSize(1, fy + FOOT - 32)
 		P.wing:ClearAllPoints()
-		P.wing:SetPoint("TOPLEFT", win, "TOPLEFT", wx, -top)
+		P.wing:SetPoint("TOPLEFT", body, "TOPLEFT", wx, -top)
 		P.wing:SetSize(wingWidth, gridH)
 		P.wingFoot:ClearAllPoints()
-		P.wingFoot:SetPoint("TOPLEFT", win, "TOPLEFT", wx, -fy)
+		P.wingFoot:SetPoint("TOPLEFT", body, "TOPLEFT", wx, -fy)
 		P.wingFoot:SetSize(wingWidth, FOOT)
 	end
-	return W
+	return win:GetWidth()
 end
 
 -- The window is never thrown from one shape to another. Held by an edge it is drawn wherever between
@@ -1488,7 +1482,7 @@ local function Build()
 	P.menu:HookScript("OnLeave", function(self) UI.TipHide(self) end)
 	P.divide = Rule(win)
 	P.divide:SetSize(16, 1)
-	P.divide:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 8, 7 + FOOT + 4)
+	P.divide:SetPoint("BOTTOMLEFT", UI.Body(win), "BOTTOMLEFT", 8, 7 + FOOT + 4)
 
 	-- The character's name, and a menu of the others.
 	P.who = UI.MenuButton(win, {
@@ -1526,7 +1520,7 @@ local function Build()
 	local function RailButton(glyph, bottom)
 		local b = CreateFrame("Button", nil, win)
 		b:SetSize(24, RAIL_BUTTON)
-		b:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 4, bottom)
+		b:SetPoint("BOTTOMLEFT", UI.Body(win), "BOTTOMLEFT", 4, bottom)
 		b.railBottom = bottom
 		b.glyph = b:CreateTexture(nil, "OVERLAY")
 		b.glyph:SetTexture(MEDIA .. glyph)
@@ -1739,20 +1733,16 @@ function Window.Refresh()
 	if not ok then geterrorhandler()(err) end
 end
 
--- Heritage Frame (fine / bold) moves HeadCloseReserve; the search box sits on that inset. A look may lay content
--- further in (UI.LookContentIn): laid out again when that changes.
-local inWas = ""
+-- Heritage Frame (fine / bold) moves HeadCloseReserve; the search box sits on that inset.
 Shy:On("SHY_THEME", function()
 	if not (win and P.shown and box and box:IsShown()) then return end
-	local was = table.concat(IN, " ")
-	Inset()
-	if table.concat(IN, " ") ~= was or inWas ~= table.concat(IN, " ") then
-		inWas = table.concat(IN, " ")
-		Window.Refresh()
-		return
-	end
 	local s = P.shown
 	Title(win:GetWidth(), s.c, s.bank)
+end)
+-- The look keeps another clearance round the body (UI.Body): the window laid out again, that much bigger.
+Shy:On("SHY_BODY", function(f)
+	if f ~= win or not (P.shown and box and box:IsShown()) then return end
+	Window.Refresh()
 end)
 
 function Window.Init()

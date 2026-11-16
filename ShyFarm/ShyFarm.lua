@@ -4,10 +4,15 @@
 --
 -- Public (Shy.addons.Farm):
 --   T:Session()             the session, or nil: { state ("ready" | "running" | "paused"), kind, seconds, value, coin,
---                           kills, corpses, catches, want, goal }
+--                           kills, corpses, catches, want (the item counted), goal, mob (the creature farmed) }
 --   T:Farm(item, goal)      farm an item: a session is set up for it if none goes on (ready: it asks to start as you
 --                           reach where it drops), and the best camp to farm it is your active waypoint (ShyQuest);
 --                           goal: how many you want, or nil
+--   T:FarmMob(npc, [item], [goal])   farm a creature: all it drops counts, at your prices; item: the one of them
+--                           counted on its own (to `goal`). Its best camp is your active waypoint
+--   T:FarmAnything()        record everything: nothing in particular farmed, all you loot counts, the clock going now
+--   T:Loots(npc)            whether the loot tables know a creature (it has something to loot)
+--   T:FarmsFor([item])      the farms last weighed for `item` (nil: for gold), or nil; and whether a weighing is going
 --   T:Favorites()           your favorites with their stats: { { item, goal, name, stats } }, by name
 --   T:IsFavorite(item) / T:Favorite(item, on)   one kept or let go (nil: turned)
 --   T:StatRows(item)        a favorite's stats as a hover's rows
@@ -31,9 +36,9 @@ local ADDON, ns = ...
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Farm",
+	category = "items",
 	icon = "Interface\\AddOns\\ShyFarm\\Media\\ShyFarm",
 	smallIcon = "Interface\\AddOns\\ShyFarm\\Media\\ShyFarmSmall",
-	tagline = "What your grinding and fishing are worth",
 	savedVariables = "ShyFarmDB",
 	defaults = {
 		on = true,            -- the piece on screen while a session goes on
@@ -62,6 +67,7 @@ ns.appliers = appliers
 function ns.Apply()
 	for _, fn in ipairs(appliers) do fn() end
 	if ns.RefreshOptions then ns.RefreshOptions() end
+	Shy:Fire("SHY_SWITCH", "shyfarm")   -- its piece's switch in layout mode follows its setting
 end
 
 -- Something changed that the piece and other addons show: said the frame after, each kind of change once and in
@@ -88,14 +94,36 @@ function T:Session()
 	local s = S and S.Current()
 	if not s then return nil end
 	return { state = s.state, kind = S.Kind(s), seconds = S.Seconds(s), value = S.Value(s), coin = s.coin, kills = S.Kills(s),
-		corpses = s.corpses, catches = s.catches, want = s.want and s.want.item, goal = s.want and s.want.goal }
+		corpses = s.corpses, catches = s.catches, want = s.want and s.want.item, goal = s.want and s.want.goal,
+		mob = s.mob and s.mob.npc }
 end
 
 -- (It leads there too: the best camp to farm it is your active waypoint.)
 function T:Farm(item, goal)
-	ns.Session.Want(item, goal)
-	if item and ns.Card and ns.Card.Lead then ns.Card.Lead(item) end
+	ns.Session.Target(nil, item, goal)
+	if item and ns.Card and ns.Card.Lead then ns.Card.Lead() end
 end
+
+function T:FarmMob(npc, item, goal)
+	if not npc then return end
+	ns.Session.Target(npc, item, goal)
+	if ns.Card and ns.Card.Lead then ns.Card.Lead() end
+end
+
+-- Record everything: nothing in particular farmed, all you loot counts, the clock going now.
+function T:FarmAnything()
+	ns.Session.Target(nil, nil)
+	ns.Session.Clock()
+	local s = ns.Session.Current()
+	if s then s.hidden = nil end
+	if ns.Card and ns.Card.Paint then ns.Card.Paint() end
+end
+
+function T:Loots(npc)
+	return npc ~= nil and ns.loot ~= nil and ns.loot.creatures[npc] ~= nil
+end
+
+function T:FarmsFor(item) return ns.Farms.For(item) end
 
 function T:Stop()
 	ns.Session.Stop()
@@ -119,10 +147,11 @@ function T:RankFarms(item) ns.Farms.Rank(item) end
 function T:Farms() return ns.Farms.List() end
 function T:Pace() return ns.Farms.Pace() end
 
-function T:KillWorth(npc)
+-- (most: how many of what brings most, 5 unless told.)
+function T:KillWorth(npc, most)
 	local copper = ns.Worth.Worth(npc)
 	if not copper then return nil end
-	return copper, ns.Worth.Best(npc, 5)
+	return copper, ns.Worth.Best(npc, most or 5)
 end
 
 -- The finder's item menu: farm it, to a count or not.
@@ -173,10 +202,11 @@ local function Help()
 	T:Print("commands:")
 	print("  /shyfarm  - open options")
 	print("  /shyfarm start  - start a session")
-	print("  /shyfarm stop  - end the session")
+	print("  /shyfarm reset  - save this session and start fresh (stop works too)")
 	print("  /shyfarm show  - show the window (starts a session if none is going)")
 	print("  /shyfarm pause  - pause or go on")
 	print("  /shyfarm farm <item>  - farm an item (its link, ID or name)")
+	print("  /shyfarm find  - find an item or a creature to farm")
 	print("  /shyfarm price <item> <price>  - set your own price, like 1g 20s")
 end
 
@@ -197,7 +227,7 @@ SlashCmdList.SHYFARM = function(input)
 		T:OpenOptions()
 	elseif cmd == "start" then
 		ns.Session.Begin()
-	elseif cmd == "stop" or cmd == "end" then
+	elseif cmd == "reset" or cmd == "stop" or cmd == "end" then
 		ns.Session.Stop()
 	elseif cmd == "show" then
 		ns.Card.Reveal()
@@ -206,6 +236,8 @@ SlashCmdList.SHYFARM = function(input)
 	elseif cmd == "farm" then
 		local item = ItemFrom(rest)
 		if item then T:Farm(item) else T:Print("which item? Shift-click it, or give its ID.") end
+	elseif cmd == "find" then
+		if not (ns.Card.Find and ns.Card.Find()) then T:Print("you need ShyQuest turned on for that.") end
 	elseif cmd == "price" then
 		local link, amount = rest:match("^(|c.-|r)%s*(.*)$")
 		if not link then link, amount = rest:match("^(%S+)%s*(.*)$") end

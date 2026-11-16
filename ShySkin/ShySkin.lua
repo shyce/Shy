@@ -33,9 +33,9 @@ local UI = Shy.UI
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Skin",
+	category = "interface",
 	icon = MEDIA .. "ShySkin",
 	smallIcon = MEDIA .. "ShySkinSmall",
-	tagline = "The default UI in graphite, steel and your color",
 	savedVariables = "ShySkinDB",
 	defaults = { modules = {}, options = {} },
 })

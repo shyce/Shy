@@ -4,9 +4,11 @@
 --
 --   local T = Shy:NewAddon(..., {
 --       suffix = "Tip",                         -- shown as "Shy" + "Tip"
---       icon = "Interface\\AddOns\\ShyTip\\Media\\ShyTip",            -- 128px icon (hub, splash)
---       smallIcon = "Interface\\AddOns\\ShyTip\\Media\\ShyTipSmall",  -- round icon for 14-24px spots
---       tagline = "Tooltips at your cursor",
+--       icon = "Interface\\AddOns\\ShyTip\\Media\\ShyTip",            -- where its pictures are, by name
+--       smallIcon = "Interface\\AddOns\\ShyTip\\Media\\ShyTipSmall",  -- round, for a minimap button or a notice
+--       mark = ...,                             -- what stands for it wherever it is shown (icon .. "Mark" if nil)
+--       category = "interface",                 -- the group it is listed under (Shy.CATEGORIES)
+--       tagline = "...",                        -- optional; the .toc's Notes (without its slash command) if nil
 --       savedVariables = "ShyTipDB",            -- optional; becomes T.db with defaults merged in
 --       defaults = { ... },
 --       keep = { key = true },                  -- optional; saved keys that are account-wide, not per profile
@@ -591,21 +593,61 @@ local Addon = {}
 Addon.__index = Addon
 Shy.AddonPrototype = Addon
 
+-- What an addon does, in a line: its .toc's Notes, without the slash command they end on. The one place
+-- it is written; the game's addon list shows the Notes whole.
+local function Tagline(notes)
+	return notes and (notes:gsub("%s*|c%x%x%x%x%x%x%x%x/[^|]*|r%s*$", "")) or nil
+end
+
 function Shy:NewAddon(name, info)
 	local a = setmetatable(info or {}, Addon)
 	a.name = name
 	a.suffix = a.suffix or name:gsub("^Shy", "")
 	a.version = a.version or GetMeta(name, "Version")
+	a.tagline = a.tagline or Tagline(GetMeta(name, "Notes"))
 	a.smallIcon = a.smallIcon or a.icon   -- no mini icon yet
+	a.mark = a.mark or (a.icon or Shy.ICON) .. "Mark"   -- (one with no art of its own wears the fox)
 	if not Shy.addons[a.suffix] then table.insert(Shy.order, a) end
 	Shy.addons[a.suffix] = a
 	byName[name] = a
 	return a
 end
 
+-- Where addons are listed (the /shy window, the minimap's menu) they stand under these, in this order, and by
+-- name within each. An addon names its own (`category`); one that names none stands under the last.
+Shy.CATEGORIES = {
+	{ key = "leveling", title = "Leveling" },
+	{ key = "combat", title = "Combat" },
+	{ key = "items", title = "Items and gold" },
+	{ key = "social", title = "Chat and groups" },
+	{ key = "interface", title = "Interface" },
+	{ key = "other", title = "More" },
+}
+
+-- The addons a list shows (none internal; only those `keep(a)` is true of, if given), by category:
+-- { { key, title, addons }, ... }, only the categories that hold one.
+function Shy.Listed(keep)
+	local by, out = {}, {}
+	for _, c in ipairs(Shy.CATEGORIES) do by[c.key] = { key = c.key, title = c.title, addons = {} } end
+	for _, a in ipairs(Shy.order) do
+		if not a.internal and (not keep or keep(a)) then
+			local group = by[a.category] or by.other
+			group.addons[#group.addons + 1] = a
+		end
+	end
+	for _, c in ipairs(Shy.CATEGORIES) do
+		local group = by[c.key]
+		if #group.addons > 0 then
+			table.sort(group.addons, function(x, y) return x.suffix:lower() < y.suffix:lower() end)
+			out[#out + 1] = group
+		end
+	end
+	return out
+end
+
 function Addon:Print(msg)
 	local B = Shy.Brand
-	local icon = B.Icon(self.smallIcon, 14) .. " "
+	local icon = B.Icon(self.mark, 14) .. " "
 	print(icon .. B.Name(self.suffix) .. "|cff888888:|r " .. tostring(msg))
 end
 

@@ -91,8 +91,7 @@ local function Pin(i)
 		pin.ring:SetTexture("Interface\\minimap\\UI-Minimap-Ping-Expand")
 		pin.ring:SetBlendMode("ADD")
 		pin.ring:SetPoint("CENTER")
-		pin.label = pin:CreateFontString(nil, "OVERLAY")
-		pin.label:SetFontObject(UI.NameFont(10, "OUTLINE"))
+		pin.label = UI.Words(pin, UI.NameFont(10, "OUTLINE"), nil, { world = true, justify = "CENTER" })
 		pin.label:SetPoint("TOP", pin, "BOTTOM", 0, -1)
 		pins[i] = pin
 	end

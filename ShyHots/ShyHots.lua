@@ -16,9 +16,9 @@ local ADDON, ns = ...
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Hots",
+	category = "combat",
 	icon = "Interface\\AddOns\\ShyHots\\Media\\ShyHots",
 	smallIcon = "Interface\\AddOns\\ShyHots\\Media\\ShyHotsSmall",
-	tagline = "Shows the healing your HoTs still have to give",
 	savedVariables = "ShyHotsDB",
 	defaults = {
 		on = true,

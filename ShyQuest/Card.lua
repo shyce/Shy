@@ -1237,7 +1237,7 @@ function ns.CreateCard(parent, onResize)
 	card.style = UI.Segmented(card.controls, { "Zone", "Guide", "Dungeon" },
 		function()
 			if ns.Run and ns.Run.Doing() then return 3 end
-			return T:QuestStyle() == "guide" and 2 or 1
+			return ns.Following() and 2 or 1
 		end,
 		function(index)
 			if index == 3 then
@@ -1763,7 +1763,7 @@ function ns.CreateCard(parent, onResize)
 	-- The header: the pager round the count, at the right of the card's own strip or of the deck's.
 	-- Whether the card follows a leveling guide (guide mode), or just lists the quests (zone mode).
 	local function Following()
-		return T.db.guide.follow == true and G.current ~= nil
+		return ns.Following() and G.current ~= nil
 	end
 
 	local function Head(self, guided, total, stop)
@@ -2596,7 +2596,7 @@ function ns.CreateCard(parent, onResize)
 		if trayLast and folds[1] then y = y + 4 end
 		y = Zones(self, folds, y, RowFor)
 		local strip = ns.XP.Strip(self)
-		y = bodyTop + Body(self, bodyTop, y, strip and ns.XP.HEIGHT + 4 or 6)
+		y = bodyTop + Body(self, bodyTop, y, strip and ns.XP.Height() + 4 or 6)
 		for i = used + 1, #self.rows do
 			local row = self.rows[i]
 			row.stop = nil
@@ -2640,7 +2640,7 @@ function ns.CreateCard(parent, onResize)
 			strip:SetPoint("TOPRIGHT", 0, -y)
 			strip:Refresh()
 			strip:Show()
-			y = y + ns.XP.HEIGHT - 6
+			y = y + ns.XP.Height() - 6
 		end
 
 		return y + 6
@@ -2962,10 +2962,10 @@ local function StopMenu(root, stop)
 end
 
 -- The switches other files registered for one section (ns.CardSwitch). pcall: one file's error must
--- not break the menu.
-local function Switches(root, section)
+-- not break the menu. keptOnly: only those that still act without levelling help.
+local function Switches(root, section, keptOnly)
 	for _, switch in ipairs(ns.cardSwitches or {}) do
-		if switch.section == section then
+		if switch.section == section and (switch.kept or not keptOnly) then
 			local ok, err = pcall(switch.write, root)
 			if not ok then geterrorhandler()(err) end
 		end
@@ -2991,29 +2991,39 @@ local function CardMenu(root)
 	log:SetSub("Every quest you carry, on the map")
 	log:SetIcon(Glyph("log"))
 
-	-- The guide: whole or next steps, which one, your place in it, and what it leaves out here.
-	local guide = root:CreateButton("Guide")
-	guide:SetSub("Which guide, your place in it, what it leaves out")
-	guide:SetIcon(Glyph("guide"))
-	guide:CreateCheckbox("Follow a leveling guide", function() return T:QuestStyle() == "guide" end, function()
-		T:SetQuestStyle(T:QuestStyle() == "guide" and "zone" or "guide")
-	end)
-	if T:QuestStyle() == "guide" and G.current ~= nil then
-		guide:CreateCheckbox("Show the whole guide", function() return ns.char.guideFull == true end, function()
-			ns.ToggleGuideWindow()
-		end)
+	-- At the top level the guide, pickups, zones and errands (levelling help) are this character's to take back;
+	-- without them the Guide entry is left out, and Errands keeps what still acts.
+	if ns.AtTop() then
+		local help = root:CreateCheckbox("Leveling help", ns.Levelling, function() ns.SetTopHelp(not ns.Levelling()) end)
+		help:SetSub("The guide, quests to pick up and errands")
 	end
-	if ns.GuideList then
-		guide:CreateDivider()
-		ns.GuideList.Menu(guide)
-	end
-	if G.current and not G.finished then
-		guide:CreateDivider()
-		guide:CreateCheckbox("This zone's other quests too", function() return R.Extras() end, function()
-			if W.map then ns.char.zones[W.map] = not R.Extras() end
-			ns.Apply()
+	local levelling = ns.Levelling()
+
+	if levelling then
+		-- The guide: whole or next steps, which one, your place in it, and what it leaves out here.
+		local guide = root:CreateButton("Guide")
+		guide:SetSub("Which guide, your place in it, what it leaves out")
+		guide:SetIcon(Glyph("guide"))
+		guide:CreateCheckbox("Follow a leveling guide", function() return T:QuestStyle() == "guide" end, function()
+			T:SetQuestStyle(T:QuestStyle() == "guide" and "zone" or "guide")
 		end)
-		guide:CreateButton("Quests my guide skips...", function() ns.OffGuide(true) end)
+		if T:QuestStyle() == "guide" and G.current ~= nil then
+			guide:CreateCheckbox("Show the whole guide", function() return ns.char.guideFull == true end, function()
+				ns.ToggleGuideWindow()
+			end)
+		end
+		if ns.GuideList then
+			guide:CreateDivider()
+			ns.GuideList.Menu(guide)
+		end
+		if G.current and not G.finished then
+			guide:CreateDivider()
+			guide:CreateCheckbox("This zone's other quests too", function() return R.Extras() end, function()
+				if W.map then ns.char.zones[W.map] = not R.Extras() end
+				ns.Apply()
+			end)
+			guide:CreateButton("Quests my guide skips...", function() ns.OffGuide(true) end)
+		end
 	end
 
 	-- What the card lists and shows.
@@ -3027,14 +3037,16 @@ local function CardMenu(root)
 			ns.Apply()
 		end)
 	end
-	shows:CreateCheckbox("Include quests to pick up", function() return T.db.pickups end, function()
-		T.db.pickups = not T.db.pickups
-		ns.Apply()
-	end)
-	shows:CreateCheckbox("Nearby quests before the guide step", function() return T.db.guide.nearby ~= false end, function()
-		T.db.guide.nearby = T.db.guide.nearby == false
-		ns.Apply()
-	end)
+	if levelling then
+		shows:CreateCheckbox("Include quests to pick up", function() return T.db.pickups end, function()
+			T.db.pickups = not T.db.pickups
+			ns.Apply()
+		end)
+		shows:CreateCheckbox("Nearby quests before the guide step", function() return T.db.guide.nearby ~= false end, function()
+			T.db.guide.nearby = T.db.guide.nearby == false
+			ns.Apply()
+		end)
+	end
 	if G.current and not G.finished then
 		-- GuideButtons.lua's strip
 		local buttons = shows:CreateButton("Target and use buttons")
@@ -3059,11 +3071,13 @@ local function CardMenu(root)
 	end)
 
 	-- What the route adds on its own, and what the card speaks up about (registered by the files that do it).
+	-- Without levelling help only the errands for the quests you have and getting back to life are left.
 	local errands = root:CreateButton("Errands")
-	errands:SetSub("What the route adds on its own: vendors, trainers, flights")
+	errands:SetSub(levelling and "What the route adds on its own: vendors, trainers, flights"
+		or "What the route adds on its own: your bank, the mailbox")
 	errands:SetIcon(Glyph("errands"))
 	errands:CreateSection("Errands")
-	Switches(errands, "errands")
+	Switches(errands, "errands", not levelling)
 	errands:CreateSection("Suggestions")
 	Switches(errands, "suggestions")
 
@@ -3212,6 +3226,16 @@ function ns.SetupCard()
 		-- Under the minimap, where the game's tracker stands
 		point = { "TOPRIGHT", "TOPRIGHT", -40, -230 },
 		shown = Shown,
+		-- Its options' "Show the quest window".
+		switch = {
+			get = function() return T.db.card.shown ~= false end,
+			set = function(on)
+				T.db.card.shown = on
+				ns.Apply()
+				if ns.RefreshOptions then ns.RefreshOptions() end
+			end,
+			hint = "What to do next, and your quests",
+		},
 		hang = true,   -- grows downward, so the heading stays put
 		-- ShyDock's deck tab: the card is the quests, and this folds it away, or opens it again.
 		toggle = {

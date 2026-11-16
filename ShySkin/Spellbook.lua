@@ -382,14 +382,7 @@ end
 ---------------------------------------------------------------------------
 
 local function Text(parent, font, color, layer)
-	local text = parent:CreateFontString(nil, layer or "OVERLAY")
-	text:SetFontObject(font)
-	UI.Follow(text)   -- a title keeps up with the theme's font
-	text:SetJustifyH("LEFT")
-	text:SetShadowOffset(1, -1)
-	text:SetShadowColor(0, 0, 0, 1)
-	UI.Ink(text, color or C.text)
-	return text
+	return UI.Words(parent, font, color, { layer = layer })
 end
 
 local function Gradient(texture, direction, from, to)

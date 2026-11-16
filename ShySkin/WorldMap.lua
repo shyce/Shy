@@ -131,12 +131,7 @@ end
 -- Our own font string.
 local function Words(kit, owner, key, object, layer)
 	return ns.Own(kit, owner, key, function(o)
-		local text = o:CreateFontString(nil, layer or "OVERLAY")
-		text:SetFontObject(object)
-		UI.Follow(text)   -- a title keeps up with the theme's font
-		text:SetJustifyH("LEFT")
-		text:SetWordWrap(false)
-		return text
+		return UI.Words(o, object, nil, { layer = layer, wrap = false })
 	end)
 end
 

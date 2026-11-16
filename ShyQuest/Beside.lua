@@ -44,10 +44,7 @@ local function Label()
 	if not label then
 		label = CreateFrame("Frame", nil, UIParent)
 		label:SetSize(30, 10)
-		label.text = label:CreateFontString(nil, "OVERLAY")
-		label.text:SetFont(Shy.FONT_ROUNDED, 9, "")
-		label.text:SetShadowOffset(1, -1)
-		label.text:SetShadowColor(0, 0, 0, 0.9)
+		label.text = UI.Words(label, 9)
 		label.text:SetPoint("CENTER")
 	end
 	return label

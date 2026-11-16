@@ -131,7 +131,7 @@ local armed, armedUntil      -- the button showing "Sure?", and until when
 local Fill
 
 local function Guided()
-	return T.db.guide.follow and G.current ~= nil and not G.finished
+	return ns.Following() and G.current ~= nil and not G.finished
 end
 
 -- How many available quests on a map the guide doesn't use.
@@ -265,7 +265,7 @@ function Fill()
 	local y = 40
 	local function Put(thing, gap, height)
 		thing:ClearAllPoints()
-		thing:SetPoint("TOPLEFT", OFF_PAD, -y)
+		thing:SetPoint("TOPLEFT", UI.Body(off), "TOPLEFT", OFF_PAD, -y)   -- (on its body: UI.Body)
 		thing:Show()
 		y = y + (height or math.max(12, thing:GetStringHeight())) + (gap or 0)
 	end
@@ -300,9 +300,9 @@ function Fill()
 			UI.Ink(button.text, button.chosen and C.head or C.dim)
 		end
 		off.only:ClearAllPoints()
-		off.only:SetPoint("TOPLEFT", OFF_PAD, -y)
+		off.only:SetPoint("TOPLEFT", UI.Body(off), "TOPLEFT", OFF_PAD, -y)
 		off.too:ClearAllPoints()
-		off.too:SetPoint("TOPRIGHT", -OFF_PAD, -y)
+		off.too:SetPoint("TOPRIGHT", UI.Body(off), "TOPRIGHT", -OFF_PAD, -y)
 		y = y + 24 + 6
 		local others = Others(map)
 		if too then
@@ -344,7 +344,7 @@ function Fill()
 		y = y + 6
 		Put(off.all, 0, 24)
 	end
-	off:SetHeight(y + OFF_PAD)
+	UI.BodyFit(off, OFF_WIDTH, y + OFF_PAD)   -- (and the look's clearance round it: UI.Body)
 end
 
 -- Opens the window, or closes it with show == false. reason: see `why`.

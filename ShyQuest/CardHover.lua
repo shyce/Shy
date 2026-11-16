@@ -1159,7 +1159,7 @@ function CardHover.Objective(owner, stop, id, index, card)
 	local content = { card = true, about = "objective:" .. id .. ":" .. index, title = Counted(goal.text),
 		seat = one and LetterSeat(one) or MarkSeat("goal", nil, nil, kind), light = color, kind = far,
 		key = key, body = body }
-	return Shy.Hover.Show(owner, content, { dock = card, key = "objective:" .. id .. ":" .. index }) ~= nil
+	return Shy.Hover.Show(owner, content, { dock = card, key = "objective:" .. id .. ":" .. index, keep = true }) ~= nil
 end
 CardHover.ObjectiveStage = ObjectiveStage
 
@@ -1306,7 +1306,7 @@ function CardHover.Show(row, stop, card)
 	content.pins = not (stop.kind == "errand" and stop.click)   -- a row click pins it (OnKeep)
 	shown = row
 	row.hoverCard = card
-	local frame = Shy.Hover.Show(row, content, { dock = card, key = Key(stop), onKeep = OnKeep })
+	local frame = Shy.Hover.Show(row, content, { dock = card, key = Key(stop), onKeep = OnKeep, keep = true })
 	if frame then frame.about, frame.words = stop, words end
 	Shy.Clock("card: a row's hover, put up"):Lap(debugprofilestop() - from)
 	return true
@@ -1355,7 +1355,7 @@ function CardHover.Beside(owner, stop, hints, side, mini)
 		content.body[#content.body + 1] = { model = (ObjectiveStage(action.id, stop.objective, goal, color)) }
 		if one then content.seat, content.light = LetterSeat(one), color end
 	end
-	local opts = { side = side, key = Key(stop), onKeep = OnKeep, width = SLIM_WIDE }
+	local opts = { side = side, key = Key(stop), onKeep = OnKeep, width = SLIM_WIDE, keep = true }
 	if mini then CardHover.Minimap(opts) end
 	local frame = Shy.Hover.Show(owner, content, opts)
 	if frame then frame.about = stop end

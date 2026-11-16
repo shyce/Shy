@@ -77,10 +77,13 @@ end
 -- Putting the line in with SetText marks it as ours. The box's own Enter then runs it, and a protected
 -- slash command (/target and the rest) is refused. Those lines go to a secure button instead: Enter
 -- clicks it, and the box is emptied first so its handler has nothing protected left to run.
+-- A typing row of ShyChat's own (a whisper's) runs nothing itself: every command typed there goes to the button,
+-- and after it the row stays, emptied, to go on talking.
 local RECALL = "ShyChatRecall"
 local recall, armedBox, armedText, handing, combatWatch
 local placed = {}   -- edit box -> secure line we put there, until it is sent or replaced
 local passing       -- edit box handing its keys on to the bindings for the Enter that runs the line
+local own = setmetatable({}, { __mode = "k" })   -- typing rows of ShyChat's own
 
 -- A box left passing keys on fires every hotkey while you type. Key passing can't change in a fight,
 -- so this runs again when the fight ends and whenever the box takes focus.
@@ -94,6 +97,15 @@ local function SecureLine(text)
 	if issecretvalue(text) or type(text) ~= "string" then return nil end
 	local command = text:match("^(/[^%s]+)")
 	if command and IsSecureCmd(command) then return text end
+end
+
+-- The line Enter hands to the button from this box, or nil: a chat box's protected commands, any command in ours.
+local function Runs(box, text)
+	if own[box] then
+		if issecretvalue(text) or type(text) ~= "string" then return nil end
+		return text:find("^/[^%s/]") and text or nil
+	end
+	return SecureLine(text)
 end
 
 local function Unbind()
@@ -119,7 +131,7 @@ local function RecallButton()
 		Unbind()
 		if box then
 			box:SetText("")
-			box:Hide()
+			if not own[box] then box:Hide() end
 		end
 	end)
 	combatWatch = CreateFrame("Frame")
@@ -128,7 +140,7 @@ local function RecallButton()
 		StopPassing()
 		local box = armedBox
 		local text = box and not issecretvalue(box:GetText()) and box:GetText()
-		if box and box:HasFocus() and SecureLine(text) then
+		if box and box:HasFocus() and Runs(box, text) then
 			Arm(box, text)
 		else
 			Unbind()
@@ -155,11 +167,13 @@ local function OnEnterKey(editBox)
 	-- Name completion accepts its pick on Enter. Leave that to the box.
 	if AutoCompleteBox:IsShown() and AutoCompleteBox.parent == editBox then return end
 	local text = editBox:GetText()
-	if not SecureLine(text) then
+	if not Runs(editBox, text) then
 		placed[editBox] = nil
 		Unbind()
 		return
 	end
+	-- In a fight a row of ours can't hand its key on: the line stays for its own Enter to explain.
+	if own[editBox] and InCombatLockdown() then return end
 	if text ~= armedText then Arm(editBox, text) end
 	-- Still dispatching this key: keep the binding until it has clicked, then drop it.
 	-- The line is no longer one we put there: focusing the box again must not grab Enter.
@@ -195,7 +209,7 @@ local function OnArrow(editBox, key)
 	state.at = math.max(1, math.min(#typed + 1, state.at + (key == "UP" and -1 or 1)))
 	local text = typed[state.at] or state.draft
 	if state.at > #typed then browsing[editBox] = nil end
-	if SecureLine(text) then
+	if Runs(editBox, text) then
 		Arm(editBox, text)
 	else
 		placed[editBox] = nil
@@ -207,6 +221,47 @@ end
 
 local hookedBoxes = {}
 
+-- Enter on a line the button runs, followed as it is typed, focused and let go of.
+local function HookCommands(editBox)
+	editBox:HookScript("OnKeyDown", function(self, key)
+		if key == "ENTER" or key == "NUMPADENTER" then OnEnterKey(self) end
+	end)
+	editBox:HookScript("OnTextChanged", function(self, userInput)
+		-- (a chat box runs what is typed in it itself: only a line put there is the button's)
+		if not userInput or (self ~= armedBox and not own[self]) then return end
+		local text = self:GetText()
+		if issecretvalue(text) or (self == armedBox and text == armedText) then return end
+		if Runs(self, text) then
+			Arm(self, text)
+		elseif self == armedBox then
+			placed[self] = nil
+			Unbind()
+		end
+	end)
+	editBox:HookScript("OnEditFocusLost", function(self)
+		if handing or self ~= armedBox then return end
+		Unbind()
+	end)
+	editBox:HookScript("OnEditFocusGained", function(self)
+		if self == passing then StopPassing() end
+		local text = self:GetText()
+		if (own[self] or (placed[self] and text == placed[self])) and Runs(self, text) then Arm(self, text) end
+	end)
+	editBox:HookScript("OnHide", function(self)
+		browsing[self] = nil
+		if handing then return end
+		placed[self] = nil
+		if self == armedBox then Unbind() end
+	end)
+end
+
+-- A typing row of ShyChat's own: the commands typed in it run as the chat box's do.
+function W.Commands(editBox)
+	if own[editBox] then return end
+	own[editBox] = true
+	HookCommands(editBox)
+end
+
 local function SetupEditBox(editBox)
 	if not hookedBoxes[editBox] then
 		hookedBoxes[editBox] = true
@@ -214,35 +269,9 @@ local function SetupEditBox(editBox)
 		hooksecurefunc(editBox, "AddHistoryLine", RememberTyped)
 		editBox:HookScript("OnArrowPressed", function(self, key) OnArrow(self, key) end)
 		editBox:HookScript("OnKeyDown", function(self, key)
-			if key == "ENTER" or key == "NUMPADENTER" then OnEnterKey(self) return end
-			OnArrow(self, key)
+			if key ~= "ENTER" and key ~= "NUMPADENTER" then OnArrow(self, key) end
 		end)
-		editBox:HookScript("OnTextChanged", function(self, userInput)
-			if not userInput or self ~= armedBox then return end
-			local text = self:GetText()
-			if issecretvalue(text) or text == armedText then return end
-			if SecureLine(text) then
-				Arm(self, text)
-			else
-				placed[self] = nil
-				Unbind()
-			end
-		end)
-		editBox:HookScript("OnEditFocusLost", function(self)
-			if handing or self ~= armedBox then return end
-			Unbind()
-		end)
-		editBox:HookScript("OnEditFocusGained", function(self)
-			if self == passing then StopPassing() end
-			local text = self:GetText()
-			if placed[self] and text == placed[self] then Arm(self, text) end
-		end)
-		editBox:HookScript("OnHide", function(self)
-			browsing[self] = nil
-			if handing then return end
-			placed[self] = nil
-			if self == armedBox then Unbind() end
-		end)
+		HookCommands(editBox)
 	end
 	editBox:SetAltArrowKeyMode(not db.arrowKeys)
 	Wear(editBox, "", true)
@@ -267,6 +296,7 @@ local function ShowCopy(note, text)
 	copyTitle = CopyTitle()
 	UI.ShowCopyBox(copyTitle, text)
 end
+W.ShowCopy = ShowCopy   -- a conversation's lines too (Whispers.lua)
 
 Shy:On("SHY_THEME", function()
 	local box = UI.copyBox
@@ -319,15 +349,13 @@ local function FriendsOnline()
 	return (C_FriendList.GetNumOnlineFriends() + battleNet) .. " online"
 end
 
+-- Only a button whose hover tells what can't be seen has one: how many friends are online.
 local TOOLS = {
-	{ icon = ns.MEDIA .. "Copy", tip = "Copy chat", note = "Opens this window's text in a copy box.",
-		click = function(frame) W.CopyFrame(frame) end },
-	{ icon = ns.MEDIA .. "Channels", tip = "Channels", note = "Join or leave channels and see who is in them.",
-		click = function() ToggleChannelFrame() end },
+	{ icon = ns.MEDIA .. "Copy", click = function(frame) W.CopyFrame(frame) end },
+	{ icon = ns.MEDIA .. "Channels", click = function() ToggleChannelFrame() end },
 	{ icon = ns.MEDIA .. "Friends", tip = "Friends", note = FriendsOnline,
 		click = function() ToggleFriendsFrame() end },
-	{ icon = Shy.Skin.GLYPH.gear, tip = "Chat menu", note = "Every tab, copy, text size, channels and options.",
-		click = function(frame, button) W.ChatMenu(button, frame) end },
+	{ icon = Shy.Skin.GLYPH.gear, click = function(frame, button) W.ChatMenu(button, frame) end },
 }
 local GEAR = #TOOLS   -- the one button left when the row folds
 
@@ -341,11 +369,13 @@ local function ToolButton(bar, tool, frame)
 	b.icon = b:CreateTexture(nil, "OVERLAY")
 	b.icon:SetPoint("CENTER")
 	b.icon:SetTexture(tool.icon)
-	b:SetScript("OnEnter", function(self)
-		local note = type(tool.note) == "function" and tool.note() or tool.note
-		UI.Tip(self, tool.tip, note, { side = bar.side == "RIGHT" and "RIGHT" or "LEFT" })
-	end)
-	b:SetScript("OnLeave", function(self) UI.TipHide(self) end)
+	if tool.tip then
+		b:SetScript("OnEnter", function(self)
+			local note = type(tool.note) == "function" and tool.note() or tool.note
+			UI.Tip(self, tool.tip, note, { side = bar.side == "RIGHT" and "RIGHT" or "LEFT" })
+		end)
+		b:SetScript("OnLeave", function(self) UI.TipHide(self) end)
+	end
 	b:SetScript("OnClick", function(self)
 		PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
 		tool.click(frame, self)
@@ -376,6 +406,18 @@ end
 
 -- In the strip on restyled windows; else beside the window, opposite Blizzard's column. Folded
 -- (tab names reaching the row), only the gear stands, at the row's end.
+-- Where the strip's tabs must end to stay clear of the toolbar (the gear it keeps at the row's end once names reach it)
+-- and the dock's overflow arrow, as a screen x: the tab row scrolls its last tab to there, not under them.
+function W.RowEnd(frame)
+	local bg = frame.Background
+	local right = bg and bg:GetRight()
+	if not right or issecretvalue(right) then return nil end
+	local x = right - STRIP_END
+	if frame.isDocked and GeneralDockManager.overflowButton:IsShown() then x = x - ARROW end
+	if db.windowSkin and db.toolbar ~= "hide" then x = x - IN_STRIP.size - IN_STRIP.gap end
+	return x
+end
+
 local function PlaceToolbar(frame, folded)
 	local bar = tools[frame]
 	local side = db.windowSkin and "STRIP" or (frame.buttonSide == "right" and "LEFT" or "RIGHT")
@@ -453,6 +495,9 @@ local function DockRight()
 			if right and (not most or right > most) then most = right end
 		end
 	end
+	-- Conversations docked after the game's tabs reach further.
+	local docked = ns.Whispers and ns.Whispers.StripRight and ns.Whispers.StripRight()
+	if docked and (not most or docked > most) then most = docked end
 	return most or false
 end
 
@@ -652,8 +697,12 @@ function W.Tick()
 			if dockRight == nil and frame.isDocked and bar.side == "STRIP" then dockRight = DockRight() end
 			local crowded = Crowded(frame, bar, dockRight)
 			if crowded ~= (bar.folded or false) then PlaceToolbar(frame, crowded) end
+			-- A menu opened from the row keeps the row: the menu closes with the button it hangs from.
+			local menuOwner = UI.MenuOwner()
 			local wanted
-			if db.toolbar == "hide" then
+			if menuOwner and menuOwner:GetParent() == bar then
+				wanted = true
+			elseif db.toolbar == "hide" then
 				wanted = false
 			elseif crowded then
 				wanted = visible and bar.zone:IsMouseOver()
@@ -840,6 +889,16 @@ local function SetTextSize(frame, height)
 	SetChatWindowSize(frame:GetID(), height)
 end
 
+-- The window's text sizes under a "Text size" row (a conversation's menu has them too: its words are its chat's).
+function W.SizeRows(root, frame)
+	local size = root:CreateButton("Text size")
+	local _, current = frame:GetFont()
+	current = current and math.floor(current + 0.5)
+	for _, height in ipairs(CHAT_FONT_HEIGHTS) do
+		size:CreateRadio(tostring(height), function() return height == current end, function() SetTextSize(frame, height) end)
+	end
+end
+
 local SELECT_TAB = "/click %sTab LeftButton"
 
 -- A window's name for a menu: a whisper tab's can be secret.
@@ -860,31 +919,35 @@ end
 local function TabRows(root)
 	local dock = GeneralDockManager
 	local list = type(dock) == "table" and dock.DOCKED_CHAT_FRAMES
-	if type(list) ~= "table" or #list < 2 then return end
+	if type(list) ~= "table" then return end
+	local Wh = ns.Whispers
+	local docked = Wh and Wh.InChat and Wh.InChat() or 0
+	if #list + docked < 2 then return end
+	local covering = Wh and Wh.Covering and Wh.Covering()
 	root:CreateTitle("Tabs")
 	for _, other in ipairs(list) do
 		local tab = _G[other:GetName() .. "Tab"]
 		local row = root:CreateButton(WindowName(tab))
 		row:SetSecure({ type = "macro", macrotext = SELECT_TAB:format(other:GetName()) })
-		if other == dock.selected then
+		if other == dock.selected and not covering then
 			row:SetDetail("open")
 		elseif tab and (Look.Unread(other) or ChatFrameUtil.IsTabAlerting(tab)) then
 			row:SetDetail(Gold("new"))
 		end
 	end
+	if docked > 0 then Wh.MenuRows(root) end
 	root:CreateDivider()
 end
 
 -- The rows every chat menu shares: this window's tools, then the game's own.
+-- (A conversation docked over the window's text: copying and clearing are the conversation's, and its words wear the
+-- window's size, so the window's size is set as ever.)
 local function MenuRows(root, frame)
-	root:CreateButton("Copy chat", function() W.CopyFrame(frame) end)
-	root:CreateButton("Clear window", function() W.Clear(frame) end)
-	local size = root:CreateButton("Text size")
-	local _, current = frame:GetFont()
-	current = current and math.floor(current + 0.5)
-	for _, height in ipairs(CHAT_FONT_HEIGHTS) do
-		size:CreateRadio(tostring(height), function() return height == current end, function() SetTextSize(frame, height) end)
-	end
+	local Wh = ns.Whispers
+	local over = Wh and Wh.Over and Wh.Over(frame)
+	root:CreateButton("Copy chat", function() if over then Wh.CopyOpen() else W.CopyFrame(frame) end end)
+	root:CreateButton("Clear window", function() if over then Wh.ClearOpen() else W.Clear(frame) end end)
+	W.SizeRows(root, frame)
 	root:CreateDivider()
 	root:CreateButton("Channels", function() ToggleChannelFrame() end)
 	root:CreateButton("Chat settings", function() ShowUIPanel(ChatConfigFrame) end)

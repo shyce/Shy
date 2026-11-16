@@ -17,6 +17,7 @@ local CALM = 0.55
 -- default strength); the head a darker band of it.
 local VEIL, HEAD = 1.15, 0.5
 local WHITE = { 1, 1, 1 }
+local BRONZE = { 0.86, 0.66, 0.40 }   -- the frame's own bronze, for a tail of our drawing beside it
 
 -- An option as `x` wears it (a housing, or the owner of a line): its own (a card showing a preset), else the theme's.
 local function Option(x, key)
@@ -197,6 +198,12 @@ UI.LookKind("heritage", {
 	end,
 	rims = false,
 	-- The dialog's border and its lit rim, and the foot's: nothing across the face.
+	-- A chat bubble's tail (UI.LookTail): the frame's outer line running on round it (a double line of our own
+	-- drawing: the frame itself is the game's), in your color, or the game's bronze.
+	tail = function(h)
+		local size = Option(h, "frame") == "bold" and "Bold" or "Fine"
+		return "Heritage" .. size, { { layer = "Frame", color = Option(h, "color") == "game" and BRONZE or UI.LookAccent(h) } }
+	end,
 	edge = { "heritageFrame", "heritageLit", "heritageFoot", "heritageFootLit" },
 	bar = "classic",   -- the game's own kind of rounded bar
 	slot = "band",

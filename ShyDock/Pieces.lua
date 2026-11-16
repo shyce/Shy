@@ -1,10 +1,15 @@
 -- Taking the cooldown manager apart: a mode within layout mode (or alongside Edit
--- Mode) where the stand-in gives way and every piece of the vessel (the game's frames
--- Move.lua adopts, the swing row, a rogue's blades) has a mover of its own. The vessel keeps its whole
--- shape meanwhile, every socket drawn as an outline; a piece let go within reach of
--- its socket is seated again, anywhere else it is loose: its own box from then on,
--- placed and sized by the player (ns.char.loose, kept by Shy.HUD). Put together
--- again, the vessel reshapes around what is seated.
+-- Mode) where every piece of the vessel (the game's frames Move.lua adopts, the swing row, a rogue's
+-- blades) has a mover of its own, standing where it is. The vessel keeps its whole shape meanwhile,
+-- every socket drawn as an outline. The stand-in gives way to a grey shell of the cooldown manager off
+-- to the side of the screen's open middle (HUD.Room): its own panel on a right-click (Put together, Put
+-- all back), and a piece let go on it goes back in. A piece let go within reach of its socket, or over
+-- the plate, is seated again; anywhere else it is loose: its own box from then on, placed and sized by
+-- the player (ns.char.loose, kept by Shy.HUD). Put together (or leaving layout mode), the vessel
+-- reshapes around what is seated.
+--
+-- A free piece (Move.FREE: the cast bar) works so all the time: its own handle in layout mode, seated or not,
+-- and in Edit Mode; while it is in hand its socket shows, lit as it comes within reach.
 --
 -- Also the vessel's own controls on the editor's panel (Move.lua's stand-in): size,
 -- the tracked bars' side, Take apart / Put together, Put every piece back.
@@ -19,6 +24,8 @@ local P = {}
 ns.Pieces = P
 
 local SNAP_SEAT = 24   -- a piece let go within this of its seat is seated again
+local STILL = 4        -- a piece let go within this of where it was picked up wasn't moved
+local SHELL_W, SHELL_H = 300, 56   -- the cooldown manager's shell while it is taken apart
 -- Boxes of ShyDock's and ShyRogue's own that are pieces: key -> HUD box id, and their names.
 local OWN = { swing = "shydock-swing", blades = "shyrogue-combo" }
 local TITLES = { swing = "Swing timer", blades = "Combo points" }
@@ -26,6 +33,7 @@ local TITLES = { swing = "Swing timer", blades = "Combo points" }
 local RECT = { essential = "gems", cast = "cast" }
 
 local apart = false
+local shell          -- the cooldown manager's grey shell while it is taken apart
 local sockets = {}   -- key -> its outline
 local holder         -- the outlines' parent
 local tracking       -- { box, key } while a piece is in hand
@@ -88,9 +96,9 @@ local function Near(box, key)
 	return abs(l - sl) <= SNAP_SEAT and abs(b - sb) <= SNAP_SEAT
 end
 
--- The sockets: a seat waiting for its piece is the vessel's own recess (the slot art of Cockpit.lua) with the
--- piece's name in it, dim; it lights gold, with a glow, as the piece in hand comes within reach. A seated piece's
--- socket is only a faint outline, so the piece reads as seated.
+-- The sockets: a seat waiting for its piece is the vessel's own recess (the slot art of Cockpit.lua), empty (a
+-- name in it would read as a second piece); it lights gold, with a glow, as the piece in hand comes within reach.
+-- A seated piece's socket is only a faint outline, so the piece reads as seated.
 
 local GLOW_REACH = 2
 
@@ -116,39 +124,53 @@ local function Socket(key)
 	f.outline = CreateFrame("Frame", nil, f)
 	f.outline:SetAllPoints()
 	UI.Skin(f.outline, { 0, 0, 0, 0 }, C.border)
-	f.name = UI.Text(f, "", 11, true, C.dim)
-	f.name:SetPoint("CENTER")
-	f.name:SetWordWrap(false)
 	sockets[key] = f
 	return f
 end
 
 local function Paint(key, f, gold)
-	local loose = ns.char.loose[key]
+	-- A piece in hand has left its seat: its socket waits for it.
+	local loose = ns.char.loose[key] or (tracking ~= nil and tracking.key == key)
 	f.hollow:SetShown(loose)
 	f.well:SetShown(loose)
 	f.glow:SetShown(loose and gold)
 	f.outline:SetShown(not loose)
 	UI.Tint(f.hollow, gold and C.alert or Theme.skin.metal, 0.85)
-	f.name:SetShown(loose)
-	UI.Ink(f.name, gold and C.alert or C.dim)
 end
 
--- Draws every socket from plan `c` (the last one when nil). Shown only while apart.
+local function Holder()
+	if not holder then
+		holder = CreateFrame("Frame", "ShyDockSockets", UIParent)
+		holder:SetAllPoints(UIParent)
+		holder:SetFrameStrata("HIGH")
+		holder:SetFrameLevel(40)   -- under the movers
+		holder:EnableMouse(false)
+	end
+	return holder
+end
+
+-- Draws every socket from plan `c` (the last one when nil). Shown while apart, and a free piece's while it
+-- is in hand.
 function P.Refresh(c)
 	if c then plan = c end
-	if not (apart and plan and holder) then return end
+	local only = not apart and tracking and tracking.key or nil
+	if not ((apart or only) and plan) then return end
+	Holder()
 	local middle = UIParent:GetWidth() / 2
 	local used = {}
-	Each(function(key, _, title)
+	-- The swing timer's seat is the cast bar's row: one socket for the two, the swing's only while it alone is out.
+	local shared = plan.rects.swing ~= nil and plan.rects.cast ~= nil
+	local swingOwns = shared and ns.char.loose.swing == true and not ns.char.loose.cast
+	Each(function(key)
 		local r = plan.rects[RECT[key] or key]
 		if key == "bars" then r = plan.rects.barsWing end
+		if only ~= nil and only ~= key then r = nil end
+		if shared and only == nil and ((key == "swing" and not swingOwns) or (key == "cast" and swingOwns)) then r = nil end
 		if r then
 			local f = sockets[key] or Socket(key)
 			f:ClearAllPoints()
 			f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", middle + r[1], r[2])
 			f:SetSize(math.max(1, r[3] - r[1]), math.max(1, r[4] - r[2]))
-			f.name:SetText(title or key)
 			Paint(key, f, lit == key)
 			f:Show()
 			used[key] = true
@@ -159,6 +181,8 @@ function P.Refresh(c)
 	end
 	holder:Show()
 end
+
+local Shelve
 
 -- In hand
 
@@ -172,8 +196,39 @@ local function Watch()
 	end
 end
 
-local function Dropped(box, key)
-	if Near(box, key) then
+-- Is the middle of the piece over the cooldown manager's plate (as planned, its row open)? Let go there, it goes
+-- back in: nothing is left lying on top of it.
+local function Over(box)
+	local l, b, w, h = Rect(box)
+	local r = plan and plan.rects.box
+	if not (l and r) then return false end
+	local x, y = l + w / 2 - UIParent:GetWidth() / 2, b + h / 2
+	return x >= r[1] and x <= r[3] and y >= math.min(r[2], plan.low or r[2]) and y <= r[4]
+end
+
+-- Is the middle of the piece over the cooldown manager's shell (taken apart)? Let go there, it goes back in.
+local function OnShell(box)
+	if not (apart and shell) then return false end
+	local l, b, w, h = Rect(box)
+	local sl, sb, sw, sh = Rect(shell)
+	if not (l and sl) then return false end
+	local x, y = l + w / 2, b + h / 2
+	return x >= sl and x <= sl + sw and y >= sb and y <= sb + sh
+end
+
+-- Let go where it was picked up (a click, or a drag of a hair): nothing changes, as it was before.
+local function Unmoved(from, box)
+	local l, b = Rect(box)
+	return from ~= nil and l ~= nil and abs(l - from[1]) <= STILL and abs(b - from[2]) <= STILL
+end
+
+P.Watching = Watch   -- (each frame of a drag: the socket lit as the piece in hand comes within reach)
+
+local function Dropped(box, key, from, wasLoose)
+	if Unmoved(from, box) then
+		ns.char.loose[key] = wasLoose
+		if not wasLoose then HUD.Forget(box) end
+	elseif Near(box, key) or Over(box) or OnShell(box) then
 		ns.char.loose[key] = nil
 		HUD.Forget(box, true)
 	else
@@ -186,6 +241,30 @@ local function Dropped(box, key)
 	T:Apply()
 end
 
+-- The shell: the cooldown manager while it is taken apart, grey, at the side of the screen's open middle (what
+-- no piece stands in, whatever the screen's size and the layout), so it lies on nothing. It is the cooldown
+-- manager's own piece meanwhile: its panel and menu are the stand-in's.
+function Shelve()
+	if not shell or HUD.IsPlaced(shell) then return end
+	local left, bottom, _, top = HUD.Room(shell)
+	HUD.SetHome(shell, { "LEFT", "BOTTOMLEFT", left, (bottom + top) / 2 })
+end
+
+local function Shell()
+	shell = HUD.Create({
+		id = "shydock-shell", title = "Cooldown manager",
+		width = SHELL_W, height = SHELL_H,
+		point = { "CENTER", "CENTER", 0, 0 },   -- placeholder: Shelve seats it
+		shown = function() return false end,      -- in layout mode only,
+		away = function() return not apart end,    -- and only while it is taken apart
+		grey = function() return "Taken apart  \194\183  drop a piece here to put it back" end,
+	})
+	shell.ownSize = true
+	shell.panel = function(...) return P.Panel(...) end
+	shell.menu = function(root) if ns.Move.handle.menu then ns.Move.handle.menu(root) end end
+	P.shell = shell
+end
+
 -- Entering and leaving
 
 -- Works in layout mode and alongside Edit Mode alike: there Edit Mode drags the game's frames itself,
@@ -196,19 +275,15 @@ function P.Enter()
 	if not HUD.IsUnlocked() then HUD.SetUnlocked(true) end
 	if not HUD.IsUnlocked() then return false end
 	apart = true
-	if not holder then
-		holder = CreateFrame("Frame", "ShyDockSockets", UIParent)
-		holder:SetAllPoints(UIParent)
-		holder:SetFrameStrata("HIGH")
-		holder:SetFrameLevel(40)   -- under the movers
-		holder:EnableMouse(false)
-	end
+	Holder()
 	for key, id in pairs(OWN) do
 		local box = HUD.Find(id)
 		if box then HUD.SetStill(box, false) end
 	end
 	ns.Cockpit.SetApart(true)
 	HUD.Update(ns.Move.handle)
+	Shelve()
+	HUD.Update(shell)
 	ns.Move.Sync()
 	ns.Arrange.Soon()
 	return true
@@ -222,6 +297,7 @@ function P.Leave()
 	if holder then holder:Hide() end
 	ns.Cockpit.SetApart(false)
 	HUD.Update(ns.Move.handle)
+	if shell then HUD.Update(shell) end
 	ns.Move.Sync()
 	ns.Arrange.Soon()
 	T:Apply()
@@ -236,11 +312,12 @@ end
 function P.SetLoose(key, loose)
 	local box = BoxOf(key)
 	if loose then
-		ns.char.loose[key] = true
+		-- Taken out from a menu, it waits under the cooldown manager (Move.lua) to be placed: never on its plate.
+		ns.char.loose[key] = "wait"
 		if box then
 			if box.foreign then box.given, box.placed = nil, nil end
 			HUD.SetStill(box, false)
-			HUD.Release(box)
+			HUD.Forget(box, true)
 		end
 	else
 		ns.char.loose[key] = nil
@@ -404,23 +481,26 @@ function P.Apply()
 end
 
 local function Lifted(box)
-	if not apart then return end
 	local key = KeyOf(box)
-	if not key then return end
-	tracking = { box = box, key = key }
+	if not key or not (apart or ns.Move.FREE[key]) then return end
+	local l, b = Rect(box)
+	tracking = { box = box, key = key, from = l and { l, b } or nil, wasLoose = ns.char.loose[key] }
 	if not driver then
 		driver = CreateFrame("Frame")
 		driver:SetScript("OnUpdate", Watch)
 	end
 	driver:Show()
+	P.Refresh()
+	Watch()   -- lit at once when picked up within reach
 end
 
 local function LetGo(box)
-	if not (apart and tracking and tracking.box == box) then return end
-	local key = tracking.key
+	if not (tracking and tracking.box == box) then return end
+	local key, from, wasLoose = tracking.key, tracking.from, tracking.wasLoose
 	tracking = nil
 	if driver then driver:Hide() end
-	Dropped(box, key)
+	if not apart and holder then holder:Hide() end
+	Dropped(box, key, from, wasLoose)
 end
 
 -- Alongside Edit Mode the game's frames are dragged by Edit Mode itself: its drag's start and end
@@ -434,7 +514,23 @@ function P.Watch(piece)
 	if type(frame.OnDragStop) == "function" then hooksecurefunc(frame, "OnDragStop", function() LetGo(piece.box) end) end
 end
 
+-- Pieces left out where they don't belong come back in, as the vessel is laid out (Move.Sync, plan `c`): a bar
+-- this character has nothing in, or one lying on the cooldown manager's plate (left there before a piece let go
+-- over it went back in, or moved there in Edit Mode). Not while one is in hand, nor in a fight.
+function P.Tidy(c)
+	if tracking or InCombatLockdown() then return end
+	if c then plan = c end
+	for key, how in pairs(ns.char.loose) do
+		local box = BoxOf(key)
+		if ns.Move.Unused(key) or (box and how ~= "wait" and Over(box)) then
+			ns.char.loose[key] = nil
+			if box then HUD.Forget(box, true) end
+		end
+	end
+end
+
 function P.Start()
+	Shell()
 	Shy:On("SHY_HUD_LAYOUT", function(on)
 		if not on then P.Leave() end
 	end)

@@ -4,7 +4,7 @@
 --   Scaled  black hide, matte, its scales showing only where the light catches them; a neon line of your color just
 --           inside its edge, venom veins creeping in from its corners, the two breathing slowly; the head's line a
 --           scar sutured shut in your color
---   Tooled  saddle leather in your color, a band of carved scrollwork inside the edge on a piece big enough for it,
+--   Tooled  saddle leather in your color, a band of carved scrollwork inside the edge on a window big enough for it,
 --           a saddle stitch of your color outside it; the head's line a flat braided lace of your color
 --   Bound   polished leather dyed deep in your color, a gilt double rule pressed in round it; the head's line a gilt
 --           rule, a lozenge at its middle
@@ -275,7 +275,7 @@ local function Fit(h, g)
 		v[4]:SetTexCoord(1, 0, 1, 0)
 	end
 	for _, t in ipairs(h.leatherVeins) do t:SetShown(veined) end
-	-- Tooled: the saddle stitch round the edge; the carved band inside it on a piece big enough.
+	-- Tooled: the saddle stitch round the edge; the carved band inside it on a window big enough.
 	local AT, SB = E.SADDLE_AT, E.SADDLE_BAND / 2
 	local stitched = key == "tooled" and w >= E.LEAST and tall >= E.LEAST
 	if stitched then
@@ -293,7 +293,9 @@ local function Fit(h, g)
 	for _, t in ipairs(h.leatherSaddle) do t:SetShown(stitched) end
 	local CI, CB = E.CARVE_IN, E.CARVE_BAND
 	local ctop = head > 0 and head + E.CARVE_HEAD or CI
-	local carved = key == "tooled" and w >= E.CARVE_WIDE and tall - ctop - CI >= E.CARVE_LEAST
+	-- (only round a content that stands clear of it, a window's body: on any other piece it would lie under what
+	-- the piece holds, the game's chat lines, a meter's bars)
+	local carved = key == "tooled" and g.cleared and w >= E.CARVE_WIDE and tall - ctop - CI >= E.CARVE_LEAST
 	if carved then
 		local top, foot, left, right = h.leatherCarve[1], h.leatherCarve[2], h.leatherCarve[3], h.leatherCarve[4]
 		local across, down = Whole(w - 2 * CI - 2 * CB, E.CARVE), Whole(tall - ctop - CI - 2 * CB, E.CARVE)
@@ -383,6 +385,25 @@ UI.LookKind("stitched", {
 		return { side, E.CARVE_HEAD + E.CARVE_BAND + E.CARVE_CLEAR, side, side }
 	end,
 	face = { "leatherDye", "leatherFace", "leatherSheen" },
+	-- A chat bubble's tail (UI.LookTail): the welt running on round it, and the leather's own work along it (the
+	-- scaled hide's neon, the tooled leather's saddle stitch, the bound leather's gilt rule), over the same leather.
+	tail = function(h)
+		local key = Leather(h)
+		local accent = UI.LookAccent(h)
+		local layers = { { layer = "Welt", color = { 1, 1, 1 } } }
+		if key == "scaled" then layers[2] = { layer = "Neon", color = accent, alpha = E.NEON_A, blend = "ADD" }
+		elseif key == "tooled" then layers[2] = { layer = "Saddle", color = accent }
+		else layers[2] = { layer = "Gilt", color = { 1, 1, 1 } } end
+		-- Its inside the same leather: the hide's fill, its dye, its face.
+		local L = LEATHERS[key]
+		local inside = { { fill = true },
+			{ color = function()
+				local r, g, b = Dye(key, accent)
+				return r, g, b
+			end, alpha = L.dye },
+			{ file = L.face, tile = 128, color = { 1, 1, 1 }, alpha = L.faced or FACE_A } }
+		return "Stitched" .. key:sub(1, 1):upper() .. key:sub(2), layers, inside
+	end,
 	edge = EDGE,
 	bar = function() return LEATHERS[Leather()].bar end,
 	slot = function() return LEATHERS[Leather()].slot end,

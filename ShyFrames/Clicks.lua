@@ -638,10 +638,11 @@ local function Create()
 		onClose = function() open = false end,
 		head = { size = "window", icon = C.ICON, title = "Click casting" },
 	})
-	win.panel = C.Panel(win)
+	-- On the window's body: clear of the look's work round the edge (UI.Body), the window that much bigger.
+	win.panel = C.Panel(UI.Body(win))
 	win.panel:SetPoint("TOPLEFT", WIN.pad, -(top + WIN.pad))
 	win.panel:Fit(WIN.width - 2 * WIN.pad, P.head + WIN.rows * P.row + 4 + P.line + 6 + P.check)
-	Shy.HUD.Resize(win, WIN.width, top + WIN.pad + win.panel.height + WIN.pad)
+	Shy.HUD.Made(win, WIN.width, top + WIN.pad + win.panel.height + WIN.pad)
 end
 
 function C.Open()

@@ -82,7 +82,7 @@ end
 -- Targets of the live steps in card order, and each one's marker by name. Also used by Plates.lua.
 function ns.StepTargets()
 	local list, marker, nth = {}, {}, {}
-	if not T.db.guide.follow then return list, marker end
+	if not ns.Following() then return list, marker end
 	for _, stop in ipairs(R.stops) do
 		local view = stop.kind == "guide" and stop.view
 		if view and view.uses then
@@ -115,7 +115,7 @@ local function Gather()
 			uses[#uses + 1] = use
 		end
 	end
-	for _, stop in ipairs(T.db.guide.follow and not aside and R.stops or {}) do
+	for _, stop in ipairs(ns.Following() and not aside and R.stops or {}) do
 		local view = stop.kind == "guide" and stop.view
 		for _, use in ipairs(view and view.uses or {}) do Add(use) end
 		-- An item a `destroy` line says to be rid of, while any is left: a tile that destroys it, clicked twice.
@@ -343,11 +343,8 @@ local function CreateLine(i)
 	line.mark = line:CreateTexture(nil, "ARTWORK")
 	line.mark:SetSize(14, 14)
 	line.mark:SetPoint("LEFT", 4, 0)
-	line.name = line:CreateFontString(nil, "OVERLAY")
-	line.name:SetFontObject(UI.NameFont(12))
+	line.name = UI.Words(line, UI.NameFont(12), nil, { wrap = false })
 	line.name:SetPoint("LEFT", CHIP_TEXT, 0)
-	line.name:SetJustifyH("LEFT")
-	line.name:SetWordWrap(false)
 	line:SetScript("OnEnter", Tip)
 	line:SetScript("OnLeave", Untip)
 	line:Hide()

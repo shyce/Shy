@@ -1,11 +1,11 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffCore|r
-## Notes: Required by every Shy addon: theme, layout mode, profiles, setup and the /shy hub. |cff888888/shy|r
+## Notes: The look, layout and setup every Shy addon shares |cff888888/shy|r
 ## Author: Shyce Cream
 ## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r
-## Version: 5.0.6
-## X-Date: 2026-11-15
-## IconTexture: Interface\AddOns\ShyCore\Media\ShyCore
+## Version: 5.1.1
+## X-Date: 2026-11-16
+## IconTexture: Interface\AddOns\ShyCore\Media\ShyCoreMarkColor
 ## SavedVariables: ShyCoreDB
 ## AddonCompartmentFunc: ShyCore_OnCompartmentClick
 ## AddonCompartmentFuncOnEnter: ShyCore_OnCompartmentEnter
@@ -64,4 +64,5 @@ Data\Client.lua
 Data\Lineups.lua
 Data\KeyTalents.lua
 Data\Instances.lua
+Data\Tails.lua
 Instances.lua

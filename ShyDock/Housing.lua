@@ -13,6 +13,7 @@
 --                                  racks; else nil (the other corner layouts have nothing beside the bars)
 --   Shy.addons.Dock:WingEdges() -> x, x   inner edges of the left and right wings (or racks), from the screen's center
 --   Shy.addons.Dock:Seam() -> the gap between any two pieces
+--   Shy.addons.Dock:UnderSpan() -> left, right, top   the room kept under the floor (ShyXP's bars), UIParent units
 --   "SHY_CONSOLE" on the bus       fired only when the rect or the roof changed
 
 local ADDON, ns = ...
@@ -25,6 +26,7 @@ ns.Housing = H
 
 -- The side bars count only where they are stacked with the others (the stack layout).
 local BARS = { "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft" }
+local MAIN = { "MainActionBar" }
 local NEAR = 12        -- bars no further apart than this are one block
 local SETTLE = 0.3     -- bars have finished laying out by now
 
@@ -67,12 +69,13 @@ local function Touches(rect, block)
 	return across >= narrower / 2 and apart <= NEAR
 end
 
--- The block around the main bar (or the lowest bar). nil with no bar on screen; false when a rect was secret.
-local function Block()
+-- The block around the main bar (or the lowest bar); `main` alone: the main bar's own. nil with no bar on screen;
+-- false when a rect was secret.
+local function Block(main)
 	local originX, originY = UIParent:GetScaledRect()
 	local scale = UIParent:GetEffectiveScale()
 	local rects = {}
-	for i, name in ipairs(BARS) do
+	for i, name in ipairs(main and MAIN or BARS) do
 		local rect, secret = Rect(_G[name], originX, originY, scale)
 		if secret then return false end
 		if rect then
@@ -107,12 +110,17 @@ local function Block()
 end
 
 -- With ShyFrames' plates over the housing, `head` raises its top so the plates meet
--- the roof (Console.Build). Never recomputed in combat.
-local head
+-- the roof (Console.Build). `alone`: the layout shows the main bar alone and fades the others in while you point
+-- at them (the minimal one): the housing is the main bar's, the others have one of their own that fades with them
+-- (Drawers.lua). Never recomputed in combat.
+local head, alone
 
 local function Head()
 	if InCombatLockdown() then return end
-	head = ns.Layout.Plates() > 0 and ns.Layout.IsActive() and ns.Layout.Plan().head or nil
+	local L = ns.Layout
+	local active = L.IsActive()
+	head = L.Plates() > 0 and active and L.Plan().head or nil
+	alone = active and L.Plan().role ~= nil and L.Plan().role.reveal == true
 end
 
 local function Tell(changed)
@@ -126,16 +134,16 @@ end
 -- following = true while Edit Mode is open and this runs every frame.
 function H.Measure(following)
 	if following ~= true then Head() end
-	local block = Block()
-	if block == false then return end   -- secret rect: keep the last position
-	if not block then
+	local bars = Block(alone)
+	if bars == false then return end   -- secret rect: keep the last position
+	if not bars then
 		dock:Hide()
 		local had = H.rect ~= nil
 		H.rect = nil
 		Tell(had)
 		return
 	end
-	local left, bottom, right, top = Console.Wrap(block[1], block[2], block[3], block[4], head)
+	local left, bottom, right, top = Console.Wrap(bars[1], bars[2], bars[3], bars[4], head)
 	local was = H.rect
 	local changed = not (was and was[1] == left and was[2] == bottom and was[3] == right and was[4] == top)
 	if changed then
@@ -145,7 +153,7 @@ function H.Measure(following)
 		dock:SetSize(right - left, top - bottom)
 	end
 	-- The buttons are its content: a look with a well sinks them, its rim round them.
-	UI.LookContent(housing.shyLook, { block[1] - left, top - block[4], right - block[3], block[2] - bottom })
+	UI.LookContent(housing.shyLook, { bars[1] - left, top - bars[4], right - bars[3], bars[2] - bottom })
 	dock:Show()
 	Tell(changed)
 end
@@ -168,6 +176,20 @@ function T:Roof()
 	if g.roofed then return g.line end
 	if Console.RACKED[style] then return (g.rack.left or g.rack.right) and g.rack.top or nil end
 	return nil
+end
+
+-- The room kept under the floor (ShyXP's bars): its left and right edges, those of what always stands across the
+-- floor (g.span: the minimal layout's main bar alone, not the side bars that only show while you point), and
+-- its top, a seam under the floor (by role, a seam under the pet bar), in UIParent units from its bottom left. The top
+-- is read off the housing where it stands, so it is right however the layout was written. nil while the console's
+-- layout is not in use or the housing is not on screen.
+function T:UnderSpan()
+	local rect = H.rect
+	if not (rect and ns.Layout.IsActive()) then return nil end
+	local g, now = ns.Layout.Plan()
+	local half = UIParent:GetWidth() / 2
+	local below = g.floor - ((g.xp or 0) + (now.under or 0))   -- from the room's top up to the floor
+	return half + g.span.left, half + g.span.right, rect[2] - below
 end
 
 -- The gap between any two pieces of the console.

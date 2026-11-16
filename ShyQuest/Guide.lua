@@ -2555,7 +2555,7 @@ local function FindLive()
 	G.active, G.waiting, G.finished, G.behind, G.offered = {}, nil, nil, {}, {}
 	canBack = nil
 	settled = GetTime() >= quietUntil
-	if not T.db.guide.follow then
+	if not ns.Following() then
 		G.current = nil
 		return
 	end
@@ -3257,9 +3257,12 @@ function G.Describe(guide, step, parts, whole, ghosts)
 		local open = shown and not quiet
 		if command == "target" or command == "mob" or command == "unitscan" then
 			if open then
+				-- (A creature named for an item the game showed it doesn't drop is nobody to fight for it.)
+				local wants = owner and owner.element.counts
+				local item = wants and wants.kind == "i" and wants.id
 				for _, named in ipairs(Named(element)) do
 					-- (The game's own kill credits are nobody to target: D.Internal.)
-					if not D.Internal(named.name) then
+					if not D.Internal(named.name) and not (item and named.npc and D.Dropless(named.npc, item)) then
 						view.targets[#view.targets + 1] = { name = named.name, npc = named.npc,
 							kind = command == "unitscan" and "scan" or command, of = part.parent }
 						if command ~= "unitscan" then who[#who + 1] = { name = named.name, task = part.parent, kind = command } end

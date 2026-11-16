@@ -347,7 +347,7 @@ local function Build()
 	own.divide:SetWidth(1)
 	own.divide:SetPoint("TOP", shell.band, "BOTTOM", 0, 0)
 	own.divide:SetPoint("BOTTOM", shell.foot, "TOP", 0, 0)
-	own.divide:SetPoint("LEFT", box, "LEFT", 2 + left + L.list + L.gap / 2, 0)
+	own.divide:SetPoint("LEFT", UI.Body(box), "LEFT", 2 + left + L.list + L.gap / 2, 0)
 	UI.Paint(own.divide, C.border, 0.9)
 
 	-- The map. Its frame is a housing of its own in the theme's look, kept in it as the theme changes; the map is a
@@ -604,7 +604,7 @@ Draw = function()
 	if hovered and not spots[hovered] then hovered = nil end
 
 	local box = own.box
-	local wide, tall = box:GetWidth(), box:GetHeight()
+	local wide, tall = UI.BodySize(box)   -- (what it holds stands on its body: UI.Body)
 	if issecretvalue(wide) or not wide or wide <= 0 then wide = L.w end
 	if issecretvalue(tall) or not tall or tall <= 0 then tall = L.h end
 	-- The game's own window, empty under ours, is as wide (up to the width ours is made at): what the game opens

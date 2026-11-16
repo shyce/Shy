@@ -1,17 +1,18 @@
 -- A session: from when you start farming to when you stop. It is ready (set up, say from the finder, the clock not
--- started: you may not be there yet), running, or paused (by hand, or by a reload, which keeps everything). Only a
--- running session counts. What counts is what reaches your bags (a loot slot the game clears), the coin you loot,
--- the creatures you kill (the game's experience line) and the corpses you loot (one each, however often looted:
--- skinning one is no second kill), the fish you catch and the ones that get away. Its clock runs while you do
--- something and stops by itself after a while of nothing (T.db.idle), so a break costs your gold an hour nothing.
--- Looting what you farm while it isn't running asks you to start or go on (ns.Card.Nudge), so nothing goes uncounted
--- unawares.
+-- started: you may not be there yet), running, or paused (by hand, or as you left where you farm). A reload keeps
+-- everything and goes on recording. Only a running session counts. What counts is what reaches your bags (a loot
+-- slot the game clears), the coin you loot, the creatures you kill (the game's experience line) and the corpses you
+-- loot (one each, however often looted: skinning one is no second kill), the fish you catch and the ones that get
+-- away. Its clock runs while you do something and stops by itself after a while of nothing (T.db.idle), so a break
+-- costs your gold an hour nothing. Looting anything while paused (or what you farm while it is set up, not started)
+-- asks you to start or go on (ns.Card.Nudge), so nothing goes uncounted unawares. What it farms: anything (all you loot counts, at your prices), a creature (s.mob: all it drops, where it
+-- stands), an item (s.want: counted on its own, wherever it is best had), or one item of a creature (both).
 --
 --   ns.char.session = { state = "ready" | "running" | "paused", why ("hand" | "reload"), began, banked, since, last,
 --                       map, items = { [item] = n }, coin, kills, corpses, catches, casts, escaped,
 --                       mobs = { [creature] = { name, corpses, items = { [item] = n } } }, want = { item, goal, done },
---                       hidden, asked }
---   ns.char.history = { { began, seconds, value, coin, kills, corpses, catches, map, want, items }, ... } newest first
+--                       mob = { npc, name }, hidden, asked }
+--   ns.char.history = { { began, seconds, value, coin, kills, corpses, catches, map, want, mob, items }, ... } newest first
 --   ns.char.ended = { [item] = true }: what you ended farming by hand, each until you farm it again
 
 local ADDON, ns = ...
@@ -86,6 +87,41 @@ end
 -- Kills: the experience lines, or the corpses looted where those are more (grey creatures give none).
 function S.Kills(s)
 	return math.max(s.kills, s.corpses)
+end
+
+-- Whether anything has counted yet: loot, coin, a kill, a catch, or the clock run a minute. One that hasn't is no
+-- session to pause or speak of: it waits quietly for the first thing you do.
+local LEAST = 60
+function S.Used(s)
+	s = s or S.Current()
+	if not s then return false end
+	return next(s.items) ~= nil or s.coin > 0 or s.kills > 0 or s.corpses > 0 or s.catches > 0 or S.Seconds(s) >= LEAST
+end
+
+-- A creature's name: the quest data's, else the one your own loot noted.
+local function CreatureName(npc)
+	local quest = Shy.addons.Quest
+	local who = quest and quest.Npc and quest:Npc(npc)
+	if who and who.name then return who.name end
+	local seen = T.db.seen[npc]
+	return seen and seen.name or nil
+end
+S.CreatureName = CreatureName
+
+-- What the session farms: { kind = "any" | "mob" | "item", key (what ShyQuest knows the farm by: an item's ID, or
+-- "n" and a creature's), item, npc, name, icon }.
+function S.Farmed(s)
+	s = s or S.Current()
+	local mob, want = s and s.mob, s and s.want
+	local item = want and want.item
+	if mob then
+		return { kind = "mob", key = "n" .. mob.npc, npc = mob.npc, item = item, name = mob.name or CreatureName(mob.npc),
+			icon = item and C_Item.GetItemIconByID(item) or nil }
+	end
+	if item then
+		return { kind = "item", key = item, item = item, name = C_Item.GetItemNameByID(item), icon = C_Item.GetItemIconByID(item) }
+	end
+	return { kind = "any" }
 end
 
 -- Worth
@@ -199,7 +235,8 @@ function S.Go()
 end
 
 -- Farm an item: a session set up for it if none goes on (ready: its clock starts when you do, or as you reach where
--- it drops), else the one going on wants it; goal: how many you want to hold.
+-- it drops), else the one going on wants it; goal: how many you want to hold. The creature farmed, if any, stays
+-- (S.Target says both).
 function S.Want(item, goal)
 	local s = S.Current()
 	if not s then
@@ -214,6 +251,25 @@ function S.Want(item, goal)
 		if ns.Stats then ns.Stats.Farmed(item, goal) end
 	end
 	ns.Changed("want")
+end
+
+-- What to farm, whole: a creature (npc: all it drops) or none (wherever the item is best had), and the item counted
+-- on its own (nil: none, all you loot counts alike).
+function S.Target(npc, item, goal)
+	local s = S.Current()
+	if not s then
+		s = New("ready")
+		ns.char.session = s
+	end
+	s.mob = npc and { npc = npc, name = CreatureName(npc) } or nil
+	if npc then s.hidden, s.asked = nil, nil end
+	-- (One only waiting, nothing counted, is set up for it as a new one is: it starts where you farm it, not with
+	-- what you loot on the way there.)
+	if (npc or item) and s.state == "running" and not S.Used(s) then
+		Bank(s)
+		s.state = "ready"
+	end
+	S.Want(item, goal)
 end
 
 -- Paused (on), or running again; nil turns it. why: "hand" (by default), or "left" (you left where you farm it:
@@ -231,7 +287,19 @@ function S.Pause(on, why)
 	end
 end
 
--- Ends it: kept in the history at today's prices, and said in a notice that stands a while.
+-- What a session looted most of by worth: { item, n }, or nil.
+function S.Best(items)
+	local best, most
+	for item, n in pairs(items) do
+		local worth = n * (P.Value(item) or 0)
+		if not most or worth > most then best, most = { item = item, n = n }, worth end
+	end
+	return best
+end
+
+-- Reset: kept in the history at today's prices, and what it came to said in a notice a moment (to share). A fresh one
+-- takes its place, empty and waiting (its clock at rest until you loot, kill or fish); the window stays as it was.
+-- Nothing looted: nothing kept, nothing to say.
 function S.Stop()
 	local s = S.Current()
 	if not s then return end
@@ -239,18 +307,51 @@ function S.Stop()
 	Bank(s)
 	local seconds, value = S.Seconds(s), S.Value(s)
 	local kept = { began = s.began, seconds = seconds, value = value, coin = s.coin, kills = S.Kills(s), corpses = s.corpses,
-		catches = s.catches, map = s.map, want = s.want and s.want.item, kind = S.Kind(s), items = s.items }
+		catches = s.catches, map = s.map, want = s.want and s.want.item, mob = s.mob and s.mob.npc, kind = S.Kind(s), items = s.items }
 	ns.char.session = nil
 	-- (Ended by hand: you're done with it. Looting it starts nothing until you farm it again, however many others
 	-- you farm and end meanwhile: Looted.)
 	if s.want then ns.char.ended[s.want.item] = true end
 	ns.char.last = nil
-	if next(s.items) or s.coin > 0 then
+	local saved = next(s.items) ~= nil or s.coin > 0
+	if saved then
 		table.insert(ns.char.history, 1, kept)
 		for i = #ns.char.history, K.HISTORY + 1, -1 do ns.char.history[i] = nil end
-		if ns.Card and ns.Card.Summary then ns.Card.Summary(kept) end
 	end
 	ns.Changed("stop")
+	local fresh = New("running")
+	fresh.since, fresh.hidden = nil, s.hidden
+	ns.char.session = fresh
+	ns.Changed("start")
+	if saved and ns.Card and ns.Card.Summary then ns.Card.Summary(kept) end
+end
+
+-- A session waiting for you (the window opened with none): its clock at rest until Start, a pick from Find, or the
+-- first thing you loot, kill or fish.
+function S.Wait()
+	local s = S.Current()
+	if s then return s end
+	s = New("running")
+	s.since = nil
+	ns.char.session = s
+	ns.Changed("start")
+	return s
+end
+
+-- Gone without a trace: a session nothing has counted in (its window closed).
+function S.Drop()
+	if not S.Current() then return end
+	ns.char.session = nil
+	ns.Changed("stop")
+end
+
+-- Its clock started now, for one waiting at rest (Start before the first thing you do).
+function S.Clock()
+	local s = S.Current()
+	if not s then return end
+	if s.state ~= "running" then return S.Go() end
+	Touch(s)
+	ns.Changed("go")
 end
 
 function S.History() return ns.char.history end
@@ -371,15 +472,22 @@ local function Ready()
 	end
 	if loot.credited then return end
 	loot.credited = true
-	if not S.Current() then Looted() end
+	-- (No session, or one only waiting, nothing picked: looting a favorite farms it.)
+	local waiting = S.Current()
+	if not waiting or (not S.Used(waiting) and not waiting.want and not waiting.mob) then Looted() end
 	local s = S.Current()
 	if loot.guid then NewCorpse(s, loot.guid, loot.creature, loot.name) end
 	if not s then return end
 	if not Counting(s) then
-		-- (What you farm in the window while it doesn't count: you are asked.)
+		-- (Paused: anything you loot asks you to go on, so nothing goes uncounted unawares. Set up and not yet started:
+		-- only what you farm asks, not what you pick up on the way there.)
 		local want = s.want and s.want.item
-		for _, slot in pairs(loot.slots) do
-			if slot.item == want then Nudge(s) end
+		if s.state == "paused" then
+			if GetNumLootItems() > 0 then Nudge(s) end
+		else
+			for _, slot in pairs(loot.slots) do
+				if slot.item == want then Nudge(s) end
+			end
 		end
 		return
 	end
@@ -517,17 +625,16 @@ function S.Start()
 		if not ok then geterrorhandler()(err) end
 	end))
 	loot.money = GetMoney()
-	-- A session kept over a reload or a logout keeps everything; one that was running comes back paused, its clock
-	-- stopped at the last thing done, and says so until you go on.
+	-- A session kept over a reload or a logout keeps everything and goes on: its clock stopped at the last thing done
+	-- (the time away isn't counted) and at rest until the next loot, kill or catch, which counts and sets it going. Only
+	-- a pause you made stays. (One a reload paused before is going again too.)
 	local s = S.Current()
 	if s then
 		s.mobs, s.items = s.mobs or {}, s.items or {}
 		s.state = s.state or (s.paused and "paused" or "running")
 		s.paused = nil
-		if s.state == "running" then
-			Bank(s, math.min(Now(), s.last))
-			s.state, s.why = "paused", "reload"
-		end
+		if s.state == "paused" and s.why == "reload" then s.state, s.why = "running", nil end
+		if s.state == "running" then Bank(s, math.min(Now(), s.last)) end
 	end
 	-- The clock stops by itself after a while of nothing: looked at only while a session is there.
 	table.insert(ns.appliers, S.Wake)

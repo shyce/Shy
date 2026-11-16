@@ -6,9 +6,9 @@ local MEDIA = "Interface\\AddOns\\ShyWarlock\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Warlock",
+	category = "combat",
 	icon = MEDIA .. "ShyWarlock",
 	smallIcon = MEDIA .. "ShyWarlockSmall",
-	tagline = "Your keys, for every level",
 	savedVariables = "ShyWarlockDB",
 	keep = { keysMade = true, keysBuild = true, keysBefore = true },   -- the macros made for your keys are no setting: a reset keeps them yours
 	defaults = {},

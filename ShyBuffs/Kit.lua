@@ -47,12 +47,7 @@ local function Soon()
 end
 
 local function Label(parent, size)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(UI.NameFont(size, "OUTLINE"))
-	fs:SetShadowColor(0, 0, 0, 1)
-	fs:SetShadowOffset(0.8, -0.8)
-	fs:SetTextColor(INK[1], INK[2], INK[3])
-	return fs
+	return UI.Words(parent, UI.NameFont(size, "OUTLINE"), INK, { world = true, justify = "CENTER" })
 end
 
 -- What is made on an icon is colored directly, not through the theme: it reads a region's color back on a change,

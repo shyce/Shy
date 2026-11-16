@@ -517,8 +517,9 @@ local function Badge(texture, entry, size, on)
 	local a = Family(entry.addon)
 	if a then
 		texture:SetSize(size, size)
-		Shy.Theme.Icon(texture, a.smallIcon)
+		Shy.Theme.Icon(texture, a.mark)
 	else
+		Shy.Theme.Plain(texture)
 		texture:SetSize(14, 14)
 		texture:SetTexture(Shy.MEDIA .. "GlyphBug")
 		UI.Tint(texture, on and C.onPickDim or C.dim)
@@ -542,14 +543,9 @@ local function Stack(text)
 end
 
 local function Para(parent, size, color)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(UI.TextFont(size))
-	fs:SetShadowOffset(1, -1)
-	fs:SetShadowColor(0, 0, 0, 1)
-	fs:SetJustifyH("LEFT")
+	local fs = UI.Words(parent, UI.TextFont(size), color)
 	fs:SetJustifyV("TOP")
 	fs:SetWordWrap(true)
-	UI.Ink(fs, color)
 	return fs
 end
 
@@ -725,16 +721,18 @@ local function Create()
 		grip = { flow = Lay, min = { 700, 360 } },
 		strata = "HIGH",
 		onClose = function() open = false end,
-		head = { size = "window", icon = Shy.SMALL_ICON, title = "Errors",
+		head = { size = "window", icon = Shy.MEDIA .. "ErrorsMark", title = "Errors",
 			buttons = { { "Copy all", 84, function() E.CopyAll() end }, { "Clear all", 84, function() end } } },
 	})
 	UI.Twice(win.head.buttons[2], function() E.Clear() end)
+	-- Everything under the header stands on the body: clear of the look's work round the edge (UI.Body).
+	local body = UI.Body(win)
 
-	list = UI.ScrollArea(win, LIST, HEIGHT - top - PAD)
+	list = UI.ScrollArea(body, LIST, HEIGHT - top - PAD)
 	list:SetPoint("TOPLEFT", PAD, -top)
 
 	-- The picked entry's head: its addon, and what can be done with it.
-	head = CreateFrame("Frame", nil, win)
+	head = CreateFrame("Frame", nil, body)
 	head:SetPoint("TOPLEFT", PAD * 2 + LIST, -top)
 	head:SetSize(WIDTH - LIST - PAD * 3, BAR - 10)
 	head.icon = head:CreateTexture(nil, "ARTWORK")
@@ -764,7 +762,7 @@ local function Create()
 	head.name:SetPoint("RIGHT", copy, "LEFT", -12, 0)
 	head.copy, head.clear = copy, clear
 
-	details = UI.ScrollArea(win, WIDTH - LIST - PAD * 3, HEIGHT - top - BAR - PAD)
+	details = UI.ScrollArea(body, WIDTH - LIST - PAD * 3, HEIGHT - top - BAR - PAD)
 	details:SetPoint("TOPLEFT", PAD * 2 + LIST, -top - BAR)
 	local d = details.content
 	d.message = Para(d, 13, C.text)
@@ -774,7 +772,7 @@ local function Create()
 	d.localsTitle = UI.Text(d, "Locals", 12, true, C.dim)
 	d.locals = Para(d, 11, C.dim)
 
-	empty = UI.Text(win, "No errors caught.", 13, false, C.dim)
+	empty = UI.Text(body, "No errors caught.", 13, false, C.dim)
 	empty:SetPoint("CENTER", 0, -10)
 	empty:SetJustifyH("CENTER")
 

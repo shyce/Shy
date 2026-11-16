@@ -45,6 +45,9 @@ local buttons, styles = {}, {}
 M.buttons, M.styles = buttons, styles
 local pieces, adopted = {}, {}
 M.pieces = pieces
+-- Pieces with a handle of their own even while seated: dragged out of the cooldown manager, or back in.
+local FREE = { cast = true }
+M.FREE = FREE
 -- The cockpit's box within the stand-in: offsets, the stand-in's size, and the box's own size.
 local hold = { dx = 0, dy = 0, w = 0, h = 0, bw = 300, bh = 79 }
 -- Boxes of ShyDock's own seated like the game's frames (the swing row): key -> HUD box id.
@@ -67,6 +70,9 @@ local function Adopt(key, name)
 	piece.title = (ok and type(title) == "string" and title ~= "") and title or name
 	piece.box = HUD.Adopt(frame, {
 		id = "shydock-" .. name, title = piece.title, editMode = true, plain = true, scale = true,
+		-- A handle in layout mode whether the game shows the frame or not (the cooldowns show only in a fight,
+		-- the cast bar only while you cast): taken apart, every piece can be picked up.
+		ghost = true,
 		-- Moved in Edit Mode: drop its home without re-placing it mid-drag.
 		taken = function(box)
 			ns.char.loose[key] = true
@@ -100,18 +106,49 @@ local function Same(a, b)
 	return a[1] == b[1] and a[2] == b[2] and a[3] == b[3] and a[4] == b[4]
 end
 
+local Union
+
+-- A bar this character has nothing in (no stances or forms, no totems): kept in the vessel with no handle of its
+-- own, even taken apart; there is nothing of it to place.
+local function Unused(key)
+	if key == "stances" then return GetNumShapeshiftForms() == 0 end
+	if key == "totems" then return not HasMultiCastActionBar() end
+	return false
+end
+
+M.Unused = Unused
+
+
+-- A piece taken out from a menu (ns.char.loose[key] == "wait") and not placed since: it waits centred under the
+-- cooldown manager's group, `clear` under it (and under the one waiting before it), where it can be seen and
+-- picked up; never on the plate. (Dragged, or moved in Edit Mode, it is where it was left.) `below`: the foot of
+-- what waits so far, nil for the group's. Returns its home and the new `below`.
+local function Waiting(box, key, c, below)
+	if not below then
+		local _, bottom = Union(c)
+		below = bottom
+	end
+	local h = box:GetHeight() * (c.scales[key] or c.scale or 1)
+	local foot = below - ns.Layout.UNITS.CLEAR - h
+	return { "BOTTOM", "BOTTOM", c.x, foot }, foot
+end
+
 -- Seat every piece from cockpit plan `c`; nil returns them to Blizzard's anchors. A seated piece is
--- still (the stand-in moves it) unless the vessel is taken apart; a loose one has its own mover.
+-- still (the stand-in moves it) unless the vessel is taken apart, or it is free (the cast bar: dragged out of
+-- its row, or back in, any time); a loose one has its own mover.
 local function Seat(c)
 	local apart = ns.Pieces ~= nil and ns.Pieces.Apart()
 	local moved = false   -- returned: some piece was given another home or scale
+	local below           -- the foot of what waits under the group so far
 	for _, piece in ipairs(pieces) do
 		local home, loose = nil, ns.char.loose[piece.key]
 		if c and not loose and ns.Layout.WasSeated(piece.key) then
 			local point, x, y = ns.Layout.Seat(piece.key, c)
 			if point then home = { point, "BOTTOM", x, y } end
+		elseif c and loose == "wait" and not HUD.IsPlaced(piece.box) then
+			home, below = Waiting(piece.box, piece.key, c, below)
 		end
-		HUD.SetStill(piece.box, home ~= nil and not apart)
+		HUD.SetStill(piece.box, home ~= nil and (not apart or Unused(piece.key)) and not FREE[piece.key])
 		-- Each piece at the scale that puts its own measures on whole pixels (the plan's grid).
 		local scale = home and (c.scales[piece.key] or c.scale) or nil
 		if not Same(piece.box.given, home) or (home and piece.box.givenScale ~= scale) then
@@ -125,7 +162,8 @@ local function Seat(c)
 			local point, x, y = nil, nil, nil
 			if c and not ns.char.loose[key] then point, x, y = ns.Layout.Seat(key, c) end
 			if point then
-				HUD.SetStill(box, not apart)
+				-- The swing timer shares the cast bar's row: while the cast bar is in it, they are one piece there.
+				HUD.SetStill(box, not apart or (key == "swing" and not ns.char.loose.cast))
 				local scale = c.scales[key] or c.scale
 				if not Same(box.defaultPoint, { point, "BOTTOM", x, y }) or box.givenScale ~= scale then
 					HUD.SetHome(box, { point, "BOTTOM", x, y }, scale)
@@ -133,6 +171,15 @@ local function Seat(c)
 				end
 			else
 				HUD.SetStill(box, false)
+				if c and ns.char.loose[key] == "wait" and not HUD.IsPlaced(box) then
+					local home
+					home, below = Waiting(box, key, c, below)
+					local scale = c.scales[key] or c.scale
+					if not Same(box.defaultPoint, home) or box.givenScale ~= scale then
+						HUD.SetHome(box, home, scale)
+						moved = true
+					end
+				end
 			end
 		end
 	end
@@ -143,7 +190,7 @@ end
 local RECT = { essential = "gems", cast = "cast" }
 
 -- The group's rectangle: the box and every piece showing around it, in the plan's units.
-local function Union(c)
+function Union(c)
 	local box = c.rects.box
 	local l, b, r, t = box[1], box[2], box[3], box[4]
 	local function Add(rect)
@@ -161,9 +208,8 @@ local function Union(c)
 		end
 	end
 	Add(c.rects.blades)
-	-- The plate as a cast has it: grown down round the cast bar's row.
-	if T:CockpitHolds("cast") and c.low then Add({ box[1], c.low, box[3], box[4] }) end
-	if not ns.char.loose.swing then Add(c.rects.swing) end
+	-- The plate as a cast or a swing has it: grown down round the hand row.
+	if (T:CockpitHolds("cast") or c.rects.swing) and c.low then Add({ box[1], c.low, box[3], box[4] }) end
 	-- The tracked bars' wing, while a bar is up and they are joined to the plate.
 	if c.rects.barsWing and not c.barsApart then
 		for _, def in ipairs(ns.Layout.ROWS) do
@@ -206,8 +252,35 @@ local function Home(c)
 	HUD.Update(bars)
 end
 
+-- Edit Mode shows the cast bar and the cooldown rows only while its own settings for them are on ("Cast Bar",
+-- "Cooldown Viewer"): while the console is in use they are on, so its pieces show there to be moved; what they
+-- were is kept (T.db.editShownWas) and given back once the console isn't in use.
+local SHOWN = { Enum.EditModeAccountSetting.ShowCastBar, Enum.EditModeAccountSetting.ShowCooldownViewer }
+local showing   -- the console's settings are on (nil: not looked at yet)
+local function EditShown(on)
+	if on == showing or InCombatLockdown() then return end
+	showing = on
+	local was = T.db.editShownWas
+	if on then
+		local now = {}
+		for _, info in ipairs(C_EditMode.GetAccountSettings()) do now[info.setting] = info.value end
+		was = was or {}
+		for _, setting in ipairs(SHOWN) do
+			if was[setting] == nil then was[setting] = now[setting] or 0 end
+			if now[setting] ~= 1 then C_EditMode.SetAccountSetting(setting, 1) end
+		end
+		T.db.editShownWas = was
+	elseif was then
+		for _, setting in ipairs(SHOWN) do
+			if was[setting] ~= nil then C_EditMode.SetAccountSetting(setting, was[setting]) end
+		end
+		T.db.editShownWas = nil
+	end
+end
+
 function M.Sync()
 	AdoptAll()
+	EditShown(ns.Layout.IsActive())
 	if not ns.Layout.IsActive() then
 		Seat(nil)
 		barsHome = nil
@@ -216,6 +289,7 @@ function M.Sync()
 	end
 	local _, now = ns.Layout.Plan()
 	local c = ns.Layout.Cockpit(now)
+	if ns.Pieces and ns.Pieces.Tidy then ns.Pieces.Tidy(c) end
 	local moved = Seat(c)
 	if HUD.IsUnlocked() and not HUD.IsDragging(handle) and not HUD.IsDragging(bars) then Home(c) end
 	-- Nothing moved: the plate is drawn from the plan just made, not planned from the screen again.
@@ -359,7 +433,7 @@ local function Menu(root)
 	for _, piece in ipairs(pieces) do
 		local frame = _G[piece.name]
 		-- Tracked bars with a home of their own are no piece of the cooldown manager's.
-		if frame and ns.Layout.WasSeated(piece.key) and not (piece.key == "bars" and barsHome) then
+		if frame and ns.Layout.WasSeated(piece.key) and not (piece.key == "bars" and barsHome) and not Unused(piece.key) then
 			root:CreateCheckbox(piece.title .. " in the cooldown manager",
 				function() return not ns.char.loose[piece.key] end,
 				function() M.SetLoose(piece, not ns.char.loose[piece.key]) end)
@@ -458,6 +532,7 @@ end
 
 local function Enter()
 	picked, pickedStyle, again = nil, nil, nil
+	M.Touch()   -- the cast bar's row stands open in layout mode (Layout.Casting)
 	if not strip then BuildStrip() end
 	PaintStrip()
 	if ns.Layout.IsActive() then
@@ -471,6 +546,7 @@ local function Enter()
 end
 
 local function Leave()
+	M.Touch()
 	ns.Preview.HideGhost()
 	local size, style, redo = picked, pickedStyle, again
 	picked, pickedStyle, again = nil, nil, nil
@@ -488,6 +564,8 @@ function M.Start()
 	local box = ns.Layout.BOX
 	handle = HUD.Create({
 		id = ID, title = "Cooldown manager",
+		-- Its name at the top: the cast bar's own handle stands in its middle (the row in layout mode).
+		label = "TOP",
 		width = box.w, height = box.h,
 		point = { "BOTTOMLEFT", "BOTTOM", -box.w / 2, 300 },   -- placeholder until Home
 		shown = function() return false end,                    -- visible in layout mode only

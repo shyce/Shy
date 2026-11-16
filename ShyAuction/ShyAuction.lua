@@ -5,8 +5,10 @@
 --
 -- Public (Shy.addons.Auction):
 --   T:Price(item)           what the auction house asks for one, on your market: { unit (lowest buyout each, copper),
---                           quantity (how many are listed), listings, at (when seen), market (the middle of the last
---                           few prices seen: what to go by), shared (true: another player's scan) } or nil
+--                           quantity (how many are listed), listings, at (when seen), market (the going price over the
+--                           last two weeks, recent days counting most: what to go by), going (the last sighting's),
+--                           days (how many days of your own scans the market is from), shared (true: another player's
+--                           scan is the newest) } or nil
 --   T:Scan()                scans the whole house now, if it is open and the server allows it: true, or false and why
 --   T:Scanning()            how a scan stands: nil, or { state ("asked" | "reading"), done, of }
 --   T:Cut()                 the share of a sale the house keeps on your market (0.05 a faction's, 0.15 a goblin's)
@@ -25,15 +27,15 @@ local ADDON, ns = ...
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Auction",
+	category = "items",
 	icon = "Interface\\AddOns\\ShyAuction\\Media\\ShyAuction",
 	smallIcon = "Interface\\AddOns\\ShyAuction\\Media\\ShyAuctionSmall",
-	tagline = "The auction house, and what everything sells for",
 	savedVariables = "ShyAuctionDB",
 	defaults = {
 		window = true,        -- our window in the game's auction house's place
 		page = "buy",         -- the page it opens on (the last one open)
 		autoScan = false,     -- scan the whole house as it opens, whenever the server allows (else only when you press Scan)
-		markets = {},         -- [market key] = { at (last whole scan), asked, items = { [item] = { u, q, n, at, h = { unit, ... } } } }
+		markets = {},         -- [market key] = { at (last whole scan), asked, items = { [item] = { u, q, n, at, p, d = "day:price:seen,..." } } }
 		share = {},           -- [market key] = your own prices, packed for the companion app to send in
 		trace = {},           -- the house's last messages and what we asked of it, for when something goes wrong
 	},
@@ -255,7 +257,7 @@ SlashCmdList.SHYAUCTION = function(input)
 		elseif not price then
 			T:Print("no price for it on this market yet.")
 		else
-			T:Print(("%s each, %d listed, seen %s."):format(ns.Book.Text(price.market), price.quantity, ns.Book.Age(price.at)))
+			T:Print(("%s each, from %s; %d listed, seen %s."):format(ns.Book.Text(price.market), ns.Book.Basis(price), price.quantity, ns.Book.Age(price.at)))
 		end
 	else
 		Help()

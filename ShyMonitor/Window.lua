@@ -50,9 +50,7 @@ function ns.Spark(parent, n, color, title)
 		UI.Skin(s, C.bg, C.border)
 		s.title = UI.Text(s, title, 11, true, C.head)
 		s.title:SetPoint("TOPLEFT", 10, -7)
-		s.note = s:CreateFontString(nil, "OVERLAY")
-		s.note:SetFontObject(UI.NameFont(11))
-		UI.Ink(s.note, C.dim)
+		s.note = UI.Words(s, UI.NameFont(11), C.dim)
 		s.note:SetPoint("TOPRIGHT", -10, -7)
 	end
 	s.bars = {}
@@ -123,10 +121,8 @@ local function Crumb(i)
 	end
 	c.button = b
 	if i > 1 then
-		c.slash = crumbs:CreateFontString(nil, "OVERLAY")
-		c.slash:SetFontObject(UI.NameFont(CRUMB_FONT))
+		c.slash = UI.Words(crumbs, UI.NameFont(CRUMB_FONT), Shy.Skin.colors.idle)
 		c.slash:SetText("/")
-		UI.Ink(c.slash, Shy.Skin.colors.idle)
 	end
 	crumbPool[i] = c
 	return c
@@ -221,7 +217,7 @@ local function Create()
 		grip = { flow = Lay, min = { W.MIN_W, W.MIN_H } },
 		strata = "HIGH",
 		onClose = function() W.Close() end,
-		head = { brand = T.suffix, icon = T.icon,
+		head = { brand = T.suffix, icon = T.mark,
 			buttons = { { "Reset", 64, Reset }, { "Copy", 64, Copy } } },
 	})
 	UI.Help(box.head.buttons[1], "Reset", "Starts every clock and counter again from now.")
@@ -239,12 +235,14 @@ local function Create()
 	measure:SetPoint("RIGHT", box.head.buttons[2], "LEFT", -8, 0)
 	box.head.measure = measure
 
-	crumbs = CreateFrame("Frame", nil, box)
+	-- Everything under the header stands on the window's body: clear of the look's work round the edge (UI.Body).
+	local inside = UI.Body(box)
+	crumbs = CreateFrame("Frame", nil, inside)
 	crumbs:SetPoint("TOPLEFT", W.PAD - CRUMB_INSET, -W.TOP - 4)
 	crumbs:SetPoint("TOPRIGHT", -W.PAD, -W.TOP - 4)
 	crumbs:SetHeight(W.CRUMBS - 4)
 
-	body = CreateFrame("Frame", nil, box)
+	body = CreateFrame("Frame", nil, inside)
 	body:SetPoint("TOPLEFT", W.PAD, -W.TOP - W.CRUMBS - W.PAD + 4)
 	body:SetSize(W.WIDTH - W.PAD * 2, W.HEIGHT - W.TOP - W.CRUMBS - W.PAD * 2)
 

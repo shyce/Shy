@@ -150,18 +150,25 @@ local function Mark(words, frame)
 	if tick then tick:SetAlpha(0) end
 end
 
--- A rule of the border's color from the rail to the row's end, a unit tall.
+-- A divider row is measured from its pieces on a row the game first makes a pixel wide (and does so again each
+-- time the menu is refreshed). So the game's own piece keeps its place across the row's ends, where it always
+-- has a size, and the row measures from it alone: cleared, as tall as our menu's divider. The rule is a piece
+-- of ours over it, a unit tall in the border's color, from the rail to the row's end: on that pixel-wide row its
+-- ends cross and it has no size, so it never counts. Measured from the rule alone, the row would have no size,
+-- and every row under it would lose its place (the menu then stretches to the corner of the screen).
 local function Divider(frame)
-	local edge, x = C.border, select(3, Places(frame))
 	for _, region in ipairs({ frame:GetRegions() }) do
 		if region:IsObjectType("Texture") then
-			region:SetColorTexture(edge[1], edge[2], edge[3], 0.9)
-			region:SetHeight(1)
-			region:ClearAllPoints()
-			region:SetPoint("LEFT", frame, "LEFT", x, 0)
-			region:SetPoint("RIGHT", frame, "RIGHT")
+			region:SetColorTexture(0, 0, 0, 0)
+			region:SetHeight(R.rule)
 		end
 	end
+	local edge, x = C.border, select(3, Places(frame))
+	local rule = frame:AttachTexture()
+	rule:SetColorTexture(edge[1], edge[2], edge[3], 0.9)
+	rule:SetHeight(1)
+	rule:SetPoint("LEFT", frame, "LEFT", x, 0)
+	rule:SetPoint("RIGHT", frame, "RIGHT")
 end
 
 -- A submenu's arrow: our caret turned to point at it, dim.

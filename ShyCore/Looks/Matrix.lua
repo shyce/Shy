@@ -211,6 +211,8 @@ UI.LookKind("matrix", {
 	inset = 1,
 	border = 3,
 	face = { "matrixRain1", "matrixRain2", "matrixScan" },
+	-- A chat bubble's tail (UI.LookTail): the phosphor line running on round it, added in your color.
+	tail = function(h) return "Matrix", { { layer = "Edge", color = UI.LookAccent(h), alpha = M.EDGE_A, blend = "ADD" } } end,
 	edge = { "matrixEdge" },
 	bar = "phosphor",
 	slot = "phosphor",

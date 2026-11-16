@@ -1,7 +1,8 @@
 -- The piece as a Shy.HUD box: shown while a session goes on (and in layout mode, at a made-up session), its menus,
 -- hovers and clicks, the question of a price answered, and what it says when you have all you wanted or stop.
 -- ShyDock gives it the top left's corner, how to play under it; T:Piece() is its size for the screen ShyDock plans
--- and the setup draws.
+-- and the setup draws. What it farms (Session.lua's S.Farmed: everything, a creature, an item) is found with
+-- ShyQuest's finder (Card.Find) and led to as one place on your route (ShyQuest's FarmAt), its ground the farm's key.
 
 local ADDON, ns = ...
 local T, S, P, A, Card = ns.T, ns.Session, ns.Prices, ns.Auction, ns.Card
@@ -18,9 +19,10 @@ local function Session() return S.Current() end
 local function Sampling() return HUD.IsUnlocked() and Session() == nil end
 -- (Closed by its ×, it is away for the rest of that session, which goes on counting, starting or pausing by
 -- itself; only you bring it back.)
+-- Not in a raid: the raid's frames have the top left's corner then, and you aren't farming.
 local function Shown()
 	local s = Session()
-	return (T.db.on and s ~= nil and not s.hidden) or Sampling()
+	return (T.db.on and s ~= nil and not s.hidden and not IsInRaid()) or Sampling()
 end
 
 -- Where an item comes from, nearest first (ShyQuest's data), or nil without it.
@@ -34,35 +36,71 @@ local function Sources(item)
 	return list
 end
 
--- The nearest place an item drops or is gathered (not a vendor), or nil.
--- Where to farm an item: the heart of its best camp you can farm (ShyQuest's FarmSpot: its spawns, how often
--- they drop it, the walk there over the ground, your level; no vendors, guards, or elites while a plain one drops
--- it), for as many as you still want. It weighs every camp and asks the ground for the walk to the cheapest, so it
--- is worked out when what you farm or how many are left changes, when asked to lead (fresh), and otherwise at most
--- every SPOT_FOR seconds; how far you are from it in between is a straight line (T:Yards), which costs nothing.
--- nil without ShyQuest or anywhere to go.
+-- Where to farm: the heart of the best camp you can farm (ShyQuest's FarmSpot: its spawns, how often they drop it,
+-- the walk there over the ground, your level; no vendors, guards, or elites while a plain one drops it), for as many
+-- as you still want; a creature's own camps when you farm one. It weighs every camp and asks the ground for the walk
+-- to the cheapest, so it is worked out when what you farm or how many are left changes, when asked to lead (fresh),
+-- and otherwise at most every SPOT_FOR seconds. nil without ShyQuest, with nothing picked, or nowhere to go.
 local spots, SPOT_FOR = {}, 15
-local FarmSpot = Shy.Clocked("farm: where to farm it", function(quest, item, left) return quest:FarmSpot(item, left) end)
-local function Spot(item, fresh)
+local FarmSpot = Shy.Clocked("farm: where to farm it", function(quest, item, left, npc) return quest:FarmSpot(item, left, npc) end)
+
+-- Where to farm when none of it is on your continent (FarmSpot weighs only there): a creature's thickest camp, an
+-- item's nearest place it drops or is gathered. The way there, a boat or a flight, is ShyWay's to lead.
+local function Elsewhere(quest, target)
+	if target.npc and quest.CampsOf then
+		local camp = quest:CampsOf(target.npc)[1]
+		if camp then return { map = camp.map, x = camp.x, y = camp.y, name = target.name, id = target.npc } end
+	elseif target.item and quest.ItemSources then
+		for _, source in ipairs(quest:ItemSources(target.item) or {}) do
+			if source.kind ~= "vendor" and source.map then
+				return { map = source.map, x = source.x, y = source.y, name = source.name, id = source.id }
+			end
+		end
+	end
+	return nil
+end
+local function Spot(target, fresh)
 	local quest = Shy.addons.Quest
-	if not (quest and quest.FarmSpot) then return nil end
+	if not (quest and quest.FarmSpot and target and target.key) then return nil end
 	local s = Session()
 	local want = s and s.want
-	local left = want and want.item == item and want.goal and math.max(1, want.goal - C_Item.GetItemCount(item, false)) or nil
-	local kept = spots[item]
-	if kept and not fresh and kept.left == left and GetTime() - kept.at < SPOT_FOR then return kept.spot end
-	local spot = FarmSpot(quest, item, left)
-	spots[item] = { at = GetTime(), spot = spot, left = left }
+	local item = target.item
+	local left = item and want and want.item == item and want.goal and math.max(1, want.goal - C_Item.GetItemCount(item, false)) or nil
+	local kept = spots[target.key]
+	if kept and not fresh and kept.left == left and kept.item == item and GetTime() - kept.at < SPOT_FOR then return kept.spot end
+	local spot = FarmSpot(quest, item, left, target.npc) or Elsewhere(quest, target)
+	spots[target.key] = { at = GetTime(), spot = spot, left = left, item = item }
 	return spot
+end
+
+-- Room left in your bags: { free, total } of the bags anything goes in (ShyBags' count, else the game's; a
+-- profession's bag holds only its own kind, so it is left out), or nil where it can't be told.
+local function Room()
+	local bags = Shy.addons.Bags
+	if bags and bags.Room then
+		local free, total = bags:Room()
+		if free then return { free = free, total = total } end
+	end
+	if not (C_Container and C_Container.GetContainerNumFreeSlots) then return nil end
+	local free, total = 0, 0
+	for bag = 0, NUM_BAG_SLOTS do
+		local open, family = C_Container.GetContainerNumFreeSlots(bag)
+		if (family == nil or family == 0) and not issecretvalue(open) then
+			free = free + (open or 0)
+			total = total + (C_Container.GetContainerNumSlots(bag) or 0)
+		end
+	end
+	return { free = free, total = total }
 end
 
 local function View()
 	local s = Session()
 	if not s then return Card.SAMPLE end
 	local view = Card.View(s)
-	if view.want then
-		local spot = Spot(view.want.item)
-		if spot and not view.want.odds then view.want.from = spot.name end
+	view.room = Room()
+	if view.target.kind ~= "any" then
+		local spot = Spot(view.target)
+		if view.want and spot and not view.want.odds and not view.want.from then view.want.from = spot.name end
 		view.tools.go = spot ~= nil
 	end
 	return view
@@ -101,6 +139,19 @@ Card.Paint = Paint
 
 local Answered   -- the band's Start or Not now (below)
 
+-- Finding what to farm (ShyQuest's finder, on its farm side): whether it can, and opening it as a picker that farms
+-- what you pick and shuts.
+function Card.CanFind()
+	local quest = Shy.addons.Quest
+	return quest ~= nil and quest.FindFarm ~= nil
+end
+
+function Card.Find()
+	if not Card.CanFind() then return false end
+	Shy.addons.Quest:FindFarm({ close = true })
+	return true
+end
+
 -- Prices
 
 -- The question of a price, answered: check the auction house (now, or when you next open it, and the way there),
@@ -133,7 +184,36 @@ function Card.Answer(key)
 	end
 end
 
--- The band's answer when it asks: start (or go on) now, or not now (it asks again once you have left and come back).
+-- Money as chat can take it: "4g 23s 10c", no coins' pictures.
+local function Coins(copper)
+	copper = math.floor(copper + 0.5)
+	local g, s, c = math.floor(copper / 10000), math.floor(copper % 10000 / 100), copper % 100
+	local out = {}
+	if g > 0 then out[#out + 1] = g .. "g" end
+	if s > 0 then out[#out + 1] = s .. "s" end
+	if c > 0 or #out == 0 then out[#out + 1] = c .. "c" end
+	return table.concat(out, " ")
+end
+
+-- A finished session as a line for chat: "Farmed Westfall for 31 min: 4g 23s (8g 14s an hour), 38 kills. Best:
+-- 17 Stringy Wolf Meat."
+local function ShareLine(a)
+	local where = a.map and C_Map.GetMapInfo(a.map)
+	local minutes = math.max(1, math.floor(a.seconds / 60 + 0.5))
+	local hour = a.seconds >= 60 and (" (" .. Coins(a.value * 3600 / a.seconds) .. " an hour)") or ""
+	local count = a.kind == "fishing" and a.catches and a.catches > 0 and (", " .. a.catches .. " fish")
+		or a.kills and a.kills > 0 and (", " .. a.kills .. " kills") or ""
+	local best = a.best and C_Item.GetItemNameByID(a.best.item)
+	return ("%s %s for %d min: %s%s%s.%s"):format(a.kind == "fishing" and "Fished" or "Farmed", where and where.name or "",
+		minutes, Coins(a.value), hour, count, best and (" Best: %d %s."):format(a.best.n, best) or "")
+end
+Card.ShareLine = ShareLine
+
+local function ShareMenu(root, a)
+	UI.TellMenu(root, "Share it in", function() return ShareLine(a) end)
+end
+
+-- When it asks: start (or go on) now, or not now (it asks again once you have left and come back).
 Answered = function(key)
 	local s = Session()
 	if not s then return end
@@ -145,15 +225,43 @@ Answered = function(key)
 	end
 end
 
--- The toolbar: start, pause or go on; go where it drops; keep it as a favorite; end the session.
+-- Going places (ShyQuest)
+
+-- Leads to where you farm: the camp is the active waypoint, first on your route, the arrow pointing at it; its ground
+-- the farm's (an item's droppers, or the creature's own).
+local function GoToSource(target, quiet)
+	if not (target and target.key) then return false end
+	local spot = Spot(target, true)
+	local quest = Shy.addons.Quest
+	local name = target.item and C_Item.GetItemNameByID(target.item) or target.name
+	local title = name and spot and spot.name and spot.name ~= name and (name .. ", " .. spot.name) or name or (spot and spot.name)
+	-- (Led as where you farm it: its ground lit in the finder's color, the stop kept while you are there.)
+	if spot and quest.FarmAt and quest:FarmAt(target.item, spot.map, spot.x, spot.y, spot.name, target.npc) then return true end
+	if spot and quest:Go(spot.map, spot.x, spot.y, title) then return true end
+	if not quiet then T:Print("no place is known where you could farm it.") end
+	return false
+end
+Card.GoToSource = GoToSource
+Card.Lead = function() return GoToSource(S.Farmed(), true) end
+
+-- The toolbar: start, pause or go on; go where you farm; keep the item as a favorite; reset (the session saved).
 function Card.Tool(key)
 	local s = Session()
 	if not s then return end
 	local item = s.want and s.want.item
 	if key == "main" then
-		if s.state == "running" then S.Pause(true) else S.Go() end
-	elseif key == "go" and item then
-		Card.GoToSource(item)
+		-- (Waiting at rest: Start sets its clock going. Running: Pause.)
+		if s.state == "running" and not S.Running(s) and not S.Used(s) then
+			S.Clock()
+		elseif s.state == "running" then
+			S.Pause(true)
+		else
+			S.Go()
+		end
+	elseif key == "find" then
+		Card.Find()
+	elseif key == "go" then
+		GoToSource(S.Farmed())
 	elseif key == "favorite" and item then
 		ns.Stats.Favorite(item)
 	elseif key == "stop" then
@@ -200,40 +308,53 @@ local function PriceMenu(root, item)
 	end)
 end
 
--- Going places (ShyQuest)
-
--- Leads to where to farm it: the camp is the active waypoint, first on your route, the arrow pointing at it.
-local function GoToSource(item, quiet)
-	local spot = Spot(item, true)
-	local quest = Shy.addons.Quest
-	local name = C_Item.GetItemNameByID(item)
-	local title = name and spot and spot.name and (name .. ", " .. spot.name) or name or (spot and spot.name)
-	-- (Led as where you farm it: its ground lit in the finder's color, the stop kept while you are there.)
-	if spot and quest.FarmAt and quest:FarmAt(item, spot.map, spot.x, spot.y, spot.name) then return true end
-	if spot and quest:Go(spot.map, spot.x, spot.y, title) then return true end
-	if not quiet then T:Print("no place is known where you could farm it.") end
-	return false
-end
-Card.GoToSource = GoToSource
-Card.Lead = function(item) return GoToSource(item, true) end
-
 -- Menus
 
+-- "1 in 8", "35%", "1.4 a kill": how often a kill gives something.
+local function Per(per)
+	if per >= 1 then return ("%.1f a kill"):format(per) end
+	if per >= 0.1 then return ("%d%%"):format(math.floor(per * 100 + 0.5)) end
+	return ("1 in %d"):format(math.floor(1 / per + 0.5))
+end
+
+-- What you farm, and how: a creature's drops to count one of (or all of them alike), another of your loot, how many,
+-- its price, a favorite, the way there, something else from the finder.
 local function WantMenu(root, s)
-	local want = s.want
+	local want, mob = s.want, s.mob
+	local sub = root:CreateButton("Farm")
+	local target = S.Farmed(s)
+	sub:SetSub(target.kind == "any" and "Everything you loot" or (want and C_Item.GetItemNameByID(want.item)) or target.name or "")
+	sub:SetIcon(UI.MenuGlyph("point"))
+	if mob then
+		-- (A creature: all it drops alike, or one of them counted on its own.)
+		sub:CreateTitle(target.name or "This creature")
+		sub:CreateRadio("Everything it drops", function() return s.want == nil end, function() S.Want(nil) end)
+		for _, drop in ipairs(ns.Worth.Best(mob.npc, 8)) do
+			local entry = sub:CreateRadio(C_Item.GetItemNameByID(drop.item) or ("Item " .. drop.item),
+				function() return s.want and s.want.item == drop.item end, function() S.Want(drop.item, s.want and s.want.goal) end)
+			entry:SetDetail(Per(drop.per))
+		end
+		sub:CreateDivider()
+	end
 	local list = {}
 	for item in pairs(s.items) do
 		if P.Sellable(item) or (C_Item.GetItemQualityByID(item) or 0) > 0 then list[#list + 1] = item end
 	end
 	table.sort(list, function(a, b) return (s.items[a] or 0) > (s.items[b] or 0) end)
-	local sub = root:CreateButton("Farm")
-	sub:SetSub(want and C_Item.GetItemNameByID(want.item) or "Nothing in particular")
-	sub:SetIcon(UI.MenuGlyph("point"))
-	sub:CreateRadio("Nothing in particular", function() return s.want == nil end, function() S.Want(nil) end)
+	if not mob then
+		sub:CreateRadio("Record everything", function() return s.want == nil end, function() T:FarmAnything() end)
+	end
 	for i, item in ipairs(list) do
 		if i > 12 then break end
 		sub:CreateRadio(C_Item.GetItemNameByID(item) or ("Item " .. item), function() return s.want and s.want.item == item end,
 			function() S.Want(item, s.want and s.want.goal) end)
+	end
+	if mob then
+		sub:CreateButton("Record everything instead", function() T:FarmAnything() end)
+	end
+	if Card.CanFind() then
+		sub:CreateDivider()
+		sub:CreateButton("Find something to farm", function() Card.Find() end):SetIcon(UI.MenuGlyph("route"))
 	end
 	if want then
 		local goal = root:CreateButton("How many")
@@ -250,9 +371,9 @@ local function WantMenu(root, s)
 		PriceMenu(price, want.item)
 		root:CreateCheckbox("Favorite", function() return ns.Stats.IsFavorite(want.item) end,
 			function() ns.Stats.Favorite(want.item) end)
-		if Spot(want.item) then
-			root:CreateButton("Take me there", function() GoToSource(want.item) end):SetIcon(UI.MenuGlyph("route"))
-		end
+	end
+	if target.kind ~= "any" and Spot(target) then
+		root:CreateButton("Take me there", function() GoToSource(target) end):SetIcon(UI.MenuGlyph("route"))
 	end
 end
 
@@ -273,6 +394,9 @@ local function HistoryMenu(root)
 		entry:SetDetail(P.Text(kept.value))
 		entry:SetSub((kept.kind == "fishing" and "Fishing" or "Grinding") .. (hour and (", " .. P.Text(hour) .. " an hour") or "")
 			.. ", " .. date("%b %d", kept.began))
+		-- (Each one shared in a chat of your choice.)
+		ShareMenu(entry, { seconds = kept.seconds, value = kept.value, kills = kept.kills, catches = kept.catches,
+			kind = kept.kind, map = kept.map, best = S.Best(kept.items or {}) })
 	end
 	sub:CreateDivider()
 	sub:CreateButton("Forget them", function() wipe(ns.char.history) end)
@@ -293,6 +417,9 @@ function Card.Menu(root)
 	else
 		root:CreateTitle("Farming")
 		root:CreateButton("Start a session", function() S.Begin() end):SetIcon(UI.MenuGlyph("first"))
+		if Card.CanFind() then
+			root:CreateButton("Find something to farm", function() Card.Find() end):SetIcon(UI.MenuGlyph("route"))
+		end
 	end
 	HistoryMenu(root)
 	root:CreateDivider()
@@ -331,7 +458,7 @@ function Card.RowTip(row)
 		sections[2] = { title = "You looted", rows = yours }
 	end
 	UI.Tip(row, data.name or "", worth and ("%d came to %s."):format(data.n or 0, P.Text((worth or 0) * (data.n or 0))) or nil,
-		{ sections = sections, hints = { { "left", "Farm this" }, { "right", "Its price" } }, at = UI.Beside(card, row) })
+		{ sections = sections, hints = { { "left", "Keep count of this" }, { "right", "Its price" } }, at = UI.Beside(card, row) })
 end
 
 function Card.RowClick(row, button)
@@ -349,18 +476,37 @@ function Card.RowClick(row, button)
 			root:CreateTitle(data.name or "")
 			PriceMenu(root, item)
 			root:CreateDivider()
-			root:CreateButton("Farm this", function() S.Want(item) end):SetIcon(UI.MenuGlyph("point"))
+			root:CreateButton("Keep count of this", function() S.Want(item) end):SetIcon(UI.MenuGlyph("point"))
 		end)
 	else
 		S.Want(item, Session() and Session().want and Session().want.item == item and Session().want.goal or nil)
 	end
 end
 
--- The farmed item's hover: where it comes from (ShyQuest), your odds, how it is valued.
+-- What you farm, hovered: an item, where it comes from (ShyQuest) and how it is valued; a creature, what a kill
+-- brings and its drops; anything you loot, that you can pick one.
 function Card.WantTip(frame)
 	local s = Session()
-	local want = s and s.want
-	if not want then return end
+	if not s then return end
+	local target = S.Farmed(s)
+	local want = s.want
+	if not want and target.kind == "mob" then
+		local rows = {}
+		for _, drop in ipairs(ns.Worth.Best(target.npc, 5)) do
+			rows[#rows + 1] = { icon = C_Item.GetItemIconByID(drop.item), text = C_Item.GetItemNameByID(drop.item) or ("Item " .. drop.item),
+				right = Per(drop.per), rightColor = C.dim }
+		end
+		local worth = ns.Worth.Worth(target.npc)
+		UI.Tip(frame, target.name or "", worth and ("Each kill is worth about %s."):format(P.Text(worth)) or nil,
+			{ sections = #rows > 0 and { { title = "Best drops", rows = rows } } or nil,
+			hints = { { "left", "Keep count of one drop, or farm something else" } }, at = UI.Beside(card, frame) })
+		return
+	end
+	if not want then
+		UI.Tip(frame, "Anything you loot", "Pick an item to keep count of, or a creature to farm. Everything you loot still counts.",
+			{ hints = { { "left", Card.CanFind() and "Find something to farm" or "Keep count of something you looted" } }, at = UI.Beside(card, frame) })
+		return
+	end
 	local item = want.item
 	local rows = {}
 	for i, source in ipairs(Sources(item) or {}) do
@@ -377,11 +523,14 @@ end
 
 function Card.WantClick(frame, button)
 	local s = Session()
-	local want = s and s.want
-	if not want then return end
-	if IsModifiedClick("CHATLINK") then
+	if not s then return end
+	local want = s.want
+	if want and IsModifiedClick("CHATLINK") then
 		local link = select(2, C_Item.GetItemInfo(want.item))
 		if link then ChatFrameUtil.InsertLink(link) end
+	elseif not want and not s.mob and button ~= "RightButton" and Card.CanFind() then
+		-- (Anything you loot: a click finds something to farm, as its Find does.)
+		Card.Find()
 	else
 		UI.ContextMenu(frame, function(root) WantMenu(root, s) end)
 	end
@@ -392,14 +541,18 @@ function Card.CardTip(frame)
 	if not s then return end
 	local seconds = S.Seconds(s)
 	local words = ("%s of farming"):format(Card.Clock(seconds))
-	if s.state == "ready" then
+	if not S.Used(s) then
+		words = "Nothing yet. The clock starts when you loot something."
+	elseif s.state == "ready" then
 		words = "Not started yet: nothing counts until you start."
 	elseif s.state == "paused" then
 		words = words .. ", paused."
 	elseif not S.Running(s) then
 		words = words .. ", the clock stopped while you rested."
 	end
-	UI.Tip(frame, "Farming", words, { hints = K.HINTS })
+	-- (Where you farm, which the window itself leaves to your map.)
+	local where = s.map and C_Map.GetMapInfo(s.map)
+	UI.Tip(frame, where and ("Farming in " .. where.name) or "Farming", words, { hints = K.HINTS })
 end
 
 -- What it says
@@ -417,6 +570,13 @@ function Card.Reached(item, goal)
 	end
 end
 
+-- What is farmed, for a notice: its name and picture (an item's, else ShyFarm's own).
+local function Named(s)
+	local target = S.Farmed(s)
+	local item = target.item
+	return item and C_Item.GetItemNameByID(item) or target.name, item and C_Item.GetItemIconByID(item) or T.smallIcon
+end
+
 -- Asking to start (or go on): the band in the window, a sound, and a notice a click on which starts it. Said once
 -- until answered; ns.Changed paints it. A window you closed stays away: the notice asks.
 local function Ask(s)
@@ -424,11 +584,11 @@ local function Ask(s)
 	s.ask = true
 	if T.db.sound then PlaySound(SOUNDKIT.READY_CHECK) end
 	local N = Shy.Notices
-	local item = s.want and s.want.item
+	local name, icon = Named(s)
 	if N and N.Post then
-		N.Post("shyfarm-ask", { order = 39, icon = item and C_Item.GetItemIconByID(item) or T.smallIcon, color = C.alert,
-			text = s.state == "paused" and "Paused" or "Start", title = item and C_Item.GetItemNameByID(item) or "Farming",
-			note = s.state == "paused" and "You looted it while paused." or "You're where it drops.",
+		N.Post("shyfarm-ask", { order = 39, icon = icon, color = C.alert,
+			text = s.state == "paused" and "Paused" or "Start", title = name or "Farming",
+			note = s.state == "paused" and "That loot didn't count." or "You're where it drops.",
 			says = "Click to start counting.", click = function() S.Go() end, hold = 60 })
 	end
 	ns.Changed("ask")
@@ -438,14 +598,16 @@ end
 -- shows its band and the figures lit. A window you closed stays away (/shyfarm show, or farming something, brings it).
 function Card.Started(item, how)
 	local N = Shy.Notices
-	local name = C_Item.GetItemNameByID(item) or "it"
 	local s = Session()
+	local name, icon = Named(s)
+	if item then name, icon = C_Item.GetItemNameByID(item) or name, C_Item.GetItemIconByID(item) or icon end
+	name = name or "it"
 	if s then s.there = time() end
 	if T.db.sound then PlaySound(SOUNDKIT.UI_WORLDQUEST_START) end
 	local under = how == "there" and "You're there: counting now" or how == "back" and "You're back: counting again"
 		or "You looted it: counting now"
 	if N and N.Voice then
-		N.Voice("shyfarm-started", { priority = 5, hold = 5, icon = C_Item.GetItemIconByID(item), title = "Farming " .. name, under = under })
+		N.Voice("shyfarm-started", { priority = 5, hold = 5, icon = icon, title = "Farming " .. name, under = under })
 	else
 		T:Print(("farming %s. %s."):format(name, under))
 	end
@@ -459,39 +621,41 @@ function Card.Nudge()
 	if s then Ask(s) end
 end
 
--- Where you farm is the ground the maps light for it (ShyQuest's R.FarmGround: the spawns of what you'd farm it
--- from). Stepping onto it starts the session, or goes on after you left it or reloaded; stepping off pauses it, and
--- it goes on as you come back. A pause by hand stays. ShyQuest is the one judge of it (its farm stop says "Farm it
--- here" on the same ground): it says so as it builds your route (bus SHY_FARM_GROUND), and as the game tells of a
--- stop, a fight, a loot or a zone it is asked straight (Where). In within IN yards of a spawn, out past OUT: its own.
+-- Where you farm is the ground the maps light for it (ShyQuest's FarmGround: the spawns of what you'd farm an item
+-- from, or the creature's own). Stepping onto it starts the session, or goes on after you left it or reloaded;
+-- stepping off pauses it, and it goes on as you come back. A pause by hand stays. ShyQuest is the one judge of it
+-- (its farm stop says "Farm it here" on the same ground): it says so as it builds your route (bus SHY_FARM_GROUND,
+-- with the farm's key), and as the game tells of a stop, a fight, a loot or a zone it is asked straight (Where). In
+-- within IN yards of a spawn, out past OUT: its own.
 local IN, OUT = 40, 60
 local function OnGround(s, on)
 	if on and (s.state == "ready" or (s.state == "paused" and (s.why == "left" or s.why == "reload"))) then
 		local resumed = s.state == "paused"
 		S.Go()
 		s.there = time()
-		Card.Started(s.want.item, resumed and "back" or "there")
-	elseif on == false and s.state == "running" then
+		Card.Started(s.want and s.want.item, resumed and "back" or "there")
+	elseif on == false and s.state == "running" and S.Used(s) then
 		S.Pause(true, "left")
 		if T.db.sound then PlaySound(SOUNDKIT.IG_QUEST_LIST_SELECT) end
 		local N = Shy.Notices
 		if N and N.Voice then
-			N.Voice("shyfarm-started", { priority = 5, hold = 4, icon = C_Item.GetItemIconByID(s.want.item), title = "Paused",
-				under = "You left where it drops" })
+			local _, icon = Named(s)
+			N.Voice("shyfarm-started", { priority = 5, hold = 4, icon = icon, title = "Paused", under = "You left where it drops" })
 		end
 	end
 end
 local Where = Shy.Clocked("farm: where you are", function()
 	local s = Session()
 	local quest = Shy.addons.Quest
-	if not (s and s.want and quest and quest.FarmGroundYards) then return end
-	local yards = quest:FarmGroundYards(s.want.item)
+	local key = s and S.Farmed(s).key
+	if not (key and quest and quest.FarmGroundYards) then return end
+	local yards = quest:FarmGroundYards(key)
 	if not yards then return end
 	if yards <= IN then OnGround(s, true) elseif yards > OUT then OnGround(s, false) end
 end)
-Shy:On("SHY_FARM_GROUND", Shy.Clocked("farm: its ground stepped on or off", function(item, on)
+Shy:On("SHY_FARM_GROUND", Shy.Clocked("farm: its ground stepped on or off", function(key, on)
 	local s = Session()
-	if s and s.want and s.want.item == item then OnGround(s, on) end
+	if s and key ~= nil and S.Farmed(s).key == key then OnGround(s, on) end
 end))
 function Card.Where()
 	local ok, err = pcall(Where)
@@ -506,22 +670,29 @@ local function Gold(copper)
 end
 
 -- A session ended: what it made, as a notice that stands a while.
+-- A session reset: what it came to, as a notice for a moment (nothing in the window: its room is the loot's). Its
+-- right-click shares it, or shows your past sessions.
 function Card.Summary(kept)
 	local N = Shy.Notices
 	local hour = kept.seconds >= 60 and (kept.value * 3600 / kept.seconds) or nil
 	local note = ("%s, %s an hour"):format(Card.Clock(kept.seconds), hour and P.Text(hour) or "\226\128\148")
 	if not (N and N.Post) then
-		T:Print(("session over: %s made in %s."):format(P.Text(kept.value), note))
+		T:Print(("saved: %s in %s."):format(P.Text(kept.value), note))
 		return
 	end
+	local shared = { seconds = kept.seconds, value = kept.value, kills = kept.kills, catches = kept.catches, kind = kept.kind,
+		map = kept.map, best = S.Best(kept.items or {}) }
 	N.Post("shyfarm", { order = 40, icon = T.smallIcon, color = C.alert, text = Gold(kept.value),
-		title = "Farming: " .. P.Text(kept.value), note = note, hold = 45,
-		says = "Right-click for your past sessions.",
-		menu = function(root) HistoryMenu(root) end })
+		title = "Saved: " .. P.Text(kept.value), note = note, hold = 12,
+		says = "Right-click to share it.",
+		menu = function(root)
+			ShareMenu(root, shared)
+			HistoryMenu(root)
+		end })
 end
 
--- The piece for a planned screen (ShyDock's Parts.lua): its width and its height at the setting's rows, with the
--- farmed item showing; nil while it is off. Bus SHY_FARM_PIECE when that changes.
+-- The piece for a planned screen (ShyDock's Parts.lua): its width and its height at the setting's rows, with what you
+-- farm showing; nil while it is off. Bus SHY_FARM_PIECE when that changes.
 function T:Piece()
 	if not T.db.on then return nil end
 	local view = { want = true }
@@ -529,20 +700,25 @@ function T:Piece()
 		passing = true }
 end
 
--- Shows the piece where it stands now (the hub's Open, /shyfarm show): a session begins if none goes on.
+-- Shows the piece where it stands now (the hub's Open, /shyfarm show): with none going on, a session waits for you.
 function Card.Reveal()
-	local s = Session() or S.Begin()
+	local s = Session() or S.Wait()
 	s.hidden = nil
 	Paint()
 end
 
--- Its ×: away for the rest of the session, which goes on counting.
+-- Its ×: away for the rest of the session, which goes on counting. One only waiting (nothing counted, nothing
+-- picked) has nothing to count on for: it goes with the window.
 function Card.Close()
 	local s = Session()
 	if not s then return end
+	if not S.Used(s) and not s.want and not s.mob then
+		S.Drop()
+		return
+	end
 	s.hidden = true
 	Paint()
-	T:Print("still counting. /shyfarm show brings the window back; /shyfarm stop ends the session.")
+	T:Print("still counting. /shyfarm show brings the window back, and Reset in it saves the session and starts fresh.")
 end
 
 -- A look a second while the window shows a running clock, and none at all otherwise.
@@ -551,15 +727,12 @@ local Beat = Shy.Clocked("farm: the clock", function()
 		card.clock:SetText(Card.Clock(S.Seconds()))
 		card.view.seconds = S.Seconds()
 	end
-	-- (The moment's band of a start goes as its time is up.)
-	local s = Session()
-	if s and s.there and time() - s.there >= 5 and card.view and card.view.band and card.view.band.kind == "go" then Paint() end
 end)
 local where   -- the events that say you may have come to or left where you farm (Where)
 function Card.Wake()
 	local s = Session()
 	-- (Where you are is looked at only as the game says something happened: you stopped, a fight began, a zone.)
-	local watch = s ~= nil and s.want ~= nil
+	local watch = s ~= nil and (s.want ~= nil or s.mob ~= nil)
 	if where and watch ~= where.on then
 		where.on = watch
 		for _, event in ipairs(where.EVENTS) do
@@ -583,8 +756,18 @@ function Card.Start()
 		width = K.WIDTH,
 		height = Card.Height(Card.SAMPLE, T.db.rows),
 		-- The top left's corner, where how to play stands (ShyDock puts that under it while a session shows).
-		point = { "TOPLEFT", "TOPLEFT", 16, -116 },
+		point = { "TOPLEFT", "TOPLEFT", 16, -16 },
 		shown = Shown,
+		-- Its options' "On screen while you farm".
+		switch = {
+			get = function() return T.db.on ~= false end,
+			set = function(on)
+				T.db.on = on
+				ns.Apply()
+				if ns.RefreshOptions then ns.RefreshOptions() end
+			end,
+			hint = "Your loot and gold an hour while you farm",
+		},
 		hang = true,
 		-- (Sized from a corner it is laid out again as it is, the rows that fit shown.)
 		grip = { flow = function() if card and card.view then card:Fill(card.view) end end,
@@ -592,6 +775,10 @@ function Card.Start()
 	})
 	card = ns.CreateCard(box, box)
 	HUD.Manage(box, card, Card.Menu)
+	-- Joining or leaving a raid shows or hides it.
+	local roster = CreateFrame("Frame")
+	roster:RegisterEvent("GROUP_ROSTER_UPDATE")
+	roster:SetScript("OnEvent", function() HUD.Update(box) end)
 	local immersion = Shy.Immersion
 	if immersion and immersion.Watch then immersion.Watch("farm", box) end
 
@@ -621,6 +808,17 @@ function Card.Start()
 	Card.Wake()
 	Shy:On("SHY_HUD_LAYOUT", Paint)
 	Shy:On("SHY_THEME", Paint)
+	-- Room in your bags said again as it changes (selling, using, moving things), only its words, only while the piece
+	-- shows: ShyBags says so, and the game does.
+	local Bagged = Shy.Clocked("farm: room in your bags", function()
+		if not (card and card.view and Session() and box:IsShown()) then return end
+		card.view.room = Room()
+		card:FillRoom(card.view.room)
+	end)
+	Shy:On("SHY_BAGS_ROOM", Bagged)
+	local bagged = CreateFrame("Frame")
+	bagged:RegisterEvent("BAG_UPDATE_DELAYED")
+	bagged:SetScript("OnEvent", Bagged)
 	Paint()
 end
 

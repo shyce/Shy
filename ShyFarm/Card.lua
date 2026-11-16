@@ -1,10 +1,12 @@
 -- The piece on the screen while you farm. Its header says what you are doing and where, the clock (stopped while
 -- you rest) and the cog. Under it, side by side, the two figures that matter: what the session made and what that
--- comes to an hour; under them kills and corpses looted (or catches and the ones that got away). The item you farm
--- stands next in a slot with how many you hold of how many you want, the odds you have had and when you will have
--- them all; one with no price asks how to value it (the auction house, a price you type, or the vendor's). Then
--- the loot, the best first, each at what it is worth: coin, things, and junk as one row. What was just looted
--- lights a moment. At the auction house its foot looks up the prices it lacks.
+-- comes to an hour; under them kills and corpses looted (or catches and the ones that got away). What you farm, once
+-- picked with Find, stands next in a slot (nothing picked: no block, the room is the loot's): a creature (all it drops:
+-- what a kill brings and how many you have looted), or the item counted on its own (how many you hold of how many
+-- you want, the odds you have had and when you will have them all); an item with no price asks how to value it (the
+-- auction house, a price you type, or the vendor's). Then the loot, the best first, each at what it is worth: coin,
+-- things, and junk as one row. What was just looted lights a moment. At the auction house its foot looks up the
+-- prices it lacks. How it stands is the clock's word in the header (paused, ready) and Start or Pause: no banners.
 --
 -- In ShyDock's deck it is a box with a tab ("Farm") that is offered while a session goes on, lowest in the deck so
 -- nothing else moves for it; alone it stands where you put it, and is sized from its corners: the rows that fit
@@ -27,12 +29,15 @@ local K = {
 	STATS = 20,                   -- kills and corpses, or catches
 	WANT = 48,                    -- the item farmed
 	ASK = 50,                     -- the question of its price
+	FEW = 5,                      -- free bag slots at or under which they're said in gold
+	THUMB = 12,                   -- the list's thumb, while it has more to show
 	ROW = 22,                     -- a loot row
 	ICON = 18,                    -- a loot row's picture
 	SLOT = 32,                    -- the farmed item's picture
+	SIGN = 20,                    -- a creature's sign in that slot, or the bag's for everything you loot
+	GLYPH = 20,                   -- Go there and Favorite, on what you farm
 	BAR = 3,                      -- the farmed item's progress
 	FOOT = 30,                    -- the auction house's button
-	BAND = 48,                    -- how the session stands, when it isn't running: ready, paused, or asking to start
 	TOOLS = 30,                   -- the controls: start or pause, go there, favorite, end
 	END = 8,                      -- under the last row
 	LEAST = 3,                    -- loot rows at the least
@@ -43,6 +48,11 @@ local K = {
 	HINTS = { { "left", "Move" }, { "right", "Menu" } },
 }
 local TOP = K.HEAD + UI.LINE + 6
+
+-- Whether the block of what you farm shows: for something picked (an item, a creature), never for anything at all.
+local function Picked(view)
+	return view.want ~= nil or (view.target ~= nil and view.target.kind ~= "any")
+end
 
 ns.cards = {}
 
@@ -78,30 +88,27 @@ local function QualityColor(q)
 	return { r, g, b }
 end
 
+-- Rows by what they came to, most first; then by how many; then steady (coin before things of the same worth).
+local function Worthier(a, b)
+	if a.value ~= b.value then return a.value > b.value end
+	if (a.n or 0) ~= (b.n or 0) then return (a.n or 0) > (b.n or 0) end
+	return (a.item or 0) < (b.item or 0)
+end
+
 -- What the card shows, from a session: everything worked out, nothing drawn. Tests read it.
 function Card.View(s)
 	local view = { title = S.Kind(s) == "fishing" and "Fishing" or "Grinding", zone = s.map and C_Map.GetMapInfo(s.map),
 		seconds = S.Seconds(s), running = S.Running(s), state = s.state, value = S.Value(s), perHour = S.PerHour(s), rows = {} }
 	view.zone = view.zone and view.zone.name or nil
-	-- How it stands, said plainly when it isn't running: ready (not started), paused (by hand or by a reload), or
-	-- asking to start (you reached where it drops, or looted it while it didn't count).
-	if s.ask then
-		view.band = { kind = "ask", words = s.state == "paused" and "You looted it while paused" or "You're where it drops",
-			sub = s.state == "paused" and "Go on counting?" or "Start the clock now?", start = s.state == "paused" and "Go on" or "Start" }
-	elseif s.state == "ready" then
-		view.band = { kind = "ready", words = "Ready when you are",
-			sub = s.want and "Nothing counts yet. You'll be asked when you get there." or "Nothing counts until you start." }
-	elseif s.state == "paused" then
-		view.band = { kind = "paused", words = "Paused",
-			sub = s.why == "reload" and "Kept over the reload. It goes on where it drops."
-				or s.why == "left" and "You left where it drops. It goes on when you're back."
-				or "Nothing counts until you go on." }
-	elseif s.state == "running" and s.there and time() - s.there < 5 then
-		-- (Just begun as you got there: said a moment, in the color of things going well.)
-		view.band = { kind = "go", words = "You're there", sub = "Counting from now." }
-	end
-	view.tools = { main = s.state == "running" and "Pause" or s.state == "ready" and "Start" or "Go on",
-		primary = s.state ~= "running", want = s.want and s.want.item,
+	local used = S.Used(s)
+	view.target = S.Farmed(s)
+	-- (Its clock's word: paused or ready only once there is something to pause or start.)
+	view.clockWords = (s.state == "paused" and used and "paused") or (s.state == "ready" and view.target.kind ~= "any" and "ready") or nil
+	-- (Waiting, its clock at rest with nothing counted: Start, and no End, there is nothing to end yet.)
+	local waiting = s.state == "running" and not used and not S.Running(s)
+	view.tools = { main = (not waiting and s.state == "running") and "Pause" or "Start",
+		primary = s.state ~= "running" or waiting, want = s.want and s.want.item, farmed = view.target.kind ~= "any",
+		ends = used or s.want ~= nil or s.mob ~= nil,
 		favorite = s.want ~= nil and ns.Stats ~= nil and ns.Stats.IsFavorite(s.want.item) }
 	if S.Kind(s) == "fishing" then
 		view.stats = { { "loot", Plural(s.catches, "catch", "catches") } }
@@ -112,27 +119,31 @@ function Card.View(s)
 	end
 	view.want = S.Wanted(s)
 	if view.want and P.Needs(view.want.item) then view.ask = view.want.item end
-	-- The loot: coin, then things by what they came to, then the junk as one row.
-	if s.coin > 0 then view.rows[1] = { coin = true, name = "Coin", value = s.coin } end
-	local things, junk = {}, { junk = true, name = "Junk", n = 0, value = 0 }
-	for item, n in pairs(s.items) do
-		local each = P.Value(item) or 0
-		local q = Quality(item)
-		if q == 0 then
-			junk.n, junk.value = junk.n + n, junk.value + n * each
-			junk.icon = junk.icon or C_Item.GetItemIconByID(item)
-		else
-			things[#things + 1] = { item = item, n = n, value = n * each, quality = q, unpriced = P.Value(item) == nil,
-				name = C_Item.GetItemNameByID(item), icon = C_Item.GetItemIconByID(item) }
+	-- A creature farmed: what a kill of it brings, how many you have looted this session and how fast.
+	local target = view.target
+	if target.kind == "mob" then
+		local mob = s.mobs[target.npc]
+		target.kills = mob and mob.corpses or 0
+		target.worth = ns.Worth.Worth(target.npc)
+		local seconds = S.Seconds(s)
+		target.rate = seconds >= 60 and target.kills * 3600 / seconds or nil
+		local quest = Shy.addons.Quest
+		local who = quest and quest.Npc and quest:Npc(target.npc)
+		if who and who.maxLevel and who.maxLevel > 0 then
+			target.level = who.minLevel ~= who.maxLevel and ("level %d-%d"):format(who.minLevel, who.maxLevel) or ("level %d"):format(who.maxLevel)
 		end
+		if view.want then view.want.from = target.name end
 	end
-	table.sort(things, function(a, b)
-		if a.value ~= b.value then return a.value > b.value end
-		if a.n ~= b.n then return a.n > b.n end
-		return a.item < b.item
-	end)
-	for _, row in ipairs(things) do view.rows[#view.rows + 1] = row end
-	if junk.n > 0 then view.rows[#view.rows + 1] = junk end
+	-- The loot: every thing on its own row (grey junk too), coin among them, the most it came to first; what you loot
+	-- next finds its place by its worth. Unpriced last.
+	if s.coin > 0 then view.rows[1] = { coin = true, name = "Coin", value = s.coin } end
+	for item, n in pairs(s.items) do
+		local each = P.Value(item)
+		local q = Quality(item)
+		view.rows[#view.rows + 1] = { item = item, n = n, value = n * (each or 0), quality = q, junk = q == 0, unpriced = each == nil,
+			name = C_Item.GetItemNameByID(item), icon = C_Item.GetItemIconByID(item) }
+	end
+	table.sort(view.rows, Worthier)
 	if A.IsOpen() and T.db.auction then
 		local left = A.Left()
 		if left > 0 then
@@ -144,14 +155,14 @@ function Card.View(s)
 	end
 	if #view.rows == 0 then
 		view.quiet = S.Kind(s) == "fishing" and { "Nothing caught yet", "Your catches add up here." }
-			or { "Nothing looted yet", "What you loot adds up here, at what it's worth." }
+			or { "Nothing looted yet", "" }
 	end
 	return view
 end
 
 -- A made-up session, for layout mode: what the piece looks like at work.
 local SAMPLE = {
-	title = "Grinding", zone = "Westfall", seconds = 1873, running = true, state = "running", value = 42350, perHour = 81400,
+	title = "Grinding", zone = "Westfall", room = { free = 14, total = 64 }, seconds = 1873, running = true, state = "running", value = 42350, perHour = 81400,
 	tools = { main = "Pause", favorite = true, want = true },
 	stats = { { "kill", "38 kills" }, { "loot", "36 looted" } },
 	want = { name = "Stringy meat", have = 14, goal = 20, odds = "1 in 2", rate = 27, eta = 800, sample = true },
@@ -169,7 +180,7 @@ Card.SAMPLE = SAMPLE
 
 -- A loot row: its picture in a slot, its name in its quality's color, the count, what it came to.
 local function NewRow(card)
-	local row = CreateFrame("Frame", nil, card)
+	local row = CreateFrame("Frame", nil, card.list.content)
 	row:SetHeight(K.ROW)
 	row.icon = row:CreateTexture(nil, "ARTWORK")
 	row.icon:SetSize(K.ICON, K.ICON)
@@ -178,17 +189,11 @@ local function NewRow(card)
 	row.glyph = row:CreateTexture(nil, "ARTWORK")
 	row.glyph:SetSize(14, 14)
 	row.glyph:SetPoint("CENTER", row.icon)
-	row.value = row:CreateFontString(nil, "OVERLAY")
-	row.value:SetFontObject(UI.NameFont(12))
+	row.value = UI.Words(row, UI.NameFont(12), C.text, { justify = "RIGHT" })
 	row.value:SetPoint("RIGHT", -2, 0)
-	row.value:SetJustifyH("RIGHT")
-	row.count = row:CreateFontString(nil, "OVERLAY")
-	row.count:SetFontObject(UI.NameFont(11))
-	row.name = row:CreateFontString(nil, "OVERLAY")
-	row.name:SetFontObject(UI.NameFont(12))
+	row.count = UI.Words(row, UI.NameFont(11), C.dim)
+	row.name = UI.Words(row, UI.NameFont(12), C.text, { wrap = false })
 	row.name:SetPoint("LEFT", row.icon, "RIGHT", 7, 0)
-	row.name:SetJustifyH("LEFT")
-	row.name:SetWordWrap(false)
 	row.count:SetPoint("LEFT", row.name, "RIGHT", 4, 0)
 	-- The light a row takes as something lands in it, as the kit lights a picked row: your color washed over it,
 	-- faint, with a fine line of it at its left edge; painted through the theme (it follows your color and look),
@@ -248,19 +253,13 @@ local function PaintRow(row, data, width)
 		Hover.Glyph(row.glyph, "coin", 14)
 		UI.Tint(row.glyph, C.alert)
 		row.glyph:Show()
-	elseif data.more then
-		row.icon:Hide()
-		row.slot:Empty(true)
-		Hover.Glyph(row.glyph, "bag", 14)
-		UI.Tint(row.glyph, C.dim)
-		row.glyph:Show()
 	else
 		row.icon:SetTexture(data.icon or QUESTION_MARK_ICON)
 		row.icon:SetDesaturated(data.junk == true)
 	end
 	row.name:SetText(data.name or (item and "…") or "")
-	if data.coin or data.more then
-		UI.Ink(row.name, data.more and C.dim or C.text)
+	if data.coin then
+		UI.Ink(row.name, C.text)
 	elseif data.junk then
 		UI.Ink(row.name, QualityColor(0))
 	else
@@ -273,10 +272,18 @@ local function PaintRow(row, data, width)
 	else
 		row.value:SetText(P.Text(data.value or 0, 12, row.value))
 	end
-	UI.Ink(row.value, data.more and C.dim or C.text)
+	UI.Ink(row.value, C.text)
 	-- (The name gives way to the count and the value.)
 	local room = width - K.ICON - 11 - row.value:GetStringWidth() - 8 - row.count:GetStringWidth() - 6
 	row.name:SetWidth(math.max(20, math.min(row.name:GetUnboundedStringWidth() + 1, room)))
+end
+
+-- The room under the card's header: its box's size on screen (it is anchored all round to it), its own as a
+-- preview, less the look's clearance round its body (UI.Body).
+local function Room(card)
+	local l, t, r, b = UI.BodyIn(card)
+	local f = card.box or card
+	return f:GetWidth() - l - r, f:GetHeight() - t - b
 end
 
 function ns.CreateCard(parent, box)
@@ -284,27 +291,26 @@ function ns.CreateCard(parent, box)
 	card.box = box
 	card:SetSize(K.WIDTH, 200)
 	-- The header, a window's: ShyFarm's icon, what you do and where, the clock, the cog and the ×.
-	card.head = UI.Head(card, { size = "window", icon = T.smallIcon, title = "Farming", drag = box,
+	card.head = UI.Head(card, { size = "window", icon = T.mark, title = "Farming", drag = box,
 		close = box and function() if Card.Close then Card.Close() end end or nil,
 		buttons = { { glyph = GLYPH.gear, tip = { "Farming menu", "Pause, what you farm and its price, past sessions." },
 			click = function(b) UI.ContextMenu(b, function(root) if Card.Menu then Card.Menu(root) end end) end } },
-		panel = { hud = true, facets = false } })
+		-- (its body inside the size the screen's plan gives it: the rows give the room, UI.Body)
+		panel = { hud = true, facets = false }, body = true })
 	card.title = card.head.title
-	card.zone = UI.Text(card, "", 11, false, C.dim)
-	card.zone:SetWordWrap(false)
-	card.clock = card:CreateFontString(nil, "OVERLAY")
-	card.clock:SetFontObject(UI.NameFont(12))
+	-- Room left in your bags, at the stats line's right: how many slots are free, in words (a bag's sign there would
+	-- read as another "looted"); gold when few, red when full (then nothing more is looted).
+	card.room = UI.Text(card, "", 11, false, C.dim)
+	card.room:SetWordWrap(false)
+	card.clock = UI.Words(card, UI.NameFont(12))
 	card.clockGlyph = card:CreateTexture(nil, "ARTWORK")
 	card.clockGlyph:SetSize(12, 12)
 	Hover.Glyph(card.clockGlyph, "clock", 12)
 
 	-- The two figures, side by side, each with a small caption under it.
-	card.made = card:CreateFontString(nil, "OVERLAY")
-	card.made:SetFontObject(UI.NameFont(17))
+	card.made = UI.Words(card, UI.NameFont(17))
 	card.madeSays = UI.Text(card, "MADE", 9, true, C.dim)
-	card.rate = card:CreateFontString(nil, "OVERLAY")
-	card.rate:SetFontObject(UI.NameFont(17))
-	card.rate:SetJustifyH("RIGHT")
+	card.rate = UI.Words(card, UI.NameFont(17), C.hot, { justify = "RIGHT" })
 	card.rateSays = UI.Text(card, "AN HOUR", 9, true, C.dim)
 	card.rateSays:SetJustifyH("RIGHT")
 	-- A light behind the figures when the session's worth goes up: gold, fading.
@@ -333,23 +339,31 @@ function ns.CreateCard(parent, box)
 		card.stats[i] = { glyph = glyph, words = words }
 	end
 
-	-- The item farmed: its slot, its name, how many of how many, the odds and when, a bar under it all.
+	-- What you farm: its slot (an item's picture; a creature's sign, or the bag's for everything you loot), its name,
+	-- how many of how many, the odds and when, a bar under it all; with nothing picked, Find at its right.
 	local want = CreateFrame("Frame", nil, card)
 	want:SetHeight(K.WANT)
 	want.icon = want:CreateTexture(nil, "ARTWORK")
 	want.icon:SetSize(K.SLOT, K.SLOT)
 	want.icon:SetPoint("TOPLEFT", 2, -4)
 	want.slot = Shy.Slot.New(want, { to = want.icon, icon = want.icon, size = K.SLOT, hover = false })
-	want.count = want:CreateFontString(nil, "OVERLAY")
-	want.count:SetFontObject(UI.NameFont(14))
+	want.sign = want:CreateTexture(nil, "ARTWORK", nil, 1)
+	want.sign:SetSize(K.SIGN, K.SIGN)
+	want.sign:SetPoint("CENTER", want.icon)
+	want.sign:Hide()
+	want.count = UI.Words(want, UI.NameFont(14), C.hot, { justify = "RIGHT" })
 	want.count:SetPoint("TOPRIGHT", -2, -5)
-	want.count:SetJustifyH("RIGHT")
-	want.name = want:CreateFontString(nil, "OVERLAY")
-	want.name:SetFontObject(UI.NameFont(13))
+	-- What you can do with what you farm, at the block's foot on the right: put where to farm it on your route, keep
+	-- the item as a favorite (lit in gold while it is one).
+	want.star = UI.GlyphButton(want, Shy.MEDIA .. "GlyphStar", K.GLYPH, function() if Card.Tool then Card.Tool("favorite") end end,
+		{ tip = { "Favorite", "Your favorites wait in Find, with how your farming of each went." } })
+	want.star:SetPoint("BOTTOMRIGHT", 0, 4)
+	want.go = UI.GlyphButton(want, Shy.Skin.GLYPH.pin, K.GLYPH, function() if Card.Tool then Card.Tool("go") end end,
+		{ tip = { "Go there", "Puts the best place to farm it on your route." } })
+	want.go:SetPoint("RIGHT", want.star, "LEFT", -4, 0)
+	want.name = UI.Words(want, UI.NameFont(13), C.text, { wrap = false })
 	want.name:SetPoint("TOPLEFT", want.icon, "TOPRIGHT", 9, -2)
 	want.name:SetPoint("RIGHT", want.count, "LEFT", -6, 0)
-	want.name:SetJustifyH("LEFT")
-	want.name:SetWordWrap(false)
 	want.line = UI.Text(want, "", 11, false, C.dim)
 	want.line:SetPoint("TOPLEFT", want.name, "BOTTOMLEFT", 0, -4)
 	want.line:SetPoint("RIGHT", -2, 0)
@@ -406,42 +420,18 @@ function ns.CreateCard(parent, box)
 	-- At the auction house: the prices it lacks, a click away.
 	card.foot = UI.Button(card, "", 100, function() A.Check() end)
 
-	-- How the session stands while it isn't running: a band in its meaning's color (gold paused, your color ready),
-	-- its words, and when it asks, Start and Not now.
-	local band = CreateFrame("Frame", nil, card)
-	band:SetHeight(K.BAND - 4)
-	band.wash = band:CreateTexture(nil, "BACKGROUND", nil, 1)
-	band.wash:SetAllPoints()
-	band.wash:SetColorTexture(1, 1, 1, 1)
-	band.edge = band:CreateTexture(nil, "ARTWORK")
-	band.edge:SetWidth(2)
-	band.edge:SetPoint("TOPLEFT")
-	band.edge:SetPoint("BOTTOMLEFT")
-	band.words = UI.Text(band, "", 12, true, C.text)
-	band.words:SetPoint("TOPLEFT", 9, -4)
-	band.words:SetWordWrap(false)
-	band.sub = UI.Text(band, "", 10, false, C.dim)
-	band.sub:SetPoint("TOPLEFT", band.words, "BOTTOMLEFT", 0, -2)
-	band.sub:SetWordWrap(true)
-	band.sub:SetJustifyH("LEFT")
-	band.later = UI.Button(band, "Not now", 62, function() if Card.Answer then Card.Answer("later") end end)
-	band.later:SetHeight(22)
-	band.later:SetPoint("RIGHT", -4, 0)
-	band.start = UI.Button(band, "Start", 56, function() if Card.Answer then Card.Answer("start") end end)
-	band.start:SetHeight(22)
-	band.start:SetPoint("RIGHT", band.later, "LEFT", -5, 0)
-	card.band = band
-
 	-- The controls, in view: start or pause (lit while it isn't running), go where it drops, keep it as a favorite,
-	-- end the session (asked twice).
+	-- reset: the session saved in your past ones, the table cleared (asked twice).
 	card.tools = {}
-	local WORDS = { main = "Pause", go = "Go there", favorite = "Favorite", stop = "End" }
-	for i, key in ipairs({ "main", "go", "favorite", "stop" }) do
+	local WORDS = { main = "Start", find = "Find", stop = "Reset" }
+	for i, key in ipairs({ "main", "find", "stop" }) do
 		local b = UI.Button(card, WORDS[key], 60, function() if Card.Tool then Card.Tool(key) end end)
 		b:SetHeight(22)
 		card.tools[i], card.tools[key] = b, b
 	end
 	UI.Twice(card.tools.stop, function() if Card.Tool then Card.Tool("stop") end end)
+	-- (What can't be seen on it: the session isn't lost.)
+	UI.Help(card.tools.stop, "Reset", "Clears the table and starts fresh. This session is saved in your past sessions.", { side = "CURSOR" })
 	card.foot:SetHeight(22)
 
 	card.quiet = UI.Text(card, "", 12, true, C.dim)
@@ -450,83 +440,82 @@ function ns.CreateCard(parent, box)
 	card.quietLine:SetJustifyH("CENTER")
 
 	card.rows = {}
+	-- The loot's list: it scrolls when there is more than the card has room for (the wheel is the list's only then, the
+	-- camera's otherwise), every thing in it.
+	card.list = UI.ScrollArea(card, K.WIDTH - 2 * K.PAD, 100, { quiet = true, smooth = true, shades = C.hud })
 
 	-- Where everything stands, from the top, for the blocks the view has.
+	-- (Everything under the header stands on the card's body: clear of the look's work round the edge, UI.Body.)
 	function card:Lay(view)
-		local width = self:GetWidth()
+		local inside = UI.Body(self)
+		local width = UI.BodySize(self)
 		local inner = width - 2 * K.PAD
-		-- In the strip: the clock where the controls end, the zone after the title's words.
+		-- In the strip: the clock where the controls end.
 		local head = self.head
 		self.clock:ClearAllPoints()
 		self.clock:SetPoint("RIGHT", self, "TOPRIGHT", -head.right, -head.mid)
 		self.clockGlyph:ClearAllPoints()
 		self.clockGlyph:SetPoint("RIGHT", self.clock, "LEFT", -4, 0)
-		self.zone:ClearAllPoints()
+		self.room:ClearAllPoints()
 
 		local y = TOP + 4
-		self.band:ClearAllPoints()
-		self.band:SetShown(view and view.band ~= nil or false)
-		if self.band:IsShown() then
-			self.band:SetPoint("TOPLEFT", K.PAD - 3, -(y - 2))
-			self.band:SetPoint("TOPRIGHT", -(K.PAD - 3), -(y - 2))
-			y = y + K.BAND
-		end
 		self.made:ClearAllPoints()
-		self.made:SetPoint("TOPLEFT", K.PAD, -y)
+		self.made:SetPoint("TOPLEFT", inside, "TOPLEFT", K.PAD, -y)
 		self.rate:ClearAllPoints()
-		self.rate:SetPoint("TOPRIGHT", -K.PAD, -y)
+		self.rate:SetPoint("TOPRIGHT", inside, "TOPRIGHT", -K.PAD, -y)
 		self.madeSays:ClearAllPoints()
-		self.madeSays:SetPoint("TOPLEFT", K.PAD + 1, -(y + 21))
+		self.madeSays:SetPoint("TOPLEFT", inside, "TOPLEFT", K.PAD + 1, -(y + 21))
 		self.rateSays:ClearAllPoints()
-		self.rateSays:SetPoint("TOPRIGHT", -K.PAD - 1, -(y + 21))
+		self.rateSays:SetPoint("TOPRIGHT", inside, "TOPRIGHT", -K.PAD - 1, -(y + 21))
 		self.glow:ClearAllPoints()
-		self.glow:SetPoint("TOPLEFT", 4, -(y - 6))
-		self.glow:SetPoint("BOTTOMRIGHT", self, "TOPRIGHT", -4, -(y + K.HERO))
+		self.glow:SetPoint("TOPLEFT", inside, "TOPLEFT", 4, -(y - 6))
+		self.glow:SetPoint("BOTTOMRIGHT", inside, "TOPRIGHT", -4, -(y + K.HERO))
 		y = y + K.HERO
 		self.rule:ClearAllPoints()
-		self.rule:SetPoint("TOPLEFT", K.PAD, -y)
-		self.rule:SetPoint("TOPRIGHT", -K.PAD, -y)
+		self.rule:SetPoint("TOPLEFT", inside, "TOPLEFT", K.PAD, -y)
+		self.rule:SetPoint("TOPRIGHT", inside, "TOPRIGHT", -K.PAD, -y)
 		local x = K.PAD
 		for _, stat in ipairs(self.stats) do
 			stat.glyph:ClearAllPoints()
-			stat.glyph:SetPoint("LEFT", self, "TOPLEFT", x, -(y + K.STATS / 2 + 1))
+			stat.glyph:SetPoint("LEFT", inside, "TOPLEFT", x, -(y + K.STATS / 2 + 1))
 			stat.words:ClearAllPoints()
 			stat.words:SetPoint("LEFT", stat.glyph, "RIGHT", 4, 0)
 			if stat.words:IsShown() then x = x + 13 + 4 + stat.words:GetStringWidth() + 14 end
 		end
-		self.zone:SetPoint("RIGHT", self, "TOPRIGHT", -K.PAD, -(y + K.STATS / 2 + 1))
-		self.zone:SetPoint("LEFT", self, "TOPLEFT", x, -(y + K.STATS / 2 + 1))
-		self.zone:SetJustifyH("RIGHT")
+		self.room:SetPoint("RIGHT", inside, "TOPRIGHT", -K.PAD, -(y + K.STATS / 2 + 1))
+		self.room:SetJustifyH("RIGHT")
 		y = y + K.STATS
 		do
-			local gap = 5
-			local each = math.floor((inner - 3 * gap) / 4)
-			for i, b in ipairs(self.tools) do
+			-- (Only the controls that mean something now, sharing the width: no Go there or Favorite with nothing picked.)
+			local gap, shown = 5, {}
+			for _, b in ipairs(self.tools) do if b:IsShown() then shown[#shown + 1] = b end end
+			local each = math.floor((inner - (#shown - 1) * gap) / math.max(1, #shown))
+			for i, b in ipairs(shown) do
 				b:ClearAllPoints()
 				b:SetWidth(each)
-				b:SetPoint("TOPLEFT", K.PAD + (i - 1) * (each + gap), -(y + 2))
+				b:SetPoint("TOPLEFT", inside, "TOPLEFT", K.PAD + (i - 1) * (each + gap), -(y + 2))
 			end
 			y = y + K.TOOLS
 		end
 		self.want:ClearAllPoints()
-		self.want:SetShown(view and view.want ~= nil or false)
+		self.want:SetShown(view ~= nil and Picked(view))
 		if self.want:IsShown() then
-			self.want:SetPoint("TOPLEFT", K.PAD, -y)
-			self.want:SetPoint("TOPRIGHT", -K.PAD, -y)
+			self.want:SetPoint("TOPLEFT", inside, "TOPLEFT", K.PAD, -y)
+			self.want:SetPoint("TOPRIGHT", inside, "TOPRIGHT", -K.PAD, -y)
 			y = y + K.WANT
 		end
 		self.ask:ClearAllPoints()
 		self.ask:SetShown(view and view.ask ~= nil or false)
 		if self.ask:IsShown() then
-			self.ask:SetPoint("TOPLEFT", K.PAD, -y)
-			self.ask:SetPoint("TOPRIGHT", -K.PAD, -y)
+			self.ask:SetPoint("TOPLEFT", inside, "TOPLEFT", K.PAD, -y)
+			self.ask:SetPoint("TOPRIGHT", inside, "TOPRIGHT", -K.PAD, -y)
 			local shown, gap = {}, 6
 			for _, b in ipairs(self.ask.buttons) do if b:IsShown() then shown[#shown + 1] = b end end
 			local each = math.floor((inner - (#shown - 1) * gap) / math.max(1, #shown))
 			for i, b in ipairs(shown) do
 				b:ClearAllPoints()
 				b:SetWidth(each)
-				b:SetPoint("TOPLEFT", (i - 1) * (each + gap), -20)
+				b:SetPoint("TOPLEFT", self.ask, "TOPLEFT", (i - 1) * (each + gap), -20)
 			end
 			self.ask.input:ClearAllPoints()
 			self.ask.input:SetPoint("TOPLEFT", 0, -20)
@@ -537,16 +526,14 @@ function ns.CreateCard(parent, box)
 			y = y + K.ASK
 		end
 		self.listTop = y + 2
-		for i, row in ipairs(self.rows) do
-			row:ClearAllPoints()
-			row:SetPoint("TOPLEFT", K.PAD, -(self.listTop + (i - 1) * K.ROW))
-			row:SetPoint("RIGHT", -K.PAD, 0)
-		end
+		self.list:ClearAllPoints()
+		self.list:SetPoint("TOPLEFT", inside, "TOPLEFT", K.PAD, -self.listTop)
+		self.list:SetPoint("BOTTOMRIGHT", inside, "BOTTOMRIGHT", -K.PAD, (view and view.foot and K.FOOT or 0) + K.END)
 		self.foot:ClearAllPoints()
-		self.foot:SetPoint("BOTTOMLEFT", K.PAD, K.END)
-		self.foot:SetPoint("BOTTOMRIGHT", -K.PAD, K.END)
+		self.foot:SetPoint("BOTTOMLEFT", inside, "BOTTOMLEFT", K.PAD, K.END)
+		self.foot:SetPoint("BOTTOMRIGHT", inside, "BOTTOMRIGHT", -K.PAD, K.END)
 		self.quiet:ClearAllPoints()
-		self.quiet:SetPoint("TOP", self, "TOP", 0, -(self.listTop + 10))
+		self.quiet:SetPoint("TOP", inside, "TOP", 0, -(self.listTop + 10))
 		self.quietLine:ClearAllPoints()
 		self.quietLine:SetPoint("TOP", self.quiet, "BOTTOM", 0, -4)
 		self.quietLine:SetWidth(inner - 16)
@@ -554,10 +541,10 @@ function ns.CreateCard(parent, box)
 
 	-- Loot rows the card has room for at its height.
 	function card:Places(view)
-		local fixed = TOP + 4 + (view.band and K.BAND or 0) + K.HERO + K.STATS + K.TOOLS + (view.want and K.WANT or 0) + (view.ask and K.ASK or 0)
+		local fixed = TOP + 4 + K.HERO + K.STATS + K.TOOLS + (Picked(view) and K.WANT or 0)
+			+ (view.ask and K.ASK or 0)
 			+ (view.foot and K.FOOT or 0) + K.END + 2
-		-- (On the screen it is its box's height: it is anchored all round to it.)
-		local height = (self.box or self):GetHeight()
+		local height = select(2, Room(self))
 		return math.max(1, math.floor((height - fixed) / K.ROW))
 	end
 
@@ -565,8 +552,8 @@ function ns.CreateCard(parent, box)
 	function card:Fill(view)
 		self.view = view
 		self.title:SetText(view.title)
-		self.zone:SetText(view.zone or "")
-		self.clock:SetText(view.state == "paused" and "paused" or view.state == "ready" and "ready" or Clock(view.seconds))
+		self:FillRoom(view.room)
+		self.clock:SetText(view.clockWords or Clock(view.seconds))
 		UI.Ink(self.clock, view.running and C.text or C.dim)
 		UI.Tint(self.clockGlyph, view.running and C.hot or C.dim)
 		self.made:SetText(view.value > 0 and P.Text(view.value, 17, self.made) or "\226\128\148")
@@ -587,9 +574,8 @@ function ns.CreateCard(parent, box)
 				stat.words:SetText(said[2])
 			end
 		end
-		self:FillBand(view.band)
 		self:FillTools(view.tools)
-		self:FillWant(view.want)
+		self:FillWant(view.want, view.target)
 		self:FillAsk(view.ask)
 		self.foot:SetShown(view.foot ~= nil)
 		if view.foot then
@@ -598,21 +584,23 @@ function ns.CreateCard(parent, box)
 			if self.foot.SetPrimary then self.foot:SetPrimary(not view.foot.busy) end
 		end
 		self:Lay(view)
-		local places = self:Places(view)
 		local rows = view.rows
-		if #rows > places then
-			rows = Card.Trim(rows, places)
-		end
+		local list = self.list
+		list.content:SetHeight(math.max(1, #rows * K.ROW))
+		list:Update()
+		-- (Room for the list's thumb only while it has more to show.)
+		local width = Room(self) - 2 * K.PAD - (list:Overflows() and K.THUMB or 0)
+		list.content:SetWidth(width)
 		for i = 1, math.max(#rows, #self.rows) do
 			local data, row = rows[i], self.rows[i]
 			if data then
 				if not row then
 					row = NewRow(self)
 					self.rows[i] = row
-					row:SetPoint("TOPLEFT", K.PAD, -(self.listTop + (i - 1) * K.ROW))
-					row:SetPoint("RIGHT", -K.PAD, 0)
+					row:SetPoint("TOPLEFT", list.content, "TOPLEFT", 0, -(i - 1) * K.ROW)
+					row:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
 				end
-				PaintRow(row, data, (self.box or self):GetWidth() - 2 * K.PAD)
+				PaintRow(row, data, width)
 				row:Show()
 			elseif row then
 				row:Hide()
@@ -627,24 +615,13 @@ function ns.CreateCard(parent, box)
 		end
 	end
 
-	function card:FillBand(b)
-		local band = self.band
-		if not b then return end
-		local color = b.kind == "paused" and C.alert or b.kind == "go" and C.good or C.hot
-		band.wash:SetGradient("HORIZONTAL", CreateColor(color[1], color[2], color[3], 0.22), CreateColor(color[1], color[2], color[3], 0.03))
-		UI.Paint(band.edge, color)
-		band.words:SetText(b.words)
-		UI.Ink(band.words, color)
-		band.sub:SetText(b.sub)
-		band.start:SetShown(b.start ~= nil)
-		band.later:SetShown(b.start ~= nil)
-		if b.start then
-			band.start:SetLabel(b.start)
-			if band.start.SetPrimary then band.start:SetPrimary(true) end
-		end
-		local room = (self.box or self):GetWidth() - 2 * K.PAD - 16 - (b.start and 130 or 0)
-		band.words:SetWidth(room)
-		band.sub:SetWidth(room)
+	-- Bag space: { free, total }, or nil where it can't be told (nothing shows then).
+	function card:FillRoom(room)
+		self.room:SetShown(room ~= nil)
+		if not room then return end
+		local color = room.free <= 0 and C.bad or room.free <= K.FEW and C.alert or C.dim
+		self.room:SetText(room.free <= 0 and "Bags full" or room.free == 1 and "1 slot free" or (room.free .. " slots free"))
+		UI.Ink(self.room, color)
 	end
 
 	function card:FillTools(t)
@@ -652,15 +629,58 @@ function ns.CreateCard(parent, box)
 		t = t or {}
 		tools.main:SetLabel(t.main or "Start")
 		if tools.main.SetPrimary then tools.main:SetPrimary(t.primary == true) end
-		tools.go:SetUsable(t.want ~= nil and t.go ~= false, t.want and "No place is known for it" or "Pick something to farm")
-		tools.favorite:SetUsable(t.want ~= nil, "Pick something to farm")
-		if tools.favorite.SetOn then tools.favorite:SetOn(t.favorite == true) end
-		if tools.favorite.SetMark then tools.favorite:SetMark(t.favorite and C.alert or nil) end
+		-- (The same three in the same places, always: Find while there is a finder, Reset dim with nothing to reset.)
+		tools.find:SetShown(Card.CanFind ~= nil and Card.CanFind())
+		tools.stop:SetUsable(t.ends ~= false, "Nothing to reset yet")
+		-- On what you farm: Go there with something picked, Favorite with an item counted.
+		local want = self.want
+		local farmed = t.farmed or t.want ~= nil
+		want.go:SetShown(farmed and t.go ~= false)
+		want.star:SetShown(t.want ~= nil)
+		if want.star.SetOn then want.star:SetOn(t.favorite == true) end
 	end
 
-	function card:FillWant(w)
+	-- What you farm: the item counted (w), else the creature (target.kind "mob"), else everything you loot, with Find.
+	function card:FillWant(w, target)
 		local want = self.want
-		if not w then return end
+		local mode = w and "item" or (target and target.kind == "mob" and "mob") or "any"
+		want.mode = mode
+		-- (The line gives way to Go there and Favorite where they stand: FillTools says which, before this.)
+		local first = (want.go:IsShown() and want.go) or (want.star:IsShown() and want.star) or nil
+		want.name:ClearAllPoints()
+		want.name:SetPoint("TOPLEFT", want.icon, "TOPRIGHT", 9, -2)
+		want.name:SetPoint("RIGHT", want.count, "LEFT", -6, 0)
+		want.line:ClearAllPoints()
+		want.line:SetPoint("TOPLEFT", want.name, "BOTTOMLEFT", 0, -4)
+		want.line:SetPoint("RIGHT", first or want, first and "LEFT" or "RIGHT", first and -6 or -2, 0)
+		want.sign:SetShown(mode ~= "item")
+		want.icon:SetShown(mode == "item")
+		want.slot:Empty(mode ~= "item")
+		if mode == "any" then
+			Hover.Glyph(want.sign, "bag", K.SIGN)
+			UI.Tint(want.sign, C.dim)
+			want.name:SetText("Anything you loot")
+			UI.Ink(want.name, C.text)
+			want.count:SetText("")
+			want.line:SetText(T.db.value == "vendor" and "It all counts, at vendor prices" or "It all counts, at auction prices")
+			want.bar:Hide()
+			return
+		end
+		if mode == "mob" then
+			Hover.Glyph(want.sign, "kill", K.SIGN)
+			UI.Tint(want.sign, C.text)
+			want.name:SetText(target.name or "\226\128\166")
+			UI.Ink(want.name, C.text)
+			want.count:SetText(Plural(target.kills or 0, "kill", "kills"))
+			UI.Ink(want.count, C.hot)
+			local words = {}
+			if target.worth and target.worth > 0 then words[#words + 1] = P.Text(target.worth, 11, want.line) .. " a kill" end
+			if target.rate and target.rate > 0 then words[#words + 1] = ("%d kills an hour"):format(math.floor(target.rate + 0.5)) end
+			if #words < 2 and target.level then words[#words + 1] = target.level end
+			want.line:SetText(#words > 0 and table.concat(words, K.SEP) or "Everything it drops counts")
+			want.bar:Hide()
+			return
+		end
 		local item = w.item
 		local name = item and C_Item.GetItemNameByID(item) or w.name
 		want.name:SetText(name or "\226\128\166")
@@ -682,10 +702,13 @@ function ns.CreateCard(parent, box)
 		elseif w.eta then
 			words[#words + 1] = Minutes(w.eta) .. " to go"
 		end
+		-- (One of a creature's drops: whose, first.)
+		if target and target.kind == "mob" and w.from then table.insert(words, 1, "from " .. w.from) end
 		if #words == 0 then
 			local from = w.from
 			words[1] = from and ("from " .. from) or (w.got and w.got > 0 and (w.got .. " this session") or "none yet")
 		end
+		while #words > 3 do table.remove(words) end
 		want.line:SetText(table.concat(words, K.SEP))
 		want.bar:SetShown(w.goal ~= nil)
 		if w.goal then
@@ -746,24 +769,10 @@ function ns.CreateCard(parent, box)
 	return card
 end
 
--- Rows cut to `places`: the last place adds up the rest.
-function Card.Trim(rows, places)
-	local out, rest = {}, { more = true, value = 0, count = 0 }
-	for i, row in ipairs(rows) do
-		if i < places then
-			out[i] = row
-		else
-			rest.count, rest.value = rest.count + 1, rest.value + (row.value or 0)
-		end
-	end
-	rest.name = ("%d more"):format(rest.count)
-	out[places] = rest
-	return out
-end
-
 -- The card's height with the view's blocks and `rows` loot rows.
 function Card.Height(view, rows)
-	return TOP + 4 + (view.band and K.BAND or 0) + K.HERO + K.STATS + K.TOOLS + (view.want and K.WANT or 0) + (view.ask and K.ASK or 0) + rows * K.ROW
+	return TOP + 4 + K.HERO + K.STATS + K.TOOLS + (Picked(view) and K.WANT or 0) + (view.ask and K.ASK or 0)
+		+ rows * K.ROW
 		+ (view.foot and K.FOOT or 0) + K.END + 2
 end
 

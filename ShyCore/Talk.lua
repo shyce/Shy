@@ -482,10 +482,11 @@ end
 -- along its top when it is Space's or the primary.
 local Keyed = UI.Keyed
 
+-- (Its words wear the text effect, as the kit's do: they stand on the look's own housings.)
 local function Shadowed(fs)
 	fs:SetShadowOffset(1, -1)
 	fs:SetShadowColor(0, 0, 0, 1)
-	return fs
+	return Shy.Theme.Wear(fs)
 end
 
 -- Lilita One's line: ascender 0.923 and descender 0.220 of its size, capitals and digits 0.705 tall. A string
@@ -2675,11 +2676,13 @@ end
 function W.Shell(win)
 	local shell = setmetatable({ win = win, pills = {} }, { __index = W.Shelled })
 	local head0 = UI.HEAD.window.line + UI.LINE
+	-- The band and the foot stand on the window's body: clear of the look's work round the edge (UI.Body).
+	local body = UI.Body(win)
 
 	-- The band: your color's wash from the left over the window's ground, a groove along its foot.
 	local band = CreateFrame("Frame", nil, win)
-	band:SetPoint("TOPLEFT", 2, -head0)
-	band:SetPoint("TOPRIGHT", -2, -head0)
+	band:SetPoint("TOPLEFT", body, "TOPLEFT", 2, -head0)
+	band:SetPoint("TOPRIGHT", body, "TOPRIGHT", -2, -head0)
 	band:SetHeight(WIN.band)
 	band:SetFrameLevel(win:GetFrameLevel() + 2)
 	shell.band = band
@@ -2755,8 +2758,8 @@ function W.Shell(win)
 
 	-- The foot: a hover's foot, its floor under a groove and a lip of light.
 	local foot = CreateFrame("Frame", nil, win)
-	foot:SetPoint("BOTTOMLEFT", 2, 2)
-	foot:SetPoint("BOTTOMRIGHT", -2, 2)
+	foot:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 2, 2)
+	foot:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -2, 2)
 	foot:SetHeight(WIN.foot)
 	foot:SetFrameLevel(win:GetFrameLevel() + 6)
 	shell.foot = foot
@@ -2986,7 +2989,7 @@ end
 -- The column the words and the answers stand in, at the window's width now.
 function W.Width()
 	if s.make ~= "window" or not W.win then return end
-	local wide = W.win:GetWidth()
+	local wide = UI.BodySize(W.win)   -- (its body's: UI.Body)
 	if issecretvalue(wide) or not wide or wide <= 0 then wide = WIN.w end
 	local area = math.floor(wide - (WIN.pad - 2) - 2 - 6 - 2)   -- band's inset, the area's left, its right, the foot's
 	local sheet = area - WIN.bar
@@ -3169,7 +3172,7 @@ end
 function W.Foot()
 	if not W.win then return end
 	local gap = WIN.between
-	local room = W.win:GetWidth() - 4 - 2 * WIN.button
+	local room = UI.BodySize(W.win) - 4 - 2 * WIN.button   -- (the foot stands on its body: UI.Body)
 	local buttons = {}
 	for _, b in ipairs(ui.buttons) do
 		if b:IsShown() then buttons[#buttons + 1] = b end

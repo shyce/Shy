@@ -6,9 +6,9 @@ local MEDIA = "Interface\\AddOns\\ShyHunter\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Hunter",
+	category = "combat",
 	icon = MEDIA .. "ShyHunter",
 	smallIcon = MEDIA .. "ShyHunterSmall",
-	tagline = "Your keys, for every level",
 	savedVariables = "ShyHunterDB",
 	keep = { keysMade = true, keysBuild = true, keysBefore = true },   -- the macros made for your keys are no setting: a reset keeps them yours
 	defaults = {},

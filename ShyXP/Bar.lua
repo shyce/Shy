@@ -40,11 +40,79 @@ local function Under(rows, text)
 	rows[#rows + 1] = { text = text, quiet = true, indent = 1 }
 end
 
-function ns.ShowSummaryTooltip(owner, hints)
+local function Leaves(owner)
 	if not leaves[owner] then
 		leaves[owner] = true
 		owner:HookScript("OnLeave", function(self) UI.TipHide(self) end)
 	end
+end
+
+-- The reputation you track as a card: its standing and how far through it, what is left to the next, the
+-- pace and what it has gained since you began.
+function ns.ShowRepTooltip(owner, hints)
+	Leaves(owner)
+	local Rep = ns.Rep
+	local into, span, data = Rep.Progress()
+	if not data then return end
+	local word, color = Rep.Standing(data.reaction)
+	local next_ = Rep.Next(data.reaction)
+	local body = { { bar = { have = into / span, gain = 0, more = 0 } } }
+
+	-- To the next standing: the time at your pace, the pace, the kills or hand-ins at what one has come to, and the
+	-- quests in your log that give it (the client says which, not how much).
+	local ahead = {}
+	if next_ then
+		local eta = Rep.TimeToNext()
+		if eta then Row(ahead, "Time", "~" .. S.Duration(eta)) end
+		local pace = Rep.Pace()
+		if pace then Row(ahead, "Reputation per hour", S.Number(pace)) end
+		local count, average = Rep.GainsToNext(), Rep.Average()
+		if count then
+			Row(ahead, "Kills or quests", "~" .. S.Number(count))
+			Under(ahead, ("+%s each, on average"):format(S.Number(average)))
+		end
+	end
+	local ready, all = Rep.Quests()
+	if all > 0 then
+		Row(ahead, "Quests that raise it", ready > 0 and (ready .. " of " .. all .. " ready") or (all .. " in your log"), GOLD)
+	end
+	if #ahead > 0 then body[#body + 1] = { title = next_ and ("To " .. next_) or word, rows = ahead } end
+
+	-- This standing: how long you have watched it in it, its gains and what they came to; this session's.
+	local rec = Rep.Record()
+	local now = {}
+	if rec then
+		Row(now, "Time", S.Duration(rec.time))
+		if rec.gains > 0 then
+			Row(now, "Kills or quests", S.Number(rec.gains))
+			Row(now, "Reputation", "+" .. S.Number(rec.gained), C.good)
+		end
+		if not rec.whole then Under(now, "Since you began watching it") end
+	end
+	local got = Rep.Session()
+	if got > 0 then Row(now, "This session", "+" .. S.Number(got), C.good) end
+	if #now > 0 then body[#body + 1] = { title = "As " .. word, rows = now } end
+
+	-- Each standing behind and how long it took (at least, where you began watching it partway).
+	local splits = {}
+	for _, split in ipairs(Rep.Splits()) do
+		local was, wasColor = Rep.Standing(split.reaction)
+		splits[#splits + 1] = { text = was, right = (split.whole and "" or "at least ") .. S.Duration(split.time),
+			color = wasColor, rightColor = C.text }
+	end
+	if #splits > 0 then body[#body + 1] = { title = "Standings", rows = splits } end
+
+	local key = { { text = ("%d%%"):format(math.floor(into / span * 100)), color = C.hot },
+		{ text = "  \194\183  " .. word, color = color } }
+	if next_ then key[3] = { text = "  \194\183  " .. S.Number(span - into) .. " to " .. next_, color = C.dim } end
+	Shy.Hover.Show(owner, {
+		card = true, title = data.name, hints = hints, body = body, least = 200, key = key,
+	}, { keep = false })
+end
+
+function ns.ShowSummaryTooltip(owner, hints, source)
+	if (source or S.Mode()) == "rep" then return ns.ShowRepTooltip(owner, hints) end
+	Leaves(owner)
 	local on = T.db.lines
 	local cur, max, level = S.Progress()
 	local ready, quests = S.QuestXP()
@@ -111,20 +179,32 @@ end
 
 -- Hovering the default bar: the stats card in the place of the game's tooltip, one card rather than the
 -- game's lines with these under them.
-local BAR_HINTS = { { "left", "Shift: share" } }
+local BAR_HINTS = { { "left", "Shift: share" }, { "right", "Track" } }
 
 local function OnBar(owner)
 	if not T.db.tooltip or not S.Active() then return end
 	GameTooltip:Hide()
-	ns.ShowSummaryTooltip(owner, BAR_HINTS)
+	ns.ShowSummaryTooltip(owner, BAR_HINTS, "xp")
+end
+
+-- A right click on either of the game's bars: what the bars track.
+local function TrackMenu(owner, button)
+	if button == "RightButton" and ns.Rep then UI.ContextMenu(owner, ns.Rep.Menu) end
 end
 
 local EXPERIENCE = StatusTrackingBarInfo.BarsEnum.Experience
+local REPUTATION = StatusTrackingBarInfo.BarsEnum.Reputation
 local hookedContainers = {}
 
--- The border and dividers belong to the slot, which can also show reputation: fade them only while it shows XP.
+local function RepShy()
+	return T.db.barStyle == "shy" and ns.Rep ~= nil and ns.Rep.Watched() ~= nil
+end
+
+-- The border and dividers belong to the slot, which shows one bar at a time: faded only while the bar it
+-- shows is restyled.
 local function StyleContainer(container)
-	local hide = T.db.barStyle == "shy" and S.Active() and container.shownBarIndex == EXPERIENCE
+	local shown = container.shownBarIndex
+	local hide = T.db.barStyle == "shy" and ((shown == EXPERIENCE and S.Active()) or (shown == REPUTATION and RepShy()))
 	container.BarFrameTexture:SetAlpha(hide and 0 or 1)
 	for divider in container.HorizontalDividersPool:EnumerateActive() do
 		divider:SetAlpha(hide and 0 or 1)
@@ -148,7 +228,7 @@ local function UpdateBar(bar)
 
 	if shy then
 		extra.shy:Update()
-		extra.shy.text:SetText(ns.BarText())
+		extra.shy.text:SetText(ns.BarText("xp"))
 		extra.shy.text:SetShown(showText)
 		extra.log:Hide()
 		extra.quest:Hide()
@@ -207,6 +287,7 @@ local function Hook(bar)
 
 	-- Above the slot's border and dividers; takes no mouse input.
 	extra.shy = ns.CreateXPBar(bar)
+	extra.shy.source = "xp"
 	extra.shy:SetAllPoints()
 	extra.shy:SetFrameStrata("MEDIUM")
 	extra.shy:SetFrameLevel(container:GetFrameLevel() + 10)
@@ -247,16 +328,80 @@ local function Hook(bar)
 		UpdateBar(bar)
 	end)
 	bar.ExhaustionTick:HookScript("OnEnter", OnBar)
-	bar:HookScript("OnMouseUp", function(_, button)
-		if button == "LeftButton" and IsShiftKeyDown() and S.Active() then ns.Share() end
+	bar:HookScript("OnMouseUp", function(self, button)
+		if button == "LeftButton" and IsShiftKeyDown() and S.Active() then ns.Share("xp") end
+		TrackMenu(self, button)
 	end)
 	bar:HookScript("OnSizeChanged", function() UpdateBar(bar) end)
 	UpdateBar(bar)
 end
 
+-- The game's reputation bar, restyled as the XP bar is: our bar over it with the progress text, the
+-- reputation card on hover.
+local repBars = {}
+
+local function UpdateRepBar(bar)
+	local extra = repBars[bar]
+	local shy = RepShy()
+	extra.shy:SetShown(shy)
+	bar.StatusBar:SetAlpha(shy and 0 or 1)
+	bar.OverlayFrame.Text:SetAlpha(shy and 0 or 1)
+	StyleContainer(bar:GetParent())
+	if not shy then return end
+	extra.shy:Update()
+	extra.shy.text:SetText(ns.BarText("rep"))
+	extra.shy.text:SetShown(T.db.barText == "always" or (T.db.barText == "hover" and extra.hovered))
+end
+
+local function HookRep(bar)
+	if repBars[bar] then return end
+	local extra = {}
+	repBars[bar] = extra
+	local container = bar:GetParent()
+	if not hookedContainers[container] then
+		hookedContainers[container] = true
+		hooksecurefunc(container, "UpdateDividers", StyleContainer)
+		hooksecurefunc(container, "ApplyPendingBarToShow", StyleContainer)
+	end
+	extra.shy = ns.CreateXPBar(bar)
+	extra.shy.source = "rep"
+	extra.shy:SetAllPoints()
+	extra.shy:SetFrameStrata("MEDIUM")
+	extra.shy:SetFrameLevel(container:GetFrameLevel() + 10)
+	bar:HookScript("OnEnter", function(self)
+		extra.hovered = true
+		UpdateRepBar(self)
+		if T.db.tooltip and RepShy() then
+			GameTooltip:Hide()
+			ns.ShowRepTooltip(self, BAR_HINTS)
+		end
+	end)
+	bar:HookScript("OnLeave", function(self)
+		extra.hovered = false
+		UpdateRepBar(self)
+	end)
+	bar:HookScript("OnMouseUp", function(self, button)
+		if button == "LeftButton" and IsShiftKeyDown() and RepShy() then ns.Share("rep") end
+		TrackMenu(self, button)
+	end)
+	bar:HookScript("OnSizeChanged", function(self) UpdateRepBar(self) end)
+	UpdateRepBar(bar)
+end
+
+local function RepBars()
+	local list = {}
+	for _, container in ipairs(StatusTrackingBarManager.barContainers) do
+		local bar = container.bars and REPUTATION and container.bars[REPUTATION]
+		if bar then list[#list + 1] = bar end
+	end
+	return list
+end
+
 -- A setting changed: everything laid out and said again.
 function ns.Refresh()
+	if ns.Under then ns.Under.Place() end
 	for bar in pairs(bars) do UpdateBar(bar) end
+	for bar in pairs(repBars) do UpdateRepBar(bar) end
 	for card in pairs(ns.cards) do
 		card:Layout()
 		card:Refresh()
@@ -268,7 +413,9 @@ end
 -- What you have changed (XP, rested, quests ready, the time going by): the numbers said again, the layout
 -- left as it stands.
 function ns.Update()
+	if ns.Under then ns.Under.Refresh() end
 	for bar in pairs(bars) do UpdateBar(bar) end
+	for bar in pairs(repBars) do UpdateRepBar(bar) end
 	for card in pairs(ns.cards) do card:Refresh() end
 	ns.UpdateBox()
 	if ns.RefreshOptions then ns.RefreshOptions() end
@@ -290,8 +437,10 @@ end
 
 local hiddenByUs = {}
 
+-- The game's own bars show only under the action bars with the default look picked (else ours stand there:
+-- Under.lua).
 local function WantBlizzardBar()
-	return not (ns.dockedBy and T.db.hideWhenDocked)
+	return ns.Place() == "under" and T.db.barStyle == "blizzard"
 end
 
 function ns.ApplyBlizzardBar()
@@ -327,6 +476,7 @@ end
 
 function ns.SetupBar()
 	for _, bar in ipairs(ExpBars()) do Hook(bar) end
+	for _, bar in ipairs(RepBars()) do HookRep(bar) end
 	HookBlizzardBar()
 	ns.ApplyBlizzardBar()
 	-- XP per hour and time to level change between XP gains.

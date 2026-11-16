@@ -6,6 +6,8 @@
 --     When it alone changes, the slots slide to their new places and nothing is read again (grid:Lay).
 --   grid:Morph(from, to, f) draws the slots a share f of the way between two column counts.
 --   grid.order(bags, sizes) returns every slot as { bag, slot } in layout order; grid.sort names that order.
+--     Whatever the order, a special bag's slots (herbs, souls, arrows...) stand after the ordinary ones, framed
+--     and welled in their kind's color (BagBar.KindColor).
 --     The order is read only on Build, so slots don't move under the mouse; grid:Settled() is false once
 --     a fresh Build would lay them out differently.
 --   grid:Filter(test), grid:Room() (free, total), grid:Shape() (columns, rows), grid.onChange
@@ -287,8 +289,46 @@ local function Seat(self)
 	return total, true
 end
 
--- The seated buttons in the order they are laid out: the sort's, else bag by bag. (A sort that misses a
--- slot, or names one with no seat, falls back to bag order.)
+-- Special bags (herbs, souls, arrows...): their kind's color by bag, as the bag column shows it
+-- (BagBar.KindColor); an ordinary bag and the key ring have none. A live grid only: a stored one can't be asked.
+local function Kinds(self)
+	local kind = ns.BagBar and ns.BagBar.KindColor
+	if not (self.live and kind) then return {} end
+	local out = {}
+	for _, bag in ipairs(self.bags or {}) do
+		if bag ~= KEYS then out[bag] = kind(bag) end
+	end
+	return out
+end
+
+-- A kind's color as a slot's well: deep, so the item in it still reads (one table per color, kept).
+local DEEP = 0.26
+local deep = {}
+local function Deep(color)
+	if not color then return nil end
+	if not deep[color] then deep[color] = { color[1] * DEEP, color[2] * DEEP, color[3] * DEEP } end
+	return deep[color]
+end
+
+-- The ordinary bags' slots first, then the special bags', each in the order it came in: what a special bag
+-- holds stands apart at the end whatever the sort. bagOf(entry) is an entry's bag.
+local function SpecialLast(self, list, bagOf)
+	local kinds = Kinds(self)
+	if next(kinds) == nil then return list end
+	local out, after = {}, {}
+	for _, entry in ipairs(list) do
+		local to = kinds[bagOf(entry)] and after or out
+		to[#to + 1] = entry
+	end
+	for _, entry in ipairs(after) do out[#out + 1] = entry end
+	return out
+end
+
+local function PlaceBag(place) return place[1] end
+local function TileBag(tile) return (Tile.At(tile)) end
+
+-- The seated buttons in the order they are laid out: the sort's, else bag by bag, a special bag's last
+-- (SpecialLast). (A sort that misses a slot, or names one with no seat, falls back to bag order.)
 local function Arrange(self)
 	local list
 	local places = self.order and self.order(self.bags, self.sizes)
@@ -309,7 +349,7 @@ local function Arrange(self)
 			for slot = 1, self.sizes[bag] do list[#list + 1] = self.where[Key(bag, slot)] end
 		end
 	end
-	return list
+	return SpecialLast(self, list, TileBag)
 end
 
 local function SameOrder(self, list)
@@ -412,13 +452,16 @@ function Methods:Filter(test)
 	self.test = test
 	local hits = 0
 	local focus = self.live and self.focus or nil
+	local kinds = Kinds(self)
 	for i = 1, self.count do
 		local tile = self.tiles[i]
 		local item = Tile.Item(tile)
 		local miss = test ~= nil and item ~= nil and not test(item)
-		local mine = focus ~= nil and Tile.At(tile) == focus
+		local bag = Tile.At(tile)
+		local mine = focus ~= nil and bag == focus
 		Tile.Dim(tile, miss or (focus ~= nil and not mine))
-		Tile.Steel(tile, mine and self.focusColor or nil)
+		Tile.Steel(tile, mine and self.focusColor or kinds[bag])
+		Tile.Well(tile, Deep(kinds[bag]))
 		if test and item and not miss then hits = hits + 1 end
 	end
 	self.hits = hits
@@ -462,6 +505,7 @@ end
 function Methods:Settled()
 	local places = self.live and self.order and self.order(self.bags or {}, self.sizes)
 	if not places or #places ~= self.count then return true end
+	places = SpecialLast(self, places, PlaceBag)
 	for i, place in ipairs(places) do
 		local tile = self.tiles[i]
 		local bag, slot = Tile.At(tile)

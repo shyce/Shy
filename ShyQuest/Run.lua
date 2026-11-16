@@ -376,8 +376,10 @@ function Run.Start(short)
 	made[short] = guide
 	fresh = true
 	-- From zone mode the card follows the run, and goes back to zone mode when it ends (Run.Ended).
-	local zone = (was and was.zone) or (T.db.guide.follow ~= true) or nil
-	state.run = { short = short, back = back, picked = picked, zone = zone }
+	-- flipped: the run turned the guide on, for every character on the profile, and turns it off again.
+	local zone = (was and was.zone) or (not ns.Following()) or nil
+	local flipped = (was and was.flipped) or (zone and not T.db.guide.follow) or nil
+	state.run = { short = short, back = back, picked = picked, zone = zone, flipped = flipped }
 	if zone and not T.db.guide.follow then T.db.guide.follow = true end
 	G.Run(guide)
 	Shy:Fire("SHY_DUNGEON_RUN", dungeon.map)
@@ -394,7 +396,14 @@ function Run.Ended(run, kept)
 	Shy:Fire("SHY_DUNGEON_RUN", nil)
 	if kept or type(run) ~= "table" or not run.zone then return end
 	C_Timer.After(0, function()
-		if not Run.Doing() and T.db.guide.follow then T:SetQuestStyle("zone") end
+		if Run.Doing() or not T.db.guide.follow then return end
+		if ns.Levelling() then
+			T:SetQuestStyle("zone")
+		elseif run.flipped then
+			-- At the top level the style is this character's levelling help; the run's own switch goes back.
+			T.db.guide.follow = false
+			ns.Apply()
+		end
 	end)
 end
 
@@ -583,7 +592,7 @@ function Run.Quests(map)
 			elseif goal.kind == "i" then
 				local item = D.Item(goal.id)
 				for _, source in ipairs(item and item.sources or NONE) do
-					if source.kind == "n" then needs[#needs + 1] = source.id end
+					if source.kind == "n" and not D.Dropless(source.id, goal.id) then needs[#needs + 1] = source.id end
 				end
 			end
 		end
@@ -854,7 +863,7 @@ end
 function Run.Banner(card, y, width)
 	local guide = G.current
 	local b = card.runBanner
-	if not (guide and guide.run and T.db.guide.follow) then
+	if not (guide and guide.run and ns.Following()) then
 		Dress(card, nil, width)
 		if b then
 			b:Hide()

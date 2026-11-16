@@ -43,8 +43,9 @@ P.BUFFS, P.DEBUFFS = 7, 2
 -- The guide card and the objectives, as drawn: about this tall.
 P.GUIDE, P.OBJECTIVES = 270, 140
 -- The top left's corner, from it (x right, y down): how to play's own home (ShyCore's keys guide), where a farming
--- session (ShyFarm) stands while you farm, how to play under it.
-P.TOP_LEFT = { x = 16, y = -116 }
+-- session (ShyFarm) stands while you farm, how to play under it. (In a raid on a classic layout the raid's frames
+-- have the corner: Arrange.lua.)
+P.TOP_LEFT = { x = 16, y = -16 }
 -- Cells in the micro menu's row, tiles in the bags', rows of raid frames drawn.
 P.MENU_CELLS, P.BAG_TILES, P.RAID_ROWS = 10, 5, 2
 -- The pet bar: ten buttons at half size, a seam over the housing's right end (Layout.lua, End).
@@ -563,8 +564,12 @@ function P.List(g, now, c, s)
 		end
 	end
 
-	-- The experience bar under the floor (by role, under the bars and the pet bar)
-	if now.under > 0 then Add("xp", g.left + SEAM, g.xp or 0, g.right - SEAM, (g.xp or 0) + now.under, { label = "XP bar", share = 0.3 }) end
+	-- The XP and reputation bars under the floor (by role, under the bars and the pet bar): edge to edge with what
+	-- stands across the floor, at the top of their room, a seam over its foot (ShyXP's Under.lua stands them so).
+	if now.under > 0 then
+		local foot = g.xp or 0
+		Add("xp", g.span.left, foot + SEAM, g.span.right, foot + now.under, { label = "XP bar", share = 0.3 })
+	end
 
 	-- By role: your frames round your character, the group where the role wants it, the threat meter by your target.
 	local role = P.Role(g, now, c, s.threat)

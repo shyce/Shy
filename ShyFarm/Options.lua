@@ -18,7 +18,7 @@ local function At(w, page, x, y)
 end
 
 local VALUE = {
-	{ value = "auction", text = "Auction price, else vendor" },
+	{ value = "auction", text = "Whichever pays more" },
 	{ value = "vendor", text = "Vendor price" },
 }
 

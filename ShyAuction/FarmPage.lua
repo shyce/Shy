@@ -19,20 +19,21 @@ local L = { row = 54, drops = 3, tile = 16, dropGap = 70, meter = 110, right = 1
 local VIEWS = { "best", "item", "favorites" }
 local WORDS = {
 	views = { "Best gold an hour", "For an item", "Your favorites" },
-	need = "The farm finder is ShyFarm's: turn it on to see the best farms here.",
-	quest = "The farm finder needs ShyQuest, which knows where everything stands.",
-	working = "Weighing every farm you could farm...",
-	none = "Nothing you could farm at your level drops it.",
-	pick = "Pick an item on Buy or Sell, and the farms for it are here.",
-	noFavorites = "No favorites yet: star an item in the finder, and it is kept here.",
-	context = "Level %d  \194\183  the flights you know  \194\183  your pace, %d s a kill",
-	tripped = "an hour, the trip counted", allDrops = "%s an hour, all drops", items = "%s an hour",
-	away = "%d min away", camp = "a camp of %d", farmThis = "Farm this", wayWorking = "working out the way...",
-	notFarmed = "not farmed yet", farmed = "%d looted in %d sessions  \194\183  at best %d an hour",
-	market = "Market %s each", forIt = "Farms for %s",
+	need = "Turn on ShyFarm to see the best farms here.",
+	quest = "Turn on ShyQuest too. It knows where everything is.",
+	working = "Finding the best farms for you...",
+	none = "Nothing at your level drops it.",
+	pick = "Pick an item on Buy or Sell, or find one to farm, and you'll see the best places to get it.",
+	find = "Find an item to farm",
+	noFavorites = "No favorites yet. Star an item in the finder and it'll show up here.",
+	context = "For level %d, your flights, and about %d s a kill",
+	tripped = "an hour, travel included", allDrops = "%s an hour from everything it drops", items = "%s an hour",
+	away = "%d min away", camp = "%d in the camp", farmThis = "Farm this", wayWorking = "finding the way there...",
+	notFarmed = "you haven't farmed it yet", farmed = "%d looted in %d sessions  \194\183  at best %d an hour",
+	market = "Sells for %s each", forIt = "Where to farm %s",
 }
 
-local page, views, context, scroll, rows, missing, lead
+local page, views, context, scroll, rows, missing, lead, finder
 local view = "best"
 local want                 -- the item For an item shows, when a favorite was clicked
 
@@ -267,6 +268,26 @@ local function Build(frame)
 	scroll:SetPoint("BOTTOMRIGHT", -12, 6)
 	missing = Shop.Text(page, UI.TextFont(12), C.dim)
 	missing:SetPoint("CENTER")
+	-- For an item, with none picked: the finder's farm side as a picker (ShyQuest). A creature picked stands for
+	-- what brings most of its worth.
+	finder = UI.Button(page, WORDS.find, 170, function()
+		local quest = Shy.addons.Quest
+		if not (quest and quest.FindFarm) then return end
+		quest:FindFarm({ list = "favorites", pick = function(kind, id)
+			local farm = Farm()
+			if kind == "creature" then
+				local _, best = farm and farm:KillWorth(id)
+				id = best and best[1] and best[1].item
+			end
+			if not id then return end
+			want, view = id, "item"
+			views:Select(2)
+			ns.Window.Stale()
+		end })
+	end)
+	finder:SetHeight(24)
+	finder:SetPoint("TOP", missing, "BOTTOM", 0, -12)
+	finder:Hide()
 end
 
 local function Say(text)
@@ -279,6 +300,7 @@ local function Draw(frame, width, height)
 	views:SetShown(farm ~= nil)
 	context:SetShown(farm ~= nil)
 	lead:Hide()
+	finder:Hide()
 	if not farm then
 		scroll:Hide()
 		return Say(WORDS.need)
@@ -295,6 +317,8 @@ local function Draw(frame, width, height)
 	elseif view == "item" and not item then
 		entries = 0
 		Say(WORDS.pick)
+		local quest = Shy.addons.Quest
+		finder:SetShown(quest ~= nil and quest.FindFarm ~= nil)
 	else
 		-- Ranked for what this view shows (weighed again, over a few frames, when it isn't).
 		if state ~= "working" and state ~= "missing" and (state == nil or ranked ~= item) then

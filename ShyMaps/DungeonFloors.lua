@@ -544,24 +544,16 @@ function Floors.Pane(parent)
 	shade:SetPoint("BOTTOMRIGHT", -1, 1)
 	shade:SetColorTexture(1, 1, 1, 1)
 	shade:SetGradient("VERTICAL", CreateColor(0, 0, 0, 0.92), CreateColor(0, 0, 0, 0))
-	local caption = over:CreateFontString(nil, "OVERLAY")
-	caption:SetFontObject(UI.NameFont(L.caption))
+	local caption = UI.Words(over, UI.NameFont(L.caption), C.text)
 	caption:SetText("IN THE ORDER YOU MEET THEM")
-	UI.Ink(caption, C.text)
 	pane.art, pane.shade, pane.caption = art, shade, caption
 	-- (Which room you are in, at the sheet's top: said where the floor shown has it.)
-	local you = over:CreateFontString(nil, "OVERLAY")
-	you:SetFontObject(UI.NameFont(L.you))
+	local you = UI.Words(over, UI.NameFont(L.you))
 	you:SetPoint("TOP", sheet, "TOP", 0, -8)
-	you:SetShadowColor(0, 0, 0, 0.9)
-	you:SetShadowOffset(1, -1)
 	you:Hide()
 	pane.you = you
 	-- (Who of your group is in which room, under it.)
-	local them = over:CreateFontString(nil, "OVERLAY")
-	them:SetFontObject(UI.NameFont(L.you - 1))
-	them:SetShadowColor(0, 0, 0, 0.9)
-	them:SetShadowOffset(1, -1)
+	local them = UI.Words(over, UI.NameFont(L.you - 1))
 	them:Hide()
 	pane.them = them
 
@@ -971,11 +963,7 @@ function Floors.Pane(parent)
 			parts = parts + 1
 			local text = pane.parts[parts]
 			if not text then
-				text = written:CreateFontString(nil, "OVERLAY")
-				text:SetFontObject(UI.NameFont(L.part))
-				text:SetShadowColor(0, 0, 0, 0.9)
-				text:SetShadowOffset(1, -1)
-				UI.Ink(text, C.text)
+				text = UI.Words(written, UI.NameFont(L.part), C.text)
 				pane.parts[parts] = text
 			end
 			text:SetText(named.name:upper())

@@ -86,10 +86,7 @@ local function Build()
 	Shy.Skin.HatchBar(fill)
 	fill:SetMinMaxValues(0, 1)
 	bar.fill = fill
-	local time = fill:CreateFontString(nil, "OVERLAY")
-	time:SetFontObject(UI.NameFont(11))
-	time:SetShadowOffset(1, -1)
-	time:SetShadowColor(0, 0, 0, 1)
+	local time = UI.Words(fill, UI.NameFont(11))
 	time:SetPoint("RIGHT", bar, "RIGHT", -6, 0)
 	bar.time = time
 	Tone(false)

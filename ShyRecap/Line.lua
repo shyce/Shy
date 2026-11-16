@@ -150,6 +150,16 @@ function ns.SetupLine()
 		id = "shyrecap", title = "Death recap",
 		width = LINE.w, height = LINE.h, point = HOME,
 		shown = function() return Current() ~= nil end,
+		-- Its options' "Show death recap".
+		switch = {
+			get = function() return T.db.on ~= false end,
+			set = function(on)
+				T.db.on = on
+				ns.Apply()
+				if ns.RefreshOptions then ns.RefreshOptions() end
+			end,
+			hint = "What killed you, when you die",
+		},
 		top = { order = 10, sample = Picture, passing = true },
 	})
 	line = ns.CreateLine(box)

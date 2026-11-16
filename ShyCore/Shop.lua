@@ -122,15 +122,7 @@ end
 -- Text
 
 function Shop.Text(parent, font, color)
-	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFontObject(font)
-	UI.Follow(text)   -- a title keeps up with the theme's font
-	text:SetJustifyH("LEFT")
-	text:SetWordWrap(false)
-	text:SetShadowOffset(1, -1)
-	text:SetShadowColor(0, 0, 0, 1)
-	UI.Ink(text, color or C.text)   -- after the font: a font object brings its own color
-	return text
+	return UI.Words(parent, font, color, { wrap = false })
 end
 
 -- A to Z only: string.upper follows the machine's locale and breaks UTF-8 letters.

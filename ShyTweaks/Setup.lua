@@ -40,7 +40,7 @@ end
 
 Shy.Setup.Questions({
 	id = "tweaks", order = 25, title = "Tweaks", noun = "tweaks", glyph = "use", tab = "game",
-	lead = "These come down to taste. Every other tweak has a sensible default.",
+	lead = "These are down to taste. The rest of the tweaks are already set to sensible defaults.",
 	groups = ns.CATEGORIES,
 	items = Items,
 })

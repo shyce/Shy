@@ -6,9 +6,9 @@ local MEDIA = "Interface\\AddOns\\ShyPaladin\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Paladin",
+	category = "combat",
 	icon = MEDIA .. "ShyPaladin",
 	smallIcon = MEDIA .. "ShyPaladinSmall",
-	tagline = "Your seal on the swing bar",
 	savedVariables = "ShyPaladinDB",
 	keep = { keysMade = true, keysBuild = true, keysBefore = true },   -- the macros made for your keys are no setting: a reset keeps them yours
 	-- color: the bar in the seal's color. twist: "off", "light", or the light and a sound's key (Twist.lua's SOUNDS).

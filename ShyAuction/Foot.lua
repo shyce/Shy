@@ -20,8 +20,9 @@ local Ticking   -- (below: the footer's hide stops it)
 local EMBLEM = { Alliance = "communities-icon-faction-alliance", Horde = "communities-icon-faction-horde" }
 local SIDE = { Alliance = "Alliance house", Horde = "Horde house", Neutral = "Neutral house" }
 
-function F.Build(box, tall)
-	foot = CreateFrame("Frame", nil, box)
+-- (on the window's body: UI.Body)
+function F.Build(body, tall)
+	foot = CreateFrame("Frame", nil, body)
 	foot:SetPoint("BOTTOMLEFT", 2, 2)
 	foot:SetPoint("BOTTOMRIGHT", -2, 2)
 	foot:SetHeight(tall - 2)

@@ -136,11 +136,12 @@ function ns.CreateOptions()
 			{ enabled = Giving, desc = "Also turns in repeatable quests that take items from you each time." }), panel, RIGHT, y - 84)
 
 		y = y - 126
-		local function Guided() return T.db.guide.follow end
+		-- At the top level the guide is this character's levelling help (T:SetQuestStyle), as on the card.
+		local function Guided() return ns.Following() end
 		local function GetGuide(key) return function() return T.db.guide[key] end end
 		local function SetGuide(key) return function(v) T.db.guide[key] = v end end
 		At(UI.Header(panel, "Leveling guide", 576), panel, LEFT, y)
-		At(group:Checkbox(panel, "Follow the leveling guide", GetGuide("follow"), SetGuide("follow"),
+		At(group:Checkbox(panel, "Follow the leveling guide", Guided, function(v) T:SetQuestStyle(v and "guide" or "zone") end,
 			{ desc = "Step-by-step guides for levels 1 to 30, every starting zone, both factions. The guide's steps lead the card, with nearby quests after them. Your guide and your place in it are worked out from the quests you've done." }), panel, LEFT, y - 32)
 		At(group:Checkbox(panel, "Whole guide on the card",
 			function() return ns.char.guideFull == true end, function(v) ns.ToggleGuideWindow(v) end,
@@ -183,6 +184,11 @@ function ns.CreateOptions()
 		credit:SetWidth(COL)
 		At(credit, panel, RIGHT, y - 154)
 
+		At(group:Checkbox(panel, "Leveling help at max level", function() return ns.char.topHelp == true end,
+			function(v) ns.SetTopHelp(v) end,
+			{ enabled = ns.AtTop, desc = "At max level this character keeps quests to pick up and errands, not just the quests you have." }), panel, LEFT, y - 148)
+
+		y = y - 26
 		-- These only store settings; the files acting on them may not be loaded yet.
 		local function Buttoned() return Guided() and T.db.guide.buttons end
 		At(UI.Text(panel, "Current step", 13, true, UI.colors.head), panel, LEFT, y - 170)

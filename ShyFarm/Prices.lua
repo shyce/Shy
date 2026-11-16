@@ -82,7 +82,12 @@ function P.Value(item)
 	if use == "auction" and ah then return ah, "auction" end
 	if use ~= "vendor" then
 		if entry and entry.own and use == nil then return entry.own, "own" end
-		if T.db.value == "auction" and ah then return ah, "auction" end
+		-- (Valued at the auction house: whichever pays more, it or the vendor, since that's where you'd sell it.)
+		if T.db.value == "auction" and ah then
+			local sell = P.Vendor(item)
+			if sell and sell > ah then return sell, "vendor" end
+			return ah, "auction"
+		end
 	end
 	local sell = P.Vendor(item)
 	if sell then return sell, "vendor" end

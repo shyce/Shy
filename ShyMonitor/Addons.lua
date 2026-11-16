@@ -89,15 +89,11 @@ local function Gauge(parent, name)
 	UI.Skin(g, C.bg, C.border)
 	g.name = UI.Text(g, name, 12, true, C.head)
 	g.name:SetPoint("TOPLEFT", IN, TOP_Y)
-	g.note = g:CreateFontString(nil, "OVERLAY")
-	g.note:SetFontObject(UI.NameFont(11))
-	UI.Ink(g.note, C.dim)
+	g.note = UI.Words(g, UI.NameFont(11), C.dim)
 	g.note:SetPoint("TOPRIGHT", -IN, TOP_Y - 1)
 	g.note:SetJustifyH("RIGHT")
 	g.note:SetWordWrap(false)
-	g.value = g:CreateFontString(nil, "OVERLAY")
-	g.value:SetFontObject(UI.NameFont(19))
-	UI.Ink(g.value, C.text)
+	g.value = UI.Words(g, UI.NameFont(19), C.text)
 	g.value:SetPoint("TOPLEFT", IN, VALUE_Y)
 	g.unit = UI.Text(g, "", 11, false, C.dim)
 	g.unit:SetPoint("BOTTOMLEFT", g.value, "BOTTOMRIGHT", 5, 2)
@@ -143,9 +139,7 @@ end
 
 local function Cell(row, col)
 	local key, _, left, width, right = col[1], col[2], col[3], col[4], col[5]
-	local fs = row:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(UI.NameFont(11))
-	UI.Ink(fs, C.text)
+	local fs = UI.Words(row, UI.NameFont(11), C.text)
 	fs:SetPoint(right and "RIGHT" or "LEFT", row, "LEFT", right and left + width or left, 0)
 	fs:SetWidth(width)
 	fs:SetJustifyH(right and "RIGHT" or "LEFT")
@@ -186,9 +180,7 @@ local function Row(i)
 	row.bar:SetValue(0)
 	UI.Skin(row.bar, C.bg, C.rowEdge)
 	row.barFill = row.bar:GetStatusBarTexture()
-	row.share = row:CreateFontString(nil, "OVERLAY")
-	row.share:SetFontObject(UI.NameFont(11))
-	UI.Ink(row.share, C.text)
+	row.share = UI.Words(row, UI.NameFont(11), C.text)
 	row.share:SetPoint("LEFT", COLS[2][3] + 72, 0)
 	for i2 = 3, #COLS do Cell(row, COLS[i2]) end
 	UI.Ink(row.errors, C.bad)
@@ -244,14 +236,14 @@ local function ShownName(name)
 	return shown
 end
 
--- An addon's small icon: the one it registered, else its own folder's by the family's naming
--- (<Addon>/Media/<Addon>Small); a data addon (ShyWay_Ground_1) wears the icon of the addon it belongs to.
-function ns.IconOf(name, big)
+-- An addon's mark: the one it registered, else its own folder's by the family's naming (<Addon>/Media/<Addon>Mark);
+-- a data addon (ShyWay_Ground_1) wears the mark of the addon it belongs to.
+function ns.IconOf(name)
 	for _, addon in ipairs(Shy.order) do
-		if addon.name == name then return (not big and addon.smallIcon) or addon.icon end
+		if addon.name == name then return addon.mark end
 	end
 	local base = name:match("^(Shy%a+)") or name
-	return "Interface\\AddOns\\" .. base .. "\\Media\\" .. base .. (big and "" or "Small")
+	return "Interface\\AddOns\\" .. base .. "\\Media\\" .. base .. "Mark"
 end
 local function IconOf(name)
 	local icon = iconOf[name]

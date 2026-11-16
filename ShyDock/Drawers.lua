@@ -26,7 +26,7 @@
 
 local ADDON, ns = ...
 local T = ns.T
-local Console = ns.Console
+local UI, Console = Shy.UI, ns.Console
 local max, min = math.max, math.min
 
 local W = {}
@@ -142,6 +142,7 @@ end
 -- (A piece in hand, the guide sized by its foot over the menu: the column is stacked again on every frame of
 -- it, and the menu's pull and tray, which stand by coordinates, go with it in that same frame.)
 function W.Touch()
+	W.Reveal()
 	if menu then
 		if Shy.HUD.InHand and Shy.HUD.InHand() then menu:Measure() end
 		menu:Touch()
@@ -156,6 +157,7 @@ end
 
 function W.Apply()
 	if not Shy.Drawer then return end
+	W.Reveal()
 	if menu then menu:Apply() end
 	for _, d in pairs(racks) do d:Apply() end
 end
@@ -177,8 +179,140 @@ function W.PinRacks(sides)
 	return true
 end
 
+-- The reveal, the minimal layout's (Console.ROLE's `reveal`): the main bar alone shows. Bars 2 and 3, in a housing of
+-- their own over it, and the side bars in their racks fade in while you point anywhere over the bars, and out a
+-- moment after you leave; nothing moves. They are faded and nothing else, as a drawer's frames are, so their keys
+-- work all the while and a fight changes nothing. They show too while you carry a spell or an item to drop on a
+-- bar, and in Edit Mode. The racks' drawers stand down meanwhile: the reveal has the side bars.
+local REVEAL = { fade = 0.15, linger = 0.6, look = 0.05 }   -- seconds: in or out; after you leave; between looks
+local ROWS = { "MultiBarBottomLeft", "MultiBarBottomRight" }
+local shown = { on = false, level = 0, want = 0, left = 0, wait = 0 }
+local rows, revealer
+
+-- The frames the reveal fades: bars 2 and 3, the side bars, their racks and the rows' housing.
+local function Faded()
+	local list = {}
+	for _, name in ipairs(ROWS) do list[#list + 1] = _G[name] end
+	for key, side in pairs({ right = 1, left = -1 }) do
+		list[#list + 1] = ns.Layout.RackBar(side)
+		list[#list + 1] = ns.Rack.frames and ns.Rack.frames[key]
+	end
+	list[#list + 1] = rows
+	return list
+end
+
+-- The rows' housing round bars 2 and 3 as they stand (the bars' own rectangles, read, never anchored to: they are
+-- protected); hidden with neither on screen, kept where it was while a rectangle is secret.
+local function Rows()
+	local l, b, r, t
+	for _, name in ipairs(ROWS) do
+		local frame = _G[name]
+		if frame then
+			local fl, fb, fr, ft = Console.Rect(frame)
+			if fl == false then return end
+			if fl then l, b, r, t = min(l or fl, fl), min(b or fb, fb), max(r or fr, fr), max(t or ft, ft) end
+		end
+	end
+	if not (l and shown.on and T.db.housing) then
+		rows:Hide()
+		shown.rows = nil
+		return
+	end
+	l, b, r, t = Console.Wrap(l, b, r, t)
+	shown.rows = { l, b, r, t }
+	rows:ClearAllPoints()
+	rows:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", l, b)
+	rows:SetSize(r - l, t - b)
+	UI.SetFill(rows, ns.Graphite)
+	rows:Show()
+end
+
+-- Is the mouse over the bars: the housing, the rows' housing, a rack (each as the console keeps its rectangle)?
+local function Over()
+	local x, y = GetCursorPosition()
+	if x == nil or issecretvalue(x) or issecretvalue(y) then return false end
+	local scale = UIParent:GetEffectiveScale()
+	x, y = x / scale, y / scale
+	local function In(l, b, r, t)
+		return l ~= nil and x >= l and x <= r and y >= b and y <= t
+	end
+	local housing, rowsAt = ns.Housing.rect, shown.rows
+	return (housing ~= nil and In(housing[1], housing[2], housing[3], housing[4]))
+		or (rowsAt ~= nil and In(rowsAt[1], rowsAt[2], rowsAt[3], rowsAt[4]))
+		or In(RackRect("right")) or In(RackRect("left"))
+end
+
+local function Wanted()
+	return Over() or GetCursorInfo() ~= nil or EditModeManagerFrame:IsEditModeActive()
+end
+
+-- Every faded frame at the reveal's level (set only where it differs: a drawer or the game may have set another).
+local function Level(level)
+	for _, frame in ipairs(Faded()) do
+		if frame:GetAlpha() ~= level then frame:SetAlpha(level) end
+	end
+end
+
+local function Step(_, elapsed)
+	shown.wait = shown.wait - elapsed
+	if shown.wait <= 0 then
+		shown.wait = REVEAL.look
+		if Wanted() then
+			shown.want, shown.left = 1, REVEAL.linger
+		else
+			shown.left = shown.left - REVEAL.look
+			if shown.left <= 0 then shown.want = 0 end
+		end
+		Level(shown.level)
+	end
+	if shown.level ~= shown.want then
+		local step = elapsed / REVEAL.fade
+		shown.level = shown.want > shown.level and min(1, shown.level + step) or max(0, shown.level - step)
+		Level(shown.level)
+	end
+end
+
+-- Whether the layout in use reveals its bars.
+function W.Revealing()
+	return shown.on
+end
+
+-- The layout came, went or moved: the reveal starts, stops (every frame its own alpha back) or follows.
+function W.Reveal()
+	if not rows then return end
+	local L = ns.Layout
+	local role = L.IsActive() and Console.ROLE[L.Style()] or nil
+	local on = role ~= nil and role.reveal == true
+	if on ~= shown.on then
+		shown.on = on
+		shown.level, shown.want, shown.left, shown.wait = 0, 0, 0, 0
+		if not on then
+			for _, frame in ipairs(Faded()) do frame:SetAlpha(1) end
+		end
+		for _, d in pairs(racks) do d:Apply() end
+	end
+	Rows()
+	if on then
+		Level(shown.level)
+		revealer:Show()
+	else
+		revealer:Hide()
+	end
+end
+
 function W.Start()
 	if not Shy.Drawer then return end
+	-- The rows' housing (W.Reveal): LOW, under the bars' buttons, as the housing is.
+	rows = CreateFrame("Frame", "ShyDockRows", UIParent)
+	rows:SetFrameStrata("LOW")
+	rows:SetFrameLevel(30)
+	rows:EnableMouse(false)
+	rows:Hide()
+	UI.Panel(rows, { cap = true, facets = false, line = false, brackets = 10 })
+	revealer = CreateFrame("Frame")
+	revealer:Hide()
+	revealer:SetScript("OnUpdate", Shy.Clocked("ShyDock reveal", Step))
+	W.rows, W.revealer = rows, revealer
 	-- The menu's box: pull and tray as one piece of the HUD. It draws nothing (the drawer does) and takes no
 	-- mouse but its mover's in layout mode and the pull's; Arrange.lua sizes it and gives it its home.
 	W.box = Shy.HUD.Create({
@@ -215,7 +349,7 @@ function W.Start()
 			grip = function() return RackGrip(key, side) end,
 			near = function() return Near(key) end,
 			housing = ns.Rack.frames[key],
-			shown = function() return ns.Layout.IsActive() and ns.Rack.frames[key]:IsShown() == true end,
+			shown = function() return ns.Layout.IsActive() and not shown.on and ns.Rack.frames[key]:IsShown() == true end,
 			help = "Click to put this bar away, or to bring it back.",
 		})
 	end

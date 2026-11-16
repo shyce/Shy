@@ -6,9 +6,9 @@ ns.MEDIA = MEDIA
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Chat",
+	category = "social",
 	icon = MEDIA .. "ShyChat",
 	smallIcon = MEDIA .. "ShyChatSmall",
-	tagline = "Cleaner, more compact chat",
 	savedVariables = "ShyChatDB",
 	defaults = {
 		enabled = true,          -- rewrite chat lines
@@ -54,7 +54,7 @@ local T = Shy:NewAddon(ADDON, {
 		bubbleSize = 13,         -- text size (the game's is 13)
 		-- whispers
 		whispers = true,         -- each conversation in a window of its own
-		whisperOpen = "window",  -- window: a new one, a step down and right of the last | tab: a blinking tab
+		whisperOpen = "auto",    -- auto: where you put that person, else where you usually put people | window | tab | chat
 		whisperFight = true,     -- the windows step aside in a fight
 		whisperLines = 50,       -- lines kept per conversation
 		maxLines = 300,

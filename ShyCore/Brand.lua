@@ -122,7 +122,7 @@ function B.CreateEmblem(parent, icon, size)
 	f.glow:SetPoint("CENTER")
 	f.icon = f:CreateTexture(nil, "ARTWORK")
 	f.icon:SetAllPoints()
-	Theme.Icon(f.icon, icon)
+	Theme.Icon(f.icon, icon, size)
 	f.sheen = f:CreateTexture(nil, "OVERLAY")
 	f.sheen:SetTexture(B.SHEEN)
 	f.sheen:SetBlendMode("ADD")
@@ -327,7 +327,7 @@ function B.ShowSplash()
 	f:SetPoint("TOP", 0, -130)
 	B.splash = f
 
-	local emblem = B.CreateEmblem(f, Shy.ICON, ICON)
+	local emblem = B.CreateEmblem(f, Shy.core.mark, ICON)
 	emblem:SetPoint("CENTER", f, "TOP", 0, -ICON / 2 - 10)
 
 	local flash = f:CreateTexture(nil, "OVERLAY")

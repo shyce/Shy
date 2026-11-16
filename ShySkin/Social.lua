@@ -1377,10 +1377,12 @@ local function Build()
 	own.box = box
 	-- Opens and closes with the game's window.
 	box:SetParent(f)
+	-- Its pages stand on its body: clear of the look's work round the edge (UI.Body).
+	local body = UI.Body(box)
 	own.pages = {}
 	for key, build in pairs(BUILD) do
 		local page = CreateFrame("Frame", nil, box)
-		page:SetAllPoints()
+		page:SetAllPoints(body)
 		page:Hide()
 		own.pages[key] = page
 		build(page)

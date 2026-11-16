@@ -80,11 +80,9 @@ local function Half(style, label)
 	local b = CreateFrame("Button", nil, bar)
 	b:SetSize(LOOK_W, TALL)
 	b.style = style
-	b.text = b:CreateFontString(nil, "OVERLAY")
-	b.text:SetFontObject(UI.TextFont(12))
+	b.text = UI.Words(b, UI.TextFont(12), C.text)
 	b.text:SetPoint("CENTER")
 	b.text:SetText(label)
-	UI.Ink(b.text, C.text)
 	UI.Press(b, { fill = C.bgHot, bare = true, sink = { b.text } })
 	function b:OnLook(s)
 		if s.on and not s.down then UI.Paint(self.shyBg, C.fill) end

@@ -136,7 +136,7 @@ function ns.CreateOptions()
 			desc = "The cooldown manager and cast bar use the Opacity set on /shy. Off, they are solid.",
 		}), panel, LEFT, y - 26)
 		At(group:Checkbox(panel, "Swing timer", Get("swing"), Set("swing"), {
-			desc = "A bar under your health and power that fills until your next swing, one per weapon. Gold means a next-swing ability is queued; red means your target is out of range.",
+			desc = "While you swing, a bar for each weapon takes your cast bar's spot until you cast, gold when a next-swing ability is queued and red when your target is out of reach.",
 		}), panel, LEFT + 340, y)
 		At(group:Checkbox(panel, "Cooldowns in combat only", Get("cooldownsInCombat"), function(v)
 			T.db.cooldownsInCombat = v

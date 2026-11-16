@@ -36,9 +36,9 @@ local MEDIA = "Interface\\AddOns\\ShyMaps\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Maps",
+	category = "leveling",
 	icon = MEDIA .. "ShyMaps",
 	smallIcon = MEDIA .. "ShyMapsSmall",
-	tagline = "The whole map, the way you left it",
 	savedVariables = "ShyMapsDB",
 	defaults = {
 		on = true,

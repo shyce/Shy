@@ -1,10 +1,10 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffMage|r
-## Notes: Lays your keys out once for every level: each spell comes to its key as you learn it, and your food, water, bandage and potions are a key each. |cff888888/shymage|r
+## Notes: Every ability on a key near your hand, each new one as you learn it |cff888888/shymage|r
 ## Author: Shyce Cream
-## Version: 5.0.6
-## X-Date: 2026-11-15
-## IconTexture: Interface\AddOns\ShyMage\Media\ShyMage
+## Version: 5.1.1
+## X-Date: 2026-11-16
+## IconTexture: Interface\AddOns\ShyMage\Media\ShyMageMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore
 ## SavedVariables: ShyMageDB

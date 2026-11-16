@@ -1,8 +1,9 @@
--- Shy.Setup: character setup. A window holds a few steps (profile, game settings, plus steps other
--- addons register), each picked as recommended from the start and shown together on its overview, then
+-- Shy.Setup: character setup. The /shy window, lent to it, walks a few steps (profile, game settings, plus steps
+-- other addons register), each picked as recommended from the start and shown together on its overview, then
 -- S.Run applies them all with at most one reload. Offered at every login until the character is set up
--- (once its intro has played), and opened from /shy setup and from the /shy window, where the same pieces are
--- live sections. While it is open the screen stays up and every pick goes on it as it is made.
+-- (once its intro has played), and opened from /shy setup and from the /shy window's Home, whose rooms hold the
+-- same pieces as live sections. While it is open the screen stays up and every pick goes on it as it is made;
+-- nothing is kept until Finish.
 --
 --   Shy.Setup.Step{ id, order, title,     registered by the addon that owns the step
 --       glyph,                            its picture on the rail and its overview card (UI.GlyphArt's names)
@@ -27,6 +28,10 @@
 --       tab = id,                         no page of its own while that step has one: it is a tab of that
 --                                         step's page, after the step's own (a subject's steps together)
 --       tabTitle,                         its tab's name there, when its title alone would not say it
+--       walk = id,                        one of the pages of that step's own walk (see S.Walk): no row of its
+--                                         own on the rail nor a card on the overview; it hangs under that step's
+--                                         row, and is walked after it, while the step's `walks(plan)` says so
+--       walks(plan),                      a step with a walk of its own: whether its pages are walked now
 --       Later(answers),                   answers kept by S.Wait, given back after the reload
 --       Shown(plan),                      its page came up: put the plan's picks on the screen
 --       atOpen = true,                    its Shown runs as the overview comes up too (the size: the first
@@ -37,7 +42,7 @@
 --   Shy.Setup.Act(plan)        what the profile step does: "stay", "use" or "fresh"
 --   Shy.Setup.Wait(id, answers)   a step's profile settings, applied after the reload once the profile has loaded
 --   Shy.Setup.Tile(parent, width, glyph, name, onClick, height, icon)   a choice tile, as the profile page has them
---   Shy.Setup.Row(parent, width, item, get, set)   a whole-row switch: item = { title, desc, say }
+--   Shy.Setup.Row(parent, width, item, get, set)   a whole-row tick: item = { title, desc, say }
 --   Shy.Setup.Questions{ ... }            an addon's own switches as a step: see "Questions"
 --   Shy.Setup.Plan(plan)       fills `plan` (or a new table) with the recommended choices
 --   Shy.Setup.Check(plan)      true, or false and why
@@ -45,6 +50,11 @@
 --   Shy.Setup.Open(at) / Close() / IsOpen()   at: a step's id to open on, the overview unless told
 --   Shy.Setup.At()             the page on show ("overview" or a step's id); nil while it is closed
 --   Shy.Setup.Relabel()        the open page's heading again (a step whose lead changed)
+--   Shy.Setup.Grew()           the open page measured again (a step's page that grew by itself): it scrolls that far
+--   Shy.Setup.Walk(id)         a step's walk taken up or left (its `walks` says which, now): its pages hang under
+--                              its row on the rail, or go; taken up, to its first page. Next and Back walk them as
+--                              any others, Finish does what was picked there.
+--   Shy.Setup.Show(id)         to a step's page
 --   Shy.Setup.Done()           this character has been set up (Finish ran for it), as its record says
 --   Shy.Setup.Untouched()      Global has only ever been used by one character
 --
@@ -545,9 +555,9 @@ S.GAME = {
 	{ key = "stackPlates", group = "Nameplates", title = "Stack enemy nameplates", on = true, round = 2,
 		desc = "Enemy nameplates stack instead of overlapping, so each stays readable. (Options > Nameplates)",
 		flags = { nameplateStackingTypes = Enum.NamePlateStackType.Enemy } },
-	{ key = "npcPlates", group = "Nameplates", title = "Friendly NPC nameplates", round = 2,
+	{ key = "npcPlates", group = "Nameplates", title = "Friendly NPC nameplates", on = true, round = 11,
 		owner = Tweaks("npcNames"),
-		desc = "Guards, vendors and quest givers get a nameplate with their name. ShyTweaks' NPC names controls this while it's on. (Options > Nameplates)",
+		desc = "Guards, vendors and quest givers get a nameplate with their name, where ShyQuest marks the one your next step sends you to. ShyTweaks' NPC names controls this while it's on. (Options > Nameplates)",
 		want = { nameplateShowFriendlyNpcs = "1" } },
 	{ key = "minionPlates", group = "Nameplates", title = "Enemy pet nameplates", round = 2,
 		desc = "Pets, totems and other minions of your enemies get nameplates too. (Options > Nameplates)",
@@ -583,7 +593,6 @@ local COLUMNS = {
 	[2] = { { "Camera", "Controls", "Loot", "Chat", "Features" }, { "On screen", "Fewer interruptions", "Sound", "Nameplates" } },
 }
 local WIDE = 700   -- a list at least this wide has three columns
-local ROW, SUB, BETWEEN, MASTER = 22, 17, 6, 28
 
 -- The newest round of recommendations.
 local ROUND = 1
@@ -751,87 +760,6 @@ function S.Live(key, on)
 		end
 	end
 	return false
-end
-
--- With a plan the checkbox is a pick for later (one a page put on live goes off with it); without one it
--- switches the setting live.
-local function GameRow(f, group, def, plan, enabled)
-	local get, set
-	if plan then
-		-- (A plan ticks the ones already set: unticked, Finish turns one off.)
-		get = function() return plan.game.pick[def.key] == true end
-		set = function(v)
-			plan.game.pick[def.key] = v
-			if not v then S.Live(def.key, false) end
-		end
-	else
-		get = function() return S.Is(def) end
-		set = function(v)
-			-- Many CVars can't be set in combat.
-			if InCombatLockdown() then
-				core:Print("game settings can't be changed in combat.")
-				return
-			end
-			if v then S.Take(def) else S.Return(def) end
-			if S.Is(def) ~= v then
-				core:Print("\"" .. def.title .. "\" " .. (def.fail or "can only be changed in the game's Options window."))
-			elseif def.reload then
-				Shy.Reload(def.reload)
-			end
-		end
-	end
-	-- Dimmed while the master switch is off, or while something else switches this setting.
-	local row = group:Checkbox(f, def.title, get, set, { desc = def.desc, enabled = function()
-		return (not enabled or enabled()) and not Owned(def)
-	end })
-	if plan then
-		-- Green: already set that way, so leaving it ticked changes nothing.
-		local Base = row.Refresh
-		function row:Refresh()
-			Base(self)
-			UI.Ink(self.text, (S.Is(def) and not took[def.key]) and C.good or C.text)
-		end
-	end
-	return row
-end
-
-function S.GameList(parent, width, plan)
-	local f = CreateFrame("Frame", nil, parent)
-	local group = UI.Group()
-	local top, enabled = 0, nil
-	if plan then
-		local all = group:Checkbox(f, "Apply recommended game settings",
-			function() return plan.game.on end, function(v) plan.game.on = v end,
-			{ desc = "Applies the settings ticked below during setup. Green ones are already set. You can undo any of them later on /shy." })
-		all:SetPoint("TOPLEFT")
-		top = MASTER
-		enabled = function() return plan.game.on end
-	end
-	local tallest, rows = top, Rows()
-	local columns = COLUMNS[width >= WIDE and 3 or 2]
-	for column, names in ipairs(columns) do
-		local x, y = (column - 1) * (width + 10) / #columns, top
-		for _, name in ipairs(names) do
-			local any = false
-			for _, def in ipairs(rows) do
-				if def.group == name then
-					if not any then
-						any = true
-						local sub = UI.Text(f, name:upper(), 11, true, C.dim)
-						sub:SetPoint("TOPLEFT", x, -y)
-						y = y + SUB
-					end
-					GameRow(f, group, def, plan, enabled):SetPoint("TOPLEFT", x, -y)
-					y = y + ROW
-				end
-			end
-			if any then y = y + BETWEEN end
-		end
-		tallest = max(tallest, y - BETWEEN)
-	end
-	f:SetSize(width, tallest)
-	function f:Refresh() group:Refresh() end
-	return f
 end
 
 -- Steps
@@ -1169,7 +1097,7 @@ end
 S.Step({
 	id = "profile", order = 10, title = "Profile", glyph = "group",
 	ask = function() return "Which profile should " .. First() .. " use?" end,
-	lead = "A profile holds every addon's settings and your layout.",
+	lead = "A profile saves all your addon settings and your layout. Characters on the same profile share them.",
 	brief = function(plan)
 		local act, name = Target(plan)
 		if not act then return nil end
@@ -1228,8 +1156,8 @@ end
 
 S.Step({
 	id = "game", order = 30, title = "Game", tabTitle = "Game settings", glyph = "log",   -- one word: the rail holds every page's title
-	ask = "Pick the game settings to change",
-	lead = "The recommended ones are ticked; green ones are set already. Untick one to turn it off.",
+	ask = "Which game settings do you want?",
+	lead = "Recommended ones are ticked, and green ones are already on. Untick anything you don't want.",
 	brief = function(plan) return Changes(Changed(plan)) end,
 	changes = Changed,
 	Plan = function(plan)
@@ -1336,8 +1264,8 @@ local function SetAnswers(def, answers)
 	end
 end
 
--- The whole row is the switch. opts: height (a taller row, its words kept at its middle); slim (a
--- shorter row with the title alone).
+-- The whole row is the tick. opts: height (a taller row, its words kept at its middle); slim (a
+-- shorter row with the title alone); enabled (a function: false dims it, and a click does nothing).
 local function QuestionRow(parent, width, item, Get, Set, opts)
 	local slim = opts and opts.slim
 	local tall = slim and Q_SLIM or (opts and opts.height or Q_ROW)
@@ -1350,32 +1278,41 @@ local function QuestionRow(parent, width, item, Get, Set, opts)
 	b.lit:SetPoint("BOTTOMLEFT", 1, 1)
 	b.lit:SetWidth(2)
 	UI.Paint(b.lit, Theme.Accent)
-	b.switch = UI.Switch(b, item.title, Get, Set, { desc = item.desc })
-	b.switch:SetPoint("LEFT", 10, 0)
+	-- A tick, as every setting has (the game's settings beside it too): the row takes the click and the mouse,
+	-- the box only shows it.
+	b.box = UI.Checkbox(b, "", Get, Set)
+	b.box:EnableMouse(false)
+	b.box:SetPoint("LEFT", 10, 0)
+	local x = 38
 	b.name = UI.Text(b, item.title, 13)
 	if slim then
-		b.name:SetPoint("LEFT", 56, 0)
+		b.name:SetPoint("LEFT", x, 0)
 		b.name:SetPoint("RIGHT", -6, 0)
 		b.name:SetJustifyH("LEFT")
 		b.name:SetWordWrap(false)
 	else
-		b.name:SetPoint("TOPLEFT", 56, -5 - lift)
+		b.name:SetPoint("TOPLEFT", x, -5 - lift)
 		b.say = UI.Text(b, item.say or "", 11, false, C.dim)
-		b.say:SetPoint("TOPLEFT", 56, -21 - lift)
-		b.say:SetWidth(width - 62)
+		b.say:SetPoint("TOPLEFT", x, -21 - lift)
+		b.say:SetWidth(width - x - 6)
 		b.say:SetWordWrap(false)
 	end
 
+	local enabled = opts and opts.enabled
 	function b:Refresh()
 		local on = Get()
-		self.switch:Refresh()
+		self.dimmed = enabled ~= nil and not enabled()
+		self:SetAlpha(self.dimmed and 0.4 or 1)
+		self.box:Refresh()
 		self.lit:SetShown(on)
 		UI.SetFill(self, on and C.row or C.bg)
 		UI.Ink(self.name, on and C.head or C.text)
 	end
-	b:SetScript("OnClick", function()
+	b:SetScript("OnClick", function(self)
+		if self.dimmed then return end
 		Set(not Get())
 		PlaySound(Get() and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+		self:Refresh()
 	end)
 	b:SetScript("OnEnter", function(self)
 		UI.SetBorder(self, C.hot)
@@ -1388,6 +1325,119 @@ local function QuestionRow(parent, width, item, Get, Set, opts)
 	return b
 end
 S.Row = QuestionRow
+
+-- The game's settings as plates, as the tweaks beside them have: the whole row the tick, the setting's name on
+-- it, what it does under the mouse. With a plan a tick is a pick for later (one a page put on live goes off with
+-- it), and green says the game has it that way already; without one it switches the setting live. `changed`:
+-- the list reads every row again.
+local function GameRow(f, def, plan, enabled, changed)
+	local get, set
+	if plan then
+		-- (A plan ticks the ones already set: unticked, Finish turns one off.)
+		get = function() return plan.game.pick[def.key] == true end
+		set = function(v)
+			plan.game.pick[def.key] = v
+			if not v then S.Live(def.key, false) end
+			changed()
+		end
+	else
+		get = function() return S.Is(def) end
+		set = function(v)
+			-- Many CVars can't be set in combat.
+			if InCombatLockdown() then
+				core:Print("game settings can't be changed in combat.")
+				return
+			end
+			if v then S.Take(def) else S.Return(def) end
+			if S.Is(def) ~= v then
+				core:Print("\"" .. def.title .. "\" " .. (def.fail or "can only be changed in the game's Options window."))
+			elseif def.reload then
+				Shy.Reload(def.reload)
+			end
+			changed()
+		end
+	end
+	-- Dimmed while the master switch is off, or while something else switches this setting.
+	local row = QuestionRow(f, 100, def, get, set, { slim = true, enabled = function()
+		return (not enabled or enabled()) and not Owned(def)
+	end })
+	row.text = row.name
+	if plan then
+		local Base = row.Refresh
+		function row:Refresh()
+			Base(self)
+			if S.Is(def) and not took[def.key] then UI.Ink(self.name, C.good) end
+		end
+	end
+	return row
+end
+
+-- A group's caption, as the tweaks' full list has them: its name, a rule on to the column's edge.
+local function GameCaption(f, name, width)
+	local cap = CreateFrame("Frame", nil, f)
+	cap:SetSize(width, Q_CAPTION - 4)
+	cap.text = UI.Text(cap, name:upper(), 11, true, C.dim)
+	cap.text:SetPoint("LEFT")
+	local rule = cap:CreateTexture(nil, "ARTWORK")
+	UI.Paint(rule, C.border, 0.7)
+	rule:SetHeight(1)
+	rule:SetPoint("LEFT", cap.text, "RIGHT", 8, 0)
+	rule:SetPoint("RIGHT")
+	return cap
+end
+
+-- With a plan, a plate over the list says whether setup changes the game's settings at all.
+local MASTER = { title = "Use the recommended game settings", say = "Untick this to leave every game setting as it is.",
+	desc = "The ones ticked below are changed when you press Finish. Green ones are already on. You can undo any of them later in /shy." }
+
+function S.GameList(parent, width, plan)
+	local f = CreateFrame("Frame", nil, parent)
+	local rows = {}
+	local function Changed() f:Refresh() end
+	local top, enabled = 0, nil
+	if plan then
+		local all = QuestionRow(f, width, MASTER, function() return plan.game.on end, function(v)
+			plan.game.on = v
+			Changed()
+		end)
+		all.text = all.name
+		all:SetPoint("TOPLEFT")
+		rows[#rows + 1] = all
+		top = Q_ROW + Q_BREAK + 4
+		enabled = function() return plan.game.on end
+	end
+	local tallest, list = top, Rows()
+	local columns = COLUMNS[width >= WIDE and 3 or 2]
+	local col = (width - (#columns - 1) * GAP) / #columns
+	for column, names in ipairs(columns) do
+		local x, y = (column - 1) * (col + GAP), top
+		for _, name in ipairs(names) do
+			local any = false
+			for _, def in ipairs(list) do
+				if def.group == name then
+					if not any then
+						any = true
+						GameCaption(f, name, col):SetPoint("TOPLEFT", x, -y)
+						y = y + Q_CAPTION
+					end
+					local row = GameRow(f, def, plan, enabled, Changed)
+					row:SetWidth(col)
+					row:SetPoint("TOPLEFT", x, -y)
+					rows[#rows + 1] = row
+					y = y + Q_SLIM + Q_SLIM_GAP
+				end
+			end
+			if any then y = y + Q_BREAK end
+		end
+		tallest = max(tallest, y - Q_BREAK - Q_SLIM_GAP)
+	end
+	f:SetSize(width, tallest)
+	function f:Refresh()
+		for _, row in ipairs(rows) do row:Refresh() end
+	end
+	return f
+end
+
 
 local function QuestionsPage(parent, width, plan, def, room)
 	local f = CreateFrame("Frame", nil, parent)
@@ -1580,7 +1630,7 @@ function S.Questions(def)
 		ask = def.ask or ("Which " .. def.noun .. " do you want?"),
 		lead = function(plan)
 			local state = plan[def.id]
-			return state and state.all and ("All " .. def.noun .. " by category. Hover one to see what it does.") or def.lead
+			return state and state.all and ("Every one of the " .. def.noun .. ", by category. Hover over one to see what it does.") or def.lead
 		end,
 		brief = function(plan)
 			local state, items, on = plan[def.id], def.items(), 0
@@ -1639,46 +1689,40 @@ local function SetPending()
 	mine.pending = nil
 end
 
--- The window: a rail of pages down its left, each with what it holds now under its name; the one on show stands
--- beside the rail under its own question. A page is a step; steps on one subject share a page as its tabs (a
--- step's `tab`: the layout's page holds the cooldown manager, the game's the tweaks). It opens on the
--- overview: every step's pick on a card, in columns (GROUPS), each recommended from the start, so Finish there
--- sets a character up in one click and a click on a card goes to its step. Next and Back walk the pages and
--- their tabs in order; Finish stands on every page, so a character set up before can open one, change it and
--- finish. A page coming up fades in; nothing moves.
+-- The window: the /shy window, lent (Shy.Hub.Lend). Its rail holds the setup's pages, each with what it holds
+-- now under its name; the one on show stands beside the rail under its own question, as the window's rooms do.
+-- A page is a step; steps on one subject share a page as its tabs (a step's `tab`: the screen's page holds the
+-- cooldown manager, the game's the tweaks). It opens on the overview: your band, then every step's pick on a
+-- tile, the steps in groups (GROUPS), each recommended from the start, so Finish there sets a character up in one
+-- click and a click on a tile goes to its step. Next and Back walk the pages and their tabs in order; Finish
+-- stands on every page, so a character set up before can open one, change it and finish. The band's edge is gold
+-- and the foot says so: nothing is kept until Finish. A page coming up fades in; nothing moves.
 
-local FOOT, PAD, PAGE_H = 46, 40, 538
-local HEADER = UI.HEAD.main.line + UI.LINE   -- a main window's header, down to its line's foot
-local EDGE, NAV_W = 2, 220   -- the window's own edge; the steps down its left (UI.Rail), flush with it
-local NAV_H = 16 + PAGE_H + 12   -- the rail: from the header's line to the foot's
-local SECTION_W = 1000   -- the page on show beside the rail
-local SECTION_X = EDGE + NAV_W + PAD   -- its left: the window's padding from the rail's rule
-local WIDTH = SECTION_X + SECTION_W + 40   -- the page's scroll bar and the window's edge after it
 local HEAD_H = UI.LEAD_H   -- a page's heading, down to the page
 local TABS_H = 42          -- a page's tabs (the steps sharing it), down to its heading
 -- The foot's buttons: in from the window's right edge and up from its foot, each one's width, between two, and
 -- each side of the divider.
-local FEET = { EDGE = 14, UP = 11, NEXT = 110, BACK = 76, FINISH = 110, GAP = 8, DIVIDE = 12 }
+local FEET = { EDGE = 14, UP = 11, NEXT = 110, BACK = 76, FINISH = 110, LATER = 86, GAP = 8, DIVIDE = 12 }
 local STRIP_GAP = 22 -- under a strip standing over a page's heading (a step `inside` another)
-local FADE = 0.15    -- seconds a page takes to come up
-local MADE_H = HEADER + 16 + PAGE_H + 12 + FOOT   -- the window as made; it flows taller, never wider
+local FADE = 0.15    -- seconds a page comes up in
 -- The size is no page: it is a strip over the profile's page (its step is `inside` the profile's), so it is
 -- the first thing set and every preview after it is drawn at the size the screen will have.
--- The overview's columns, and the pages in the rail's order with them.
+-- The overview's groups, and the pages in the rail's order with them.
 local GROUPS = {
 	{ title = "You", steps = { "profile" } },
-	{ title = "Your screen", steps = { "theme", "screen" } },
-	{ title = "How you play", steps = { "immersion", "talents", "dungeons" } },
+	{ title = "Your screen", steps = { "theme", "screen", "xp" } },
+	{ title = "How you play", steps = { "immersion", "talents", "keys", "dungeons" } },
 	{ title = "The game", steps = { "game" } },
 }
 local OVERVIEW = "overview"
--- The overview: its band (BAND tall, an accent EDGE down its left, your face in a ring: RING its art's size,
--- Dial's, FACE the face in it), then a column a group under its caption, a card a step (its glyph in a WELL).
-local CARD = { H = 92, GAP = 10, CAPTION = 24, GLYPH = "note", WELL = 36, BAND = 88, EDGE = 3, RING = 56, FACE = 38 }
+-- The overview: the band, a line under it (DOWN), the first caption FIRST under the band, the others NEXT under
+-- the tiles before them, tiles BELOW a caption; GLYPH a step's without one of its own.
+local CARD = { GLYPH = "note", DOWN = 7, FIRST = 40, NEXT = 26, BELOW = 24, AIR = 20 }
 -- at: the page on show (OVERVIEW or its step's id); tabs: each page's tab on show, by page; order: the pages in
 -- the rail's order; done: the steps gone past, by id; first: what each step held as the window opened, by id;
--- wasDone: the character was set up before it opened; pageH: the page's height at the window's height now.
-local win = { open = false, plan = {}, pages = {}, at = OVERVIEW, tabs = {}, order = {}, done = {}, first = {}, pageH = PAGE_H }
+-- wasDone: the character was set up before it opened; pageW, pageH: the page's width and height in the window
+-- now; back: opened from the /shy window, which Not now goes back to; fight: put away for a fight, open still.
+local win = { open = false, plan = {}, pages = {}, built = {}, at = OVERVIEW, tabs = {}, order = {}, done = {}, first = {}, pageW = 700, pageH = 538 }
 
 -- The room a page has under its heading.
 local function Room() return win.pageH - HEAD_H end
@@ -1719,7 +1763,7 @@ end
 local function Groups()
 	local out, placed = {}, {}
 	for _, step in ipairs(steps) do
-		if step.inside or Host(step) or not step.Build then placed[step] = true end
+		if step.inside or Host(step) or not step.Build or step.walk then placed[step] = true end
 	end
 	for _, def in ipairs(GROUPS) do
 		local group = { title = def.title, steps = {} }
@@ -1755,50 +1799,9 @@ local function Watching()
 end
 
 -- The screen stays up while the window is open, the first time too: every pick shows on it as it is made
--- (the look, the layout, the cooldown manager), so nothing fades and the window stands in the empty room in
--- its middle (Stand).
+-- (the look, the layout, the cooldown manager), so nothing fades.
 local function Awake(on)
 	if Shy.Immersion then Shy.Immersion.Hold("setup", on) end
-end
-
--- The window in the empty room in the screen's middle (Shy.HUD.Room), as large as fits there, unless the
--- player has put it somewhere. Never smaller than a unit to a screen pixel (its text as large as on a 1080p
--- screen at the game's own size): where the room is narrower it stands over the pieces around it, centred on
--- the room as far as the screen allows, and never larger than the screen. Its size is the screen's, worked
--- out again each time it stands. Where the player put it is their screen's, not a profile's (positions are a
--- profile's, and the window opens as profiles are picked, made and switched to): it is kept for the account
--- too, and the window stands there again in any profile, at the size this screen gives it.
-local MARGIN = 8   -- kept clear at the screen's edges
-local function Fit(box, l, b, r, t)
-	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
-	local w, h = box:GetWidth(), box:GetHeight()
-	local _, high = GetPhysicalScreenSize()
-	local sharp = high and high > 0 and sh / high or 1   -- the scale at which a unit is a screen pixel
-	local room = math.min((r - l) / w, (t - b) / h)
-	return math.min(1, (sw - 2 * MARGIN) / w, (sh - 2 * MARGIN) / h, math.max(room, sharp))
-end
-
-local function Stand()
-	local box = win.box
-	if InCombatLockdown() then return end
-	local spot = ShyCoreDB and ShyCoreDB.setupSpot
-	if spot and not Shy.HUD.IsPlaced(box) then Shy.HUD.SetSpot(box, spot) end
-	local l, b, r, t = Shy.HUD.Room(box)
-	local fit = Fit(box, l, b, r, t)
-	if Shy.HUD.IsPlaced(box) then
-		-- Its bottom left corner stays where it was put; the size is this screen's.
-		local at = Shy.HUD.Spot(box)
-		local k = (at.scale or 1) / fit
-		if math.abs(k - 1) > 0.001 then
-			Shy.HUD.SetSpot(box, { x = at.x * k, y = at.y * k, top = at.top and at.top * k, scale = fit })
-		end
-		return
-	end
-	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
-	local hw, hh = box:GetWidth() * fit / 2, box:GetHeight() * fit / 2
-	local cx = math.max(MARGIN + hw, math.min(sw - MARGIN - hw, (l + r) / 2))
-	local cy = math.max(MARGIN + hh, math.min(sh - MARGIN - hh, (b + t) / 2))
-	Shy.HUD.SetHome(box, { "CENTER", "CENTER", cx - sw / 2, cy - sh / 2 }, fit)
 end
 
 -- Picks go on as they are made, so the window and the screen show them. Each step that does so hands what
@@ -1832,7 +1835,7 @@ local function PutBack(moving)
 	end
 end
 
-local Go
+local Go, RailRows, guest, Walked, Branches   -- (the rail's rows and branches, and what the /shy window asks of setup: made below; a walk asks for them before)
 
 -- What a step holds now, in a few words (its `brief`), and in a sentence (what stands under its first line, else the line).
 local function Brief(step)
@@ -1884,49 +1887,34 @@ local function Place(id)
 	end
 end
 
--- A card of the overview: a step's glyph in a well, its name, what it holds now and that in a sentence. At its
--- corner, how the pick stands: a check while it is the one recommended (a first setup), "changed" once it is
--- another than the window opened with. A click goes to the step's page (a step inside another's or a tab of
--- it: to that page, at its tab).
+-- A tile of the overview, as the /shy window's Home has them: a step's glyph, its name, what it holds now (in
+-- gold when it can't go ahead as it is). At its right end, how the pick stands: a check while it is the one
+-- recommended (a first setup), "changed" once it is another than the window opened with. The sentence that says
+-- more is its hover. A click goes to the step's page (a step inside another's or a tab of it: to that page, at
+-- its tab).
 local function Card(parent, width, step)
-	local b = CreateFrame("Button", nil, parent)
-	b:SetSize(width, CARD.H)
-	UI.Skin(b)
-	b.well = CreateFrame("Frame", nil, b)
-	b.well:SetSize(CARD.WELL, CARD.WELL)
-	b.well:SetPoint("TOPLEFT", 10, -10)
-	UI.Skin(b.well, C.bg, C.border)
-	b.glyph = b.well:CreateTexture(nil, "ARTWORK")
-	b.glyph:SetPoint("CENTER")
+	local b = Shy.Hub.Tile(parent, width)
+	b.glyph = b:CreateTexture(nil, "ARTWORK")
+	b.glyph:SetPoint("CENTER", b.icon, "CENTER")
 	if not UI.GlyphArt(b.glyph, step.glyph or CARD.GLYPH) then b.glyph:SetSize(16, 16) end
 	UI.Tint(b.glyph, C.dim)
-	local x = 10 + CARD.WELL + 10
-	b.name = UI.Text(b, step.title:upper(), 11, true, C.dim)
-	b.name:SetPoint("TOPLEFT", x, -11)
-	b.value = UI.Text(b, "", 15, true, C.head)
-	b.value:SetPoint("TOPLEFT", x, -27)
-	b.value:SetPoint("RIGHT", b, "RIGHT", -10, 0)
-	b.value:SetWordWrap(false)
-	b.says = UI.Text(b, "", 11, false, C.dim)
-	b.says:SetPoint("TOPLEFT", 10, -(10 + CARD.WELL + 8))
-	b.says:SetPoint("RIGHT", b, "RIGHT", -10, 0)
-	b.says:SetJustifyV("TOP")
-	b.says:SetWordWrap(true)
-	b.says:SetMaxLines(2)
+	b.name:SetText(step.title)
+	UI.Ink(b.name, C.head)
+	b.value = b.line
 	b.check = b:CreateTexture(nil, "OVERLAY")
 	b.check:SetTexture(MEDIA .. "GlyphCheckS")   -- drawn for 12 units
 	b.check:SetSize(12, 12)
-	b.check:SetPoint("TOPRIGHT", -10, -10)
+	b.check:SetPoint("TOPRIGHT", -8, -7)
 	UI.Tint(b.check, C.good)
 	b.tag = UI.Text(b, "changed", 10, true, C.alert)
-	b.tag:SetPoint("TOPRIGHT", -10, -11)
+	b.tag:SetPoint("TOPRIGHT", -8, -6)
 	b.step = step
 	function b:Refresh()
 		local brief = Brief(step)
 		local line, bad = Line(step)
 		self.value:SetText(brief or step.title)
-		self.says:SetText(line or "")
-		UI.Ink(self.says, bad and C.alert or C.dim)
+		UI.Ink(self.value, bad and C.alert or C.text)
+		self.says = line
 		local changed = win.first[step.id] ~= nil and brief ~= win.first[step.id]
 		self.tag:SetShown(changed)
 		self.check:SetShown(not changed and not win.wasDone)
@@ -1937,94 +1925,65 @@ local function Card(parent, width, step)
 	end)
 	b:SetScript("OnEnter", function(self)
 		UI.SetBorder(self, C.hot)
-		UI.SetBorder(self.well, C.hot)
 		UI.Tint(self.glyph, Theme.light)
+		if self.says and self.says ~= "" then UI.Tip(self, step.title, self.says) end
 	end)
 	b:SetScript("OnLeave", function(self)
 		UI.SetBorder(self, C.border)
-		UI.SetBorder(self.well, C.border)
 		UI.Tint(self.glyph, C.dim)
+		UI.TipHide(self)
 	end)
 	return b
 end
 
--- The overview: a band that names the character, then a column a group under its caption, a card a step (one
--- inside another's page or a tab of it under its host).
+-- The overview: the band that names the character, the line saying nothing is kept until Finish, then a group a
+-- caption and its tiles, as many across as Home has (one inside another's page or a tab of it after its host).
 local function Overview(parent)
+	local Hub, H = Shy.Hub, Shy.Hub.HOME
+	local width = win.pageW
 	local f = CreateFrame("Frame", nil, parent)
-	f:SetSize(SECTION_W, PAGE_H)
-	local band = CreateFrame("Frame", nil, f)
-	band:SetSize(SECTION_W, CARD.BAND)
-	band:SetPoint("TOPLEFT")
-	UI.Skin(band, C.row, C.border)
-	local edge = band:CreateTexture(nil, "ARTWORK")
-	edge:SetPoint("TOPLEFT", 1, -1)
-	edge:SetPoint("BOTTOMLEFT", 1, 1)
-	edge:SetWidth(CARD.EDGE)
-	Theme.Paint(edge, Theme.Accent, 1)
-	-- Your character's face in a ring, as the game draws it.
-	local ring = band:CreateTexture(nil, "ARTWORK")
-	ring:SetTexture(MEDIA .. "Dial")
-	ring:SetSize(CARD.RING, CARD.RING)
-	ring:SetPoint("CENTER", band, "LEFT", CARD.EDGE + 16 + CARD.RING / 2, 0)
-	UI.Tint(ring, Theme.skin.metal)
-	f.face = band:CreateTexture(nil, "ARTWORK", nil, 1)
-	f.face:SetSize(CARD.FACE, CARD.FACE)
-	f.face:SetPoint("CENTER", ring, "CENTER")
-	local round = band:CreateMaskTexture()
-	round:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-	round:SetAllPoints(f.face)
-	f.face:AddMaskTexture(round)
-	UI.Concentric(ring, f.face)
-	local x = CARD.EDGE + 16 + CARD.RING + 16
-	f.title = UI.Text(band, "", 20, true, C.head)
-	f.title:SetPoint("BOTTOMLEFT", band, "LEFT", x, 2)
-	f.words = UI.Text(band, "", 12, false, C.dim)
-	f.words:SetPoint("TOPLEFT", band, "LEFT", x, -6)
-	f.words:SetPoint("RIGHT", band, "RIGHT", -16, 0)
-	f.words:SetWordWrap(false)
+	f.width = width
+	f:SetSize(width, win.pageH)
+	f.band = Hub.Band(f, width)
+	f.band:SetPoint("TOPLEFT")
+	f.state = UI.Text(f, "", 11, false, C.text)
+	f.state:SetPoint("TOPLEFT", f.band, "BOTTOMLEFT", H.EDGE + 16, -CARD.DOWN)
+	f.state:SetWidth(width - 2 * (H.EDGE + 16))
+	f.state:SetWordWrap(false)
 
 	f.cards = {}
-	local groups = Groups()
-	local each = (SECTION_W - (#groups - 1) * CARD.GAP * 2) / #groups
-	local tall = 0
-	for column, group in ipairs(groups) do
-		local x0, y = (column - 1) * (each + CARD.GAP * 2), CARD.BAND + 20
-		local caption = UI.Text(f, group.title:upper(), 11, true, C.dim)
-		caption:SetPoint("TOPLEFT", x0, -y)
-		local rule = f:CreateTexture(nil, "ARTWORK")
-		Theme.Paint(rule, C.border, 0.6)
-		rule:SetHeight(1)
-		rule:SetPoint("LEFT", caption, "RIGHT", 10, 0)
-		rule:SetPoint("RIGHT", f, "TOPLEFT", x0 + each, -y - 6)
-		y = y + CARD.CAPTION
+	local each = (width - (H.ACROSS - 1) * H.GAP * 2) / H.ACROSS
+	local y = H.BANNER + CARD.FIRST
+	for _, group in ipairs(Groups()) do
+		local caption = Hub.Caption(f, width, group.title)
+		caption:SetPoint("TOPLEFT", 0, -y)
+		y = y + CARD.BELOW
+		local list = {}
 		for _, host in ipairs(group.steps) do
-			local list = { host }
+			list[#list + 1] = host
 			for _, inner in ipairs(Insides(host)) do
 				if inner.brief then list[#list + 1] = inner end
 			end
 			for i, part in ipairs(Parts(host)) do
 				if i > 1 then list[#list + 1] = part end
 			end
-			for _, step in ipairs(list) do
-				local card = Card(f, each, step)
-				card:SetPoint("TOPLEFT", x0, -y)
-				f.cards[#f.cards + 1] = card
-				y = y + CARD.H + CARD.GAP
-			end
 		end
-		tall = max(tall, y)
+		for i, step in ipairs(list) do
+			local card = Card(f, each, step)
+			local column, row = (i - 1) % H.ACROSS, math.floor((i - 1) / H.ACROSS)
+			card:SetPoint("TOPLEFT", column * (each + H.GAP * 2), -(y + row * (H.TILE + H.GAP)))
+			f.cards[#f.cards + 1] = card
+		end
+		y = y + math.ceil(#list / H.ACROSS) * (H.TILE + H.GAP) - H.GAP + CARD.NEXT
 	end
-	f.tall = tall
+	f.tall = y - CARD.NEXT + CARD.AIR
 	function f:Relabel()
-		SetPortraitTexture(self.face, "player")
-		local first = First()
+		self.band:Tell(true)
+		local kept = UI.Wrap(C.alert, "Nothing is saved until you press Finish.")
 		if win.wasDone then
-			self.title:SetText(first .. " is set up like this")
-			self.words:SetText("Click anything to change it, then Finish.")
+			self.state:SetText("This is how " .. First() .. " is set up. Click anything to change it. " .. kept)
 		else
-			self.title:SetText("Ready when you are, " .. first)
-			self.words:SetText("Everything is picked for you. Finish sets it all up at once; click anything to change it first.")
+			self.state:SetText("It's all picked for you already. Click anything to change it. " .. kept)
 		end
 	end
 	function f:Fit() end
@@ -2039,12 +1998,14 @@ end
 -- strips over that and the steps sharing it as tabs between, one on show at a time under its own heading. The
 -- page is laid again on every refresh: it may grow.
 local function StepPage(parent, host)
+	local width = win.pageW
 	local f = CreateFrame("Frame", nil, parent)
-	f:SetSize(SECTION_W, PAGE_H)
+	f.width = width
+	f:SetSize(width, win.pageH)
 	f.step, f.parts, f.strips, f.sections, f.top, f.open = host, Parts(host), {}, {}, 0, 1
 	-- The steps inside this one: each a strip over its heading, top down.
 	for _, inner in ipairs(Insides(host)) do
-		local strip = inner.Build(f, SECTION_W, win.plan, Room())
+		local strip = inner.Build(f, width, win.plan, Room())
 		strip:ClearAllPoints()
 		strip:SetPoint("TOPLEFT", 0, -f.top)
 		f.strips[#f.strips + 1] = strip
@@ -2055,14 +2016,14 @@ local function StepPage(parent, host)
 		for i, part in ipairs(f.parts) do labels[i] = part.tabTitle or part.title end
 		f.tabs = UI.Tabs(f, labels, function(i)
 			if win.tabs[host.id] ~= i and win.shown == host.id then Go(host.id, i) end
-		end, SECTION_W, 15)
+		end, width, 15)
 		f.tabs:SetPoint("TOPLEFT", 0, -f.top)
 		f.top = f.top + TABS_H
 	end
-	f.lead = UI.Lead(f, SECTION_W)
+	f.lead = UI.Lead(f, width)
 	f.lead:SetPoint("TOPLEFT", 0, -f.top)
 	for i, part in ipairs(f.parts) do
-		local section = part.Build(f, SECTION_W, win.plan, Room() - f.top)
+		local section = part.Build(f, width, win.plan, Room() - f.top)
 		section:ClearAllPoints()
 		section:SetPoint("TOPLEFT", 0, -f.top - HEAD_H)
 		f.sections[i] = section
@@ -2110,6 +2071,17 @@ local function Tall(f)
 	box.scroll:Update()
 end
 
+-- The page on show grew or shrank by itself (a pick that shows more under it): measured again, and the window
+-- scrolls as far as it now reaches.
+function S.Grew()
+	local f = win.open and win.shown and win.pages[win.shown]
+	if not (f and f.sections) then return end
+	local section = f.sections[f.open]
+	local h = section and section:GetHeight()
+	f:SetHeight(max(win.pageH, f.top + HEAD_H + ((type(h) == "number" and not issecretvalue(h)) and h or 0)))
+	Tall(f)
+end
+
 -- Each piece of a page's showing on the clock (the task manager): a click on the rail is all of them.
 local function Lap(name, from)
 	local now = debugprofilestop()
@@ -2131,24 +2103,34 @@ local function Show()
 	local host = key ~= OVERVIEW and Step(key) or nil
 	local lap = debugprofilestop()
 	-- The rail: what each page holds now, those gone past checked, the one on show open.
-	box.nav:SetSubs(Briefs())
+	box.rail:SetSubs(Briefs())
 	for _, id in ipairs(win.order) do
 		local step, done = Step(id), id ~= OVERVIEW
 		for _, part in ipairs(step and Parts(step) or {}) do done = done and win.done[part.id] == true end
-		box.nav:SetDone(id, done)
+		box.rail:SetDone(id, done)
 	end
-	box.nav:Select(key, true)
+	-- (a walk's page: its step's row open, its own line on the branch lit)
+	box.rail:Select(host and host.walk or key, true)
+	box.rail:SetKid(host and host.walk and key or nil)
 	lap = Lap("setup: the rail told", lap)
-	-- Pages are built on first visit.
-	if not win.pages[key] then
-		local f = host and StepPage(box.content, host) or Overview(box.content)
-		f:SetPoint("TOPLEFT")
+	-- Pages are built on first visit, and for each width the window stands at (maximized or put back), each kept:
+	-- a page built is never let go (the game keeps every frame, its sections what they registered).
+	local f = win.pages[key]
+	if f and f.width ~= win.pageW then
+		f:Hide()
+		f = win.built[key] and win.built[key][win.pageW]
+		if f then win.pages[key] = f end
+	end
+	if not f then
+		f = host and StepPage(box.content, host) or Overview(box.content)
+		f:SetPoint("TOPLEFT", Shy.Hub.IN, 0)
 		win.pages[key] = f
+		win.built[key] = win.built[key] or {}
+		win.built[key][win.pageW] = f
 		lap = Lap("setup: a page made", lap)
 	end
-	for id, f in pairs(win.pages) do f:SetShown(id == key) end
+	for id, other in pairs(win.pages) do other:SetShown(id == key) end
 	lap = Lap("setup: the page shown, the others put away", lap)
-	local f = win.pages[key]
 	local parts = host and f.parts or {}
 	local tab = math.min(max(win.tabs[key] or 1, 1), max(#parts, 1))
 	win.tabs[key] = tab
@@ -2191,38 +2173,35 @@ local function Show()
 	-- moves under the mouse; Finish before them past a divider: it ends the walk, they go on with it. On the
 	-- last page there is nothing to go on to, and Finish takes Next's place. The one to press stands filled:
 	-- Finish on the overview and the last page, Next between them. Finish is dimmed while a step can't go
-	-- ahead; its hover says why. (It is placed and its attributes set only out of combat: it is protected, and
-	-- the window steps aside in a fight anyway.)
+	-- ahead; its hover says why. Beside Not now, on a step's page, what Finish is for (the overview's band says
+	-- it there).
 	local first, last = at == 1, at == #win.order and tab >= #parts
 	box.back:SetShown(not first)
 	box.next:SetShown(not last)
 	box.next:SetPrimary(not first)
 	box.divider:SetShown(not last)
+	box.kept:SetShown(not first)
 	local finish = box.finish
 	local ok, why = S.Check(win.plan)
 	finish.dimmed = not ok
 	finish.why = why
 	finish:SetAlpha(ok and 1 or 0.4)
 	finish:SetPrimary(first or last)
-	if not InCombatLockdown() then
-		-- How far in from the right edge the walk's buttons reach; Finish stands past the divider from there.
-		local walk = FEET.EDGE + FEET.NEXT + (first and 0 or FEET.GAP + FEET.BACK)
-		box.back:ClearAllPoints()
-		box.back:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -(FEET.EDGE + (last and FEET.FINISH or FEET.NEXT) + FEET.GAP), FEET.UP)
-		box.divider:ClearAllPoints()
-		box.divider:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -(walk + FEET.DIVIDE), FEET.UP + 1)
-		finish:ClearAllPoints()
-		finish:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -(last and FEET.EDGE or walk + 2 * FEET.DIVIDE + 1), FEET.UP)
-		finish:Show()
-		finish.armed = nil
-		finish:SetAttribute("type", nil)
-	end
+	local walk = FEET.EDGE + FEET.NEXT + (first and 0 or FEET.GAP + FEET.BACK)
+	box.back:ClearAllPoints()
+	box.back:SetPoint("BOTTOMRIGHT", box.foot, "BOTTOMRIGHT", -(FEET.EDGE + (last and FEET.FINISH or FEET.NEXT) + FEET.GAP), FEET.UP)
+	box.divider:ClearAllPoints()
+	box.divider:SetPoint("BOTTOMRIGHT", box.foot, "BOTTOMRIGHT", -(walk + FEET.DIVIDE), FEET.UP + 1)
+	finish:ClearAllPoints()
+	finish:SetPoint("BOTTOMRIGHT", box.foot, "BOTTOMRIGHT", -(last and FEET.EDGE or walk + 2 * FEET.DIVIDE + 1), FEET.UP)
+	if not InCombatLockdown() then finish.key:SetAttribute("type", nil) end
+	finish.key.armed = nil
 end
 
 -- The step on show, or nil on the overview.
 local function Showing()
 	local f = win.at ~= OVERVIEW and win.pages[win.at]
-	return f and f.parts[win.tabs[win.at] or 1] or nil
+	return f and f.parts and f.parts[win.tabs[win.at] or 1] or nil
 end
 
 -- The step on show is gone past: checked off from here on.
@@ -2257,6 +2236,21 @@ local function Backward()
 	if tab > 1 then Go(win.at, tab - 1) elseif at > 1 then Go(win.order[at - 1], "last") end
 end
 
+-- A walk within the walk: in and out. The rail and the header follow; the page comes up at the walk's first page,
+-- and back at the one it was entered from.
+function S.Walk(id)
+	local host = Step(id)
+	if not (win.open and host) then return end
+	guest.items = RailRows()
+	Shy.Hub.Retell(guest)
+	Branches()
+	local first = Walked(host)[1]
+	if first then Go(first.id) else Show() end
+end
+function S.Show(id)
+	if win.open then Go(Place(id)) end
+end
+
 -- The page's heading again: the step's question and its sentence.
 function S.Relabel()
 	local box = win.box
@@ -2277,143 +2271,94 @@ function S.At()
 	return step and step.id or OVERVIEW
 end
 
--- The window flows taller: the page, the rail beside it and every page built take the height. Wider (maximized),
--- the pages keep the width they are laid out for, SECTION_W, a readable one every step's page is built to, and
--- stand in the middle of the room there is. Nothing is scaled.
-local function Lay(_, width, height)
-	win.pageH = height - (HEADER + 16 + 12 + FOOT)
-	local box = win.box
-	if not (box and box.scroll) then return end
-	local extra = math.max(0, math.floor(((width or WIDTH) - WIDTH) / 2))
-	box.scroll:ClearAllPoints()
-	box.scroll:SetPoint("TOPLEFT", SECTION_X + extra, -(HEADER + 16))
-	box.scroll:SetHeight(win.pageH)
-	box.nav:SetHeight(16 + win.pageH + 12)
-	box.navRule:SetHeight(16 + win.pageH + 12)
-	for _, f in pairs(win.pages) do f:Fit() end
+-- The window flows taller: the page and every page built take the height. Wider (maximized), the page on show
+-- stands as built for the width there is, as the window's own rooms do. Nothing is scaled. `sizing`: a corner is
+-- still dragged, every frame the mouse moves: the page takes the height, nothing is read again.
+local function Lay(sizing)
+	if not win.box then return end
+	win.pageW, win.pageH = Shy.Hub.Size()
+	for _, f in pairs(win.pages) do
+		if f.width == win.pageW then f:Fit() end
+	end
 	local f = win.shown and win.pages[win.shown]
 	if f and win.open then
-		f:Refresh()
-		Tall(f)
+		if f.width ~= win.pageW then
+			Show()
+		else
+			if not sizing then f:Refresh() end
+			Tall(f)
+		end
 	end
 end
 
 -- When the game last closed every window itself (GetTime, the same all through a frame): see "Offered".
 local gameAt
 
-local function Build()
-	-- Secure: the Finish button reloads, so the window is hidden in a fight by a state driver and
-	-- comes back after it.
-	local box = UI.Window({
-		id = "shysetup", name = "ShySetupWindow", title = "Set up", width = WIDTH, height = MADE_H,
-		grip = { flow = Lay, min = { WIDTH, MADE_H }, max = { WIDTH } },
-		point = { "CENTER", "CENTER", 0, 40 }, shown = function() return win.open end, secure = true, strata = "HIGH",
-		maximize = true,
-		-- A fight hides it (its state driver), and then it stays open to come back: by the next frame the
-		-- fight has locked things down. Closed by Esc, it is put away until the next login. Closed by the game
-		-- (a loading screen, dying, a cinematic), it is offered again once the world is back.
-		onClose = function(self)
-			local at = GetTime()
-			C_Timer.After(0, function()
-				if self:IsShown() or InCombatLockdown() or not win.open then return end
-				win.open = false
-				Awake(false)
-				PutBack()
-				Shy.HUD.Update(self)
-				if at ~= gameAt and not Watching() then win.away = true end
-			end)
-		end,
-		close = function() S.Close() end,
-		-- The title stands above the middle, the name under it: the two share the strip's middle.
-		head = { icon = Shy.ICON, title = "Set up", lift = 7, panel = { glazed = true } },
-	})
-	win.box = box
-	-- Moved: kept for the account (Stand). Let go of at its home: nothing kept, it finds the room again.
-	Shy:On("SHY_HUD_MOVED", function(moved)
-		if moved == box and ShyCoreDB then ShyCoreDB.setupSpot = Shy.HUD.Spot(box) end
-	end)
-	-- Solid whatever the screen under it does.
-	box:SetIgnoreParentAlpha(true)
-	local header = box.head
-	local what = header.title
-	-- A player name: UI.NameFont covers every alphabet. Their level and class after it.
-	local who = UI.Text(header, "", 12, false, C.hot)
-	who:SetFontObject(UI.NameFont(12))
-	UI.Ink(who, C.hot)
-	who:SetText(First())
-	who:SetPoint("TOPLEFT", what, "BOTTOMLEFT", 1, -2)
-	local whoElse = UI.Text(header, "", 12, false, C.dim)
-	whoElse:SetPoint("LEFT", who, "RIGHT", 6, 0)
-	whoElse:SetText(("\194\183  level %d %s"):format(UnitLevel("player"), (UnitClass("player"))))
-	box.who = whoElse
+-- The way out of the walk, open or not: the screen let go, what was put on and not finished put back, Finish's
+-- key put away. back: to the /shy window's rooms, open; else the window closes.
+local function Out(back)
+	win.open = false
+	Awake(false)
+	PutBack()
+	local key = win.box and win.box.finish.key
+	if key and not InCombatLockdown() then key:Hide() end
+	-- (Our pages stand on the window's content too: put away before its rooms come back, faded in when next shown.)
+	for _, f in pairs(win.pages) do f:Hide() end
+	win.shown, win.section = nil, nil
+	Shy.Hub.Return(not back)
+end
 
-	-- The rail: the overview, then every page; a click opens one.
-	local items = { { key = OVERVIEW, label = "Overview", glyph = "home" } }
-	win.order = { OVERVIEW }
-	for _, group in ipairs(Groups()) do
-		for _, step in ipairs(group.steps) do
-			items[#items + 1] = { key = step.id, label = step.title, glyph = step.glyph or CARD.GLYPH }
-			win.order[#win.order + 1] = step.id
+-- What the /shy window asks of its guest.
+guest = { words = "Setting up" }
+function guest.Go(key) Go(key) end
+-- A line under a row (a walk's page): to its page.
+function guest.Kid(_, kid) Go(Place(kid)) end
+function guest.Lay(sizing) Lay(sizing) end
+function guest.Close() S.Close() end
+function guest.Leave() S.Close(true) end
+function guest.Away() return win.fight == true end
+-- Hidden: by Esc it is put away until the next login. By the game (a loading screen, dying, a cinematic), it is
+-- offered again once the world is back. Put away for a fight, it stays open to come back: by the next frame the
+-- fight has locked things down.
+function guest.Hidden(box)
+	local at = GetTime()
+	C_Timer.After(0, function()
+		if box:IsShown() or InCombatLockdown() or win.fight or not win.open then return end
+		Out(false)
+		if at ~= gameAt and not Watching() then win.away = true end
+	end)
+end
+
+-- Finish: sets everything up and, when that needs a reload, reloads in the same click. The game refuses an
+-- addon the reload itself; a secure button running /reload is allowed. So Finish is one of the window's buttons
+-- with a secure key laid over it while the mouse is on it, a child of the screen placed by its corners, never
+-- the window's (that would make the window protected): as Layout mode's is (Shy.HUD.EditModeKey). Its PreClick
+-- runs the setup (held: no Reload panel) and arms it only when a reload is wanted. Down and up both reach it (the
+-- reload fires on whichever the game acts on), so it runs once per click. In a fight the window is away.
+local function FinishKey(finish)
+	local key = CreateFrame("Button", "ShySetupFinish", UIParent, "SecureActionButtonTemplate")
+	key:SetFrameStrata("FULLSCREEN_DIALOG")
+	key:SetFrameLevel(500)
+	key:RegisterForClicks("AnyUp", "AnyDown")
+	key:SetAttribute("macrotext", SLASH_RELOAD1)
+	key:Hide()
+	-- Hover and press are Finish's, for its look and its hover.
+	local function Tell(script)
+		return function(_, ...)
+			local fn = finish:GetScript(script)
+			if fn then fn(finish, ...) end
 		end
 	end
-	box.nav = UI.Rail(box, function(key) Go(key) end, { width = NAV_W, height = NAV_H })
-	box.nav:SetPoint("TOPLEFT", EDGE, -HEADER)
-	box.nav:SetItems(items)
-	-- One rule down the rail's right, from the header's line to the foot's.
-	box.navRule = box:CreateTexture(nil, "ARTWORK")
-	UI.Paint(box.navRule, C.border, 0.7)
-	box.navRule:SetWidth(1)
-	box.navRule:SetPoint("TOPLEFT", EDGE + NAV_W, -HEADER)
-	box.navRule:SetHeight(NAV_H)
-	-- What each step holds now, under its name and on the overview's cards, kept up as picks change.
-	local since = 0
-	box:HookScript("OnUpdate", function(_, elapsed)
-		since = since + elapsed
-		if since < 0.25 or not win.open then return end
-		since = 0
-		box.nav:SetSubs(Briefs())
-		local f = win.at == OVERVIEW and win.pages[OVERVIEW]
-		if f then f:Refresh() end
+	key:SetScript("OnEnter", Tell("OnEnter"))
+	key:SetScript("OnLeave", function(self)
+		Tell("OnLeave")(self)
+		if not InCombatLockdown() and self.armed ~= "reload" then self:Hide() end
 	end)
-	-- The page on show stands on a scroll area's content; one taller than the window's page scrolls (Show).
-	box.scroll = UI.ScrollArea(box, SECTION_W + 14, PAGE_H)
-	box.scroll:SetPoint("TOPLEFT", SECTION_X, -(HEADER + 16))
-	box.content = box.scroll.content
-	box.content:SetWidth(SECTION_W)
-
-	local rule = box:CreateTexture(nil, "ARTWORK")
-	UI.Paint(rule, C.border, 0.7)
-	rule:SetHeight(1)
-	rule:SetPoint("BOTTOMLEFT", 2, FOOT)
-	rule:SetPoint("BOTTOMRIGHT", -2, FOOT)
-	local later = UI.Button(box, "Not now", 86, function() S.Close() end)
-	later:SetPoint("BOTTOMLEFT", 14, 11)
-	later:HookScript("OnEnter", function(self) UI.Tip(self, "Not now", "Closes this until you next log in. /shy setup opens it any time.", { side = "TOP" }) end)
-	later:HookScript("OnLeave", function(self) UI.TipHide(self) end)
-	box.later = later
-
-	-- Finish: sets everything up and, when that needs a reload, reloads in the same click. The game
-	-- refuses an addon the reload itself; a secure button running /reload is allowed. Its PreClick runs
-	-- the setup (held: no Reload panel) and arms the button only when a reload is wanted. Down and up
-	-- both reach it (the reload fires on whichever the game acts on), so it runs once per click.
-	-- Show places it (a protected button anchors to its window alone).
-	local finish = CreateFrame("Button", nil, box, "SecureActionButtonTemplate")
-	finish:SetSize(FEET.FINISH, 24)
-	finish:SetPoint("BOTTOMRIGHT", -FEET.EDGE, FEET.UP)
-	finish:RegisterForClicks("AnyUp", "AnyDown")
-	finish:SetAttribute("macrotext", SLASH_RELOAD1)
-	UI.ButtonFace(finish, "Finish")
-	finish:SetScript("OnEnter", function(self)
-		UI.SetBorder(self, C.hot)
-		UI.Tip(self, "Finish", self.dimmed and self.why or "Applies everything you picked, with one reload if needed. Change any of it later with /shy.", { side = "TOP" })
-	end)
-	finish:SetScript("OnLeave", function(self)
-		UI.SetBorder(self, C.border)
-		UI.TipHide(self)
-	end)
+	key:HookScript("OnMouseDown", Tell("OnMouseDown"))
+	key:HookScript("OnMouseUp", Tell("OnMouseUp"))
 	-- armed: nil before a click; "reload" (the macro fires), "done" (nothing to reload) or "failed".
-	finish:SetScript("PreClick", function(self)
-		if self.armed ~= nil or self.dimmed or InCombatLockdown() then return end
+	key:SetScript("PreClick", function(self)
+		if self.armed ~= nil or finish.dimmed or InCombatLockdown() then return end
 		local ok, why, reload = S.Run(win.plan, true)
 		-- What is worn now is the answer; switching profile, the old one keeps what it had.
 		if ok and S.Act(win.plan) ~= "stay" then PutBack(true) elseif ok then win.kept = nil end
@@ -2432,48 +2377,92 @@ local function Build()
 			core:Print(why)
 		end
 	end)
-	finish:SetScript("PostClick", function(self, _, down)
+	key:SetScript("PostClick", function(self, _, down)
 		if down or self.armed == "reload" then return end
 		local done = self.armed == "done"
 		self.armed = nil
 		if not InCombatLockdown() then self:SetAttribute("type", nil) end
 		if done then S.Close() elseif win.open then Show() end
 	end)
-	finish:Hide()
+	finish:HookScript("OnEnter", function(self)
+		if InCombatLockdown() then return end
+		local left, bottom, width, height = self:GetLeft(), self:GetBottom(), self:GetWidth(), self:GetHeight()
+		if not left then return end
+		local s = self:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		key:ClearAllPoints()
+		key:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * s, bottom * s)
+		key:SetSize(width * s, height * s)
+		key:Show()
+	end)
+	finish.key = key
+end
+
+-- The foot's buttons on the window's foot, once; and what keeps the walk up while it is open.
+local function Build(box)
+	local foot = box.foot
+	local later = UI.Button(foot, "Not now", FEET.LATER, function() S.Close(win.back) end)
+	later:SetPoint("BOTTOMLEFT", FEET.EDGE, FEET.UP)
+	later:HookScript("OnEnter", function(self)
+		UI.Tip(self, "Not now", (win.back and "Go back to the rest of /shy." or "Close this until you next log in.")
+			.. " Nothing you picked here is saved. Type /shy setup to come back to it.", { side = "TOP" })
+	end)
+	later:HookScript("OnLeave", function(self) UI.TipHide(self) end)
+	box.later = later
+	-- What Finish is for, beside Not now on every step's page.
+	box.kept = UI.Text(foot, "Nothing is saved until you press Finish.", 12, false, C.alert)
+	box.kept:SetPoint("LEFT", later, "RIGHT", 14, 0)
+
+	local finish = UI.Button(foot, "Finish", FEET.FINISH, function() end)
+	finish:SetPoint("BOTTOMRIGHT", -FEET.EDGE, FEET.UP)
+	finish:HookScript("OnEnter", function(self)
+		UI.Tip(self, "Finish", self.dimmed and self.why or "Saves everything you picked, with one reload if it needs one. You can change any of it later in /shy.", { side = "TOP" })
+	end)
+	finish:HookScript("OnLeave", function(self) UI.TipHide(self) end)
+	FinishKey(finish)
 	box.finish = finish
 
 	-- Next at the window's right end and Back before it, the way through the pages, and the divider between
 	-- them and Finish (Show places Back, the divider and Finish).
-	box.next = UI.Button(box, "Next", FEET.NEXT, function() Forward() end)
+	box.next = UI.Button(foot, "Next", FEET.NEXT, function() Forward() end)
 	box.next:SetPoint("BOTTOMRIGHT", -FEET.EDGE, FEET.UP)
-	box.back = UI.Button(box, "Back", FEET.BACK, function() Backward() end)
+	box.back = UI.Button(foot, "Back", FEET.BACK, function() Backward() end)
 	box.back:SetPoint("BOTTOMRIGHT", -(FEET.EDGE + FEET.NEXT + FEET.GAP), FEET.UP)
-	box.divider = box:CreateTexture(nil, "ARTWORK")
+	box.divider = foot:CreateTexture(nil, "ARTWORK")
 	UI.Paint(box.divider, C.border, 0.9)
 	box.divider:SetSize(1, 22)
 
-	-- Combat starting or ending changes whether setup can run. A layout put on (a pick on the screen page)
-	-- or a size (the size page) moves the screen: once it has settled, the window stands again, sized for it.
-	box:RegisterEvent("PLAYER_REGEN_DISABLED")
-	box:RegisterEvent("PLAYER_REGEN_ENABLED")
-	box:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
-	box:RegisterEvent("UI_SCALE_CHANGED")
-	box:RegisterEvent("DISPLAY_SIZE_CHANGED")
-	box:SetScript("OnEvent", function(_, event)
+	-- What each step holds now, under its name and on the overview's tiles, kept up as picks change.
+	local since = 0
+	box:HookScript("OnUpdate", function(_, elapsed)
+		since = since + elapsed
+		if since < 0.25 or not win.open then return end
+		since = 0
+		box.rail:SetSubs(Briefs())
+		local f = win.at == OVERVIEW and win.pages[OVERVIEW]
+		if f then f:Refresh() end
+	end)
+
+	-- A fight puts the window away (nothing can be set up in one) and brings it back after. A layout put on (a
+	-- pick on the screen page) or a size (the size page) moves the screen: the page shows it once it has.
+	local watch = CreateFrame("Frame")
+	watch:RegisterEvent("PLAYER_REGEN_DISABLED")
+	watch:RegisterEvent("PLAYER_REGEN_ENABLED")
+	watch:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+	watch:RegisterEvent("UI_SCALE_CHANGED")
+	watch:RegisterEvent("DISPLAY_SIZE_CHANGED")
+	watch:SetScript("OnEvent", function(_, event)
 		if not win.open then return end
 		if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
+			win.fight = event == "PLAYER_REGEN_DISABLED" or nil
+			if win.fight and not InCombatLockdown() then finish.key:Hide() end
+			Shy.HUD.Update(box)
 			Show()
 			return
 		end
 		-- (A pick can be laid out a moment after its click, once what it switched on is up: the page shows it then.)
 		local f = win.shown and win.pages[win.shown]
 		if f and f:IsShown() then f:Refresh() end
-		C_Timer.After(0.6, function()
-			if win.open and not InCombatLockdown() then Stand() end
-		end)
 	end)
-	-- (A kept height may have been put on before the page was here to take it.)
-	Lay(box, box:GetWidth(), box:GetHeight())
 end
 
 function S.IsOpen() return win.open end
@@ -2490,19 +2479,59 @@ function S.Picked(key)
 	return false
 end
 
+-- The rail's rows: the overview, then every page.
+-- A step's walk while it is walked: its pages, in order (none while its `walks` says not).
+function Walked(host)
+	local out = {}
+	local ok, on = pcall(Said, host.walks, win.plan)
+	if not (ok and on) then return out end
+	for _, step in ipairs(steps) do
+		if step.walk == host.id and step.Build then out[#out + 1] = step end
+	end
+	return out
+end
+
+-- Each walked step's pages under its row on the rail, a line each (unfolded while the row is open).
+function Branches()
+	local box = win.box
+	if not box then return end
+	for _, step in ipairs(steps) do
+		if step.walks then
+			local kids = {}
+			for i, page in ipairs(Walked(step)) do kids[i] = { key = page.id, label = page.title } end
+			box.rail:SetKids(step.id, kids)
+		end
+	end
+end
+
+function RailRows()
+	local items = { { key = OVERVIEW, label = "Overview", glyph = "home" } }
+	win.order = { OVERVIEW }
+	for _, group in ipairs(Groups()) do
+		for _, step in ipairs(group.steps) do
+			items[#items + 1] = { key = step.id, label = step.title, glyph = step.glyph or CARD.GLYPH }
+			win.order[#win.order + 1] = step.id
+			for _, page in ipairs(Walked(step)) do win.order[#win.order + 1] = page.id end
+		end
+	end
+	return items
+end
+
 -- win.plan is refilled in place, never replaced: the pages hold a reference to it. `at`: the step to open
--- on (its id), the overview unless told.
+-- on (its id), the overview unless told. Opened from the /shy window, Not now goes back to it.
 function S.Open(at)
-	if not win.box then Build() end
 	if not win.open then
+		win.back = Shy.Hub.IsOpen() and not Shy.Hub.Lent()
 		S.Plan(win.plan)
 		win.at = OVERVIEW
+		win.fight = nil
 		wipe(win.tabs)
 		wipe(win.done)
 		win.kept, win.doneWas, win.wasDone = Worn(), Mine().done, S.Done()
 		wipe(took)
 		wipe(win.first)
 		for _, step in ipairs(steps) do win.first[step.id] = Brief(step) end
+		guest.items, guest.name = RailRows(), First()
 	end
 	local key, tab = Place(at)
 	if key and Index(key) then
@@ -2510,20 +2539,22 @@ function S.Open(at)
 		win.tabs[key] = tab
 	end
 	win.open = true
+	local box = Shy.Hub.Lend(guest)
+	if not win.box then
+		win.box = box
+		Build(box)
+	end
 	Awake(true)
-	Shy.HUD.Update(win.box)
-	Stand()
+	Branches()
+	Lay()
 	Show()
 end
 
--- Closed by the player: not offered again this session. Only Finish is an answer for good.
-function S.Close()
-	if not win.box then return end
+-- Closed by the player: not offered again this session. Only Finish is an answer for good. back: to the rest of
+-- the /shy window (Not now there, or another room asked for), else the window closes.
+function S.Close(back)
 	win.away = true
-	win.open = false
-	Awake(false)
-	PutBack()
-	Shy.HUD.Update(win.box)
+	if win.open then Out(back) end
 end
 
 -- Offered, the hub and /shy setup
@@ -2584,6 +2615,7 @@ end)
 Shy:On("SHY_ADDON_LOADED", function(a)
 	if a ~= core then return end
 	if core.isNew then Book().untouched = true end
+	ShyCoreDB.setupSpot = nil   -- (where its own window stood: it walks the /shy window now)
 	RepairDock()
 end)
 

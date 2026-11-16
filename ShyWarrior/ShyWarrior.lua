@@ -10,9 +10,9 @@ local MEDIA = "Interface\\AddOns\\ShyWarrior\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Warrior",
+	category = "combat",
 	icon = MEDIA .. "ShyWarrior",
 	smallIcon = MEDIA .. "ShyWarriorSmall",
-	tagline = "Openings, shouts and threat",
 	savedVariables = "ShyWarriorDB",
 	keep = { keysMade = true, keysBuild = true, keysBefore = true },   -- the macros made for your keys are no setting: a reset keeps them yours
 	defaults = {

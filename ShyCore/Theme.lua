@@ -61,7 +61,11 @@
 -- animation runs (a breathing glow) shows that gradient as white, so mark it `texture.shyFlat = true` before
 -- tinting it and it takes one color instead, the ramp's where it stands.
 --
---   Theme.Icon(texture, path)    -- shows <path>Mono tinted with the accent
+--   Theme.Icon(texture, path[, units])  -- shows <path>Mono tinted with the accent; an addon's mark (a.mark) from
+--                                the size of it drawn for where it stands, a texel a pixel (units: the texture's
+--                                size where it fills a frame; none: its own, set to the art's). Theme.Plain(texture)
+--                                before such a texture shows anything else
+--   Theme.MarkArt(path, units)   -- a mark as a menu row's picture
 --   Theme.IconMarkup(path, size) -- the same as an inline |T...|t
 --
 -- Opacity: one setting for everything that stays on screen during play (HUD boxes, the console, chat,
@@ -1410,7 +1414,14 @@ function Theme.Scope(frame, r, g, b)
 		local scope = ScopeOf(region)
 		if scope ~= w.scope then
 			w.scope = scope
-			Lay(region, w)
+			-- The alpha it has now kept, as Repaint keeps it: a texture's tint and its alpha are one value, so a
+			-- button's wash faded out would come back whole over its glyph.
+			local reader, a = not w.ramped and READ[w.kind], nil
+			if reader then
+				local ok, _, _, _, now = pcall(region[reader], region)
+				if ok then a = now end
+			end
+			Lay(region, w, a)
 		end
 	end
 end
@@ -1489,17 +1500,112 @@ end
 
 -- Icons: each addon icon has a grey copy (<name>Mono) that is tinted with the accent.
 
-function Theme.Icon(texture, path)
-	texture:SetTexture(path .. "Mono")
+-- An addon's mark (a.mark, <Addon>Mark: its picture alone) is grey already and shows as it is. A mark also has a
+-- sheet of itself drawn at each of FIT.sizes pixels (<Addon>MarkFit; laid left to right in rows a texel apart, as
+-- FIT.cells): it is shown from the size nearest its own on screen, a texel a pixel, so it is never shrunk or
+-- stretched (at a size between two the game's filtering breaks curves and slanted edges up). Larger than the
+-- sheet holds, it is the mark's own file.
+local FIT = { sizes = { 64, 56, 48, 44, 40, 36, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12 }, wide = 256, tall = 128,
+	past = 1.12, cells = {}, fitted = setmetatable({}, { __mode = "k" }) }
+do
+	local x, y, row = 0, 0, 0
+	for _, size in ipairs(FIT.sizes) do
+		if x + size > FIT.wide then x, y, row = 0, y + row + 1, 0 end
+		if row == 0 then row = size end
+		FIT.cells[size] = { x, y }
+		x = x + size + 1
+	end
+end
+
+local function IsMark(path) return path:sub(-4) == "Mark" end
+local function Grey(path) return IsMark(path) and path or path .. "Mono" end
+
+-- Pixels a unit where a region stands, or nil while it can't be told.
+local function PerUnit(region)
+	local scale = region:GetEffectiveScale()
+	if not scale or issecretvalue(scale) or scale <= 0 then return nil end
+	return scale / PixelUtil.GetPixelToUIUnitFactor()
+end
+
+-- The sheet's size nearest `units` where `region` stands, and where it is on the sheet: size, x, y (texels), and
+-- the pixels a unit there; nil where that can't be told or the mark is larger than the sheet holds.
+local function Cell(units, region)
+	local per = PerUnit(region)
+	if not per or units * per > FIT.sizes[1] * FIT.past then return nil end
+	local best
+	for _, size in ipairs(FIT.sizes) do
+		if not best or math.abs(size - units * per) < math.abs(best - units * per) then best = size end
+	end
+	return best, FIT.cells[best][1], FIT.cells[best][2], per
+end
+
+local function Fit(texture)
+	local f = FIT.fitted[texture]
+	local size, x, y, per = Cell(f.units, texture)
+	if size then
+		texture:SetTexture(f.path .. "Fit")
+		texture:SetTexCoord(x / FIT.wide, (x + size) / FIT.wide, y / FIT.tall, (y + size) / FIT.tall)
+	else
+		texture:SetTexture(f.path)
+		texture:SetTexCoord(0, 1, 0, 1)
+	end
+	-- (Its own size, where it has one: as large as the art, so a texel is a pixel.)
+	if f.sized then
+		local side = size and size / per or f.units
+		texture:SetSize(side, side)
+	end
+end
+
+-- units: how large the texture is where it fills something (an emblem); none: the texture's own size, which is
+-- then set to the nearest the art is drawn at.
+function Theme.Icon(texture, path, units)
+	local was = FIT.fitted[texture]
+	local own = units or (was and was.sized and was.units) or texture:GetWidth()
+	if IsMark(path) and own and own > 0 then
+		FIT.fitted[texture] = { path = path, units = own, sized = units == nil }
+		Fit(texture)
+	else
+		Theme.Plain(texture)
+		texture:SetTexture(Grey(path))
+	end
 	Theme.Tint(texture, Theme.icon)
 end
+
+-- A texture that showed a mark, before it shows something else: the whole picture again, at the size it is given.
+function Theme.Plain(texture)
+	if not FIT.fitted[texture] then return end
+	FIT.fitted[texture] = nil
+	texture:SetTexCoord(0, 1, 0, 1)
+end
+
+-- A mark as a menu row's picture (UI.Menu's item.icon), `units` large in a menu on `region`'s scale.
+function Theme.MarkArt(path, units, region)
+	local size, x, y = Cell(units, region or UIParent)
+	if not size then return { path, Theme.icon } end
+	return { path .. "Fit", Theme.icon,
+		coords = { x / FIT.wide, (x + size) / FIT.wide, y / FIT.tall, (y + size) / FIT.tall } }
+end
+
+local refit = CreateFrame("Frame")
+refit:RegisterEvent("UI_SCALE_CHANGED")
+refit:RegisterEvent("DISPLAY_SIZE_CHANGED")
+refit:SetScript("OnEvent", function()
+	for texture in pairs(FIT.fitted) do Fit(texture) end
+end)
 
 function Theme.IconMarkup(path, size)
 	size = size or 0
 	local c = Theme.icon
+	local r, g, b = floor(c[1] * 255 + 0.5), floor(c[2] * 255 + 0.5), floor(c[3] * 255 + 0.5)
+	if IsMark(path) and size > 0 then
+		local cell, x, y = Cell(size, UIParent)
+		if cell then
+			return format("|T%sFit:%d:%d:0:0:%d:%d:%d:%d:%d:%d:%d:%d:%d|t", path, size, size, FIT.wide, FIT.tall,
+				x, x + cell, y, y + cell, r, g, b)
+		end
+	end
 	-- The 64x64 is only for cropping; with the whole picture shown, any size works.
-	return format("|T%sMono:%d:%d:0:0:64:64:0:64:0:64:%d:%d:%d|t", path, size, size,
-		floor(c[1] * 255 + 0.5), floor(c[2] * 255 + 0.5), floor(c[3] * 255 + 0.5))
+	return format("|T%s:%d:%d:0:0:64:64:0:64:0:64:%d:%d:%d|t", Grey(path), size, size, r, g, b)
 end
 
 -- Accent source
@@ -2437,6 +2543,16 @@ function Effect.Mark(fs, own)
 	if own then l.own = true end
 	if l.own then Effect.Hook(fs, l) end
 	Effect.Soon(fs)
+end
+
+-- Words of Shy's own that are no title and no caption (a name, a figure, a line of a list: UI.Words and UI.Text
+-- make them) wear the effect, at the least a shadow, so they read on any look's ground (a galaxy's sky, a bright
+-- accent). Laid the frame after and again as the theme changes; nothing of the string is wrapped, so words set every
+-- frame cost nothing more. Returns the font string.
+function Theme.Wear(fs)
+	Effect.Mark(fs, false)
+	Effect.lettered[fs].least = "shadow"
+	return fs
 end
 
 -- A string of Shy's own words wears the effect too, from now. Lettered with no ground it is a control's words (a

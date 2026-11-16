@@ -1,10 +1,10 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffWay|r
-## Notes: Finds the quickest route anywhere, on foot or by flight, boat, zeppelin, tram or portal, for the other Shy addons.
+## Notes: Finds you the quickest way anywhere: on foot, or by flight, boat, zeppelin, tram or portal
 ## Author: Shyce Cream
-## Version: 5.0.6
-## X-Date: 2026-11-15
-## IconTexture: Interface\AddOns\ShyWay\Media\ShyWay
+## Version: 5.1.1
+## X-Date: 2026-11-16
+## IconTexture: Interface\AddOns\ShyWay\Media\ShyWayMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore
 ## SavedVariables: ShyWayDB

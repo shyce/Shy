@@ -238,13 +238,7 @@ local function Border()
 end
 
 local function Words(parent, font, side)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(font)
-	fs:SetShadowOffset(1, -1)
-	fs:SetShadowColor(0, 0, 0, 1)
-	fs:SetWordWrap(false)
-	fs:SetJustifyH(side)
-	return fs
+	return UI.Words(parent, font, nil, { wrap = false, justify = side })
 end
 
 local function Hair(parent)

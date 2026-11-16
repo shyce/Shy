@@ -16,12 +16,26 @@
 --   Shy.Command(word, help, fn)     /shy <word>; with `help`, listed in the Tools room
 --   T:RegisterOptions(page)  an addon's options: a room of the window, built as it first shows (its OnShow)
 --   T:OpenOptions()          the window at them
+--
+-- The setup walks through the same window: lent, its rail is the guest's pages and a foot opens under its room.
+--   Shy.Hub.Lend(guest)      the window open on a guest's pages: guest = { items (the rail's), words, name (after
+--                            the window's name in its header), Go(key) (a row clicked), Lay(sizing) (the window
+--                            resized: Shy.Hub.Size; sizing, a corner still dragged, every frame the mouse moves,
+--                            so nothing is read again), Close() (its ×), Leave() (another room asked for), Hidden(box) (the
+--                            window hidden by Esc or the game), Away() (true: kept out of sight, still open) }.
+--                            Returns the window: box.rail, box.scroll, box.content (a page at Shy.Hub.IN across),
+--                            box.foot. Shy.Hub.Lent(): the guest, or nil
+--   Shy.Hub.Return(shut)     the window back to its own rooms, open (shut: closed)
+--   Shy.Hub.Size()           the page's width and the room's height under the header, now
+--   Shy.Hub.Band(parent, width)      the band that names your character: band:Tell(setup) (the edge gold while
+--                            setting up: nothing is kept yet); band.who, band.what
+--   Shy.Hub.Tile(parent, width)      a tile: b.icon, b.name, b.line (cut where the tile ends); Shy.Hub.HOME its sizes
+--   Shy.Hub.Caption(parent, width, text)   a caption over a group, a rule after its words
 local Shy = Shy
 local B, UI, Theme = Shy.Brand, Shy.UI, Shy.Theme
 local Addon, core = Shy.AddonPrototype, Shy.core
 local C = UI.colors
 local max = math.max
-core.tagline = "Theme, layout and profiles for every addon"
 
 local Hub = {}
 Shy.Hub = Hub
@@ -30,7 +44,7 @@ Shy.Hub = Hub
 local door = CreateFrame("Frame")
 door:Hide()
 local function DoorName()
-	return B.Icon(Shy.SMALL_ICON, 16) .. " " .. B.Gradient("Shy")
+	return B.Icon(core.mark, 16) .. " " .. B.Gradient("Shy")
 end
 Shy.category = Settings.RegisterCanvasLayoutCategory(door, DoorName())
 Settings.RegisterAddOnCategory(Shy.category)
@@ -52,13 +66,16 @@ door:SetScript("OnShow", function(self)
 end)
 
 -- The window: the rail flush with its left edge, a rule, then the room. An addon's page stands a little to the
--- left of ours (IN): its own margin is inside it. The room flows taller with the window, never wider.
+-- left of ours (IN): its own margin is inside it. The room flows with the window, up to MOST across.
 -- GLIDE: seconds the room takes to glide to a section picked on the rail; AIR: room left over a section's head
 -- there, and how near the top a head counts as the one in view.
 local W = { EDGE = 2, RAIL = 220, PAD = 28, IN = 24, PAGE = 700, SCROLL = 14, RIGHT = 22, TOP = 16, FOOT = 14, PAGE_H = 580,
-	BAR = 26, BAR_GAP = 10, FADE = 0.15, MEASURE = 0.2, SOON = 0.05, SETTLED = 0.5, REST = 4, BRIEFS = 0.5, GLIDE = 0.28, AIR = 10, MOST = 1000 }
+	BAR = 26, BAR_GAP = 10, FADE = 0.15, MEASURE = 0.2, SOON = 0.05, SETTLED = 0.5, REST = 4, BRIEFS = 0.5, GLIDE = 0.28, AIR = 10, MOST = 1000,
+	WALK = 46, UNDER = 12, STEP = 50 }
+-- WALK: the foot a guest walks its pages on, up from the window's bottom to its rule; UNDER: room over that rule.
 -- MOST: the widest a room flows to (maximized), the width the setup window's pages are laid out at, so every
--- shared section is known to stand there.
+-- shared section is known to stand there. STEP: the widths a room is laid out at go in steps of this (PAGE and
+-- MOST among them): a room is built for each width it stands at and kept, so there are few.
 W.HEADER = UI.HEAD.main.line + UI.LINE
 W.WIDTH = W.EDGE + W.RAIL + W.PAD + W.PAGE + W.SCROLL + W.RIGHT
 W.HEIGHT = W.HEADER + W.TOP + W.PAGE_H + W.FOOT
@@ -66,25 +83,27 @@ W.HEIGHT = W.HEADER + W.TOP + W.PAGE_H + W.FOOT
 local ROOMS = {
 	{ key = "home", label = "Home", glyph = "home" },
 	{ key = "theme", label = "Theme", glyph = "star", ask = "Theme",
-		lead = "A whole theme at once, or any part made yours. Your screen follows as you pick." },
+		lead = "Pick a ready-made theme, or change just the parts you want. You'll see it on your screen right away." },
 	{ key = "screen", label = "Screen", glyph = "window", ask = "Your screen",
-		lead = "How large everything is, and where it all stands." },
+		lead = "Change how big everything is, and move things where you want them." },
 	{ key = "play", label = "Play", glyph = "book", ask = "How you play",
-		lead = "How you get quests and how much UI stays on screen." },
-	{ key = "keys", label = "Keys", glyph = "action", ask = "Your keys",
-		lead = "Every ability on a key, laid out around how you move. Nothing changes until you lay them out." },
+		lead = "How you pick up and hand in quests, and how much of the UI you see while you play." },
+	{ key = "keys", label = "Keys", glyph = "action", paged = true },
 	{ key = "game", label = "Game", glyph = "log", ask = "Game settings",
-		lead = "Ticking one applies it now; unticking gives back what you had. Each is in the game's own options too." },
-	{ key = "profiles", label = "Profiles", glyph = "group", ask = "Profiles",
-		lead = "A profile holds every addon's settings and your layout." },
+		lead = "Tick one and it changes right away. Untick it and you get back what you had. They're all in the game's own options too." },
+	{ key = "profiles", label = "Profile", glyph = "group", ask = "Profiles",
+		lead = "A profile saves all your addon settings and your layout. Characters on the same profile share them." },
 	{ key = "tools", label = "Tools", glyph = "use", ask = "Tools",
-		lead = "The minimap button, the splash, and what to reach for when something looks wrong." },
+		lead = "The minimap button, the login splash, and help for when something goes wrong." },
 }
 local ROOM = {}
 for _, room in ipairs(ROOMS) do ROOM[room.key] = room end
 
--- at: the room on show, a key or an addon; pages: each room's page, by the same.
-local win = { open = false, at = "home", pages = {}, pageH = W.PAGE_H, pageW = W.PAGE }
+-- at: the room on show, a key or an addon; pages: each room's page, by the same. kept: each of our rooms' pages
+-- by the width it was built for (a page built is never let go: the game keeps every frame, and its sections
+-- keep what they registered).
+local win = { open = false, at = "home", pages = {}, kept = {}, parts = {}, pageH = W.PAGE_H, pageW = W.PAGE }
+-- (parts: the part on show in each paged room, by its key: kept through the room built again for another width)
 
 -- A hover on a control: hooked on enter rather than UI.Help, which needs Shy.Hover as it is called.
 local function Help(frame, title, text)
@@ -111,12 +130,9 @@ function Shy.Command(word, help, fn)
 	if help then listed[#listed + 1] = { word = word, help = help } end
 end
 
-function Shy.HubHead(page, top, text)
-	local f = CreateFrame("Frame", nil, page)
-	f:SetSize(page.width, 14)
-	f:SetPoint("TOPLEFT", top, "BOTTOMLEFT", 0, top == page.origin and -6 or -26)
-	page.heads = page.heads or {}
-	page.heads[#page.heads + 1] = { key = "head" .. (#page.heads + 1), label = text, frame = f }
+function Hub.Caption(parent, width, text)
+	local f = CreateFrame("Frame", nil, parent)
+	f:SetSize(width, 14)
 	local words = UI.Text(f, text:upper(), 11, true, C.dim)
 	words:SetPoint("LEFT")
 	local rule = f:CreateTexture(nil, "ARTWORK")
@@ -125,6 +141,25 @@ function Shy.HubHead(page, top, text)
 	rule:SetPoint("LEFT", words, "RIGHT", 10, 0)
 	rule:SetPoint("RIGHT")
 	f.words, f.rule = words, rule
+	return f
+end
+
+-- A section's head: a caption with its rule, its line on the rail (label: other words there than its own). In a
+-- paged room (ROOMS' `paged`) each section is a page of its own: its head is the page's heading, its words
+-- over `sentence`, as setup's pages have them.
+function Shy.HubHead(page, top, text, sentence, label)
+	local f
+	if page.paged then
+		f = UI.Lead(page, page.width)
+		f:Set(text, sentence or "")
+		f:SetHeight(UI.LEAD_H - 12)
+		f:SetPoint("TOPLEFT", page.origin, "BOTTOMLEFT", 0, 0)
+	else
+		f = Hub.Caption(page, page.width, text)
+		f:SetPoint("TOPLEFT", top, "BOTTOMLEFT", 0, top == page.origin and -6 or -26)
+	end
+	page.heads = page.heads or {}
+	page.heads[#page.heads + 1] = { key = "head" .. (#page.heads + 1), label = label or text, frame = f }
 	return f
 end
 
@@ -169,8 +204,9 @@ function Lowest(f, lowest, floor)
 	return LowestChild(LowestRegion(lowest, floor, f:GetRegions()), floor, f:GetChildren())
 end
 
--- The room an open page has: the window's, less the strip over an addon's.
+-- The room an open page has: the window's, less the strip over an addon's. Lent: less the foot under it.
 local function Room()
+	if win.guest then return win.pageH + W.FOOT - W.UNDER - W.WALK end
 	return win.pageH - (type(win.at) == "table" and W.BAR + W.BAR_GAP or 0)
 end
 
@@ -204,7 +240,7 @@ end
 -- whole: measured whatever stands where (a room just shown). Else only where its pieces have moved.
 local function Measure(whole)
 	local box, page = win.box, win.pages[win.at]
-	if not page or page.scrollsItself then return end
+	if win.guest or not page or page.scrollsItself then return end
 	local room = Room()
 	local top, bottom = page:GetTop(), page:GetBottom()
 	if not top or issecretvalue(top) or issecretvalue(bottom) then return end
@@ -212,11 +248,12 @@ local function Measure(whole)
 	if not whole and page.stood and math.abs(stands - page.stood) < 0.5 then return end
 	page.stood = stands
 	local held = top - Lowest(page, top, bottom) + 20
+	page.held = held
 	local tall = max(held, room)
 	-- A room's sections stand on the rail, to go to, only where the room is taller than the window shows:
 	-- with all of it in sight there is nowhere to go, and the lines under its row are only in the way.
 	-- (Less the 20 of air under the last piece: that the room scrolls by its air alone hides nothing.)
-	local lined = type(win.at) ~= "table" and page.heads ~= nil and #page.heads > 1 and held - 20 > room + 1
+	local lined = type(win.at) ~= "table" and page.heads ~= nil and #page.heads > 1 and (page.paged or held - 20 > room + 1)
 	if page.lined ~= lined then
 		page.lined = lined
 		if type(win.at) ~= "table" then box.rail:SetKids(win.at, lined and page.heads or nil) end
@@ -258,7 +295,7 @@ local function OurPage(room)
 	local page = CreateFrame("Frame", nil, win.box.content)
 	page:SetPoint("TOPLEFT", W.IN, 0)
 	page:SetSize(win.pageW, win.pageH)
-	page.width, page.refresh = win.pageW, {}
+	page.width, page.refresh, page.paged = win.pageW, {}, room.paged
 	page.origin = CreateFrame("Frame", nil, page)
 	page.origin:SetSize(win.pageW, 1)
 	page.origin:SetPoint("BOTTOMLEFT", page, "TOPLEFT", 0, room.ask and -UI.LEAD_H or 0)
@@ -281,9 +318,15 @@ local function OurPage(room)
 		return a.at < b.at
 	end)
 	-- (One section failing must not take the room with it: the rest stand, and the error is told.)
+	page.parts = room.paged and {} or nil
 	for i, section in ipairs(list) do
-		local ok, last, fresh = pcall(section.build, page, top)
+		local heads = page.heads and #page.heads or 0
+		local ok, last, fresh = pcall(section.build, page, room.paged and page.origin or top)
 		from = Lap(("hub: %s, section %d made"):format(room.key, i), from)
+		-- (paged: the section's head and what it built, to show it alone)
+		if ok and page.parts and page.heads and #page.heads > heads then
+			page.parts[#page.parts + 1] = { head = page.heads[#page.heads], frame = last }
+		end
 		if ok then
 			top = last or top
 			if fresh then
@@ -294,6 +337,17 @@ local function OurPage(room)
 			geterrorhandler()(last)
 		end
 	end
+	-- One part on show (by its head's key; the first unless told), the others put away.
+	function page:Part(key)
+		self.part = key or win.parts[room.key] or self.part or (self.parts[1] and self.parts[1].head.key)
+		win.parts[room.key] = self.part
+		for _, part in ipairs(self.parts or {}) do
+			local on = part.head.key == self.part
+			part.head.frame:SetShown(on)
+			if part.frame then part.frame:SetShown(on) end
+		end
+	end
+	if page.parts then page:Part() end
 	return page
 end
 
@@ -315,6 +369,36 @@ local function TheirPage(addon)
 	return page
 end
 
+-- The scroll area, `down` from the body's top and `room` tall: from the rule's side to the window's right edge,
+-- whatever width the room on show is laid out at, so its bar stands at the edge. (Placed again only where it stands
+-- otherwise: every room hangs from it, and all of them are laid out again by the game for a place it is given
+-- anew, the same one too.)
+local function Place(down, room)
+	local scroll = win.box.scroll
+	if scroll.shyDown == down and scroll.shyRoom == room then return end
+	scroll.shyDown, scroll.shyRoom = down, room
+	scroll:ClearAllPoints()
+	scroll:SetPoint("TOPLEFT", win.body, "TOPLEFT", W.EDGE + W.RAIL + W.PAD - W.IN, down)
+	scroll:SetPoint("TOPRIGHT", win.body, "TOPRIGHT", -W.RIGHT, down)
+	scroll:SetHeight(room)
+end
+
+-- The room on show fitted to the window's height: its scroll area, its own fit (the theme's lists), how tall it
+-- stands. `walk`: measured whole, as it shows and once a corner is let go. While a corner is dragged (every frame
+-- the mouse moves) nothing is walked or read again: the room takes the height from what it held when last measured.
+local function Fit(walk)
+	local box, page = win.box, win.pages[win.at]
+	local room = Room()
+	Place(-(W.HEADER + W.TOP + win.pageH - room), room)
+	if page.Fit then page:Fit(room - (page.lead and UI.LEAD_H or 0)) end
+	if walk then return Measure(true) end
+	if page.scrollsItself or not page.held then return end
+	local tall = max(page.held, room)
+	if math.abs(tall - page:GetHeight()) > 1 then page:SetHeight(tall) end
+	if math.abs(tall - box.content:GetHeight()) > 0.5 then box.content:SetHeight(tall) end
+	box.scroll:Update()
+end
+
 local function Show()
 	local box = win.box
 	local addon = type(win.at) == "table" and win.at or nil
@@ -323,35 +407,37 @@ local function Show()
 	box.rail:SetSubs(Briefs())
 	lap = Lap("hub: the rail told", lap)
 	local page = win.pages[win.at]
-	-- (one of ours laid out for another width, the window maximized or put back: laid out again for this one)
+	-- (One of ours laid out for another width, the window maximized or put back: the room as built for this
+	-- width when it last stood at it, else built for it now.)
 	if page and not addon and page.width ~= win.pageW then
 		page:Hide()
-		page = nil
+		page = win.kept[win.at] and win.kept[win.at][win.pageW]
+		if page then
+			page.lined = nil   -- (its heads go on the rail again as it is measured)
+			win.pages[win.at] = page
+		end
 	end
 	if not page then
 		page = addon and TheirPage(addon) or OurPage(ROOM[win.at])
 		win.pages[win.at] = page
+		if not addon then
+			win.kept[win.at] = win.kept[win.at] or {}
+			win.kept[win.at][win.pageW] = page
+		end
 		lap = Lap("hub: a room made", lap)
 	end
+	if page.paged then page:Part(win.parts[win.at]) end
 	-- The strip over an addon's page: back to all of them, its window, its defaults.
-	local room = Room()
 	box.bar:SetShown(addon ~= nil)
 	if addon then
 		box.bar.open:SetShown(addon.OpenWindow ~= nil)
 		box.bar.defaults:SetShown(page.OnDefault ~= nil)
 	end
-	-- (Placed again only where it stands otherwise: every room hangs from it, and all of them are laid out
-	-- again by the game for a place it is given anew, the same one too.)
-	local down = -(W.HEADER + W.TOP + win.pageH - room)
-	if box.scroll.shyDown ~= down or box.scroll.shyRoom ~= room then
-		box.scroll.shyDown, box.scroll.shyRoom = down, room
-		box.scroll:ClearAllPoints()
-		box.scroll:SetPoint("TOPLEFT", W.EDGE + W.RAIL + W.PAD - W.IN, down)
-		box.scroll:SetHeight(room)
-	end
 	for at, other in pairs(win.pages) do
 		if other ~= page then other:Hide() end
 	end
+	local room = Room()
+	Place(-(W.HEADER + W.TOP + win.pageH - room), room)
 	if page.Fit then page:Fit(room - (page.lead and UI.LEAD_H or 0)) end
 	lap = Lap("hub: the room fitted, the others put away", lap)
 	-- (Hidden first: a page builds and refreshes itself as it shows.)
@@ -391,6 +477,15 @@ end
 local function Glide(room, key)
 	if room ~= win.at then Hub.Open(room) end
 	local page, box = win.pages[win.at], win.box
+	if page and page.paged then
+		page:Part(key)
+		box.rail:SetKid(page.part)
+		box.scroll:SetVerticalScroll(0)
+		for _, fresh in ipairs(page.refresh or {}) do fresh() end
+		UI.FadeIn(page, W.FADE)
+		Measure(true)
+		return
+	end
 	for _, head in ipairs(page and page.heads or {}) do
 		local at = head.key == key and HeadAt(page, head)
 		if at then
@@ -405,7 +500,8 @@ end
 -- once the room is scrolled to its foot. (Not while gliding: the pick stays marked.)
 local function InView()
 	local page, box = win.pages[win.at], win.box
-	if win.glide or not (page and page.heads) or type(win.at) == "table" then return end
+	if win.guest or win.glide or not (page and page.heads) or type(win.at) == "table" then return end
+	if page.paged then return box.rail:SetKid(page.part) end
 	local now, far = box.scroll:At(), box.scroll:Range()
 	local key
 	for i, head in ipairs(page.heads) do
@@ -424,47 +520,109 @@ local function Gliding(elapsed)
 	if glide.t >= 1 then win.glide = nil end
 end
 
--- The window flows: taller, the rail, the room and the page on show take the height; wider (maximized), our
--- rooms are laid out again at the width there is, up to W.MOST. Nothing is scaled.
+-- The window flows: taller, the rail, the room and the page on show take the height; wider (a corner let go, or
+-- maximized), our rooms stand as laid out for the width there is, in steps of W.STEP up to W.MOST, the scroll
+-- area to the window's edge. Nothing is scaled. (width, height: its body's, UI.Body)
 local function Lay(_, width, height)
 	win.pageH = height - (W.HEADER + W.TOP + W.FOOT)
-	local room = (width or W.WIDTH) - (W.EDGE + W.RAIL + W.PAD + W.SCROLL + W.RIGHT)
-	win.pageW = max(W.PAGE, math.min(W.MOST, math.floor(room)))
+	-- (While a corner is dragged the page keeps its width: a room is built for another, and that waits for the
+	-- corner to be let go.)
+	if not win.sizing then
+		local room = (width or W.WIDTH) - (W.EDGE + W.RAIL + W.PAD + W.SCROLL + W.RIGHT)
+		win.pageW = max(W.PAGE, math.min(W.MOST, math.floor(room / W.STEP) * W.STEP))
+	end
 	local box = win.box
 	if not (box and box.scroll) then return end
-	box.scroll:SetWidth(W.IN + win.pageW + W.SCROLL)
 	box.content:SetWidth(W.IN + win.pageW)
-	box.rail:SetHeight(W.TOP + win.pageH + W.FOOT)
-	box.rule:SetHeight(W.TOP + win.pageH + W.FOOT)
-	if win.open then Show() end
+	-- (lent: the rail and its rule end at the foot's)
+	local rail = win.guest and W.TOP + Room() + W.UNDER or W.TOP + win.pageH + W.FOOT
+	box.rail:SetHeight(rail)
+	box.rule:SetHeight(rail)
+	if win.guest then
+		Place(-(W.HEADER + W.TOP), Room())
+		win.guest.Lay(win.sizing)
+	elseif win.open then
+		-- (Shown whole only where it isn't up (back from a guest) or for another width: a height alone is the room
+		-- fitted, not read again.)
+		local page = win.pages[win.at]
+		if not page or page ~= win.shown or (type(win.at) ~= "table" and page.width ~= win.pageW) then
+			Show()
+		else
+			Fit(not win.sizing)
+		end
+	end
+end
+
+function Hub.Size()
+	return win.pageW, Room()
+end
+Hub.IN = W.IN
+
+-- The rooms as the rail lists them.
+function Hub.Rooms()
+	local items = {}
+	for i, room in ipairs(ROOMS) do items[i] = { key = room.key, label = room.label, glyph = room.glyph } end
+	return items
 end
 
 local function Create()
 	local box = UI.Window({
 		id = "shyhub", name = "ShyHubWindow", title = "Shy", width = W.WIDTH, height = W.HEIGHT,
-		grip = { flow = Lay, min = { W.WIDTH, W.HEIGHT }, max = { W.WIDTH } },
-		point = { "CENTER", "CENTER", 0, 30 }, shown = function() return win.open end, strata = "HIGH", maximize = true,
-		onClose = function() win.open = false end,
+		grip = { flow = Lay, min = { W.WIDTH, W.HEIGHT }, max = { W.WIDTH - W.PAGE + W.MOST } },
+		-- (lent, the guest may keep it out of sight a while, open still: a fight while setting up)
+		point = { "CENTER", "CENTER", 0, 30 }, strata = "HIGH", maximize = true,
+		shown = function() return win.open and not (win.guest and win.guest.Away()) end,
+		-- (lent, the guest tells whether a hide closed it: the game hides it on a loading screen too)
+		onClose = function(self)
+			if win.guest then return win.guest.Hidden(self) end
+			win.open = false
+		end,
 		close = function() Hub.Close() end,
-		head = { icon = Shy.ICON, brand = "" },
+		head = { icon = core.mark, brand = "", panel = { glazed = true } },
 	})
 	win.box = box
+	-- Everything under the header stands on the body: clear of the look's work round the edge (UI.Body).
+	local body = UI.Body(box)
+	win.body = body
 
-	local items = {}
-	for i, room in ipairs(ROOMS) do items[i] = { key = room.key, label = room.label, glyph = room.glyph } end
-	box.rail = UI.Rail(box, function(key) Hub.Open(key) end, { width = W.RAIL, height = W.TOP + W.PAGE_H + W.FOOT, again = true,
-		onKid = Glide })
-	box.rail:SetPoint("TOPLEFT", W.EDGE, -W.HEADER)
-	box.rail:SetItems(items)
+	box.rail = UI.Rail(box, function(key)
+		if win.guest then win.guest.Go(key) else Hub.Open(key) end
+	end, { width = W.RAIL, height = W.TOP + W.PAGE_H + W.FOOT, again = true, onKid = function(room, kid)
+		-- (lent: a line under a guest's row is the guest's, a page of its own)
+		if win.guest and win.guest.Kid then win.guest.Kid(room, kid) else Glide(room, kid) end
+	end })
+	box.rail:SetPoint("TOPLEFT", body, "TOPLEFT", W.EDGE, -W.HEADER)
+	box.rail:SetItems(Hub.Rooms())
+	-- Lent: what the window is doing after its name in the header ("Setting up", your name).
+	-- One line in one face (a name's, which writes every alphabet), on the middle the logotype stands on.
+	box.mode = UI.Words(box.head, UI.NameFont(14))
+	box.mode:SetPoint("LEFT", box.head.title, "RIGHT", 14, 0)
+	UI.Themed(box.mode, function()
+		local guest = win.guest
+		return guest and (UI.Wrap(C.dim, guest.words or "") .. " " .. UI.Wrap(C.head, guest.name or "")) or ""
+	end)
+	box.mode:Hide()
+	-- Lent: the foot the guest's walk stands on, a rule over it across the window.
+	local foot = CreateFrame("Frame", nil, box)
+	foot:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 2, 0)
+	foot:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -2, 0)
+	foot:SetHeight(W.WALK)
+	foot.rule = foot:CreateTexture(nil, "ARTWORK")
+	UI.Paint(foot.rule, C.border, 0.7)
+	foot.rule:SetHeight(1)
+	foot.rule:SetPoint("TOPLEFT")
+	foot.rule:SetPoint("TOPRIGHT")
+	foot:Hide()
+	box.foot = foot
 	box.rule = box:CreateTexture(nil, "ARTWORK")
 	UI.Paint(box.rule, C.border, 0.7)
 	box.rule:SetWidth(1)
-	box.rule:SetPoint("TOPLEFT", W.EDGE + W.RAIL, -W.HEADER)
+	box.rule:SetPoint("TOPLEFT", body, "TOPLEFT", W.EDGE + W.RAIL, -W.HEADER)
 	box.rule:SetHeight(W.TOP + W.PAGE_H + W.FOOT)
 	-- The credit, at the rail's foot: the name in the paladin's color, the kind of realm after it, the version under it.
 	-- A click opens Tools at its Sources (Credits.lua): who else Shy is built with. Under the mouse its words light.
 	local version = UI.Text(box, core.version and ("v" .. core.version) or "", 11, false, C.dim)
-	version:SetPoint("BOTTOMLEFT", W.EDGE + 14, 12)
+	version:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", W.EDGE + 14, 12)
 	local credit = UI.Text(box, "", 12, true)
 	credit:SetPoint("BOTTOMLEFT", version, "TOPLEFT", 0, 4)
 	local function Credit(lit)
@@ -482,6 +640,7 @@ local function Create()
 		Hub.OpenAt("tools", Shy.Credits and Shy.Credits.HEAD or "Sources")
 	end)
 	Hub.credit, Hub.creditDoor = credit, door
+	box.credits = { version, credit, door }   -- (put away while lent: the foot stands there)
 
 	box.scroll = UI.ScrollArea(box, W.IN + W.PAGE + W.SCROLL, W.PAGE_H)
 	box.content = box.scroll.content
@@ -489,7 +648,7 @@ local function Create()
 
 	local bar = CreateFrame("Frame", nil, box)
 	bar:SetSize(W.PAGE, W.BAR)
-	bar:SetPoint("TOPLEFT", W.EDGE + W.RAIL + W.PAD, -(W.HEADER + W.TOP))
+	bar:SetPoint("TOPLEFT", body, "TOPLEFT", W.EDGE + W.RAIL + W.PAD, -(W.HEADER + W.TOP))
 	bar.back = UI.Button(bar, "All addons", 110, function() Hub.Open("home") end)
 	bar.back:SetPoint("LEFT")
 	bar.defaults = UI.Button(bar, "Defaults", 90, function() end)
@@ -519,7 +678,7 @@ local function Create()
 	-- While it is open: the page on show measured, and the rail's words kept up as settings change.
 	local measured, told = 0, 0
 	box:HookScript("OnUpdate", Shy.Clocked("hub: its frame (the room measured, the rail's words)", function(_, elapsed)
-		if not win.open then return end
+		if not win.open or win.guest then return end
 		Gliding(elapsed)
 		measured, told = measured + elapsed, told + elapsed
 		-- A room's height is another only after something in it is pressed (a section unfolds, a list grows) or
@@ -549,7 +708,7 @@ local function Create()
 		end
 	end))
 	-- (A kept height may have been put on before the room was here to take it.)
-	Lay(box, box:GetWidth(), box:GetHeight())
+	Lay(box, UI.BodySize(box))
 end
 
 -- A room that isn't there (an addon with no options) is Home.
@@ -568,6 +727,15 @@ waiter:SetScript("OnEvent", function(self)
 end)
 
 function Hub.Open(room)
+	-- Lent: brought up as it is; a room asked for ends the guest's walk first.
+	if win.guest then
+		if room == nil then
+			win.open = true
+			Shy.HUD.Update(win.box)
+			return
+		end
+		win.guest.Leave()
+	end
 	if room ~= nil then room = Known(room) end
 	if type(room) == "table" and InCombatLockdown() and room.options:IsProtected() then
 		waiter.room = room
@@ -586,8 +754,70 @@ end
 
 function Hub.Close()
 	if not win.box then return end
+	if win.guest then return win.guest.Close() end
 	win.open = false
 	Shy.HUD.Update(win.box)
+end
+
+-- Lent to a guest: our rooms put away, the rail the guest's, the foot open, the header saying what it does.
+-- Solid whatever the screen under it does (the guest may hold the screen up: the setup does).
+function Hub.Lend(guest)
+	if not win.box then Create() end
+	local box = win.box
+	if win.guest ~= guest then
+		win.guest, win.glide, win.shown = guest, nil, nil
+		for _, page in pairs(win.pages) do
+			page:Hide()
+			page.lined = nil
+		end
+		box.bar:Hide()
+		for _, room in ipairs(ROOMS) do box.rail:SetKids(room.key, nil) end
+		box.rail:SetItems(guest.items)
+		for _, part in ipairs(box.credits) do part:Hide() end
+		box.foot:Show()
+		box.mode:SetText(UI.Wrap(C.dim, guest.words or "") .. " " .. UI.Wrap(C.head, guest.name or ""))
+		box.mode:Show()
+		box.content.shyTall = nil
+		box.scroll:SetVerticalScroll(0)
+		box:SetIgnoreParentAlpha(true)
+	end
+	win.open = true
+	Shy.HUD.Update(box)
+	Lay(box, UI.BodySize(box))
+	return box
+end
+
+function Hub.Lent() return win.guest end
+
+-- The guest's rail and header told again (its own walk within its walk: other rows, another title).
+function Hub.Retell(guest)
+	local box = win.box
+	if not box or win.guest ~= guest then return end
+	box.rail:SetItems(guest.items)
+	box.mode:SetText(UI.Wrap(C.dim, guest.words or "") .. " " .. UI.Wrap(C.head, guest.name or ""))
+	Lay(box, UI.BodySize(box))
+end
+
+-- shut: closed as it goes back (nothing laid out for a window going away).
+function Hub.Return(shut)
+	local guest, box = win.guest, win.box
+	if not guest then return end
+	win.guest, win.shown = nil, nil
+	if shut then
+		win.open = false
+		Shy.HUD.Update(box)
+	end
+	for _, item in ipairs(guest.items) do
+		if item.key then box.rail:SetDone(item.key, false) end
+	end
+	box.rail:SetItems(Hub.Rooms())
+	for _, part in ipairs(box.credits) do part:Show() end
+	box.foot:Hide()
+	box.mode:Hide()
+	box:SetIgnoreParentAlpha(false)
+	-- (Home again: where the walk began)
+	win.at = "home"
+	Lay(box, UI.BodySize(box))
 end
 
 -- A room opened at one of its heads, by the head's words (the credit opens Tools at its Sources). The glide waits
@@ -604,9 +834,19 @@ end
 
 function Hub.IsOpen() return win.open end
 
--- Layout mode has the screen to itself.
+-- A corner dragged: the window takes the height at once and the width when let go (see Lay).
+Shy:On("SHY_HUD_MOVING", function(box)
+	if box == win.box then win.sizing = true end
+end)
+Shy:On("SHY_HUD_MOVED", function(box)
+	if box ~= win.box or not win.sizing then return end
+	win.sizing = nil
+	Lay(box, UI.BodySize(box))
+end)
+
+-- Layout mode has the screen to itself (but for a guest's walk, which may send you there and back).
 Shy:On("SHY_HUD_LAYOUT", function(on)
-	if on then Hub.Close() end
+	if on and not win.guest then Hub.Close() end
 end)
 
 function Addon:RegisterOptions(page)
@@ -622,7 +862,9 @@ end
 -- every addon, a click from its options.
 
 -- RING: the face's ring, its art's size (DialMid, drawn for 40 to 44); FACE: the face inside it.
-local HOME = { BANNER = 64, EDGE = 3, TILE = 40, GAP = 4, ACROSS = 3, ICON = 28, RING = 42, FACE = 28 }
+-- FIRST: the first caption under the band; BELOW: a caption's top to its tiles'; NEXT: the last row to the next caption.
+local HOME = { BANNER = 64, EDGE = 3, TILE = 40, GAP = 4, ACROSS = 3, ICON = 32, RING = 42, FACE = 28, FIRST = 40, BELOW = 24,
+	NEXT = 26 }
 
 local function First() return (UnitName("player")) end
 
@@ -638,21 +880,31 @@ local function ProfileWords()
 	return name, "the " .. name .. " profile"
 end
 
-local function AddonTile(parent, a, width)
+Hub.HOME = HOME
+
+-- A tile: an icon at its left, a name, a line under it cut where the tile ends. Lit under the mouse.
+function Hub.Tile(parent, width)
 	local b = CreateFrame("Button", nil, parent)
 	b:SetSize(width, HOME.TILE)
 	UI.Skin(b)
-	local icon = b:CreateTexture(nil, "ARTWORK")
-	icon:SetSize(HOME.ICON, HOME.ICON)
-	icon:SetPoint("LEFT", 6, 0)
-	Theme.Icon(icon, a.icon)
-	local name = UI.Text(b, "", 14, true)
-	UI.Themed(name, function() return B.Name(a.suffix) end)
-	name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 8, 0)
-	local tagline = UI.Text(b, a.tagline or "", 11, false, C.dim)
-	tagline:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
-	tagline:SetPoint("RIGHT", b, "RIGHT", -8, 0)
-	tagline:SetWordWrap(false)
+	b.icon = b:CreateTexture(nil, "ARTWORK")
+	b.icon:SetSize(HOME.ICON, HOME.ICON)
+	b.icon:SetPoint("LEFT", 6, 0)
+	b.name = UI.Text(b, "", 14, true)
+	b.name:SetPoint("TOPLEFT", b.icon, "TOPRIGHT", 8, 0)
+	b.line = UI.Text(b, "", 11, false, C.dim)
+	b.line:SetPoint("TOPLEFT", b.name, "BOTTOMLEFT", 0, -2)
+	b.line:SetPoint("RIGHT", b, "RIGHT", -8, 0)
+	b.line:SetWordWrap(false)
+	return b
+end
+
+local function AddonTile(parent, a, width)
+	local b = Hub.Tile(parent, width)
+	Theme.Icon(b.icon, a.mark)
+	b.name:SetText(a.suffix)
+	UI.Ink(b.name, C.head)
+	b.line:SetText(a.tagline or "")
 	local usable = a.options ~= nil or a.OpenWindow ~= nil
 	b:SetAlpha(usable and 1 or 0.5)
 	b:SetScript("OnClick", function()
@@ -668,52 +920,71 @@ local function AddonTile(parent, a, width)
 	-- (The tagline is cut where the tile ends: the hover says it whole, and the version.)
 	b:SetScript("OnEnter", function(self)
 		if usable then UI.SetBorder(self, C.hot) end
-		UI.Tip(self, B.Name(a.suffix), (a.tagline or "") .. (a.version and ("\n" .. UI.Wrap(C.dim, "v" .. a.version)) or ""))
+		UI.Tip(self, a.suffix, (a.tagline or "") .. (a.version and ("\n" .. UI.Wrap(C.dim, "v" .. a.version)) or ""))
 	end)
 	b:SetScript("OnLeave", function(self)
 		UI.SetBorder(self, C.border)
 		UI.TipHide(self)
 	end)
-	b.name, b.tagline = name, tagline
+	b.tagline = b.line
 	return b
 end
 
-function Build.home(page)
-	local S = Shy.Setup
-	local banner = CreateFrame("Frame", nil, page)
-	banner:SetSize(page.width, HOME.BANNER)
-	banner:SetPoint("TOPLEFT")
-	UI.Skin(banner, C.row, C.border)
-	local edge = banner:CreateTexture(nil, "ARTWORK")
-	edge:SetPoint("TOPLEFT", 1, -1)
-	edge:SetPoint("BOTTOMLEFT", 1, 1)
-	edge:SetWidth(HOME.EDGE)
-	Theme.Paint(edge, Theme.Accent, 1)
-	-- Your character's face in a ring, as the game draws it.
-	local ring = banner:CreateTexture(nil, "ARTWORK")
+-- The band: your character's face in a ring as the game draws it, your name, your level, class and profile under
+-- it, an edge down its left in your color. Setting up, the edge is gold: nothing is kept until Finish.
+function Hub.Band(parent, width)
+	local band = CreateFrame("Frame", nil, parent)
+	band:SetSize(width, HOME.BANNER)
+	UI.Skin(band, C.row, C.border)
+	band.edge = band:CreateTexture(nil, "ARTWORK")
+	band.edge:SetPoint("TOPLEFT", 1, -1)
+	band.edge:SetPoint("BOTTOMLEFT", 1, 1)
+	band.edge:SetWidth(HOME.EDGE)
+	Theme.Paint(band.edge, Theme.Accent, 1)
+	local ring = band:CreateTexture(nil, "ARTWORK")
 	ring:SetTexture(Shy.MEDIA .. "DialMid")
 	ring:SetSize(HOME.RING, HOME.RING)
-	ring:SetPoint("CENTER", banner, "LEFT", HOME.EDGE + 12 + HOME.RING / 2, 0)
+	ring:SetPoint("CENTER", band, "LEFT", HOME.EDGE + 12 + HOME.RING / 2, 0)
 	UI.Tint(ring, Theme.skin.metal)
-	local face = banner:CreateTexture(nil, "ARTWORK", nil, 1)
-	face:SetSize(HOME.FACE, HOME.FACE)
-	face:SetPoint("CENTER", ring, "CENTER")
-	local round = banner:CreateMaskTexture()
+	band.face = band:CreateTexture(nil, "ARTWORK", nil, 1)
+	band.face:SetSize(HOME.FACE, HOME.FACE)
+	band.face:SetPoint("CENTER", ring, "CENTER")
+	local round = band:CreateMaskTexture()
 	round:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-	round:SetAllPoints(face)
-	face:AddMaskTexture(round)
-	UI.Concentric(ring, face)
-	-- A player's name: UI.NameFont covers every alphabet. Their level, class and profile under it.
-	local who = banner:CreateFontString(nil, "OVERLAY")
-	who:SetFontObject(UI.NameFont(18))
-	who:SetShadowOffset(1, -1)
-	who:SetShadowColor(0, 0, 0, 1)
-	UI.Ink(who, C.head)
-	who:SetText(First())
+	round:SetAllPoints(band.face)
+	band.face:AddMaskTexture(round)
+	UI.Concentric(ring, band.face)
+	-- A player's name: UI.NameFont covers every alphabet.
+	local who = UI.Words(band, UI.NameFont(18), C.head, { wrap = false })
 	who:SetPoint("TOPLEFT", HOME.EDGE + 12 + HOME.RING + 10, -13)
-	local what = UI.Text(banner, "", 12, false, C.dim)
+	who:SetPoint("RIGHT", band, "RIGHT", -16, 0)
+	local what = UI.Text(band, "", 12, false, C.dim)
 	what:SetPoint("TOPLEFT", who, "BOTTOMLEFT", 0, -5)
+	what:SetPoint("RIGHT", band, "RIGHT", -16, 0)
 	what:SetWordWrap(false)
+	band.who, band.what = who, what
+	function band:Tell(setup)
+		Theme.Paint(self.edge, setup and C.alert or Theme.Accent, 1)
+		SetPortraitTexture(self.face, "player")
+		self.who:SetText(First())
+		local _, profile = ProfileWords()
+		self.what:SetText(("level %d %s  \194\183  on %s"):format(UnitLevel("player"), (UnitClass("player")), profile))
+	end
+	-- (The words end before what stands at the band's right: a long profile's name is cut there.)
+	function band:EndAt(frame)
+		self.who:SetPoint("RIGHT", frame, "LEFT", -16, 0)
+		self.what:SetPoint("RIGHT", frame, "LEFT", -16, 0)
+	end
+	return band
+end
+
+-- What applies when, under the band: in /shy as you pick; setting up, nothing until Finish.
+Hub.LIVE = "Anything you change here happens right away."
+
+function Build.home(page)
+	local S = Shy.Setup
+	local banner = Hub.Band(page, page.width)
+	banner:SetPoint("TOPLEFT")
 
 	local arrange = Shy.HUD.LayoutButton(banner, 130)
 	arrange:SetHeight(30)
@@ -721,59 +992,56 @@ function Build.home(page)
 	Help(arrange, "Layout mode", "Move anything on screen in one editor, the game's pieces and ours. Click a piece for its settings.")
 	local setup
 	if S and S.Open then
-		setup = UI.Button(banner, "Set up " .. First(), 150, function()
-			Hub.Close()
-			S.Open()
-		end)
+		setup = UI.Button(banner, "Set up " .. First(), 150, function() S.Open() end)
 		setup:SetHeight(30)
 		setup:SetPoint("RIGHT", arrange, "LEFT", -8, 0)
 	end
-	-- (The words end before the buttons: a long profile's name is cut there, never run under them.)
-	who:SetPoint("RIGHT", setup or arrange, "LEFT", -16, 0)
-	who:SetJustifyH("LEFT")
-	who:SetWordWrap(false)
-	what:SetPoint("RIGHT", setup or arrange, "LEFT", -16, 0)
+	banner:EndAt(setup or arrange)
 	local state = UI.Text(page, "", 11, false, C.dim)
 	state:SetPoint("TOPLEFT", banner, "BOTTOMLEFT", HOME.EDGE + 16, -7)
 	state:SetWidth(page.width - 2 * (HOME.EDGE + 16))
 	state:SetWordWrap(false)
 
-	local head = Shy.HubHead(page, banner, "Your addons")
-	head:ClearAllPoints()
-	head:SetPoint("TOPLEFT", banner, "BOTTOMLEFT", 0, -40)
-	-- Whether the addons' data was made for this game (Client.lua), at the caption's right, where its rule
+	-- Every addon, a caption for each category and its tiles under it, by name (Shy.Listed); each caption a
+	-- click from the rail.
+	local each = (page.width - (HOME.ACROSS - 1) * HOME.GAP * 2) / HOME.ACROSS
+	local y, head = HOME.FIRST, nil
+	Hub.tiles = {}
+	for _, group in ipairs(Shy.Listed()) do
+		local caption = Shy.HubHead(page, banner, group.title)
+		caption:ClearAllPoints()
+		caption:SetPoint("TOPLEFT", banner, "BOTTOMLEFT", 0, -y)
+		head = head or caption
+		y = y + HOME.BELOW
+		for i, a in ipairs(group.addons) do
+			local tile = AddonTile(page, a, each)
+			tile:SetPoint("TOPLEFT", banner, "BOTTOMLEFT", ((i - 1) % HOME.ACROSS) * (each + HOME.GAP * 2),
+				-(y + math.floor((i - 1) / HOME.ACROSS) * (HOME.TILE + HOME.GAP)))
+			Hub.tiles[#Hub.tiles + 1] = tile
+		end
+		y = y + math.ceil(#group.addons / HOME.ACROSS) * (HOME.TILE + HOME.GAP) - HOME.GAP + HOME.NEXT
+	end
+	if not head then
+		head = Shy.HubHead(page, banner, "Your addons")
+		head:ClearAllPoints()
+		head:SetPoint("TOPLEFT", banner, "BOTTOMLEFT", 0, -HOME.FIRST)
+		local none = UI.Text(page, "No addons loaded. Enable them in the AddOns list.", 13, false, C.dim)
+		none:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -12)
+	end
+	-- Whether the addons' data was made for this game (Client.lua), at the first caption's right, where its rule
 	-- ends: quiet when it was.
 	local data = UI.Text(head, "", 11, false, C.dim)
 	data:SetPoint("RIGHT")
 	Hub.dataLine = data
 
-	local each = (page.width - (HOME.ACROSS - 1) * HOME.GAP * 2) / HOME.ACROSS
-	local count = 0
-	Hub.tiles = {}
-	for _, a in ipairs(Shy.order) do
-		if not a.internal then
-			local tile = AddonTile(page, a, each)
-			tile:SetPoint("TOPLEFT", head, "BOTTOMLEFT", (count % HOME.ACROSS) * (each + HOME.GAP * 2),
-				-10 - math.floor(count / HOME.ACROSS) * (HOME.TILE + HOME.GAP))
-			count = count + 1
-			Hub.tiles[count] = tile
-		end
-	end
-	if count == 0 then
-		local none = UI.Text(page, "No addons loaded. Enable them in the AddOns list.", 13, false, C.dim)
-		none:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -12)
-	end
-
 	page.refresh[#page.refresh + 1] = function()
-		SetPortraitTexture(face, "player")
-		local _, profile = ProfileWords()
-		what:SetText(("level %d %s  \194\183  on %s"):format(UnitLevel("player"), (UnitClass("player")), profile))
+		banner:Tell(false)
 		-- The one to press stands filled: setting up until that is done, arranging the screen after.
 		local done = not setup or S.Done()
 		arrange:SetPrimary(done)
 		if setup then setup:SetPrimary(not done) end
-		state:SetText(not setup and "" or done and (First() .. " is set up. Set up again to change profile, layout and game settings in one go.")
-			or (First() .. " isn't set up yet. A few picks and one reload: profile, layout and recommended game settings."))
+		state:SetText(not setup and Hub.LIVE or done and (Hub.LIVE .. " Set up again to change profile, layout and game settings in one go.")
+			or (Hub.LIVE .. " " .. First() .. " isn't set up yet. It only takes a few clicks and one reload."))
 		local words, color
 		if Shy.DataCheck then words, color = Shy.DataCheck.Words() end
 		data:SetText(words or "")
@@ -840,7 +1108,7 @@ function Build.profiles(page, top)
 		else
 			Relist()   -- the character's own profile, created from current settings: no reload
 		end
-	end, { width = COL, desc = "A profile holds every addon's settings and your layout. Global is shared by every character that hasn't picked another. Switching to an existing profile needs a reload." })
+	end, { width = COL, desc = "A profile saves all your addon settings and your layout. Every character uses Global unless you pick another. Switching to a profile you already have needs a reload." })
 	uses:SetPoint("TOPLEFT", top, "BOTTOMLEFT", 0, -8)
 
 	local words = UI.Text(page, "Characters on the same profile share all settings. Give this character its own, or name one to share between a few (your healers, for example).", 12, false, C.dim)

@@ -87,7 +87,7 @@ function ns.CreateOptions()
 		UI.PageHeader(panel, T)
 		group = UI.Group(Relayout)
 
-		intro = UI.Text(panel, "Restyles the default UI with dark panels and steel-framed icons in your accent color. Nothing moves except inside the vendor and trainer windows, and each part switches back to default without a reload.", 13)
+		intro = UI.Text(panel, "Turn any part off and it's back to the game's look at once. Most keep the game's layout; the vendor, trainer, mail, professions, spellbook, friends and guild windows are rebuilt to be easier to use.", 13)
 		intro:SetWidth(CARD_W)
 		intro:SetPoint("TOPLEFT", LEFT, INTRO)
 

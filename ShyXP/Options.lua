@@ -1,4 +1,4 @@
--- Options: the stats card as a live preview, box controls beside it, then tabs (box stats, XP bar, tooltip).
+-- Options: the stats card as a live preview, box controls beside it, then tabs (box stats, XP bar, reputation, tooltip).
 
 local ADDON, ns = ...
 local T, S = ns.T, ns.Stats
@@ -16,7 +16,7 @@ local function At(w, page, x, y)
 	return w
 end
 
-local function Boxed() return T.db.box.shown end
+local function Boxed() return ns.Place() == "box" end
 local function Carded() return T.db.box.style == "card" end
 
 local TOOLTIP_LINES = {
@@ -115,6 +115,32 @@ local function MorePage(page, g)
 	page:HookScript("OnShow", function() against:SetItems(Runs()) end)
 end
 
+local function RepPage(page, g)
+	At(UI.Header(page, "Reputation", COL), page, LEFT, 0)
+	At(g:Checkbox(page, "Reputation at max level", Get("repAtTop"), function(v) ns.Rep.SetAtTop(v) end,
+		{ desc = "At max level the bar and the box show the reputation you track. With none tracked, the next one you gain is." }), page, LEFT, -32)
+	local pick = UI.Button(page, "Track a reputation", 160, function(self) T:TrackMenu(self) end)
+	At(pick, page, LEFT, -76)
+	local now = UI.Text(page, "", 12, false, UI.colors.dim)
+	now:SetPoint("LEFT", pick, "RIGHT", 12, 0)
+	now:SetWidth(COL - 172)
+	now:SetWordWrap(false)
+	g:Add({ Refresh = function()
+		local data = ns.Rep.Watched()
+		now:SetText(data and data.name or "None")
+	end })
+	local tip = UI.Text(page, "Or right-click the XP bar or the box. Below max level, tracking one shows it in place of your XP.", 12, false, UI.colors.dim)
+	tip:SetWidth(COL)
+	At(tip, page, LEFT, -112)
+
+	At(UI.Header(page, "In the box", COL), page, RIGHT, 0)
+	for i, def in ipairs(ns.REP_TILES) do
+		At(g:Checkbox(page, def.label, function() return T.db.box.repTiles[def.key] end,
+			function(v) T.db.box.repTiles[def.key] = v end,
+			{ enabled = function() return Boxed() and Carded() end }), page, RIGHT, -32 - (i - 1) * 26)
+	end
+end
+
 function ns.CreateOptions()
 	local panel = CreateFrame("Frame")
 	local group = UI.Group(function() ns.Refresh() end)
@@ -122,49 +148,51 @@ function ns.CreateOptions()
 	local function Build()
 		UI.PageHeader(panel, T)
 
-		local preview = ns.CreateCard(panel)
+		-- The tabs and their pages hang from this, so a tall card pushes them down: never into them.
+		local lower = CreateFrame("Frame", nil, panel)
+		lower:SetSize(1, 1)
+		lower:SetPoint("TOPLEFT", 0, -304)
+		local preview = ns.CreateCard(panel, function(_, height)
+			lower:SetPoint("TOPLEFT", 0, -math.max(304, 112 + height + 18))
+		end)
 		preview:SetPoint("TOPLEFT", 24, -112)
 
-		local switchLabel = UI.Text(panel, "Level stats on screen", 15, true)
-		switchLabel:SetPoint("TOPLEFT", RIGHT, -114)
-		local switch = group:Switch(panel, "Level stats on screen", GetBox("shown"), SetBox("shown"),
-			{ desc = "Your level, XP bar and the stats you pick, in the stats box. Hover it for every stat, drag to move, right-click for its menu, Shift-click to share." })
-		switch:SetPoint("LEFT", switchLabel, "RIGHT", 12, 0)
-		-- While another piece shows the level, the box stays away, whatever the switch.
+		local place = group:Dropdown(panel, "Where your bars go", ns.Places(), Get("place"), function(v) ns.SetPlace(v) end,
+			{ width = COL, desc = "Your XP and the reputation you track get a bar each on the quest window or under the action bars, or share one bar in the stats window." })
+		At(place, panel, RIGHT, -112)
+		place:HookScript("OnShow", function(self) self:SetItems(ns.Places()) end)
+		-- On the quest window while it can't carry them (hidden), they stand in the stats window (Box.lua).
 		local note = UI.Text(panel, "", 11, false, UI.colors.alert)
-		note:SetPoint("TOPLEFT", switchLabel, "BOTTOMLEFT", 0, -4)
-		note:SetWidth(COL + 120)
-		note:SetWordWrap(true)
+		At(note, panel, RIGHT, -166)
+		note:SetWidth(COL)
 		group:Add({ Refresh = function()
-			local by = ns.dockedBy
-			if not by then
-				note:SetText("")
-			elseif by == "ShyQuest" then
-				note:SetText("The guide shows your level, so the box stays hidden.")
-			else
-				note:SetText("Your level shows elsewhere, so the box stays hidden.")
-			end
+			local stands = ns.Place() == "quest" and not ns.dockedBy
+			note:SetText(stands and "The quest window is hidden, so they show in the stats window." or "")
 		end })
 
-		local arrange = Shy.HUD.LayoutButton(panel, COL)
-		arrange:SetPoint("TOPLEFT", RIGHT, -156)
-
-		At(group:Dropdown(panel, "Box style", {
+		At(group:Dropdown(panel, "Stats window", {
 			{ value = "card",    text = "Card: bar and stat tiles" },
 			{ value = "compact", text = "Compact: one slim line" },
-		}, GetBox("style"), SetBox("style"), { width = COL, enabled = Boxed }), panel, RIGHT, -176)
+		}, GetBox("style"), SetBox("style"), { width = COL, enabled = Boxed }), panel, RIGHT, -186)
 		At(group:Checkbox(panel, "Hide in combat", GetBox("hideInCombat"), SetBox("hideInCombat"),
-			{ enabled = Boxed }), panel, RIGHT, -228)
+			{ enabled = Boxed }), panel, RIGHT, -238)
+		local arrange = Shy.HUD.LayoutButton(panel, COL)
+		arrange:SetPoint("TOPLEFT", RIGHT, -266)
 
 		local pages = {}
-		local tabs = UI.Tabs(panel, { "Box stats", "XP bar", "Tooltip & more" }, function(i)
+		local names, builds = { "Box stats", "XP bar" }, { BoxPage, BarPage }
+		if ns.Rep then
+			names[#names + 1], builds[#builds + 1] = "Reputation", RepPage
+		end
+		names[#names + 1], builds[#builds + 1] = "Tooltip & more", MorePage
+		local tabs = UI.Tabs(panel, names, function(i)
 			for j, p in ipairs(pages) do p:SetShown(i == j) end
 		end, 580, 15)
-		tabs:SetPoint("TOPLEFT", 24, -304)
+		tabs:SetPoint("TOPLEFT", lower, "TOPLEFT", 24, 0)
 
-		for i, build in ipairs({ BoxPage, BarPage, MorePage }) do
+		for i, build in ipairs(builds) do
 			local page = CreateFrame("Frame", nil, panel)
-			page:SetPoint("TOPLEFT", 0, -346)
+			page:SetPoint("TOPLEFT", lower, "TOPLEFT", 0, -42)
 			page:SetPoint("BOTTOMRIGHT")
 			page:Hide()
 			build(page, group)
@@ -193,3 +221,78 @@ function ns.CreateOptions()
 
 	return panel
 end
+
+-- Where your bars go, as tiles: on setup's Screen page (a tab beside the layout and the cooldowns) and in the
+-- /shy window's Screen room. A pick goes on at once, so you see it; setup puts back what stood when you close
+-- it without Finish.
+local PLACE = {
+	quest = { glyph = "book", brief = "Quest window", say = "Your XP and reputation sit on the quest window, with your next step." },
+	under = { glyph = "up", brief = "Under the bars", say = "Thin bars under your action bars, where the game puts its own." },
+	box = { glyph = "note", brief = "Stats window", say = "A small window with all your levelling stats. Move it anywhere." },
+}
+local TILE = { H = 76, GAP = 8 }
+
+local function PlaceTiles(parent, width, get, set)
+	local f = CreateFrame("Frame", nil, parent)
+	f:SetSize(width, TILE.H)
+	local list, tiles = ns.Places(), {}
+	local each = (width - (#list - 1) * TILE.GAP) / #list
+	for i, entry in ipairs(list) do
+		local words = PLACE[entry.value]
+		local tile = Shy.Setup.Tile(f, each, nil, entry.text, function()
+			set(entry.value)
+			f:Refresh()
+		end, TILE.H)
+		Shy.Hover.Glyph(tile.glyph, words.glyph)
+		tile.say:SetText(words.say)
+		tile.say:SetMaxLines(2)
+		tile:SetPoint("TOPLEFT", (i - 1) * (each + TILE.GAP), 0)
+		tile.value = entry.value
+		tiles[i] = tile
+	end
+	function f:Refresh()
+		local now = get()
+		for _, tile in ipairs(tiles) do tile:Paint(tile.value == now) end
+	end
+	return f
+end
+
+local function Put(place)
+	if T.db.place ~= place then ns.SetPlace(place) end
+end
+
+if not (Shy.Setup and Shy.Setup.Step) then return end
+
+Shy.Setup.Step({
+	id = "xp", order = 21.5, title = "XP bar", glyph = "up", tab = "screen",
+	ask = "Where do you want your XP bar?",
+	lead = "Your XP and the reputation you watch. It moves on your screen as you pick.",
+	brief = function(plan) return (PLACE[plan.xp.place] or PLACE.under).brief end,
+	Plan = function(plan) plan.xp = { place = ns.Place() } end,
+	Build = function(parent, width, plan)
+		return PlaceTiles(parent, width, function() return plan.xp.place end, function(v)
+			plan.xp.place = v
+			Put(v)
+		end)
+	end,
+	Lines = function(plan)
+		local words = PLACE[plan.xp.place] or PLACE.under
+		return { { text = "XP bar: " .. words.brief:lower(), sub = words.say } }
+	end,
+	Run = function(plan)
+		local answers = { place = plan.xp.place }
+		if Shy.Setup.Act(plan) == "stay" then Put(answers.place) else Shy.Setup.Wait("xp", answers) end
+		return false
+	end,
+	Later = function(answers) Put(answers.place) end,
+	Worn = function() return T.db.place end,
+	PutBack = function(kept) Put(kept) end,
+})
+
+-- The /shy window's Screen room, after the cooldown manager.
+Shy.HubSection("screen", function(page, top)
+	local head = Shy.HubHead(page, top, "XP bar")
+	local tiles = PlaceTiles(page, page.width, ns.Place, Put)
+	tiles:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -12)
+	return tiles, function() tiles:Refresh() end
+end, 45)

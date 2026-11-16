@@ -155,9 +155,7 @@ end
 -- The coin box
 
 local function CountText(owner)
-	local text = owner:CreateFontString(nil, "OVERLAY")
-	text:SetFont(Shy.FONT_ROUNDED, 11, "")
-	return text
+	return UI.Words(owner, 11)
 end
 
 -- Free slots at the left of the coin box: gold when low, red when full.

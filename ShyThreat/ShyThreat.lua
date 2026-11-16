@@ -13,9 +13,9 @@ local ADDON, ns = ...
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Threat",
+	category = "combat",
 	icon = "Interface\\AddOns\\ShyThreat\\Media\\ShyThreat",
 	smallIcon = "Interface\\AddOns\\ShyThreat\\Media\\ShyThreatSmall",
-	tagline = "Who has aggro and who is about to pull it",
 	savedVariables = "ShyThreatDB",
 	defaults = {
 		on = true,            -- the meter on screen

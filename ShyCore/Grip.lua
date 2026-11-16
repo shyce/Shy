@@ -55,6 +55,8 @@
 --                                         -- engine's own sizing, so it redraws as Edit Mode's does
 --       over = function() end,            -- the region whose corners it stands on now (nil: no grip)
 --       shown = function() end,           -- optional: no grip while false
+--       seen = function() end,            -- optional: the frame whose alpha says the piece is on screen (the
+--                                         -- piece's own unless told: the chat's, faded under a page laid over it)
 --       above = function(point) end,      -- optional: a frame of the game's lying over that part of the
 --                                         -- piece on a layer of its own (the chat's edit box over its
 --                                         -- foot, its tabs over its top); the handle stands over it.
@@ -592,21 +594,35 @@ end
 -- least and its most, holds what lies opposite still and keeps the size (the box's entry, as w and h,
 -- where a sized game frame's is kept, so the menu's "Reset size" gives it up). The owner only lays
 -- the inside out, and not even that where its children hang from the box's edges.
+-- A window with a body (UI.Body) is its body and its look's clearance round it: the sizes it is made at, kept at and
+-- held between are its body's, and its flow is told its body's; the box is that much bigger, in every look.
+-- (A piece on screen keeps the size the plan gives it: its body, where it has one, stands inside that.)
+local function Clear(box)
+	if not box.window then return 0, 0 end
+	local l, t, r, b = UI.BodyIn(box)
+	return l + r, t + b
+end
+
 local function Bounds(g)
 	local box, opts = g.box, g.opts
 	local s = box:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	local cw, ch = Clear(box)
 	local least, most = opts.min or g.made, opts.max or {}
-	local mostW, mostH = most[1] or UIParent:GetWidth() / s, most[2] or UIParent:GetHeight() / s
-	return least[1], least[2], max(least[1], mostW), max(least[2], mostH)
+	local minW, minH = least[1] + cw, least[2] + ch
+	local mostW = most[1] and most[1] + cw or UIParent:GetWidth() / s
+	local mostH = most[2] and most[2] + ch or UIParent:GetHeight() / s
+	return minW, minH, max(minW, mostW), max(minH, mostH)
 end
 
+-- (width and height: the box's)
 local function Flow(g, width, height)
 	local box = g.box
 	local minW, minH, maxW, maxH = Bounds(g)
 	width, height = max(minW, math.min(maxW, width)), max(minH, math.min(maxH, height))
 	if abs(box:GetWidth() - width) < 0.01 and abs(box:GetHeight() - height) < 0.01 then return false end
 	HUD.Resize(box, width, height)
-	if type(g.opts.flow) == "function" then g.opts.flow(box, width, height) end
+	local cw, ch = Clear(box)
+	if type(g.opts.flow) == "function" then g.opts.flow(box, width - cw, height - ch) end
 	return true
 end
 
@@ -614,7 +630,8 @@ end
 local function Wear(g)
 	if not g.made or (drag and drag.box == g.box) or Act.Busy(g.box) then return end
 	local saved = Shy.core.db.hud[g.box.id]
-	Flow(g, saved and saved.w or g.made[1], saved and saved.h or g.made[2])
+	local cw, ch = Clear(g.box)
+	Flow(g, (saved and saved.w or g.made[1]) + cw, (saved and saved.h or g.made[2]) + ch)
 end
 
 local function BeginFlow(h, x, y)
@@ -636,12 +653,13 @@ local function EndFlow()
 	local box = drag.box
 	local g = byBox[box]
 	local width, height = floor(box:GetWidth() + 0.5), floor(box:GetHeight() + 0.5)
+	local cw, ch = Clear(box)
 	local saved = Shy.core.db.hud[box.id]
-	if abs(width - g.made[1]) < 0.5 and abs(height - g.made[2]) < 0.5 then
+	if abs(width - cw - g.made[1]) < 0.5 and abs(height - ch - g.made[2]) < 0.5 then
 		if saved then saved.w, saved.h = nil, nil end   -- as it was made: nothing to keep
 	else
 		saved = Act.Keep(box)
-		saved.w, saved.h = width, height
+		saved.w, saved.h = width - cw, height - ch   -- (its body's: UI.Body)
 	end
 	Flow(g, width, height)
 	drag.hold(true)
@@ -826,7 +844,7 @@ function Follow(g)
 		and (not g.opts.shown or g.opts.shown()) then
 		region = box.foreign
 		if g.opts.over then region = g.opts.over() end
-		show = region ~= nil and Seen(box.foreign, region)
+		show = region ~= nil and Seen(g.opts.seen and g.opts.seen() or box.foreign, region)
 	end
 	-- (Out of sight, with its handles put away at the last look: nothing more to do until it shows. Most game
 	-- windows are closed most of the time, and every one of them is looked at each POLL.)
@@ -1186,9 +1204,11 @@ function HUD.Grip(box, opts)
 			end)
 		end
 		Fit(g)
-		-- A box that flows wears the size it kept; the one it has now is the one it was made at.
+		-- A box that flows wears the size it kept; the one it has now is the one it was made at (a window's, its
+		-- body's: the one it was made with, whatever look it has been in since).
 		if opts.flow then
-			g.made = g.made or { box:GetWidth(), box:GetHeight() }
+			local made, cw, ch = box.shyMade, Clear(box)
+			g.made = g.made or (made and { made[1], made[2] }) or { box:GetWidth() - cw, box:GetHeight() - ch }
 			Wear(g)
 		else
 			g.made = nil
@@ -1266,12 +1286,22 @@ function HUD.Made(box, width, height)
 		Wear(g)
 		return
 	end
-	-- No grip yet (it is built as the box first shows, and takes the size the box has then as made): the box
-	-- wears the size now, unless the player kept one.
+	-- No grip yet (it is built as the box first shows, and takes the size it was made at then): the box wears the
+	-- size now, unless the player kept one.
+	box.shyMade = { width, height }
 	if Act.HasSize(box) then return end
-	HUD.Resize(box, width, height)
+	HUD.WearMade(box)
+end
+
+-- A flowing box no grip has taken hold of yet: the size it was made at (box.shyMade, its body's), with its look's
+-- clearance round it (UI.Body).
+function HUD.WearMade(box)
+	local made = box.shyMade
+	if not made then return end
+	local cw, ch = Clear(box)
+	HUD.Resize(box, made[1] + cw, made[2] + ch)
 	local how = box.grip
-	if how and type(how.flow) == "function" then how.flow(box, width, height) end
+	if how and type(how.flow) == "function" then how.flow(box, made[1], made[2]) end
 end
 
 -- A box that flows is put back at its kept size, or the one it was made at, whenever it is placed again
@@ -1280,6 +1310,18 @@ hooksecurefunc(HUD, "Apply", Shy.Clocked("grip: a box applied", function(box)
 	local g = byBox[box]
 	if g and g.made then Wear(g) end
 end))
+
+-- A window's look keeps another clearance round its body (UI.Body): it wears its size again with that round it.
+-- (A maximized one is laid out again by UI.Maximize's own.)
+Shy:On("SHY_BODY", function(box)
+	if type(box) ~= "table" or box.maxed then return end
+	local g = byBox[box]
+	if g and g.made then
+		Wear(g)
+	elseif box.shyMade and not Act.HasSize(box) then
+		HUD.WearMade(box)
+	end
+end)
 
 -- A locked piece was pressed to drag it: its corner shows the padlock for a moment, with a gleam.
 function HUD.OnLocked(box)

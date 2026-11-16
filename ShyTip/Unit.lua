@@ -142,12 +142,7 @@ local function TagSeat(tag)
 			seat.over = seat:CreateTexture(nil, "OVERLAY")
 			for _, key in ipairs(LAYERS) do seat[key]:SetAllPoints() end
 			seat.art:SetAllPoints()
-			seat.count = seat:CreateFontString(nil, "OVERLAY")
-			seat.count:SetFontObject(UI.NameFont(9))
-			seat.count:SetShadowOffset(1, -1)
-			seat.count:SetShadowColor(0, 0, 0, 1)
-			seat.count:SetTextColor(1, 1, 1)
-			seat.count:SetJustifyH("LEFT")
+			seat.count = UI.Words(seat, UI.NameFont(9), { 1, 1, 1 })
 			-- Beside the mark, on its middle (as a nameplate's count is): the plaque's compartment makes room for it.
 			seat.count:SetPoint("LEFT", seat, "RIGHT", 2, UI.NameLift(9))
 		end

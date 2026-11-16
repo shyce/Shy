@@ -16,6 +16,7 @@
 --   kit:Text(fontString, color)
 --   kit:Font(fontString, file, size, flags)     -- size and flags default to the current ones
 --   kit:FontObject(fontString, object)
+--   kit:ButtonFont(button, object)      -- a game button's words, and the fonts its states give them back
 --   kit:Justify(fontString, side)
 --   kit:Unmask(texture, mask)           -- remove an icon's round mask
 --   kit:Crop(texture, l, r, t, b)       -- tex coords (an icon's dark rim is its outer 8%)
@@ -614,6 +615,19 @@ function Kit:FontObject(fontString, object)
 	KeepFont(self, fontString)
 	fontString:SetFontObject(object)
 	UI.Follow(fontString)   -- a title font keeps up with the theme's (Theme.Follow)
+end
+
+-- A game button's words in a font object for good: its text's font and the font its states put back (a button
+-- with a NormalFont gives its text that font again as it is let go of, over whatever was set on the text).
+function Kit:ButtonFont(button, object)
+	local text = button and button:GetFontString()
+	if not text then return end
+	local e = Entry(self, button)
+	if not e.states then e.states = { button:GetNormalFontObject(), button:GetHighlightFontObject(), button:GetDisabledFontObject() } end
+	if e.states[1] then button:SetNormalFontObject(object) end
+	if e.states[2] then button:SetHighlightFontObject(object) end
+	if e.states[3] then button:SetDisabledFontObject(object) end
+	self:FontObject(text, object)
 end
 
 -- Shy's own words on a game region: the theme's font at `size` (its own size when nil) and `flags`, kept up.
@@ -2670,6 +2684,11 @@ function Kit:Restore()
 			if e.gray ~= nil then region:SetDesaturated(e.gray) end
 		end
 		-- Font before text color and side: a font object brings its own color and its own side.
+		if e.states then
+			if e.states[1] then region:SetNormalFontObject(e.states[1]) end
+			if e.states[2] then region:SetHighlightFontObject(e.states[2]) end
+			if e.states[3] then region:SetDisabledFontObject(e.states[3]) end
+		end
 		if e.font then
 			if e.font.object then
 				region:SetFontObject(e.font.object)

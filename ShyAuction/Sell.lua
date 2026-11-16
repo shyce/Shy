@@ -95,12 +95,13 @@ local function Cheapest(item)
 		end
 		return out, true
 	end
+	-- (An item listing's buyout is the price each, however many it holds.)
 	local key = C_AuctionHouse.MakeItemKey(item)
 	n = C_AuctionHouse.GetNumItemSearchResults(key) or 0
 	for i = 1, math.min(n, L.ladder) do
 		local r = C_AuctionHouse.GetItemSearchResultInfo(key, i)
 		if r and r.buyoutAmount and not issecretvalue(r.buyoutAmount) and (r.quantity or 0) > 0 then
-			out[#out + 1] = { quantity = r.quantity, unit = math.floor(r.buyoutAmount / r.quantity + 0.5), mine = r.containsOwnerItem }
+			out[#out + 1] = { quantity = r.quantity, unit = r.buyoutAmount, mine = r.containsOwnerItem }
 		end
 	end
 	return out, false
@@ -218,7 +219,8 @@ local function DrawCard(width)
 	end
 	local copper = C_AuctionHouse.SupportsCopperValues()
 	local market = ns.Book.Price(g.item)
-	card.market:SetText(market and ("Market %s each"):format(UI.Money(market.market, true, 11, card.market)) or "No market price yet")
+	card.market:SetText(market and ("Market %s each  |cffc8c8c8%s|r"):format(UI.Money(market.market, true, 11, card.market), ns.Book.Basis(market))
+		or "No market price yet")
 	-- A copper under the cheapest, unless you typed a price.
 	if not state.typed then
 		state.price = Fit(cheapest and math.max(1, cheapest - 1) or (market and market.market) or nil)

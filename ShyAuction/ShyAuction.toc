@@ -1,10 +1,10 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffAuction|r
-## Notes: The auction house and what everything sells for: whole-house scans, one price book, your realm's prices shared. |cff888888/shyauction|r
+## Notes: Buy, sell and see what anything is worth, and where to farm gold |cff888888/shyauction|r
 ## Author: Shyce Cream
-## Version: 5.0.6
-## X-Date: 2026-11-15
-## IconTexture: Interface\AddOns\ShyAuction\Media\ShyAuction
+## Version: 5.1.1
+## X-Date: 2026-11-16
+## IconTexture: Interface\AddOns\ShyAuction\Media\ShyAuctionMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyFarm, ShyQuest, ShyWay, ShyBags, ShyGear
 ## Group: ShyCore

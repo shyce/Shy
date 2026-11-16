@@ -61,7 +61,7 @@ function Win.Init()
 		end,
 		close = function() Win.SetOpen(false) end,
 		head = {
-			brand = T.suffix, icon = T.icon, tabs = { TABS, SelectTab },
+			brand = T.suffix, icon = T.mark, tabs = { TABS, SelectTab },
 			-- The Who list stays the game's own.
 			buttons = { { "Options", 76, function() T:OpenOptions() end }, { "Who", 54, function() ns.Listing.OpenWho() end } },
 		},
@@ -74,8 +74,10 @@ function Win.Init()
 	who = box.head.buttons[2]
 	W.Tip(who, "Who list", "Opens the Group Finder's Who tab, ready to type a name, guild or level.")
 
+	-- The pages stand on the window's body: clear of its look's work round the edge (UI.Body).
+	local body = UI.Body(box)
 	for i, create in ipairs({ ns.Recruit.Create, ns.Replies.Create, ns.BoardTab.Create }) do
-		local page = CreateFrame("Frame", nil, box)
+		local page = CreateFrame("Frame", nil, body)
 		page:SetPoint("TOPLEFT", 0, -Win.HEADER)
 		page:SetPoint("BOTTOMRIGHT")
 		page:Hide()

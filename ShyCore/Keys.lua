@@ -106,6 +106,16 @@ local HOT = {
 		INTERACTTARGET = true, INTERACTMOUSEOVER = true, TARGETNEARESTENEMY = true, TARGETNEARESTFRIEND = true,
 		TOGGLEGAMEMENU = true, OPENCHAT = true, REPLY = true },
 	named = 10,              -- the most of those named in a chat line before "and N more"
+	-- What moves you: the board's keys do that, so nothing of it moves to Ctrl + its key (Hot.HomeOf).
+	moving = { MOVEFORWARD = true, MOVEBACKWARD = true, STRAFELEFT = true, STRAFERIGHT = true, TURNLEFT = true,
+		TURNRIGHT = true, MOVEANDSTEER = true },
+	home = "CTRL-",          -- where what a key did goes: Ctrl + that key
+	step = 22, stepGap = 10, -- a step of the keys' page: its number's plate, and the room after it
+	followGap = 12, buttons = 12 + 24 + 12 + 20,   -- the button under the choices, and Follow my talents under it
+	steer = { STRAFELEFT = "TURNLEFT", STRAFERIGHT = "TURNRIGHT" },   -- the turn each side key did before it strafed
+	-- Picking a key in the list: a key held with another is no key of its own; the mouse's other buttons are keys.
+	metas = { LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true, LMETA = true, RMETA = true },
+	mice = { MiddleButton = "BUTTON3", Button4 = "BUTTON4", Button5 = "BUTTON5" },
 }
 
 -- The bars a key can press a button of: the binding's name -> the bar's page (the main bar has none of its own).
@@ -399,14 +409,16 @@ end
 
 -- What a class teaches one people alone (Shy.KeyGifts: class -> race -> its two, each { spell, name, on a
 -- friend }): the nth of each, as a job's `race`. One for a friend goes to the friend under the mouse, else the
--- friend you target, else you; one the game won't cast on yourself ("other") waits for a friend.
+-- friend you target, else you; one the game won't cast on yourself ("other") waits for a friend, and shows
+-- itself all the same (with no friend its cast is no spell, and the button would be a question mark).
 function Keys.Gifts(class, n)
 	local race = {}
 	for id, pair in pairs(Shy.KeyGifts and Shy.KeyGifts[class] or EMPTY) do
 		local gift = pair[n]
 		if gift then
-			race[id] = { name = gift[2], what = gift[2], "#showtooltip",
-				("/cast %s{%d}"):format(gift[3] == "other" and (Keys.OTHER .. " ") or gift[3] and (Keys.FRIEND .. " ") or "", gift[1]) }
+			local other = gift[3] == "other"
+			race[id] = { name = gift[2], what = gift[2], other and ("#showtooltip {%d}"):format(gift[1]) or "#showtooltip",
+				("/cast %s{%d}"):format(other and (Keys.OTHER .. " ") or gift[3] and (Keys.FRIEND .. " ") or "", gift[1]) }
 		end
 	end
 	return race
@@ -420,6 +432,24 @@ end
 local function Learns(spell)
 	local name = spell and C_Spell.GetSpellName(spell)
 	return name ~= nil and SecureCmdOptionParse("[known:" .. name .. "] 1; 0") == "1"
+end
+
+-- The best rank of a spell in your spellbook (by the level it is learned at), else the spell as given.
+local function Highest(spell)
+	local name = C_Spell.GetSpellName(spell)
+	if not name then return spell end
+	local best, top = spell, -1
+	local bank = Enum.SpellBookSpellBank.Player
+	for line = 1, C_SpellBook.GetNumSpellBookSkillLines() do
+		local info = C_SpellBook.GetSpellBookSkillLineInfo(line)
+		for slot = info and info.itemIndexOffset + 1 or 1, info and info.itemIndexOffset + info.numSpellBookItems or 0 do
+			local item = C_SpellBook.GetSpellBookItemInfo(slot, bank)
+			local id = item and item.itemType == Enum.SpellBookItemType.Spell and item.name == name and (item.spellID or item.actionID)
+			local level = id and C_Spell.GetSpellLevelLearned(id) or -1
+			if id and level >= top then best, top = id, level end
+		end
+	end
+	return best
 end
 
 -- Whether a spell is known, asked as a macro asks: its name, or nil. `known` keeps the answers of one layout.
@@ -575,6 +605,7 @@ local function Made(addon) return Mine(addon, "keysMade") end
 -- homes[slot] = the button something of yours stood on before a job took it and it moved to `slot`.
 local function Before(addon)
 	local before = Mine(addon, "keysBefore")
+	if before.placed == nil then before.ranked = true end   -- (a new layout knows a spell at any rank: Moved)
 	before.slots, before.keys = before.slots or {}, before.keys or {}
 	before.placed, before.pinned = before.placed or {}, before.pinned or {}
 	before.account = before.account or {}
@@ -585,6 +616,19 @@ end
 -- What a job that stands as the thing itself stands as: "item" (a bags' job), or "spell".
 local function Sort(name, before)
 	return before.sorts[name] or "item"
+end
+
+-- What a button holds (kind, id), as such a job is known by: an item by itself, a spell by its name, so any rank
+-- of it is the same job's (the game puts a new rank in an old one's place).
+local function Ident(kind, id)
+	local name = kind == "spell" and C_Spell.GetSpellName(id)
+	return name and ("spell:" .. name) or (tostring(kind) .. ":" .. tostring(id))
+end
+
+-- Whether a button holding (kind, id) holds what the job `name` stands as.
+local function Owns(name, before, kind, id)
+	local item = before.last[name]
+	return item ~= nil and kind == Sort(name, before) and Ident(kind, id) == Ident(kind, item)
 end
 
 -- Whether a job stands as the thing itself, with no macro: its item (job.item), or the spell (job.spell).
@@ -624,8 +668,7 @@ local function Remove(name, made, before)
 	if item then
 		for _, slots in ipairs({ before.placed[name] or EMPTY, before.pinned[name] or EMPTY }) do
 			for _, slot in ipairs(slots) do
-				local kind, id = GetActionInfo(slot)
-				if kind == Sort(name, before) and id == item then
+				if Owns(name, before, GetActionInfo(slot)) then
 					PickupAction(slot)
 					ClearCursor()
 				end
@@ -686,14 +729,14 @@ end
 -- The item a job that stands as its item (job.item) should hold now: the best of the first of its kinds the
 -- bags hold, else what it last held (its button then shows what to buy), or nil.
 local function Pick(job, best, before)
-	-- (the spell itself: a people's ability, which has no ranks; or the first you know of what you stay in)
+	-- (the spell itself, at the best rank you have: a people's ability, or the first you know of what you stay in)
 	if type(job.spell) == "table" then
 		for _, spell in ipairs(job.spell) do
-			if Learns(spell) then return spell end
+			if Learns(spell) then return Highest(spell) end
 		end
 		return before.last[job.name]
 	elseif job.spell then
-		return job.spell
+		return Highest(job.spell)
 	end
 	for _, kind in ipairs(job.supply) do
 		if best[kind] then return best[kind] end
@@ -878,6 +921,12 @@ end
 --   Keys.Hotkeys.Keep(key, on) / Keeps(key)   keeps a key as you have it, out of the board (its job left off);
 --                              with the hotkeys set it is done at once.  -> true, or false in a fight
 --
+-- What a key did before the board took it moves to Ctrl + that key (Keys.Hotkeys.HomeOf: C's character window
+-- to Ctrl + C, B's bags to Ctrl + B, Mouse 4's autorun to Ctrl + Mouse 4), while that does nothing yet; one home a
+-- binding, and none for what moves you, turns the bar's pages or presses a button. A home is bound, kept and put
+-- back like any key set here (it was nothing before), said in chat when it is made, and goes again when you keep
+-- the key it came from. The plan's changes hold the homes too (from "": a free key), and plan.homes lists them.
+--
 -- A layout's hotkeys never take a key of yours unseen: the keys' panel lists each one before you choose, and a
 -- chat command that would take one opens the panel instead (Keys.Run).
 --
@@ -898,10 +947,13 @@ end
 local Hot = {}
 Keys.Hotkeys = Hot
 Shy.core.keep.hotkeys = true
+Hot.ButtonOf = Button        -- a key's own button (the grid's; the number row's by its flyout)
+HOT.fixed = 2                -- what a set of hotkeys was last brought up to (state.homed): 1 gave the keys the board
+                             -- took a home on Ctrl; 2 has the side keys strafe when the board takes every key that did
 
 -- (The same keyboard gives the same two tables every time: they are read, never written. A board differs by the
 -- way you move, what your two side keys do now, and the flyouts' shapes.)
-HOT.order, HOT.boards = {}, {}
+HOT.order, HOT.boards, HOT.orders = {}, {}, {}
 for _, shift in ipairs({ "", "SHIFT-" }) do
 	for _, row in ipairs(HOT.rows) do
 		for key in row:gmatch(".") do HOT.order[#HOT.order + 1] = shift .. key end
@@ -957,14 +1009,53 @@ local function Must(command)
 	return HOT.musts[command] == true or command:find("^%u+ ") ~= nil
 end
 
+-- Whether you can still strafe that way once the board is set: a key that strafes now and that the board leaves
+-- as it is (one off the grid, or one you keep). keep: the keys you keep.
+local function Strafes(command, way, keep)
+	for _, key in ipairs({ GetBindingKey(command) }) do
+		if not way.move[key] and (not GRID[key] or (keep and keep[key])) then return true end
+	end
+	return false
+end
+
+-- The keys you picked for a kept key's ability (core.db.hotkeys.standIn: kept key -> the key you picked), while
+-- each still does nothing else: kept key -> key, and in order.  -> the table (nil for none), and the pairs as text
+local function StandIns(way, keep)
+	local book = keep and Shy.core.db and Shy.core.db.hotkeys
+	local picked = book and book.standIn
+	if not picked or not next(picked) then return nil, "" end
+	local out, said, over = {}, {}, book.over or EMPTY
+	for key, at in pairs(picked) do
+		local button = keep[key] and GRID[key] and not way.move[key] and Button(key)
+		local now = button and not GRID[at] and not way.move[at] and GetBindingAction(at)
+		if now == "" or (now and (now == button or over[at] == now)) then
+			out[key] = at
+			said[#said + 1] = key .. ">" .. at
+		end
+	end
+	table.sort(said)
+	return #said > 0 and out or nil, table.concat(said, " ")
+end
+Hot.StandIns = StandIns
+
 -- (whole: every key the board has a use for, the ones you keep with them)
+-- Your side keys (A and D for WASD) do what they do now if it moves you sideways, else strafe; and they strafe
+-- whenever the board takes every key you strafe with (Q and E as the game ships them), so you never lose it:
+-- you turn with the mouse then. A key you keep whose ability you gave another key (the list's quick bind):
+-- that key presses its button, after the board's own in the order.
 function Keys.Board(opts, scheme, whole)
 	scheme = scheme or Keys.Scheme()
 	local way = Keys.SCHEMES[scheme]
-	local left, right = GetBindingAction(way.left), GetBindingAction(way.right)
-	left, right = HOT.sides[left] and left or "STRAFELEFT", HOT.sides[right] and right or "STRAFERIGHT"
+	local keeping = Keeping()
+	local sides = {}
+	for i, side in ipairs({ way.left, way.right }) do
+		local strafe = i == 1 and "STRAFELEFT" or "STRAFERIGHT"
+		local now = GetBindingAction(side)
+		sides[i] = (HOT.sides[now] and (now == strafe or Strafes(strafe, way, keeping))) and now or strafe
+	end
+	local left, right = sides[1], sides[2]
 	-- (a key you keep stands out of the board; the keys you move with never do)
-	local keep, kept = not whole and Keeping(), ""
+	local keep, kept = not whole and keeping, ""
 	if keep then
 		local list = {}
 		for key in pairs(keep) do
@@ -973,7 +1064,8 @@ function Keys.Board(opts, scheme, whole)
 		table.sort(list)
 		kept = table.concat(list, " ")
 	end
-	local id = scheme .. "|" .. left .. "|" .. right .. "|" .. Shape(HOT.plain).id .. "|" .. Shape(HOT.bar).id .. "|" .. kept
+	local ins, said = StandIns(way, keep)
+	local id = scheme .. "|" .. left .. "|" .. right .. "|" .. Shape(HOT.plain).id .. "|" .. Shape(HOT.bar).id .. "|" .. kept .. "|" .. said
 	local want = HOT.boards[id]
 	if not want then
 		want = {}
@@ -981,9 +1073,20 @@ function Keys.Board(opts, scheme, whole)
 			if not way.move[key] and not (keep and keep[key]) then want[key] = Button(key) end
 		end
 		want[way.forward], want[way.back], want[way.left], want[way.right] = "MOVEFORWARD", "MOVEBACKWARD", left, right
-		HOT.boards[id] = want
+		local order = HOT.order
+		if ins then
+			order = {}
+			for i, key in ipairs(HOT.order) do order[i] = key end
+			for _, key in ipairs(HOT.order) do
+				if ins[key] then
+					want[ins[key]] = Button(key)
+					order[#order + 1] = ins[key]
+				end
+			end
+		end
+		HOT.boards[id], HOT.orders[id] = want, order
 	end
-	return want, HOT.order
+	return want, HOT.orders[id]
 end
 
 -- Whether both flyouts' bars are on (the game's switches of its side bars).
@@ -1005,10 +1108,23 @@ local function HotBook()
 end
 
 -- What is kept for the key bindings in use.  -> state, its id
+-- (Not one key set here is still as set: the key bindings were reset to the game's, or bound over whole. The
+-- hotkeys are no longer set there, and what was kept of them goes: nothing is bound back over what you have.)
+local function Lapsed(state)
+	if not (state and state.on and next(state.set)) then return false end
+	for key, ours in pairs(state.set) do
+		if GetBindingAction(key) == ours then return false end
+	end
+	return true
+end
 local function HotState(make)
 	local book = HotBook()
 	local id = GetCurrentBindingSet() == Enum.BindingSet.Character and UnitGUID("player") or "account"
 	local state = book.sets[id]
+	if Lapsed(state) then
+		book.sets[id], state = nil, nil
+		Keys.gen = (Keys.gen or 0) + 1
+	end
 	if not state and make then
 		state = { was = {}, set = {} }
 		book.sets[id] = state
@@ -1025,10 +1141,15 @@ function Hot.State()
 	return (HotState())
 end
 
+-- (a home counts as none of yours: it did nothing before)
 function Hot.Kept()
 	local state = HotState()
+	local homed = {}
+	for _, home in pairs(state and state.homes or EMPTY) do homed[home] = true end
 	local n = 0
-	for _ in pairs(state and state.set or {}) do n = n + 1 end
+	for key in pairs(state and state.set or EMPTY) do
+		if not homed[key] then n = n + 1 end
+	end
 	return n, state and state.at
 end
 
@@ -1058,6 +1179,127 @@ local function Pictured(command)
 	return command:find("^ACTIONBUTTON%d") ~= nil or command:find("^MULTIACTIONBAR%dBUTTON%d") ~= nil
 end
 
+-- Whether a binding turns the main bar's pages: the layout keeps the bar on its own page, so it goes without a
+-- home, and is said in one line rather than key by key.
+function Hot.Paging(command)
+	return command:find("ACTIONPAGE") ~= nil
+end
+
+-- Where what a key did goes when the board takes the key: Ctrl + that key (the character window from C to
+-- Ctrl + C), so a hand finds it by the letter it knows. Only while Ctrl + the key does nothing (or that already),
+-- one key a binding, and never what moves you, turns the bar's pages or presses a bar's button (its ability goes
+-- with its key). taken: keys and bindings given a home already this time, filled in.  -> the key, or nil
+-- The key you picked for it in the list comes first (core.db.hotkeys.homeAt: binding -> key), while it is still
+-- free; else Ctrl + the key.
+function Hot.HomeOf(key, command, taken)
+	if command == "" or Pictured(command) or HOT.moving[command] or Hot.Paging(command) then return nil end
+	if taken and taken[command] then return nil end
+	local book = Shy.core.db and Shy.core.db.hotkeys
+	local picked = book and book.homeAt and book.homeAt[command]
+	local over = book and book.over
+	for _, home in ipairs({ picked or false, HOT.home .. key }) do
+		local now = home and not (taken and taken[home]) and not Keys.Moving(home) and GetBindingAction(home)
+		-- (the key you picked may do something else, while it is still what you said it could stop doing)
+		if now == "" or now == command or (now and home == picked and over and over[home] == now) then
+			if taken then taken[home], taken[command] = true, true end
+			return home
+		end
+	end
+end
+
+-- What you picked in the list, account-wide beside the keys you keep: homeAt (a binding -> the key it goes to),
+-- standIn (a key you keep -> the key its ability goes on) and over (a key you said may be taken from what it did:
+-- the key -> what it did then; while it still does that, it is free to pick).
+function Hot.Choices()
+	local book = HotBook()
+	book.homeAt, book.standIn, book.over = book.homeAt or {}, book.standIn or {}, book.over or {}
+	return book
+end
+
+-- A key you bound to something else yourself after it was set here: yours.
+function Hot.Mine(key)
+	return Theirs(HotState(), key)
+end
+
+-- Whether a key can be picked in the list for `does` (a binding going to a new home, or the button of `kept`, the
+-- key you keep, for its ability): the left and right mouse buttons never, nor a key you move with or one of the
+-- board's; and one picked for something else, or that does something else now, only once you are sure.
+--   -> true, or false and why, said on the row; and when you can have it once you are sure, the question:
+--   { text, yes (the button's words), homeAt (the binding picked for it), standIn (the kept key picked for it),
+--   over (what it does now) }, for Hot.TakeOver
+function Hot.Free(key, does, kept)
+	if not key or key == "" then return false, "" end
+	local said = Keys.Key(key)
+	if key == "BUTTON1" or key == "BUTTON2" then return false, "Your left and right mouse buttons stay as they are." end
+	if Keys.Moving(key) then return false, said .. " moves you. Pick another key." end
+	if Keys.Board(nil, nil, true)[key] and not Hot.Keeps(key) then
+		return false, said .. " is one of your new keys. Pick one off them, like Ctrl + a key."
+	end
+	local book = Hot.Choices()
+	local here = kept and ("%s's ability"):format(Keys.Key(kept)) or BindingCalled(does)
+	local yes = "Use " .. said
+	for command, at in pairs(book.homeAt) do
+		if at == key and command ~= does then
+			local why = ("%s is picked for %s already."):format(said, BindingCalled(command))
+			return false, why, { text = ("%s Use it for %s instead?"):format(why, here), yes = yes, homeAt = command }
+		end
+	end
+	for other, at in pairs(book.standIn) do
+		if at == key and other ~= kept then
+			local why = ("%s is picked for %s's ability already."):format(said, Keys.Key(other))
+			return false, why, { text = ("%s Use it for %s instead?"):format(why, here), yes = yes, standIn = other }
+		end
+	end
+	local now = GetBindingAction(key)
+	if now ~= "" and now ~= does and book.over[key] ~= now then
+		local name = BindingCalled(now)
+		local left = false            -- (another key does it too: it keeps that one)
+		for _, other in ipairs({ GetBindingKey(now) }) do
+			if other ~= key then left = true end
+		end
+		-- (a kept key's ability: what the key did goes to Ctrl + it, as with the board's keys)
+		local home = not left and kept and Hot.HomeOf(key, now)
+		local text = ("%s does %s. Use it for %s instead?"):format(said, name, here)
+		if left then
+			text = ("%s %s stays on its other key."):format(text, name)
+		elseif home then
+			text = ("%s %s moves to %s."):format(text, name, Keys.Key(home))
+		else
+			text = ("%s %s is left without a key."):format(text, name)
+		end
+		return false, ("%s does %s. Pick a key that does nothing yet."):format(said, name),
+			{ text = text, yes = yes, over = now }
+	end
+	return true
+end
+
+-- You are sure: the key Hot.Free asked about is yours to pick. What it does now may be bound over (put back
+-- whenever the pick or the hotkeys go), or the pick it had lets it go. Then pick it again.  -> true, or false and why
+function Hot.TakeOver(key, ask, defer)
+	if InCombatLockdown() then return false, "Your keys can be changed once the fight is over." end
+	if ask.over then
+		Hot.Choices().over[key] = ask.over
+	elseif ask.standIn then
+		return Hot.SetStandIn(ask.standIn, nil, defer)
+	elseif ask.homeAt then
+		-- (the key of yours that did it: where Ctrl + that key is its place again)
+		local mine = Keys.Mine()
+		for _, entry in ipairs(mine and Hot.Yours(mine.opts) or EMPTY) do
+			if entry.from == ask.homeAt then return Hot.SetHome(entry.key, ask.homeAt, nil, defer) end
+		end
+		Hot.Choices().homeAt[ask.homeAt] = nil
+		Keys.gen = Keys.gen + 1
+	end
+	return true
+end
+
+-- What a list of homes says in chat: "Character Info (Ctrl + C) and Open All Bags (Ctrl + B)".
+function Hot.Homes(homes)
+	local names = {}
+	for i, entry in ipairs(homes) do names[i] = ("%s (%s)"):format(BindingCalled(entry.command), Keys.Key(entry.home)) end
+	return Several(names, HOT.named)
+end
+
 -- The keys that press another key's button, for every button the board gives a key: fn(key, the button's binding).
 -- (a key you keep is never let go)
 local function Others(want, keep, command, fn, ...)
@@ -1085,16 +1327,22 @@ function Hot.Plan(opts)
 		kept.bar = Flyouts()   -- (a bar switched on or off says nothing)
 		return kept
 	end
-	local plan = { changes = {}, lose = {}, freed = {}, want = want, order = order, at = GetTime(), gen = Keys.gen }
+	local plan = { changes = {}, lose = {}, freed = {}, homes = {}, want = want, order = order, at = GetTime(), gen = Keys.gen }
 	HOT.plan = plan
 	local after = {}             -- the keys that change -> what each does then
 	local state = HotState()
+	local taken, homed = {}, {}
 	for _, key in ipairs(order) do
 		local to = want[key]
 		local from = to and GetBindingAction(key)
 		if to and from ~= to and not Theirs(state, key) then
 			plan.changes[#plan.changes + 1] = { key = key, from = from, to = to }
 			after[key] = to
+			local home = Hot.HomeOf(key, from, taken)
+			if home then
+				plan.homes[#plan.homes + 1] = { key = key, home = home, command = from }
+				homed[from] = true
+			end
 		end
 	end
 	Strays(want, order, function(key, command)
@@ -1102,13 +1350,20 @@ function Hot.Plan(opts)
 		plan.freed[#plan.freed + 1] = key
 		after[key] = ""
 	end)
+	for _, entry in ipairs(plan.homes) do
+		if GetBindingAction(entry.home) ~= entry.command then
+			-- (a home you picked over something it did: that changes, and is said with the rest)
+			plan.changes[#plan.changes + 1] = { key = entry.home, from = GetBindingAction(entry.home), to = entry.command, home = entry.key }
+			after[entry.home] = entry.command
+		end
+	end
 	-- What has a key now and would have none: nothing the board itself gives a key, nothing with a key left, and
 	-- no button of a bar (the ones under the keys you move with are clicked, as the board means them to be).
 	local held, asked = {}, {}
 	for _, command in pairs(want) do held[command] = true end
 	for _, change in ipairs(plan.changes) do
 		local from = change.from
-		if from ~= "" and not held[from] and not asked[from] and not Pictured(from) then
+		if from ~= "" and not held[from] and not homed[from] and not asked[from] and not Pictured(from) then
 			asked[from] = true
 			local left = false
 			for _, key in ipairs({ GetBindingKey(from) }) do
@@ -1127,27 +1382,83 @@ function Hot.Take(opts, quiet)
 	local state = HotState(not quiet)
 	if not state or (quiet and not state.on) then return result end
 	local want, order = Keys.Board(opts)
+	local homes, taken = {}, {}
+	-- Set before what a set is brought up to now (quiet too: it is the next log-in): once, the side keys strafe
+	-- where the board took every key that did, and every key still as set here gives what it did a home.
+	local fixing = state.on == true and (tonumber(state.homed) or (state.homed and 1) or 0) < HOT.fixed
+	local way = Scheme()
+	local book = HotBook()
+	local picked = {}            -- the keys picked for a kept key's ability -> that key
+	for kept, at in pairs(book.standIn or EMPTY) do picked[at] = kept end
 	for _, key in ipairs(order) do
 		local command = want[key]
 		if command and not quiet and Theirs(state, key) then
-			-- (bound to something else by you since it was set here: yours from now on, kept as it is)
-			local book = HotBook()
-			book.keep = book.keep or {}
-			book.keep[key], state.was[key], state.set[key] = true, nil, nil
+			if picked[key] then
+				-- (the key you picked for an ability, bound to something else since or let go: the pick goes)
+				book.standIn[picked[key]], state.was[key], state.set[key] = nil, nil, nil
+				if book.over then book.over[key] = nil end
+			else
+				-- (bound to something else by you since it was set here: yours from now on, kept as it is)
+				book.keep = book.keep or {}
+				book.keep[key], state.was[key], state.set[key] = true, nil, nil
+			end
 			result.kept = result.kept + 1
 		else
-			-- (quiet: a key is ours only while it is still as it was set here)
-			local ours = not quiet or (state.set[key] ~= nil and GetBindingAction(key) == state.set[key])
-			if command and ours and HotSet(state, key, command) then result.bound = result.bound + 1 end
+			-- (quiet: a key is ours only while it is still as it was set here; or a side key, brought up to date)
+			local side = fixing and (key == way.left or key == way.right) and HOT.sides[GetBindingAction(key)]
+			local ours = not quiet or side or (state.set[key] ~= nil and GetBindingAction(key) == state.set[key])
+			local now = GetBindingAction(key)
+			if command and ours and HotSet(state, key, command) then
+				result.bound = result.bound + 1
+				if HOT.steer[command] and HOT.steer[command] == now then
+					result.strafe = (result.strafe and (result.strafe .. " and ") or "") .. Keys.Key(key)
+				end
+				local home = not quiet and Hot.HomeOf(key, now, taken)
+				if home then homes[#homes + 1] = { key = key, home = home, command = now } end
+			end
+		end
+	end
+	if fixing then
+		for _, key in ipairs(order) do
+			local was = state.was[key]
+			if state.set[key] ~= nil and GetBindingAction(key) == state.set[key] and was and was ~= "" then
+				local home = Hot.HomeOf(key, was, taken)
+				if home then homes[#homes + 1] = { key = key, home = home, command = was } end
+			end
 		end
 	end
 	if not quiet then
+		-- (a key that became yours just now leaves the board first; and once the keys are set, a key you bound to
+		-- a button yourself since is yours: only the game's keys from before are let go)
+		if result.kept > 0 then want, order = Keys.Board(opts) end
+		local before = state.on == true
 		Strays(want, order, function(key)
+			if before and state.set[key] == nil then return end
 			if HotSet(state, key, "") then result.cleared = result.cleared + 1 end
 		end)
 		state.on, state.at = true, state.at or time()
 	end
-	if result.bound + result.cleared > 0 then SaveBindings(GetCurrentBindingSet()) end
+	-- What the board took moves to Ctrl + its key (one of yours bound there since is never touched).
+	local made, homed = {}, 0
+	if state.on then
+		state.homes, state.homed = state.homes or {}, HOT.fixed
+		for _, entry in ipairs(homes) do
+			local there = GetBindingAction(entry.home) == entry.command
+			if there or HotSet(state, entry.home, entry.command) then
+				state.homes[entry.key] = entry.home
+				made[#made + 1] = entry
+				if not there then homed = homed + 1 end
+			end
+		end
+		if #made > 0 then
+			Shy.core:Print(("nothing of yours is lost. On new keys now: %s. /shy keys lists every key that changed."):format(Hot.Homes(made)))
+		end
+		if result.strafe then
+			Shy.core:Print(("%s strafe now, since the keys you strafed with hold abilities. To turn, hold the right mouse button and move the mouse."):format(result.strafe))
+		end
+	end
+	result.homes = made
+	if result.bound + result.cleared + homed > 0 then SaveBindings(GetCurrentBindingSet()) end
 	Keys.gen = Keys.gen + 1
 	return result
 end
@@ -1183,16 +1494,17 @@ end
 
 -- Keeps a key as it is, or lets the hotkeys have it. With the hotkeys set it is done now: the key back as it was
 -- (only while it is still as set here) or set, and keys laid out are laid out again around it.
---   -> true, or false in a fight
-function Hot.Keep(key, on)
+--   -> true, or false in a fight. defer: only noted, nothing bound (setup's page: Finish does it)
+function Hot.Keep(key, on, defer)
 	on = on and true or nil
 	if (Hot.Keeps(key) or nil) == on then return true end
 	local state = HotState()
-	local set = state ~= nil and state.on == true and Keys.Mode() == "shy"
+	local set = not defer and state ~= nil and state.on == true and Keys.Mode() == "shy"
 	if set and InCombatLockdown() then return false end
-	local book = HotBook()
+	local book = Hot.Choices()
 	book.keep = book.keep or {}
 	book.keep[key] = on
+	if not on then book.standIn[key] = nil end   -- (the board's again: its ability on it, no other key for it; Take lets that one go)
 	local mine = watched[1]
 	local laid = set and mine ~= nil and Keys.Has(mine.addon)
 	if laid then Keys.Revert(mine.addon) end
@@ -1203,6 +1515,15 @@ function Hot.Keep(key, on)
 		local was = state.was[key] or ""
 		if SetBinding(key, was ~= "" and was or nil) then
 			state.was[key], state.set[key] = nil, nil
+			-- (back on its key, it leaves Ctrl + the key: while that is still as it was set here)
+			local home = state.homes and state.homes[key]
+			if home then
+				state.homes[key] = nil
+				if state.set[home] ~= nil and GetBindingAction(home) == state.set[home] then
+					local before = state.was[home] or ""
+					if SetBinding(home, before ~= "" and before or nil) then state.was[home], state.set[home] = nil, nil end
+				end
+			end
 			SaveBindings(GetCurrentBindingSet())
 		end
 	elseif set and not on then
@@ -1217,15 +1538,89 @@ function Hot.Keep(key, on)
 	return true
 end
 
+-- One binding of the hotkeys' own put back as it was, while it is still as set here.
+local function HotUnset(state, key)
+	if not (state and state.set[key] ~= nil and GetBindingAction(key) == state.set[key]) then return false end
+	local was = state.was[key] or ""
+	if not SetBinding(key, was ~= "" and was or nil) then return false end
+	state.was[key], state.set[key] = nil, nil
+	return true
+end
+
+-- Picks the key what `key` did goes to (command: what it did), or nil for Ctrl + the key again. With the
+-- hotkeys set it moves at once: off the key it was on (while that is as set here), onto the new one.
+--   -> true, or false and why (a key that can't be picked, or a fight), and Hot.Free's question when there is one
+function Hot.SetHome(key, command, at, defer)
+	if at == HOT.home .. key then at = nil end
+	if at then
+		local free, why, ask = Hot.Free(at, command)
+		if not free then return false, why, ask end
+	end
+	local state = HotState()
+	local set = not defer and state ~= nil and state.on == true and Keys.Mode() == "shy"
+	if set and InCombatLockdown() then return false, "Your keys can be changed once the fight is over." end
+	local book = Hot.Choices()
+	local was = book.homeAt[command]
+	if was and was ~= at then book.over[was] = nil end   -- (a key you let go of is asked about again)
+	book.homeAt[command] = at
+	if set then
+		state.homes = state.homes or {}
+		local old = state.homes[key]
+		if old then HotUnset(state, old) end
+		state.homes[key] = nil
+		local home = Hot.HomeOf(key, command, {})
+		if home and (GetBindingAction(home) == command or HotSet(state, home, command)) then state.homes[key] = home end
+		SaveBindings(GetCurrentBindingSet())
+	end
+	Keys.gen = Keys.gen + 1
+	Shy:Fire("SHY_KEYS_MODE", Keys.Mode())
+	return true
+end
+
+-- Picks the key a kept key's ability goes on (nil: none, the ability left off). With the hotkeys set it is done
+-- now: the key you picked before let go, the new one set to the kept key's button, and keys laid out are laid out
+-- again on it.  -> true, or false and why, and Hot.Free's question when there is one
+function Hot.SetStandIn(key, at, defer)
+	local button = Hot.ButtonOf(key)
+	if not button then return false, "" end
+	if at then
+		local free, why, ask = Hot.Free(at, button, key)
+		if not free then return false, why, ask end
+	end
+	local state = HotState()
+	local set = not defer and state ~= nil and state.on == true and Keys.Mode() == "shy"
+	if set and InCombatLockdown() then return false, "Your keys can be changed once the fight is over." end
+	-- (an ability on another key: its own key is one you keep, back as you had it)
+	if not Hot.Keeps(key) and not Hot.Keep(key, true, defer) then return false, "Your keys can be changed once the fight is over." end
+	local book = Hot.Choices()
+	local mine = watched[1]
+	local laid = set and mine ~= nil and Keys.Has(mine.addon)
+	if laid then Keys.Revert(mine.addon) end
+	local old = book.standIn[key]
+	if old and old ~= at then book.over[old] = nil end   -- (a key you let go of is asked about again)
+	book.standIn[key] = at
+	if set and old and old ~= at and HotUnset(state, old) then SaveBindings(GetCurrentBindingSet()) end
+	Keys.gen = Keys.gen + 1
+	if set then Hot.Take(mine and mine.opts) end
+	if laid then
+		local result = Keys.Apply(mine.addon, mine.jobs, mine.opts)
+		if result then mine.waiting = result.waiting end
+	end
+	Shy:Fire("SHY_KEYS_MODE", Keys.Mode())
+	return true
+end
+
 -- Every key of yours the hotkeys take, or would: one that does something of the game's or of yours now (not a
 -- bar's button, whose ability goes wherever its key does, and not nothing), the ones a hand relies on first, then
 -- as a hand meets them. Each { key, from (what it does, or did before it was set here), to (what the board
 -- gives it), kept (it stays as it is), move (a key you move with: the board's whatever you keep), must (a hand
--- relies on it), also (another key that does it then, or nil) }.
+-- relies on it), also (another key that does it then, or nil), home (Ctrl + the key, where it goes or went, or
+-- nil), paging (it turns the bar's pages: said in one line, after the rest) }.
 function Hot.Yours(opts)
 	local whole, order = Keys.Board(opts, nil, true)
 	local keep, state, move = Keeping() or EMPTY, HotState(), Scheme().move
 	local on = state ~= nil and state.on == true
+	local homes, taken = state and state.homes or EMPTY, {}
 	-- (a key the board changes yet: not while the hotkeys are set, when every change is made)
 	local function Changes(key)
 		local to = whole[key]
@@ -1235,8 +1630,10 @@ function Hot.Yours(opts)
 	for i, key in ipairs(order) do
 		local to, now = whole[key], GetBindingAction(key)
 		local from, kept
+		local pending              -- (noted on setup's page, not done yet: Finish does it)
 		if on and state.set[key] ~= nil and now == state.set[key] then
 			from = state.was[key] or ""
+			if keep[key] and not move[key] then kept, pending = true, true end
 		elseif (keep[key] and not move[key]) or Theirs(state, key) then
 			from, kept = now, true
 		elseif not on and now ~= to then
@@ -1245,16 +1642,38 @@ function Hot.Yours(opts)
 		if from and from ~= to and from ~= "" and not Pictured(from) then
 			local also
 			for _, other in ipairs({ GetBindingKey(from) }) do
-				if other ~= key and not Changes(other) then
+				-- (its own new key isn't another: the row stays where it is as you switch it)
+				if other ~= key and other ~= homes[key] and not Changes(other) then
 					also = other
 					break
 				end
 			end
+			-- (or a key the board gives it: A strafing once Q is the board's)
+			for _, other in ipairs(order) do
+				if not also and other ~= key and whole[other] == from and not (keep[other] and not move[other]) then also = other end
+			end
+			local home
+			if on and not kept then
+				home = homes[key]
+				if home and GetBindingAction(home) ~= from then home = nil end
+				-- (another key picked for it since, not bound yet: the one it will have)
+				local book = Shy.core.db and Shy.core.db.hotkeys
+				local picked = book and book.homeAt and book.homeAt[from]
+				if picked and picked ~= home and (GetBindingAction(picked) == "" or GetBindingAction(picked) == from) then
+					home, pending = picked, true
+				end
+			elseif not kept then
+				home = Hot.HomeOf(key, from, taken)
+			end
+			-- (a key you keep: the key you picked for its ability, while it stands)
+			local ins = kept and StandIns(Scheme(), keep)
 			out[#out + 1] = { key = key, from = from, to = to, kept = kept == true, move = move[key] == true,
-				must = Must(from), also = also, at = i }
+				must = Must(from), also = also, home = home, standIn = ins and ins[key] or nil,
+				paging = Hot.Paging(from), pending = pending, at = i }
 		end
 	end
 	table.sort(out, function(a, b)
+		if a.paging ~= b.paging then return b.paging end
 		if a.must ~= b.must then return a.must end
 		return a.at < b.at
 	end)
@@ -1330,20 +1749,72 @@ Keys.Doing = Action
 
 -- The button a key presses, or would once bound to its own (it presses nothing, isn't one you move with, and
 -- its button has no other key): the binding's name, and true when it would have to be bound first.
+-- Another key that presses a button (or will, as the keys are drawn), not `except`.  -> the key, or nil
+function Hot.Pressed(button, except)
+	local coming = Coming()
+	for k, command in pairs(coming or EMPTY) do
+		if command == button and k ~= except then return k end
+	end
+	for _, k in ipairs({ GetBindingKey(button) }) do
+		if k ~= except and (not coming or coming[k] == nil or coming[k] == button) then return k end
+	end
+end
+
+-- A key you keep, or bound to something else yourself since it was set here, is never bound again. Its ability
+-- stands on the key's own button while another key presses it: the one you picked for it, or one you bound
+-- there yourself, so where you put it is where it stays.
 local function Pressable(key, opts, spare)
 	local command = Action(key)
-	if command ~= "" then return Slots(command, opts) and command or nil end
+	if command ~= "" and Slots(command, opts) then return command end
+	local own = Hot.ButtonOf(key)
+	if own and Keys.Mode() == "shy" and (Hot.Keeps(key) or Hot.Mine(key)) then
+		return Hot.Pressed(own, key) and Slots(own, opts) and own or nil
+	end
+	if command ~= "" then return nil end
 	if Keys.Moving(key) or Hot.Keeps(key) then return nil end   -- (one you keep does nothing, as you have it)
 	-- (its own: the grid's, the number row's by its flyout's shape; or its job's spare)
 	local want = Button(key) or spare
 	if want and not GetBindingKey(want) then return want, true end
 end
 
+-- The button a job's key presses as the keys are bound now: its binding's; or, for a key you keep or bound to
+-- something else since, its own button while another key of yours presses it. "" for none.
+function Hot.Pressing(key, opts)
+	local command = GetBindingAction(key)
+	if command ~= "" and Slots(command, opts) then return command end
+	local own = Hot.ButtonOf(key)
+	if own and Keys.Mode() == "shy" and (Hot.Keeps(key) or Hot.Mine(key)) and Hot.Pressed(own, key) then return own end
+	return ""
+end
+
+-- The key a seat's ability is pressed with: the seat itself, or the key of yours that presses its button.
+function Hot.KeyFor(seat, opts)
+	local own = Hot.Pressing(seat, opts)
+	if own ~= "" and own ~= GetBindingAction(seat) then return Hot.Pressed(own, seat) or seat end
+	return seat
+end
+
 -- The button a key presses, binding it to its own (or the job's spare) when it presses nothing.
 --   -> the binding's name or nil, and true when a key was bound
+-- A layout made for your keys set up, on key bindings where they aren't set (reset to the game's, or a
+-- character's own switched to): it waits, nothing moved or bound, until you set them up there or put it back.
+function Keys.Paused(addon)
+	return Keys.Has(addon) and HotBook().mode == "shy" and not Hot.On()
+end
+
+-- Whether a layout may bind a key of yours that does nothing: where you chose it (your hotkeys set up on these key
+-- bindings, or your own hotkeys picked), or on the key bindings it was first laid out on. Never on others you
+-- switched to since (a character's own, as the game ships them): nothing is bound there until you choose.
+function Hot.MayBind(before)
+	if Hot.On() or HotBook().mode == "own" then return true end
+	local _, id = HotState()
+	return before ~= nil and before.set ~= nil and before.set == id
+end
+
 local function Press(key, opts, before, spare)
 	local command, unbound = Pressable(key, opts, spare)
 	if not unbound then return command end
+	if not Hot.MayBind(before) then return nil end
 	if SetBinding(key, command) then
 		before.keys[key] = command
 		return command, true
@@ -1366,8 +1837,8 @@ local function Keep(slot, before, made)
 			local text = C_ActionBar.GetActionText(slot)
 			if text and not made[text] then return { kind, text }, true end
 		elseif kind then
-			for name, item in pairs(before.last) do
-				if item == id and made[name] and Sort(name, before) == kind then return nil end   -- (one of ours)
+			for name in pairs(before.last) do
+				if made[name] and Owns(name, before, kind, id) then return nil end   -- (one of ours)
 			end
 			return { kind, id }, true
 		end
@@ -1572,8 +2043,8 @@ local function Empty(slot, before, made)
 		-- (an item one of our jobs stands as, on a button a job took before: one of yours of that kind on a
 		-- button no job ever took is tidied with the rest, and remembered)
 		if (kind == "item" or kind == "spell") and before.slots[slot] ~= nil then
-			for name, item in pairs(before.last) do
-				if item == id and made[name] and Sort(name, before) == kind then ours = true end
+			for name in pairs(before.last) do
+				if made[name] and Owns(name, before, kind, id) then ours = true end
 			end
 		end
 		if ours then
@@ -1593,13 +2064,13 @@ local function Empty(slot, before, made)
 end
 
 -- Where the jobs laid out here stand now, on every bar: name -> { slot, ... }. A job is known by its macro's
--- name, or by the item it stands as.
+-- name, or by the item it stands as (a spell at any rank).
 local function Standing(made, before)
 	local at, items = {}, nil
 	for name, item in pairs(before and before.last or EMPTY) do
 		if made[name] then
 			items = items or {}
-			items[Sort(name, before) .. item] = name
+			items[Ident(Sort(name, before), item)] = name
 		end
 	end
 	for slot = 1, MULTIBAR_7_ACTIONBAR_PAGE * NUM_ACTIONBAR_BUTTONS do
@@ -1607,7 +2078,7 @@ local function Standing(made, before)
 		local name = text and made[text] and text or nil
 		if not name and items and not text then
 			local kind, id = GetActionInfo(slot)
-			name = (kind == "item" or kind == "spell") and items[kind .. id] or nil
+			name = (kind == "item" or kind == "spell") and items[Ident(kind, id)] or nil
 		end
 		if name then
 			at[name] = at[name] or {}
@@ -1651,13 +2122,22 @@ local function Moved(made, before, opts)
 			before.pinned[name] = not Same(now, placed) and now or nil
 		end
 	end
+	-- (once for each character: a spell job on no bar goes back to its button, where it may have stood at another
+	-- rank and not been counted)
+	if not before.ranked then
+		before.ranked = true
+		for name, slots in pairs(before.pinned) do
+			if #slots == 0 and Sort(name, before) == "spell" then before.pinned[name] = nil end
+		end
+	end
 	-- A key you took off its button since (bound to something that is no action button, or to nothing, in the
 	-- game's key bindings): its ability stays on its button, as one you moved does, and is shown with whatever
-	-- key presses that button now. (A key you bound to another button takes its job there, as before.)
+	-- key presses that button now. (A key you bound to another button takes its job there, as before; and while
+	-- another key of yours presses its button, the button is still the key's: its own job comes to it.)
 	for name, seat in pairs(made) do
 		local placed = before.placed[name]
 		if type(seat) == "string" and placed and #placed > 0 and not before.pinned[name] and at[name] then
-			local command = GetBindingAction(seat)
+			local command = Hot.Pressing(seat, opts)
 			if command == "" or not Slots(command, opts) then before.pinned[name] = placed end
 		end
 	end
@@ -1687,9 +2167,19 @@ local function KeyAt(slots, opts)
 	return key and Keys.Key(key)
 end
 
--- A key as it is said: "Shift + Mouse 4".
+-- A key as it is said: "Shift + Mouse 4", "Ctrl + C".
 function Keys.Key(key)
-	return (key:gsub("SHIFT%-", "Shift + "):gsub("BUTTON(%d)", "Mouse %1"))
+	return (key:gsub("ALT%-", "Alt + "):gsub("CTRL%-", "Ctrl + "):gsub("SHIFT%-", "Shift + "):gsub("BUTTON(%d)", "Mouse %1"))
+end
+
+-- A key as a keycap says it: "Ctrl C", "Shift Mouse 4".
+function Hot.Plate(key)
+	return (Keys.Key(key):gsub(" %+ ", " "))
+end
+
+-- A key pressed with whatever is held with it, as the game names a binding ("CTRL-SHIFT-B").
+function Hot.Chord(key)
+	return (IsAltKeyDown() and "ALT-" or "") .. (IsControlKeyDown() and "CTRL-" or "") .. (IsShiftKeyDown() and "SHIFT-" or "") .. key
 end
 
 -- The talent build followed (ShyQuest's, when it is there): its id and name, or nil.
@@ -1909,7 +2399,7 @@ end
 local function Homes(jobs, opts, wants, keep)
 	local reserved = {}
 	for _, job in ipairs(jobs) do
-		local command = job.key and GetBindingAction(job.key) or ""
+		local command = job.key and Hot.Pressing(job.key, opts) or ""
 		for _, slot in ipairs(command ~= "" and Slots(command, opts) or EMPTY) do reserved[slot] = true end
 	end
 	local out, seen = {}, {}
@@ -1975,6 +2465,8 @@ function Keys.Apply(addon, jobs, opts)
 		if not wanted[name] then Drop(name) end
 	end
 	Moved(made, before, opts)
+	-- (the key bindings it is first laid out on: the ones you chose it for, where a key that does nothing may be bound)
+	if before.layout == nil and before.set == nil then before.set = select(2, HotState()) end
 	before.layout = LAYOUT   -- (from here on, a macro off its button was moved by you)
 	-- What you seldom press, on the key it has or the next free one (none free: it is left, said so).
 	if jobs.spot then
@@ -2074,7 +2566,7 @@ function Keys.Apply(addon, jobs, opts)
 	local occupied = {}
 	for job, seat in pairs(seats) do occupied[seat] = job end
 	for _, job in ipairs(jobs) do
-		local command = job.key and GetBindingAction(job.key) or ""
+		local command = job.key and Hot.Pressing(job.key, opts) or ""
 		for _, slot in ipairs(command ~= "" and Slots(command, opts) or {}) do
 			local want = wants[slot]
 			if want then
@@ -2222,7 +2714,7 @@ function Keys.Wanted()
 	if not mine then return false end
 	local plan = Shy.Setup and Shy.Setup.Current and Shy.Setup.Current()
 	local pick = plan and plan.keys and plan.keys.pick
-	if pick then return pick ~= "off" end
+	if pick then return pick ~= "off" and pick ~= "skip" end   -- (No, or nothing laid out: no bars wanted for it)
 	return Keys.Has(mine.addon)
 end
 
@@ -2332,8 +2824,8 @@ function Keys.Displaces(addon, jobs, opts)
 				held = text and not made[text] and { kind, text } or nil
 			elseif kind then
 				held = { kind, id }
-				for name, item in pairs(last) do
-					if item == id and made[name] then held = nil end   -- (one of ours)
+				for name in pairs(last) do
+					if made[name] and Owns(name, before, kind, id) then held = nil end   -- (one of ours)
 				end
 			end
 			local covered = held and ((kind == "spell" and does[C_Spell.GetSpellName(id) or ""]) or (kind == "item" and carried[Kind(id) or ""]))
@@ -2358,7 +2850,10 @@ function Keys.Run(addon, jobs, opts, asked)
 		for _, entry in ipairs(Hot.Yours(opts)) do
 			if not entry.kept then
 				taking = taking + 1
-				if entry.must then musts[#musts + 1] = ("%s (%s)"):format(Keys.Key(entry.key), BindingCalled(entry.from)) end
+				if entry.must then
+					musts[#musts + 1] = ("%s (%s%s)"):format(Keys.Key(entry.key), BindingCalled(entry.from),
+						entry.home and (", to " .. Keys.Key(entry.home)) or "")
+				end
 			end
 		end
 		if taking > 0 then
@@ -2453,7 +2948,7 @@ function Keys.List(jobs, opts, addon)
 	for _, job in ipairs(jobs) do
 		if seats[job] then
 			local at = pinned[job.name]
-			local where = at and (KeyAt(at, opts) or "No key") or Keys.Key(seats[job])
+			local where = at and (KeyAt(at, opts) or "No key") or Keys.Key(Hot.KeyFor(seats[job], opts))
 			lines[#lines + 1] = ("%s   %s"):format(where, job.what)
 		end
 	end
@@ -2922,6 +3417,7 @@ function Keys.Rescheme()
 	local mine = watched[1]
 	local laid = mine ~= nil and Keys.Has(mine.addon)
 	if not laid and not Hot.On() then return true end
+	if laid and Keys.Paused(mine.addon) then return true end   -- (waiting for your keys: nothing moved)
 	if InCombatLockdown() then return false end
 	if laid then Keys.Revert(mine.addon) end
 	-- (the hotkeys, where they are set: the keys you move with now move you, the ones you moved with press buttons)
@@ -2967,7 +3463,7 @@ local function Grow()
 	end
 	growing = false
 	for _, entry in ipairs(watched) do
-		if Keys.Has(entry.addon) and not Keys.Old(entry.addon) and (entry.waiting ~= 0 or entry.stale) then
+		if Keys.Has(entry.addon) and not Keys.Old(entry.addon) and not Keys.Paused(entry.addon) and (entry.waiting ~= 0 or entry.stale) then
 			entry.stale = nil
 			local result = Keys.Apply(entry.addon, entry.jobs, entry.opts)
 			if result then
@@ -3043,7 +3539,7 @@ local function Turn()
 	local who = UnitGUID("player")
 	for _, entry in ipairs(watched) do
 		local opts, db = entry.opts, entry.addon.db
-		if opts and opts.build and db.keysFollow == true and Keys.Has(entry.addon) and not Keys.Old(entry.addon) then
+		if opts and opts.build and db.keysFollow == true and Keys.Has(entry.addon) and not Keys.Old(entry.addon) and not Keys.Paused(entry.addon) then
 			local build, name = opts.build()
 			if (db.keysBuild and db.keysBuild[who]) ~= (build or "") then
 				local result = Keys.Apply(entry.addon, entry.jobs, opts)
@@ -3168,18 +3664,86 @@ local function NewCap(parent, size, high)
 	return cap
 end
 
+-- A step of the keys' page: its number on a key's plate, what it is, and under it one sentence that guides; at
+-- the right, beside the title, a few words (how many keys change).
+--   Hot.StepHead(parent, n, width) -> f: f.title, f.say, f.side; f:Fit() sizes it to what it says (-> its height)
+function Hot.StepHead(parent, n, width)
+	local f = CreateFrame("Frame", nil, parent)
+	f.plate = CreateFrame("Button", nil, f)
+	f.plate:SetSize(HOT.step, HOT.step)
+	f.plate:SetPoint("TOPLEFT")
+	UI.KeyPlate(f.plate)
+	f.number = UI.Text(f.plate, tostring(n), 12, true, C.head)
+	f.number:SetPoint("CENTER")
+	f.title = UI.Text(f, "", 15, true, C.head)
+	f.title:SetPoint("LEFT", f.plate, "RIGHT", HOT.stepGap, 0)
+	f.side = UI.Text(f, "", 11, true, C.dim)
+	f.side:SetPoint("RIGHT", f, "TOPRIGHT", 0, -HOT.step / 2)
+	f.side:SetJustifyH("RIGHT")
+	f.say = UI.Text(f, "", 12, false, C.dim)
+	f.say:SetPoint("TOPLEFT", f.plate, "BOTTOMRIGHT", HOT.stepGap, -5)
+	f.say:SetWidth(width - HOT.step - HOT.stepGap)
+	f.say:SetJustifyH("LEFT")
+	f.say:SetWordWrap(true)
+	function f:Fit()
+		local said = (self.say:GetText() or "") ~= ""
+		self:SetSize(width, HOT.step + (said and (5 + math.ceil(self.say:GetStringHeight())) or 0))
+		return self:GetHeight()
+	end
+	f:Fit()
+	return f
+end
+
+-- More of a list, a click away: its words in the middle of a line between two hairlines, lit under the mouse.
+--   Hot.More(parent, width, onClick) -> b: b:Set(words) (nil or "": hidden); b.text
+HOT.moreTall = 24
+function Hot.More(parent, width, onClick)
+	local b = CreateFrame("Button", nil, parent)
+	b:SetSize(width, HOT.moreTall)
+	b.text = UI.Text(b, "", 11, true, C.good)
+	b.text:SetPoint("CENTER")
+	b.left = b:CreateTexture(nil, "ARTWORK")
+	b.right = b:CreateTexture(nil, "ARTWORK")
+	for _, rule in ipairs({ b.left, b.right }) do
+		Theme.Paint(rule, C.border, 0.8)
+		rule:SetHeight(1)
+	end
+	b.left:SetPoint("LEFT")
+	b.left:SetPoint("RIGHT", b.text, "LEFT", -12, 0)
+	b.right:SetPoint("LEFT", b.text, "RIGHT", 12, 0)
+	b.right:SetPoint("RIGHT")
+	b:SetScript("OnClick", function() onClick() end)
+	b:SetScript("OnEnter", function(self)
+		Theme.Ink(self.text, C.head)
+		for _, rule in ipairs({ self.left, self.right }) do Theme.Paint(rule, C.good, 0.6) end
+	end)
+	b:SetScript("OnLeave", function(self)
+		Theme.Ink(self.text, C.good)
+		for _, rule in ipairs({ self.left, self.right }) do Theme.Paint(rule, C.border, 0.8) end
+	end)
+	function b:Set(words)
+		self.text:SetText(words or "")
+		if words ~= nil and words ~= "" then self:Show() else self:Hide() end
+	end
+	b:Set(nil)
+	return b
+end
+
 -- The keys' controls for this character's class: how things stand, lay them out, put yours back, follow the
 -- build; and the keys themselves on two hands at the level the slider picks (yours to start with), what each
 -- does then, what comes at that level, and how each key grows on its hover. f:Refresh() says how things stand.
 -- With a plan (setup's page) the hotkeys' choice is a pick for Finish (plan.keys.pick: "shy", "own" or "off"),
 -- and the two buttons and the build's switch stay in the /shy window.
-function Keys.Panel(parent, width, plan)
+-- part: one part alone, a page of setup's walk through your keys: "choose" (the three choices and what the lit one
+-- means), "changes" (what it changes, key by key) or "board" (your keys on two hands, at any level).
+function Keys.Panel(parent, width, plan, part)
 	local f = CreateFrame("Frame", nil, parent)
 	local view = { level = nil }   -- the story, worked out as the panel shows; the level shown
-	f.status = UI.Text(f, "", 13)
-	f.status:SetPoint("TOPLEFT")
-	f.status:SetWidth(width)
-	f.status:SetJustifyH("LEFT")
+	-- Three steps, one under the other: choose, what that changes, your keys. Each says what to do there.
+	f.step1 = Hot.StepHead(f, 1, width)
+	f.step1:SetPoint("TOPLEFT")
+	f.step1.title:SetText("Choose how your keys work")
+	f.status = f.step1.say
 	local function Do(act)
 		return function()
 			local mine = Keys.Mine()
@@ -3191,8 +3755,9 @@ function Keys.Panel(parent, width, plan)
 	f.hot = Hot.Panel(f, width, plan, function()
 		f:Refresh()
 		if f.resized then f.resized() end
-	end)
-	f.hot:SetPoint("TOPLEFT", f.status, "BOTTOMLEFT", 0, -10)
+	end, part)
+	f.hot:SetPoint("TOPLEFT", f.step1, "BOTTOMLEFT", 0, -12)
+	f.part = part
 	-- One button makes the choice looked at (it says which); beside it, that until then nothing is changed.
 	local third = math.floor((width - 2 * GAP) / 3)
 	f.lay = UI.Button(f, "", third, function()
@@ -3205,7 +3770,8 @@ function Keys.Panel(parent, width, plan)
 	f.hint:SetPoint("LEFT", f.lay, "RIGHT", GAP + 4, 0)
 	f.hint:SetWidth(third - 4)
 	f.hint:SetJustifyH("LEFT")
-	f.follow = UI.Checkbox(f, "Follow my build", function()
+	-- Following your talents, a line of its own under the button, saying what it does (not a part of setting up).
+	f.follow = UI.Checkbox(f, "Follow my talents", function()
 		local mine = Keys.Mine()
 		return mine ~= nil and mine.addon.db.keysFollow == true
 	end, function(on)
@@ -3214,8 +3780,10 @@ function Keys.Panel(parent, width, plan)
 		mine.addon.db.keysFollow = on
 		if on then Turn() end
 		f:Refresh()
-	end, { desc = "Lays your keys out again when you pick another talent build." })
-	f.follow:SetPoint("LEFT", f.lay, "RIGHT", third + 2 * GAP, 0)
+	end)
+	f.follow:SetPoint("TOPLEFT", f.lay, "BOTTOMLEFT", 0, -HOT.followGap)
+	f.followSay = UI.Text(f, "When you switch to another talent build, your keys are laid out for it.", 11, false, C.dim)
+	f.followSay:SetPoint("LEFT", f.follow, "RIGHT", 12, 0)
 	-- An earlier layout's keys: one press draws your bars as they are now, another the new layout again.
 	f.flip = UI.Button(f, "", third - GAP, function()
 		view.now = not view.now
@@ -3224,15 +3792,34 @@ function Keys.Panel(parent, width, plan)
 	end)
 	f.flip:SetPoint("LEFT", f.lay, "RIGHT", GAP, 0)
 	f.flip:Hide()
-	for _, piece in ipairs({ f.lay, f.hint, f.follow }) do piece:SetShown(plan == nil) end
+	for _, piece in ipairs({ f.lay, f.hint, f.follow, f.followSay }) do piece:SetShown(plan == nil) end
 	-- The two hands.
 	local unit = math.min(VIEW.most, math.floor((width - VIEW.apart) / (2 * VIEW.span)))
 	local size = unit - VIEW.inner
 	local high = math.floor(size * VIEW.tall)
 	local hands = (VIEW.span * unit) * 2 + VIEW.apart
+	f.step3 = Hot.StepHead(f, 3, width)
+	f.step3:SetPoint("TOPLEFT", plan and f.hot or f.follow, "BOTTOMLEFT", 0, -24)
 	local board = CreateFrame("Frame", nil, f)
 	board:SetSize(hands, VIEW.caption + #BOARD * (high + VIEW.inner))
-	board:SetPoint("TOP", plan and f.hot or f.lay, "BOTTOM", 0, -18)
+	board:SetPoint("TOP", f.step3, "BOTTOM", 0, -10)
+	-- One part alone: the steps' heads and the buttons go (the page's own heading says what it is).
+	if part then
+		f.step1:Hide()
+		f.step3:Hide()
+		-- (the button stays under the choices in the /shy window: nothing changes until it is pressed)
+		if plan or part ~= "choose" then
+			for _, piece in ipairs({ f.lay, f.hint, f.follow, f.followSay }) do piece:Hide() end
+		end
+		f.hot:ClearAllPoints()
+		f.hot:SetPoint("TOPLEFT")
+		if part == "board" then
+			f.hot:Hide()   -- (it still says which keys the board is drawn for)
+			board:SetPoint("TOP", f, "TOP", 0, 0)
+		else
+			board:Hide()
+		end
+	end
 	board:SetPoint("LEFT", f, "LEFT", math.floor((width - hands) / 2), 0)
 	-- Whose hotkeys the keys are drawn for, and whether those are the ones bound now.
 	f.whose = UI.Text(board, "", 11, true, C.head)
@@ -3293,18 +3880,32 @@ function Keys.Panel(parent, width, plan)
 	f.notches = {}
 
 	-- What changes at the level shown (or, when nothing does, at the next level that changes).
+	-- (a caption with a hairline to the right, as the window's captions are)
 	f.turnsHead = UI.Text(f, "", 11, true, C.dim)
 	f.turnsHead:SetPoint("TOPLEFT", f.level, "BOTTOMLEFT", -(VIEW.arrow + GAP), -14)
+	f.turnsRule = f:CreateTexture(nil, "ARTWORK")
+	Theme.Paint(f.turnsRule, C.border, 0.7)
+	f.turnsRule:SetHeight(1)
+	f.turnsRule:SetPoint("LEFT", f.turnsHead, "RIGHT", 10, 0)
+	f.turnsRule:SetPoint("RIGHT", f, "RIGHT")
 	f.turns = {}
 	local column = math.floor((width - GAP) / 2)
-	for i = 1, VIEW.turns * 2 do
-		local row = CreateFrame("Frame", nil, f)
+	-- A row: the key on its plate (as wide as its words), the ability's picture, its name, what is new under it.
+	local plateW = 54
+	function f:Turn(i)
+		local row = self.turns[i]
+		if row then return row end
+		row = CreateFrame("Frame", nil, self)
 		row:SetSize(column, VIEW.turnRow)
-		local c, r = math.floor((i - 1) / VIEW.turns), (i - 1) % VIEW.turns
-		row:SetPoint("TOPLEFT", f.turnsHead, "BOTTOMLEFT", c * (column + GAP), -6 - r * VIEW.turnRow)
+		row.plate = CreateFrame("Button", nil, row)
+		row.plate:SetHeight(20)
+		row.plate:SetPoint("RIGHT", row, "LEFT", plateW, 0)
+		UI.KeyPlate(row.plate)
+		row.key = UI.Text(row.plate, "", 11, true, C.head)
+		row.key:SetPoint("CENTER")
 		row.well = CreateFrame("Frame", nil, row)
 		row.well:SetSize(Shy.Slot.SIZES.small, Shy.Slot.SIZES.small)
-		row.well:SetPoint("LEFT")
+		row.well:SetPoint("LEFT", plateW + 8, 0)
 		row.icon = row.well:CreateTexture(nil, "ARTWORK")
 		row.icon:SetAllPoints()
 		row.slot = Shy.Slot.New(row.well, { icon = row.icon, size = Shy.Slot.SIZES.small, hover = false })
@@ -3313,16 +3914,22 @@ function Keys.Panel(parent, width, plan)
 		row.sub = UI.Text(row, "", 11, false, C.dim)
 		row.sub:SetPoint("TOPLEFT", row.title, "BOTTOMLEFT", 0, -2)
 		for _, text in ipairs({ row.title, row.sub }) do
-			text:SetWidth(column - Shy.Slot.SIZES.small - 8)
+			text:SetWidth(column - plateW - 8 - Shy.Slot.SIZES.small - 8)
 			text:SetWordWrap(false)
 		end
-		f.turns[i] = row
+		self.turns[i] = row
+		return row
 	end
-	f.more = UI.Text(f, "", 11, false, C.dim)
-	f.more:SetPoint("TOPLEFT", f.turns[VIEW.turns], "BOTTOMLEFT", 0, -2)
+	for i = 1, VIEW.turns * 2 do f:Turn(i) end
+	f.more = Hot.More(f, width, function()
+		view.allTurns = not view.allTurns
+		if f.Turns then f.Turns(view.level) end
+		if f.resized then f.resized() end
+	end)
 	-- (as tall as the hotkeys' piece and the rows of what changes at the level shown: Turns sets it)
 	local function Above()
-		return 40 + f.hot:GetHeight() + (plan and 0 or 12 + ROW) + 18 + board:GetHeight() + 14 + VIEW.ruler + 14 + 16 + 6
+		local top = part == "board" and 0 or (f.step1:GetHeight() + 12 + f.hot:GetHeight() + (plan and 0 or HOT.buttons) + 24 + f.step3:GetHeight() + 10)
+		return top + board:GetHeight() + 14 + VIEW.ruler + 14 + 16 + 6
 	end
 	f:SetSize(width, Above() + VIEW.turns * VIEW.turnRow + 16)
 
@@ -3510,6 +4117,7 @@ function Keys.Panel(parent, width, plan)
 		grows = function(turn) return "Now " .. (turn.name or turn.job.what) end,
 	}
 	local function Turns(level)
+		f.Turns = Turns
 		local shown, list = level, view.changes and view.changes[level] or {}
 		if #list == 0 then
 			for next = level + 1, top do
@@ -3526,18 +4134,31 @@ function Keys.Panel(parent, width, plan)
 		else
 			f.turnsHead:SetText(("Next, at level %d"):format(shown))
 		end
-		for i, row in ipairs(f.turns) do
-			local turn = list[i]
+		-- Two columns, down the first and then the second; the first few, and the rest with Show more.
+		local most = VIEW.turns * 2
+		local shown = view.allTurns and #list or math.min(#list, most)
+		local down = math.max(1, math.ceil(shown / 2))
+		for i = 1, math.max(shown, #f.turns) do
+			local row = i <= shown and f:Turn(i) or f.turns[i]
+			local turn = i <= shown and list[i] or nil
 			row:SetShown(turn ~= nil)
 			if turn then
+				local c, r = math.floor((i - 1) / down), (i - 1) % down
+				row:ClearAllPoints()
+				row:SetPoint("TOPLEFT", f.turnsHead, "BOTTOMLEFT", c * (column + GAP), -8 - r * VIEW.turnRow)
+				row.plate:SetShown(turn.key ~= nil)
+				row.key:SetText(turn.key and Hot.Plate(turn.key) or "")
+				row.plate:SetWidth(math.max(22, math.ceil(row.key:GetStringWidth()) + 12))
 				row.icon:SetTexture(turn.icon or ICON)
-				row.title:SetText(turn.key and ("%s on %s"):format(turn.job.name, Keys.Key(turn.key)) or turn.job.name)
+				row.title:SetText(turn.job.name)
 				row.sub:SetText(SAY[turn.kind](turn))
 			end
 		end
-		f.more:SetText(#list > #f.turns and ("and %d more"):format(#list - #f.turns) or "")
-		local rows = math.max(1, math.min(VIEW.turns, #list))
-		f:SetHeight(Above() + rows * VIEW.turnRow + (#list > #f.turns and 16 or 4))
+		local hidden = #list - shown
+		f.more:Set(hidden > 0 and ("Show %d more"):format(hidden) or (view.allTurns and #list > most and "Show fewer") or nil)
+		f.more:ClearAllPoints()
+		f.more:SetPoint("TOPLEFT", f.turnsHead, "BOTTOMLEFT", 0, -8 - down * VIEW.turnRow - 4)
+		f:SetHeight(Above() + down * VIEW.turnRow + (f.more:IsShown() and (HOT.moreTall + 8) or 4))
 	end
 
 	-- A notch under the slider at every level where something changes.
@@ -3595,25 +4216,28 @@ function Keys.Panel(parent, width, plan)
 		if Drawn(self) then return end
 		local mine = Keys.Mine()
 		local laid = mine ~= nil and Keys.Has(mine.addon)
-		local pick = plan and plan.keys and plan.keys.pick
+		self.hot:Refresh()
+		-- Step 1's sentence: what the choice lit (or under the mouse) gives you, and when it is done.
+		local shown, state = self.hot.shown, self.hot:State()
+		local done = plan and "Finish" or "the button below"
 		if not mine then
 			self.status:SetText("No keys for this class yet.")
-		elseif pick == "off" then
-			self.status:SetText(laid and "Finish puts everything back: every button and hotkey as you had it."
-				or "Your keys stay as you have them. Pick a layout above to give every ability a key.")
-		elseif plan then
-			self.status:SetText(laid and "Your keys are laid out. Finish keeps them, the way you pick here."
-				or "Every ability gets a key, and comes to it as you learn it. Finish lays them out, and what you have now is kept.")
-		elseif laid and Keys.Old(mine.addon) then
+		elseif plan == nil and laid and Keys.Old(mine.addon) then
 			self.status:SetText("Your keys have a new layout, drawn below: water and each potion on a key of its own, what you stay in on 1 2 3, and what your people alone can do on Shift + 1 and 2. Yours stay as they are until you press Update my keys.")
-		elseif laid then
+		elseif shown == "shy" and state == "shy" then
 			local _, name = nil, nil
 			if mine.opts.build then _, name = mine.opts.build() end
-			self.status:SetText(("Your keys are laid out%s. An ability comes to its key when you learn it; move one and it stays where you put it."):format(name and (" for " .. name) or ""))
+			self.status:SetText(("Your keys are set up%s. An ability comes to its key when you learn it; move one and it stays where you put it."):format(name and (" for " .. name) or ""))
+		elseif shown == "shy" then
+			self.status:SetText(("Every ability gets its own key, close to where your hand rests, and comes to it as you learn it. Nothing changes until you press %s."):format(done))
+		elseif shown == "own" then
+			self.status:SetText("Your hotkeys stay as they are, and abilities go on the keys you already use. Any whose key does something else waits.")
 		else
-			self.status:SetText("Every ability gets a key, and comes to it as you learn it. Look at each choice first: nothing changes until you press the button.")
+			self.status:SetText(state ~= "off" and "Every button and hotkey goes back exactly as you had it."
+				or "Everything stays exactly as you have it now.")
 		end
-		self.hot:Refresh()
+		self.step1:Fit()
+		self.step3.title:SetText(shown == "shy" and "Your new keys" or "Your keys")
 		-- The button: the choice looked at, when it isn't the one in use.
 		local pending = self.hot:Pending()
 		local block = pending and pending ~= "off" and not laid and self.hot.says and self.hot.says.block
@@ -3623,6 +4247,13 @@ function Keys.Panel(parent, width, plan)
 			not mine and "No keys for this class yet." or block or "This is what you use now. Pick another choice to see it first.")
 		self.hint:SetText(pending and "Nothing changes until you press it." or "")
 		self.follow:Refresh()
+		-- (the choice alone, or what it changes alone: no keys drawn, and as tall as that part)
+		if part == "choose" or part == "changes" then
+			for _, piece in ipairs({ board, self.level, self.before, self.after, self.turnsHead, self.turnsRule, self.more }) do piece:Hide() end
+			for _, row in ipairs(self.turns) do row:Hide() end
+			self:SetHeight(self.hot:GetHeight() + ((plan == nil and part == "choose") and HOT.buttons or 0))
+			return
+		end
 		-- The keys of yours that change, for the caps' marks; the board, for the number row's extra buttons; and
 		-- everything as it was before: the keys alone, what each does, with no ability on them.
 		local shown, standing = self.hot.shown, self.hot.shown == self.hot:State()
@@ -3650,7 +4281,8 @@ function Keys.Panel(parent, width, plan)
 			Notches()
 			self:At(view.level or Mine())
 		end
-		for _, piece in ipairs({ board, self.level, self.before, self.after, self.turnsHead, self.more }) do
+		-- (Show more is shown by what it has to say: Turns)
+		for _, piece in ipairs({ board, self.level, self.before, self.after, self.turnsHead, self.turnsRule }) do
 			piece:SetShown(mine ~= nil)
 		end
 		for _, row in ipairs(self.turns) do
@@ -3741,12 +4373,17 @@ end
 --   f:Use()        makes it.  -> true, or false in a fight
 --   f.shown        the choice the keys are drawn for
 local HOTVIEW = {
-	tall = 104, apart = 12, pad = 14, tick = 14, most = 5,
-	row = 32, box = 14, caption = 18,   -- the list of your keys that change: a row (two lines), its tick, its caption
+	tall = 62, apart = 12, pad = 14, tick = 14, most = 5,
+	-- The list of your keys that change: a row (two lines) and its caption; the key's plate and the text after
+	-- it; the choice and the key that moves, at the right; the numbers beside the caption.
+	row = 40, caption = 16, plate = 22, lead = 96, choice = 170, target = 118, tallyWidth = 230,
+	rows = 6,                -- the rows shown before "Show N more" (the ones a hand relies on come first)
+	choose = 118,            -- a choice on setup's page of choices alone: tall enough for its sentence whole
+	more = 22,               -- that line's height
 	order = { "shy", "own", "off" },
 	picks = {
 		shy = { title = "Set it up for me", name = "your new keys", brief = "set up", tag = "Recommended", act = "Set up my keys",
-			say = "Every ability gets its own key, and your hotkeys are changed to match." },
+			say = "Every ability gets its own key. What a key did before moves to Ctrl + that key." },
 		own = { title = "Keep my hotkeys", name = "your own hotkeys", brief = "on my hotkeys", tag = "Not recommended", act = "Keep my hotkeys",
 			say = "Abilities go on the keys you already use. Any whose key is taken is left off." },
 		off = { title = "How I had it", name = "how you had it", brief = "left alone", tag = "Yours", act = "Put it all back",
@@ -3793,28 +4430,33 @@ function Hot.Says(pick, plan)
 	if pick == "own" then
 		says.safe = Hot.On() and "Your own hotkeys come back, each as it was before."
 			or "Your hotkeys stay as they are. Only a key that does nothing now may be given a button."
+		-- (the abilities that wait, their keys doing something else: listed on the page, a row each)
 		local stuck = mine and not Hot.On() and Stuck(mine) or {}
-		if #stuck > 0 then
-			local names = {}
-			for i, job in ipairs(stuck) do names[i] = ("%s (%s)"):format(job.name, Keys.Key(job.key)) end
-			says.notes[#says.notes + 1] = ("Left off, their keys do something else: %s."):format(Several(names, HOTVIEW.most))
-		end
+		if #stuck > 0 then says.waits = stuck end
 		return says
 	end
 	-- The abilities whose keys you keep: left off, said by name.
 	local keep = Keeping()
 	if keep and mine then
 		local off = {}
+		local ins = StandIns(Scheme(), keep) or EMPTY   -- (one you gave another key isn't left off)
 		for _, job in ipairs(Keys.Jobs(mine.jobs, mine.opts.build and (mine.opts.build()))) do
-			if job.key and keep[job.key] and not Keys.Moving(job.key) then off[#off + 1] = ("%s (%s)"):format(job.name, Keys.Key(job.key)) end
+			-- (nor one whose kept key presses its button anyway: it stands, as you have it)
+			if job.key and keep[job.key] and not ins[job.key] and not Keys.Moving(job.key) and Hot.Pressing(job.key, mine.opts) == "" then
+				off[#off + 1] = ("%s (%s)"):format(job.name, Keys.Key(job.key))
+			end
 		end
-		if #off > 0 then
-			says.notes[#says.notes + 1] = ("Left off, because you keep their keys: %s."):format(Several(off, HOTVIEW.most))
-		end
+		-- (said on the page by each kept key's row, not again under the sentence)
+		if #off > 0 then says.keptOff = ("Left off, because you keep their keys: %s."):format(Several(off, HOTVIEW.most)) end
 	end
 	if Hot.On() then
-		local kept = Hot.Kept()
-		says.safe = kept > 0 and ("%d of your hotkeys were changed. They're all saved, and you can put them all back any time."):format(kept)
+		-- (counted as the plan counted them: the keys that did something before)
+		local state = Hot.State()
+		local kept = 0
+		for key in pairs(state and state.set or EMPTY) do
+			if (state.was[key] or "") ~= "" then kept = kept + 1 end
+		end
+		says.safe = kept > 0 and ("%d of your hotkeys were changed. Each is saved, and one click puts them all back."):format(kept)
 			or "Your hotkeys already matched: nothing of yours was changed."
 		return says
 	end
@@ -3822,9 +4464,9 @@ function Hot.Says(pick, plan)
 	for _, change in ipairs(will.changes) do
 		if change.from ~= "" then says.changes = says.changes + 1 end
 	end
-	local back = plan and "you can put them all back any time from /shy keys" or "you can put them all back any time"
+	local back = plan and "one click in /shy keys puts them all back" or "one click puts them all back"
 	if says.changes > 0 then
-		says.safe = ("%d of your hotkeys change. They're all saved first, and %s."):format(says.changes, back)
+		says.safe = ("%d of your hotkeys change. Each is saved, and %s."):format(says.changes, back)
 	elseif #will.changes > 0 then
 		says.safe = ("None of your hotkeys change: %d keys that do nothing now get a button."):format(#will.changes)
 	else
@@ -3854,7 +4496,7 @@ local function HotTile(parent, width, pick, onPick)
 	b.title:SetWordWrap(false)
 	b.tag = UI.Text(b, def.tag, 11, true, pick == "shy" and C.good or C.dim)
 	b.tag:SetPoint("TOPLEFT", b.title, "BOTTOMLEFT", 0, -5)
-	b.use = UI.Text(b, "In use", 11, true, C.good)
+	b.use = UI.Text(b, "Now", 11, true, C.good)   -- (what you have now, whatever is lit)
 	b.use:SetPoint("TOP", b.tag, "TOP")
 	b.use:SetPoint("RIGHT", -HOTVIEW.pad, 0)
 	b.tick = b:CreateTexture(nil, "ARTWORK")
@@ -3862,7 +4504,9 @@ local function HotTile(parent, width, pick, onPick)
 	b.tick:SetSize(10, 10)
 	b.tick:SetPoint("RIGHT", b.use, "LEFT", -5, 0)
 	Theme.Tint(b.tick, C.good, 1)
+	-- (its sentence isn't shown on the card: the line under the cards says what the lit one does, whole)
 	b.say = UI.Text(b, def.say, 12, false, C.dim)
+	b.say:Hide()
 	b.say:SetPoint("TOPLEFT", b.tag, "BOTTOMLEFT", 0, -9)
 	b.say:SetPoint("RIGHT", -HOTVIEW.pad, 0)
 	b.say:SetJustifyH("LEFT")
@@ -3872,21 +4516,31 @@ local function HotTile(parent, width, pick, onPick)
 	return b
 end
 
-function Hot.Panel(parent, width, plan, onPick)
+function Hot.Panel(parent, width, plan, onPick, part)
 	local f = CreateFrame("Frame", nil, parent)
 	local each = math.floor((width - (#HOTVIEW.order - 1) * HOTVIEW.apart) / #HOTVIEW.order)
 	local tiles = {}
 	function f:State()
 		local mine = watched[1]
-		if mine and Keys.Has(mine.addon) then return Keys.Mode() end
+		if mine and Keys.Has(mine.addon) then
+			-- (laid out, but on key bindings the hotkeys were never set for, a character's own: it stands on your keys)
+			local mode = Keys.Mode()
+			if mode == "shy" and not Hot.On() then return "own" end
+			return mode
+		end
 		return Hot.On() and "set" or "off"
 	end
 	-- The choice lit: setup's pick; in the /shy window the one clicked, else the one in use, or the set-up
 	-- while nothing is laid out (the one to try, drawn before it is made).
 	local function Lit()
-		if plan then return plan.keys and plan.keys.pick or "off" end
-		if f.viewing then return f.viewing end
+		if plan then
+			local pick = plan.keys and plan.keys.pick
+			return HOTVIEW.picks[pick] and pick or "off"   -- (left alone, "skip": drawn as you have them)
+		end
+		if HOT.viewing then return HOT.viewing end
 		local state = f:State()
+		-- (set up is your pick, but not set on these key bindings yet, a character's own: it is offered, every key listed)
+		if state == "own" and Keys.Mode() == "shy" then return "shy" end
 		return HOTVIEW.picks[state] and state ~= "off" and state or "shy"
 	end
 	function f:Pending()
@@ -3913,7 +4567,7 @@ function Hot.Panel(parent, width, plan, onPick)
 			Shy.core:Print("your keys can be changed once the fight is over.")
 			return false
 		end
-		self.viewing = nil
+		HOT.viewing = nil
 		if pick == "new" then
 			local result = Keys.Run(mine.addon, mine.jobs, mine.opts, true)
 			if result then mine.waiting = result.waiting end
@@ -3940,63 +4594,198 @@ function Hot.Panel(parent, width, plan, onPick)
 			plan.keys = plan.keys or {}
 			plan.keys.pick = pick
 		else
-			f.viewing = pick
+			HOT.viewing = pick
 		end
 		Again(pick)
 	end
+	-- Pointed at, a choice is drawn (its keyboards are some 40 ms): drawn again only where what is shown changes,
+	-- and a leave waits a frame, so passing from one tile to the next draws once and the one lit not at all.
 	local function Look(pick)
+		f.leaving = nil
 		if f.looking == pick then return end
+		local was = f.looking or Lit()
 		f.looking = pick
-		Again()
+		if (pick or Lit()) ~= was then Again() end
+	end
+	local function Leave()
+		f.leaving = true
+		C_Timer.After(0, function()
+			if f.leaving then Look(nil) end
+		end)
 	end
 	for i, pick in ipairs(HOTVIEW.order) do
 		tiles[pick] = HotTile(f, each, pick, Pick)
 		tiles[pick]:SetPoint("TOPLEFT", (i - 1) * (each + HOTVIEW.apart), 0)
 		tiles[pick]:HookScript("OnEnter", function() Look(pick) end)
-		tiles[pick]:HookScript("OnLeave", function() Look(nil) end)
+		tiles[pick]:HookScript("OnLeave", Leave)
 	end
 	f.tiles = tiles
-	-- Nothing of yours is lost: said with a tick.
-	f.tick = f:CreateTexture(nil, "ARTWORK")
-	f.tick:SetTexture(Shy.Skin.GLYPH.tick)
-	f.tick:SetSize(HOTVIEW.tick, HOTVIEW.tick)
-	f.tick:SetPoint("TOPLEFT", 0, -(HOTVIEW.tall + 12))
-	Theme.Tint(f.tick, C.good, 1)
-	f.safe = UI.Text(f, "", 13, false, C.text)
-	f.safe:SetPoint("TOPLEFT", f.tick, "TOPRIGHT", 8, 1)
-	f.safe:SetWidth(width - HOTVIEW.tick - 8)
-	f.safe:SetJustifyH("LEFT")
+	-- Step 2, what the choice changes: its title by the choice, its sentence that nothing of yours is lost, and at
+	-- the right how many keys move, stay yours or wait.
+	f.step2 = Hot.StepHead(f, 2, width)
+	f.step2:SetPoint("TOPLEFT", 0, -(HOTVIEW.tall + 20))
+	f.safe = f.step2.say
+	f.tally = f.step2.side
+	local indent = HOT.step + HOT.stepGap
+	-- One part alone (a page of setup's walk): the choices, with what the lit one means under them; or what it
+	-- changes, its sentence at the top and the list under it.
+	f.part = part
+	if part == "changes" then
+		for _, tile in pairs(tiles) do tile:Hide() end
+		f.step2:ClearAllPoints()
+		f.step2:SetPoint("TOPLEFT")
+		f.step2.plate:Hide()
+		f.step2.title:Hide()
+		f.safe:ClearAllPoints()
+		f.safe:SetPoint("TOPLEFT")
+		f.safe:SetWidth(width - HOTVIEW.tallyWidth)
+		indent = 0
+	elseif part == "choose" then
+		f.step2:Hide()
+		-- (each choice says what it is, whole; under them, what the lit one does to your keys)
+		for _, tile in pairs(tiles) do
+			tile:SetHeight(HOTVIEW.choose)
+			tile.say:Show()
+		end
+		f.chosen = UI.Text(f, "", 13, false, C.text)
+		f.chosen:SetPoint("TOPLEFT", 0, -(HOTVIEW.choose + 16))
+		f.chosen:SetWidth(width)
+		f.chosen:SetJustifyH("LEFT")
+		f.chosen:SetWordWrap(true)
+	end
 	f.notes = UI.Text(f, "", 11, false, C.dim)
 	f.notes:SetPoint("TOPLEFT", f.safe, "BOTTOMLEFT", 0, -6)
-	f.notes:SetWidth(width - HOTVIEW.tick - 8)
+	f.notes:SetWidth(width - indent)
 	f.notes:SetJustifyH("LEFT")
 	f.warn = UI.Text(f, "", 11, false, C.alert)
-	f.warn:SetWidth(width - HOTVIEW.tick - 8)
+	f.warn:SetWidth(width - indent)
 	f.warn:SetJustifyH("LEFT")
 
-	-- Every key of yours that changes, one by one in two columns: the key and what it does now (in gold when a
-	-- hand relies on it), ticked to keep it as it is; under it, what it becomes and whether another key still
-	-- does what it did. A key you move with is the board's whatever you pick: said, not ticked.
-	f.caption = UI.Text(f, "", 12, true, C.head)
-	f.caption:SetWidth(width)
+	-- Every key of yours that changes, a row each across the page: the key on its plate and what it did (in gold
+	-- when a hand relies on it), what happens to it in one line, the choice (the new key, or keep yours), and the
+	-- key the thing that moves goes to: what the key did (Ctrl + it, unless you pick another), or the ability of
+	-- a key you keep. Click that key, then press the one you want: it is checked and done at once. A key you move
+	-- with is the board's whatever you pick: said, with no choice.
+	f.caption = UI.Text(f, "", 11, false, C.dim)
 	f.caption:SetJustifyH("LEFT")
+	f.caption:SetWidth(width - indent)
 	f.rows = {}
-	local column = math.floor((width - HOTVIEW.apart) / 2)
+	local listening              -- the row whose key is being picked
+	local function Listen(row, on)
+		if row == nil then return end
+		row.target:EnableKeyboard(on)
+		row.target:SetScript("OnKeyDown", on and row.heard or nil)
+	end
+	local function Stop()
+		local row = listening
+		listening = nil
+		if row then Listen(row, false) end
+		return row
+	end
+	f.Stop = Stop
+	-- What a key you pressed is picked for: done, or why not (said on the row, in red, until the next pick).
+	-- A key that does something else, or is picked for something else, is asked about: sure, it is yours.
+	local function Pick(entry, key)
+		-- (in setup only noted: Finish does it, Not now forgets it)
+		if entry.kept then return Hot.SetStandIn(entry.key, key, plan ~= nil) end
+		return Hot.SetHome(entry.key, entry.from, key, plan ~= nil)
+	end
+	-- (sure of one thing, the key may yet ask another: a key picked for something else that did something before)
+	local function Try(row, entry, key, ok, why, ask)
+		row.err = not ok and not ask and why ~= "" and why or nil
+		Again()
+		if not ask then return end
+		UI.Confirm(row.target, ask.text, ask.yes, function()
+			local sure, failed = Hot.TakeOver(key, ask, plan ~= nil)
+			if not sure then return Try(row, entry, key, false, failed) end
+			Try(row, entry, key, Pick(entry, key))
+		end)
+	end
+	local function Picked(row, key)
+		Stop()
+		Try(row, row.entry, key, Pick(row.entry, key))
+	end
+	-- (a fight is coming: the keyboard goes back to the game before it can't)
+	f.guard = CreateFrame("Frame", nil, f)
+	f.guard:RegisterEvent("PLAYER_REGEN_DISABLED")
+	f.guard:SetScript("OnEvent", function()
+		if Stop() then Again() end
+	end)
 	local function YourRow(i)
 		local row = f.rows[i]
 		if row then return row end
 		row = CreateFrame("Frame", nil, f)
-		row:SetSize(column, HOTVIEW.row)
-		row.box = UI.Checkbox(row, "", function() return row.entry ~= nil and row.entry.kept end, function(on)
-			local entry = row.entry
-			if entry and not Hot.Keep(entry.key, on) then Shy.core:Print("your keys can be changed once the fight is over.") end
+		row:SetSize(width, HOTVIEW.row)
+		-- The key, on its plate.
+		row.key = CreateFrame("Button", nil, row)
+		row.key:SetHeight(HOTVIEW.plate)
+		row.key:SetPoint("TOPRIGHT", row, "TOPLEFT", HOTVIEW.lead - 12, -3)   -- (against the words, as a key's legend)
+		UI.KeyPlate(row.key)
+		row.keyText = UI.Text(row.key, "", 12, true, C.head)
+		row.keyText:SetPoint("CENTER")
+		-- The key the thing that moves goes to: click, then press one (lit while it listens).
+		row.target = CreateFrame("Button", nil, row)
+		row.target:SetSize(HOTVIEW.target, HOTVIEW.plate)
+		row.target:SetPoint("TOPRIGHT", 0, -3)
+		row.target:RegisterForClicks("LeftButtonUp")
+		UI.KeyPress(row.target, { fill = C.bg })
+		row.targetText = UI.Text(row.target, "", 12, true, C.head)
+		row.targetText:SetPoint("CENTER")
+		row.target:SetScript("OnEnter", function(self)
+			if listening ~= row then
+				UI.Tip(self, "Pick a key", "Click, then press the key you want. Esc cancels; Backspace gives back the key we picked.")
+			end
+		end)
+		row.target:SetScript("OnLeave", function(self) UI.TipHide(self) end)
+		row.target:SetScript("OnClick", function(self)
+			UI.TipHide(self)
+			if listening == row then
+				Stop()
+			elseif InCombatLockdown() then
+				row.err = "Your keys can be changed once the fight is over."
+			else
+				Stop()
+				row.err = nil
+				listening = row
+				Listen(row, true)
+			end
 			Again()
-		end, { box = HOTVIEW.box, size = 12, enabled = function() return row.entry ~= nil and not row.entry.move end })
-		row.box:SetPoint("TOPLEFT")
+		end)
+		-- (the middle and side mouse buttons are keys too; the left and right ones click)
+		row.target:HookScript("OnMouseDown", function(_, button)
+			local key = listening == row and HOT.mice[button]
+			if key then Picked(row, Hot.Chord(key)) end
+		end)
+		row.heard = function(_, key)
+			if HOT.metas[key] then return end
+			if key == "ESCAPE" then
+				Stop()
+				Again()
+			elseif key == "BACKSPACE" or key == "DELETE" then
+				Picked(row, nil)
+			else
+				Picked(row, Hot.Chord(key))
+			end
+		end
+		-- The new key, or keep yours.
+		row.choice = UI.Segmented(row, { "New key", "Keep mine" }, function()
+			return row.entry and row.entry.kept and 2 or 1
+		end, function(i)
+			Stop()
+			row.err = nil
+			if row.entry and not Hot.Keep(row.entry.key, i == 2, plan ~= nil) then row.err = "Your keys can be changed once the fight is over." end
+			Again()
+		end, { width = HOTVIEW.choice, height = HOTVIEW.plate })
+		row.choice:SetPoint("TOPRIGHT", -(HOTVIEW.target + HOTVIEW.apart), -3)
+		-- What it did, and what happens to it.
+		row.head = UI.Text(row, "", 13)
 		row.sub = UI.Text(row, "", 11, false, C.dim)
-		row.sub:SetPoint("TOPLEFT", HOTVIEW.box + 6, -(HOTVIEW.box + 4))
-		row.sub:SetWidth(column - HOTVIEW.box - 6)
-		row.sub:SetWordWrap(false)
+		for _, text in ipairs({ row.head, row.sub }) do
+			text:SetJustifyH("LEFT")
+			text:SetWordWrap(false)
+		end
+		row.head:SetPoint("TOPLEFT", HOTVIEW.lead, -2)
+		row.sub:SetPoint("TOPLEFT", row.head, "BOTTOMLEFT", 0, -4)
 		f.rows[i] = row
 		return row
 	end
@@ -4009,44 +4798,223 @@ function Hot.Panel(parent, width, plan, onPick)
 		end
 		return at
 	end
+	-- The keys that turned the bar's pages, and the side keys that strafe now: lines under the rows, not a row each.
+	f.paging = UI.Text(f, "", 11, false, C.dim)
+	f.paging:SetWidth(width)
+	f.paging:SetJustifyH("LEFT")
+	f.paging:SetSpacing(4)
+	-- "Show N more": the rest of the list, and back.
+	f.more = Hot.More(f, width, function()
+		f.expanded = not f.expanded
+		Again()
+	end)
+	-- "Shift + 1 to 6" for a run of the number row, else each key.
+	local function KeysSaid(keys)
+		local shift, digits = true, {}
+		for i, key in ipairs(keys) do
+			local n = key:match("^SHIFT%-(%d)$")
+			if not n then shift = false end
+			digits[i] = tonumber(n)
+		end
+		if shift and #keys > 2 and digits[#digits] - digits[1] == #keys - 1 then
+			return ("Shift + %d to %d"):format(digits[1], digits[#digits])
+		end
+		local said = {}
+		for i, key in ipairs(keys) do said[i] = Keys.Key(key) end
+		return Several(said, HOT.named)
+	end
+	-- A row's two lines: what the key did and what happens to it (in gold when a hand relies on it), then what
+	-- the key itself does then and where the rest goes. on: the hotkeys are set (said as done).
+	local function RowSays(entry, job, on)
+		local key = Keys.Key(entry.key)
+		if entry.note then return entry.note.head, entry.note.sub end
+		if entry.wait then
+			local does = GetBindingAction(entry.key)
+			return ("%s waits for a key"):format(entry.wait.name),
+				does ~= "" and ("%s stays %s."):format(key, BindingCalled(does)) or ("%s stays as it is."):format(key)
+		end
+		local name = BindingCalled(entry.from)
+		if entry.move then
+			local turning = HOT.steer[entry.to] == entry.from
+			return ("%s %s %s"):format(GetBindingName(entry.to), on and "is on" or "goes on", key),
+				turning and ("%s turned you. To turn, hold the right mouse button and move the mouse."):format(key)
+				or ("%s did %s. It's one of the keys you move with."):format(key, name)
+		end
+		if entry.kept then
+			local sub
+			if not job then
+				sub = "Kept as you have it."
+			elseif entry.standIn then
+				sub = ("%s %s %s instead."):format(job.name, on and "is on" or "goes on", Keys.Key(entry.standIn))
+			else
+				sub = ("%s is left off until you pick a key for it."):format(job.name)
+			end
+			return ("%s stays on %s"):format(name, key), sub
+		end
+		local becomes = ("%s %s %s."):format(key, on and "is" or "becomes", job and job.name or "a free button")
+		if entry.home then
+			return ("%s %s %s"):format(name, on and "is on" or "moves to", Keys.Key(entry.home)), becomes
+		end
+		local still = entry.also and (" Still on %s."):format(Keys.Key(entry.also))
+			or (on and " It has no key now: pick one." or " Pick a key for it, or it has none.")
+		return ("%s %s %s"):format(name, on and "is no longer on" or "leaves", key), becomes .. still
+	end
+	-- The list in numbers, beside its caption: "8 move · 2 yours · 1 with no key".
+	local function Tally(entries)
+		local moved, kept, none = 0, 0, 0
+		for _, entry in ipairs(entries) do
+			if entry.note then
+				-- (said in a row of its own, not counted)
+			elseif entry.kept then
+				kept = kept + 1
+			elseif entry.home or entry.move then
+				moved = moved + 1
+			elseif not entry.also then
+				none = none + 1
+			end
+		end
+		local parts = {}
+		if moved > 0 then parts[#parts + 1] = ("%d %s"):format(moved, moved == 1 and "moves" or "move") end
+		if kept > 0 then parts[#parts + 1] = ("%d kept as yours"):format(kept) end
+		if none > 0 then parts[#parts + 1] = ("%d with no key"):format(none) end
+		return table.concat(parts, "  ·  ")
+	end
 	-- Lays the list under `above`.  -> its height (0: no list)
 	local function Yours(above, shown)
 		local mine = watched[1]
-		local entries = shown == "shy" and mine and Hot.Yours(mine.opts) or EMPTY
+		local all = shown == "shy" and mine and Hot.Yours(mine.opts) or EMPTY
+		-- (on your own hotkeys: the abilities that wait, their keys doing something else)
+		if shown == "own" and f.says and f.says.waits then
+			all = {}
+			for i, job in ipairs(f.says.waits) do all[i] = { key = job.key, from = "", wait = job, at = i } end
+		end
+		-- (the keys that turned the bar's pages, and the side keys that strafe now, are said in lines, not rows)
+		local entries, paging, sides = {}, {}, {}
+		for _, entry in ipairs(all) do
+			if entry.paging and not entry.kept then
+				paging[#paging + 1] = entry.key
+			elseif entry.move and HOT.steer[entry.to] == entry.from then
+				sides[#sides + 1] = entry.key
+			else
+				entries[#entries + 1] = entry
+			end
+		end
+		-- (what you'd miss first: what a hand relies on that moves or would have no key, then the rest with no
+		-- other key, then what another key still does; each as a hand meets them)
+		local function Rank(entry)
+			if entry.must and (entry.home or not entry.also) then return 1 end
+			return entry.also and 3 or 2
+		end
+		table.sort(entries, function(a, b)
+			local ra, rb = Rank(a), Rank(b)
+			if ra ~= rb then return ra < rb end
+			return a.at < b.at
+		end)
 		f.yours = entries
-		f.caption:SetShown(#entries > 0)
-		for i = #entries + 1, #f.rows do f.rows[i]:Hide() end
-		if #entries == 0 then return 0 end
-		local on = Hot.On()
-		f.caption:SetText(on and "Your own keys that changed. Tick one to have it back as you had it."
-			or "Your own keys that would change. Tick any you want to keep as it is.")
-		f.caption:ClearAllPoints()
-		f.caption:SetPoint("TOPLEFT", above, "BOTTOMLEFT", -(HOTVIEW.tick + 8), -12)   -- (from the tick's edge)
-		local jobs = ByKey()
+		-- The rows shown: the first few, and the rest with "Show N more" (one being picked, or that said why
+		-- not, stays out where it is). After them, the keys you move with that strafe now and the ones that turned
+		-- the bar's pages: a row each, with nothing to pick.
+		local visible = {}
 		for i, entry in ipairs(entries) do
+			local row = f.rows[i]
+			if i <= HOTVIEW.rows or f.expanded or (row and (row == listening or row.err)) then visible[#visible + 1] = entry end
+		end
+		local hidden = #entries - #visible
+		local on = Hot.On()
+		local notes = {}
+		if #sides > 0 then
+			local said = {}
+			for i, key in ipairs(sides) do said[i] = Keys.Key(key) end
+			notes[#notes + 1] = { key = sides[1], note = { plate = table.concat(sides, " "),
+				head = ("%s %s"):format(table.concat(said, " and "), on and "strafe now" or "will strafe"),
+				sub = "To turn, hold the right mouse button and move the mouse." } }
+		end
+		if #paging > 0 then
+			notes[#notes + 1] = { key = paging[1], note = { plate = (KeysSaid(paging):gsub(" %+ ", " "):gsub(" to ", "-")),
+				head = on and "These no longer turn your bar's pages" or "These will no longer turn your bar's pages",
+				sub = "They press your right side bar's buttons instead." } }
+		end
+		f.caption:SetShown(#entries + #notes > 0)
+		f.tally:SetShown(#entries > 0)
+		f.paging:Hide()
+		f.more:Set((hidden > 0 and ("Show %d more"):format(hidden)) or (f.expanded and #entries > HOTVIEW.rows and "Show fewer") or nil)
+		local rows = {}
+		for _, entry in ipairs(visible) do rows[#rows + 1] = entry end
+		for _, entry in ipairs(notes) do rows[#rows + 1] = entry end
+		for i = #rows + 1, #f.rows do f.rows[i]:Hide() end
+		if listening and not listening:IsShown() then Stop() end
+		if #rows == 0 then
+			f.more:Set(nil)
+			return 0
+		end
+		if shown == "own" then
+			f.caption:SetText("These wait for a key, because theirs does something else. Set it up for me gives each one its own.")
+			f.tally:SetText(("%d %s"):format(#entries, #entries == 1 and "waits" or "wait"))
+		else
+			f.caption:SetText(on and "Switch any back, or click a key to pick where it went."
+				or "Take the new key or keep yours. Click a key on the right to pick another.")
+			f.tally:SetText(Tally(entries))
+		end
+		if part == "changes" then f.caption:SetText("") end   -- (its page's heading says it)
+		f.caption:ClearAllPoints()
+		f.caption:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -10)
+		local jobs = ByKey()
+		local textRight = width - HOTVIEW.lead - HOTVIEW.target - HOTVIEW.choice - 2 * HOTVIEW.apart
+		local y = -8
+		for i, entry in ipairs(rows) do
+			-- (Show more stands between the list and its notes)
+			if entry.note and rows[i - 1] and not rows[i - 1].note and f.more:IsShown() then
+				f.more:ClearAllPoints()
+				f.more:SetPoint("TOPLEFT", f.caption, "BOTTOMLEFT", -indent, y + 2)
+				y = y - HOT.moreTall - 6
+			end
 			local row = YourRow(i)
 			row.entry = entry
-			row.box.text:SetText(("%s: %s"):format(Keys.Key(entry.key), BindingCalled(entry.from)))
-			row.box:SetWidth(HOTVIEW.box + 6 + row.box.text:GetStringWidth())
-			Theme.Ink(row.box.text, entry.must and C.alert or C.text)
-			local job = jobs[entry.key]
-			local sub
-			if entry.move then
-				sub = ("How you move: %s."):format(GetBindingName(entry.to))
-			elseif entry.kept then
-				sub = job and ("Kept as it is. %s is left off."):format(job.name) or "Kept as it is."
-			else
-				sub = ("%s %s. %s"):format(on and "Now" or "Becomes", job and job.name or "a free button",
-					entry.also and ("Still on %s."):format(GetBindingText(entry.also)) or "No other key does it.")
+			local job = not entry.note and jobs[entry.key] or nil
+			local head, sub = RowSays(entry, job, on and not entry.pending)
+			row.keyText:SetText(entry.note and entry.note.plate or Hot.Plate(entry.key))
+			row.key:SetWidth(math.max(HOTVIEW.plate + 8, math.ceil(row.keyText:GetStringWidth()) + 14))
+			row.head:SetText(head)
+			-- (a key you move with, or a note, has no choice: its words run the row's width)
+			local wide = (entry.move or entry.note) and (width - HOTVIEW.lead) or textRight
+			row.head:SetWidth(wide)
+			Theme.Ink(row.head, entry.must and C.alert or C.text)
+			row.sub:SetWidth(wide)
+			-- (the key being picked, or what went wrong last, takes the second line)
+			local picking = listening == row
+			if picking then
+				sub = entry.kept and ("Press the key for %s. Esc cancels."):format(job and job.name or "it")
+					or ("Press the key for %s. Esc cancels."):format(BindingCalled(entry.from))
 			end
-			row.sub:SetText(sub)
+			row.sub:SetText(row.err or sub)
+			Theme.Ink(row.sub, row.err and C.alert or picking and C.head or C.dim)
+			-- The choice: none for a key you move with, one that waits or a note; the key that moves: none for a
+			-- key you keep with no ability.
+			row.choice:SetShown(not entry.move and not entry.wait and not entry.note)
+			row.choice:Refresh()
+			-- (the key that moves: what the key did, unless another key still does it; or a kept key's ability)
+			local target = not entry.move and not entry.wait and not entry.note
+				and (entry.kept and job ~= nil or (not entry.kept and (entry.home ~= nil or not entry.also))) or false
+			row.target:SetShown(target)
+			if target then
+				local at = entry.kept and entry.standIn or (not entry.kept and entry.home)
+				row.targetText:SetText(picking and "Press a key" or (at and Hot.Plate(at)) or "Pick a key")
+				Theme.Ink(row.targetText, (picking or not at) and C.good or C.head)
+				row.target:SetOn(picking)
+			end
 			row:ClearAllPoints()
-			row:SetPoint("TOPLEFT", f.caption, "BOTTOMLEFT", ((i - 1) % 2) * (column + HOTVIEW.apart),
-				-6 - math.floor((i - 1) / 2) * HOTVIEW.row)
+			row:SetPoint("TOPLEFT", f.caption, "BOTTOMLEFT", -indent, y)
 			row:Show()
-			row.box:Refresh()
+			y = y - HOTVIEW.row
 		end
-		return 12 + HOTVIEW.caption + 6 + math.ceil(#entries / 2) * HOTVIEW.row
+		-- (no notes: Show more under the list)
+		if f.more:IsShown() and not (rows[#rows] and rows[#rows].note) then
+			f.more:ClearAllPoints()
+			f.more:SetPoint("TOPLEFT", f.caption, "BOTTOMLEFT", -indent, y + 2)
+			y = y - HOT.moreTall - 6
+		end
+		local tall = 10 + math.ceil(f.caption:GetStringHeight()) - y + 4
+		return tall
 	end
 
 	function f:Refresh()
@@ -4068,11 +5036,27 @@ function Hot.Panel(parent, width, plan, onPick)
 		end
 		local says = Hot.Says(shown, plan)   -- (said of the choice the keys are drawn for)
 		self.says = says
+		self.step2.title:SetText(shown == "shy" and "What changes for you" or shown == "own" and "What stays, and what waits"
+			or (changed and "Everything goes back" or "Nothing changes"))
 		self.safe:SetText(says.safe)
+		self.tally:SetText("")
+		-- (the choices alone: what the lit one means, and anything that stands in its way)
+		if part == "choose" then
+			self.chosen:SetText(says.safe)
+			local warn = says.block or says.warn
+			self.warn:ClearAllPoints()
+			self.warn:SetPoint("TOPLEFT", self.chosen, "BOTTOMLEFT", 0, -8)
+			self.warn:SetText(warn or "")
+			for _, piece in ipairs({ self.notes, self.caption, self.paging, self.more }) do piece:Hide() end
+			for _, row in ipairs(self.rows) do row:Hide() end
+			self:SetSize(width, HOTVIEW.choose + 16 + math.ceil(self.chosen:GetStringHeight())
+				+ (warn and 8 + math.ceil(self.warn:GetStringHeight()) or 0))
+			return
+		end
 		self.notes:SetText(table.concat(says.notes, "\n"))
 		says.warn = says.block or says.warn
 		self.warn:SetText(says.warn or "")
-		local tall = HOTVIEW.tall + 12 + math.max(HOTVIEW.tick, math.ceil(self.safe:GetStringHeight()))
+		local tall = part == "changes" and math.ceil(self.safe:GetStringHeight()) or HOTVIEW.tall + 20 + self.step2:Fit()
 		if #says.notes > 0 then tall = tall + 6 + math.ceil(self.notes:GetStringHeight()) end
 		self.warn:ClearAllPoints()
 		local last = #says.notes > 0 and self.notes or self.safe
@@ -4085,7 +5069,8 @@ function Hot.Panel(parent, width, plan, onPick)
 		self:SetSize(width, tall)
 	end
 	f:SetScript("OnHide", function(self)
-		self.looking, self.viewing = nil, nil
+		self.looking = nil   -- (the choice clicked stays looked at as you go between the room's parts)
+		self.Stop()                -- (a key half picked: the keyboard goes back to the game)
 		Keys.Pretend(nil)
 	end)
 	f:Refresh()
@@ -4304,8 +5289,10 @@ function Keys.Guide(parent, width)
 		local kept = keep and (14 + 14 + 6 + PLAY.row - 6) or 0
 		self:SetSize(width, 24 + 6 + self.train:GetHeight() + 6 + math.ceil(self.tip:GetStringHeight()) + kept + 14 + 14 + 6 + most * PLAY.row)
 	end
+	-- (Out of sight, only the level is kept: it is drawn as it shows. A room kept for another width of the /shy
+	-- window, setup's tab and a class's page each have a guide of their own.)
 	Shy:On("SHY_KEYS_LEVEL", function(level)
-		f:Show(level)
+		if f:IsVisible() then f:Show(level) else f.level = level end
 	end)
 	Shy:On("SHY_KEYS_STANCE", function()
 		if f:IsVisible() then f:Show(f.level) end
@@ -4330,26 +5317,42 @@ local function Brief()
 	return Scheme().name .. (mine and Keys.Has(mine.addon) and ", laid out" or ", not laid out")
 end
 
-Shy.HubSection("keys", function(page, top)
-	local head = Shy.HubHead(page, top, "How you move")
-	local moving = Keys.Movement(page, page.width)
-	moving:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -12)
-	return moving, function() moving:Refresh() end
-end, 10)
-
-Shy.HubSection("keys", function(page, top)
-	local head = Shy.HubHead(page, top, "Your keys")
-	local panel = Keys.Panel(page, page.width)
-	panel:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -12)
-	return panel, function() panel:Refresh() end
-end, 20)
-
-Shy.HubSection("keys", function(page, top)
-	local head = Shy.HubHead(page, top, "How to play")
-	local guide = Keys.Guide(page, page.width)
-	guide:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -12)
-	return guide, function() guide:Show(guide.level) end
-end, 30)
+-- The /shy window's Keys room: the same parts as setup's walk through your keys, a page each, picked on the rail
+-- (a paged room). A choice is made by its button; what changes, key by key, is done there and then.
+local ROOM_PARTS = {
+	{ label = "Your choice", ask = "How should your keys work?",
+		lead = "Pick one, then press the button under them. Nothing changes until you do.",
+		build = function(page) return Keys.Panel(page, page.width, nil, "choose") end },
+	{ label = "How you move", ask = "How do you move?", lead = "Your keys are laid out around the hand you move with.",
+		build = function(page) return Keys.Movement(page, page.width) end },
+	{ label = "What changes", ask = "What changes for you",
+		lead = "Every key of yours that changes, and where what it did goes. Take the new key or keep yours.",
+		build = function(page) return Keys.Panel(page, page.width, nil, "changes") end },
+	{ label = "Your new keys", ask = "Your keys, level by level",
+		lead = "Drag the level to see what comes when. Point at a key to see what it does.",
+		build = function(page) return Keys.Panel(page, page.width, nil, "board") end },
+	{ label = "How to play", ask = "How to play", lead = "What to press, and when, at the level the keys show.",
+		build = function(page)
+			-- (in a plain frame of its own: the guide's Show draws it at a level, and the room shows a part by its frame)
+			local holder = CreateFrame("Frame", nil, page)
+			holder.guide = Keys.Guide(holder, page.width)
+			holder.guide:SetPoint("TOPLEFT")
+			function holder:Refresh()
+				self.guide:Show(self.guide.level)
+				self:SetSize(page.width, math.max(1, self.guide:GetHeight()))
+			end
+			holder:Refresh()
+			return holder
+		end },
+}
+for i, def in ipairs(ROOM_PARTS) do
+	Shy.HubSection("keys", function(page, top)
+		local head = Shy.HubHead(page, top, def.ask, def.lead, def.label)
+		local piece = def.build(page)
+		piece:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -12)
+		return piece, function() piece:Refresh() end
+	end, i * 10)
+end
 
 Shy.HubBrief("keys", Brief)
 
@@ -4380,46 +5383,249 @@ function Keys.Room(parent, width, plan)
 	end
 	local moving = Under(f, "How you move", Keys.Movement(f, width))
 	local panel = Under(moving, "Your keys", Keys.Panel(f, width, plan))
-	local guide = Under(panel, "How to play", Keys.Guide(f, width))
+	-- (setup's tab is for choosing: how to play is the /shy window's, once the keys are yours)
+	local guide = Keys.Guide(f, width)
+	if plan then guide:Hide() else Under(panel, "How to play", guide) end
 	f.moving, f.panel, f.guide = moving, panel, guide
 	function f:Refresh()
 		if Drawn(self) then return end
 		moving:Refresh()
 		panel:Refresh()
-		guide:Show(guide.level)
+		if not plan then guide:Show(guide.level) end
 		local tall = 0
 		for _, piece in ipairs(pieces) do tall = tall + 14 + 12 + 26 + piece:GetHeight() end
 		self:SetSize(width, tall)
 	end
-	panel.resized = function() f:Refresh() end   -- (a pick's sentences make it taller or shorter)
+	-- (a pick's sentences and its list of your keys make it taller or shorter; setup's window then scrolls that far)
+	panel.resized = function()
+		f:Refresh()
+		if plan and Shy.Setup and Shy.Setup.Grew then Shy.Setup.Grew() end
+	end
 	f:SetScript("OnShow", f.Refresh)
 	return f
 end
 
--- Setup: your keys as a tab of the talents' page (the subject they share), or a page of their own without it.
--- The pick is the hotkeys' (plan.keys.pick): "shy", the board (recommended); "own", your keys as they are;
--- "off", nothing laid out (and keys that are laid out put back). Taken, never given: a character whose keys
--- aren't laid out starts at "off", so nobody finishes setup to find their hotkeys changed; laid out, they keep
--- the way they are. The page draws the keys for the pick and says
--- what of yours changes; Finish does it, with nothing to reload. (Setup is the core's own, loaded before this
--- file; a test that leaves it out has no window to put the tab in.)
+-- What you picked in the list (the keys you keep, where a thing goes, a kept key's ability's key), as it stands:
+-- setup's page notes picks there and Finish does them; Not now puts these back.
+local function Picks()
+	local book = Hot.Choices()
+	local copy = {}
+	for _, name in ipairs({ "keep", "homeAt", "standIn", "over" }) do
+		copy[name] = {}
+		for k, v in pairs(book[name] or EMPTY) do copy[name][k] = v end
+	end
+	return copy
+end
+local function Unpick(was)
+	local book = Hot.Choices()
+	for _, name in ipairs({ "keep", "homeAt", "standIn", "over" }) do
+		book[name] = {}
+		for k, v in pairs(was[name] or EMPTY) do book[name][k] = v end
+	end
+	Keys.gen = Keys.gen + 1
+end
+-- Finish: the picks noted on setup's page since it opened, done as the /shy window does them (bound now where
+-- the hotkeys are set, else kept for when they are).
+local function Settle(was)
+	if not was then return end
+	local now = Picks()
+	Unpick(was)
+	Hot.Choices().over = now.over   -- (the keys you said may be taken: so, before the picks that take them)
+	local mine = Keys.Mine()
+	local from = {}              -- a binding -> the key of yours it was on
+	for _, entry in ipairs(mine and Hot.Yours(mine.opts) or EMPTY) do from[entry.from] = from[entry.from] or entry.key end
+	local seen = {}
+	for _, list in ipairs({ now.keep, was.keep }) do
+		for key in pairs(list) do
+			if not seen[key] and (now.keep[key] or nil) ~= (was.keep[key] or nil) then Hot.Keep(key, now.keep[key]) end
+			seen[key] = true
+		end
+	end
+	seen = {}
+	for _, list in ipairs({ now.homeAt, was.homeAt }) do
+		for command in pairs(list) do
+			if not seen[command] and now.homeAt[command] ~= was.homeAt[command] then
+				if from[command] then
+					Hot.SetHome(from[command], command, now.homeAt[command])
+				else
+					Hot.Choices().homeAt[command] = now.homeAt[command]
+				end
+			end
+			seen[command] = true
+		end
+	end
+	for key, at in pairs(now.standIn) do
+		if was.standIn[key] ~= at then Hot.SetStandIn(key, at) end
+	end
+	for key in pairs(was.standIn) do
+		if now.standIn[key] == nil and Hot.Choices().standIn[key] ~= nil then Hot.SetStandIn(key, nil) end
+	end
+end
+
+-- Setup's page for your keys: one question in the middle of the page, and Yes or No. Yes walks through setting
+-- them up (setup's walk of your keys, below); No leaves your key binds, macros and bars alone, all of them.
+-- Answered, the answer stays lit and a line under it says what it comes to; Yes again walks through it again.
+--   Keys.Ask(parent, width, plan, room) -> f: f:Refresh(), f:Fit(room)
+local ASK = { width = 460, gap = 16, button = 136, board = 22, pad = 40 }
+Keys.QUESTION = "Do you want me to interactively set up your key binds, macros and bars as you level?"
+function Keys.Ask(parent, width, plan, room)
+	local f = CreateFrame("Frame", nil, parent)
+	f.room = room or 400
+	f:SetSize(width, f.room)
+	local column = CreateFrame("Frame", nil, f)
+	column:SetWidth(ASK.width)
+	column:SetPoint("CENTER")
+	f.column = column
+	-- (the keys you move with, lit, over the question: what it is about, at a glance)
+	f.board = MiniBoard(column, function(letter) return Scheme().move[letter] == true end)
+	f.board:SetPoint("TOP")
+	f.question = UI.Text(column, Keys.QUESTION, 18, true, C.head)
+	f.question:SetPoint("TOP", f.board, "BOTTOM", 0, -ASK.board)
+	f.say = UI.Text(column, "Every ability gets a key close to your hand, your bars and macros are laid out for you, and each new ability comes to its key as you learn it. You see everything before anything changes, and one click puts it all back.", 12, false, C.dim)
+	f.say:SetPoint("TOP", f.question, "BOTTOM", 0, -10)
+	f.answer = UI.Text(column, "", 12, false, C.text)
+	for _, text in ipairs({ f.question, f.say, f.answer }) do
+		text:SetWidth(ASK.width)
+		text:SetJustifyH("CENTER")
+		text:SetWordWrap(true)
+	end
+	local function Answer(yes)
+		plan.keys = plan.keys or {}
+		plan.keys.asked = true
+		if yes then
+			-- (set up, unless there is a pick of yours already to look through again)
+			if not HOTVIEW.picks[plan.keys.pick] then
+				local mine = Keys.Mine()
+				plan.keys.pick = mine and Keys.Has(mine.addon) and Keys.Mode() or "shy"
+			end
+			f:Refresh()
+			if Shy.Setup and Shy.Setup.Walk then Shy.Setup.Walk("keys") end
+		else
+			plan.keys.pick = "skip"
+			f:Refresh()
+			if Shy.Setup and Shy.Setup.Walk then Shy.Setup.Walk("keys") end   -- (its pages go from the rail)
+		end
+	end
+	f.yes = UI.Button(column, "Yes", ASK.button, function() Answer(true) end)
+	f.no = UI.Button(column, "No", ASK.button, function() Answer(false) end)
+	f.yes:SetPoint("TOPRIGHT", f.say, "BOTTOM", -ASK.gap / 2, -ASK.gap - 6)
+	f.no:SetPoint("TOPLEFT", f.say, "BOTTOM", ASK.gap / 2, -ASK.gap - 6)
+	f.answer:SetPoint("TOP", f.say, "BOTTOM", 0, -(ASK.gap + 6 + 24 + ASK.gap))
+	function f:Fit(height)
+		self.room = height or self.room
+		local tall = self.board:GetHeight() + ASK.board + math.ceil(self.question:GetStringHeight()) + 10
+			+ math.ceil(self.say:GetStringHeight()) + ASK.gap + 6 + 24
+			+ ((self.answer:GetText() or "") ~= "" and (ASK.gap + math.ceil(self.answer:GetStringHeight())) or 0)
+		column:SetHeight(tall)
+		self:SetSize(width, math.max(self.room, tall + 2 * ASK.pad))
+	end
+	function f:Refresh()
+		local keys = plan.keys or {}
+		local pick = keys.pick
+		local yes = keys.asked and pick ~= "skip"
+		local no = pick == "skip" and keys.asked
+		self.yes:SetPrimary(not no)
+		self.yes:SetOn(yes == true)
+		self.no:SetOn(no == true)
+		self.board:Light(function(letter) return Scheme().move[letter] == true end)
+		if no then
+			self.answer:SetText("Your key binds, macros and bars stay exactly as they are. Nothing of them is touched.")
+		elseif yes then
+			local line = Keys.STEP.Lines(plan)[1]
+			self.answer:SetText(("%s. Press Yes to look through it again."):format(line.text))
+		else
+			self.answer:SetText("")
+		end
+		self:Fit()
+	end
+	f:Refresh()
+	return f
+end
+
+-- The walk's last page: each part of it in a sentence, with Change to go back to its page.
+--   Keys.Review(parent, width, plan) -> f: f:Refresh()
+function Keys.Review(parent, width, plan)
+	local f = CreateFrame("Frame", nil, parent)
+	f:SetWidth(width)
+	local parts = {}
+	local function Part(n, title, page)
+		local head = Hot.StepHead(f, n, width - 104)
+		head.title:SetText(title)
+		head.change = UI.Button(f, "Change", 92, function()
+			if Shy.Setup and Shy.Setup.Show then Shy.Setup.Show(page) end
+		end)
+		head.change:SetPoint("TOPRIGHT", head, "TOPRIGHT", 104, 0)
+		parts[#parts + 1] = head
+		return head
+	end
+	f.choice = Part(1, "Your choice", "keys.pick")
+	f.moving = Part(2, "How you move", "keys.move")
+	f.changes = Part(3, "What changes", "keys.changes")
+	f.board = Part(4, "Your new keys", "keys.board")
+	f.foot = UI.Text(f, "Finish in setup does all of this. Until then nothing of yours changes, and later one click in /shy keys puts it all back.", 12, false, C.alert)
+	f.foot:SetWidth(width)
+	f.foot:SetJustifyH("LEFT")
+	function f:Refresh()
+		local pick = plan.keys and plan.keys.pick
+		local def = HOTVIEW.picks[pick] or HOTVIEW.picks.off
+		self.choice.say:SetText(("%s. %s"):format(def.title, def.say))
+		self.moving.say:SetText(Keys.Scheme() == "asdf" and "ASDF: S forward, F back. Your hand rests a key to the right."
+			or "WASD: W forward, S back, as the game has it.")
+		local line = Keys.STEP.Lines(plan)[1]
+		self.changes.say:SetText(line.sub and line.sub ~= "" and line.sub or line.text)
+		self.board.say:SetText(pick == "shy" and "Every ability on its own key, from your first level to your last. Each new one comes to its key as you learn it."
+			or pick == "own" and "Your abilities on the keys you already use. Any whose key does something else waits."
+			or "Your keys as you have them now.")
+		local y = 0
+		for _, part in ipairs(parts) do
+			part:ClearAllPoints()
+			part:SetPoint("TOPLEFT", 0, -y)
+			y = y + part:Fit() + 22
+		end
+		self.foot:ClearAllPoints()
+		self.foot:SetPoint("TOPLEFT", 0, -(y + 4))
+		self:SetHeight(y + 4 + math.ceil(self.foot:GetStringHeight()))
+	end
+	f:SetScript("OnShow", f.Refresh)
+	f:Refresh()
+	return f
+end
+
+-- Setup: your keys, a page of its own with one question (Keys.Ask). The pick is the hotkeys' (plan.keys.pick):
+-- "skip" (No: your keys, macros and bars left alone, whatever they are), "shy" (the board, recommended), "own"
+-- (your keys as they are) or "off" (nothing laid out, and keys that are laid out put back). Taken, never given:
+-- a character whose keys aren't laid out starts at "skip", so nobody finishes setup to find anything of theirs
+-- changed; laid out, they keep the way they are. Yes walks through it (Keys.WALK): the choice, how you move,
+-- what changes, your new keys, and a look over all of it. Finish does it, with nothing to reload. (Setup is the
+-- core's own, loaded before this file; a test that leaves it out has no window to put the page in.)
 Keys.STEP = {
-	id = "keys", order = 23.5, title = "Keys", tab = "talents", tabTitle = "Your keys", glyph = "action",
-	ask = "Your keys",
-	lead = "Every ability on a key, laid out around how you move. What you have now is kept, and one press puts it back.",
+	id = "keys", order = 23.5, title = "Your keys", glyph = "action",
+	ask = "Your keys", lead = "",
+	-- (Yes: the walk through them hangs under this page on the rail, and Next goes through it)
+	walks = function(plan)
+		local pick = plan and plan.keys and plan.keys.pick
+		return pick ~= nil and pick ~= "skip"
+	end,
 	brief = function(plan)
 		local pick = plan and plan.keys and plan.keys.pick
-		if not pick or not Keys.Mine() then return Brief() end
+		if pick == "skip" then return "Left as they are" end
+		if not HOTVIEW.picks[pick] or not Keys.Mine() then return Brief() end
 		return Scheme().name .. ", " .. HOTVIEW.picks[pick].brief
 	end,
 	Plan = function(plan)
 		local mine = Keys.Mine()
-		plan.keys = { pick = mine and Keys.Has(mine.addon) and Keys.Mode() or "off" }
+		plan.keys = { pick = mine and Keys.Has(mine.addon) and Keys.Mode() or "skip", was = Picks() }
 	end,
-	Build = function(parent, width, plan) return Keys.Room(parent, math.min(width, Keys.WIDE + 124), plan) end,
+	-- (the list's picks are noted as they are made: put back if the window closes without Finish)
+	Worn = Picks,
+	PutBack = function(was) Unpick(was) end,
+	Build = function(parent, width, plan, room) return Keys.Ask(parent, width, plan, room) end,
 	Lines = function(plan)
 		local mine = Keys.Mine()
 		local pick = plan.keys and plan.keys.pick
+		if pick == "skip" then
+			return { { text = "Your keys stay as they are", sub = "your key binds, macros and bars are left alone" } }
+		end
 		if not mine or not pick then return { { text = Brief() } } end
 		local laid = Keys.Has(mine.addon)
 		local says = Hot.Says(pick, plan)
@@ -4430,19 +5636,40 @@ Keys.STEP = {
 		if says.block and not laid then
 			return { { text = "Your keys aren't laid out yet", sub = "there is no room for their macros: see the Keys page" } }
 		end
-		local stands = laid and pick == Keys.Mode()
+		-- (set up stands only where the hotkeys are set: not on a character's own key bindings, until Finish)
+		local stands = laid and pick == Keys.Mode() and (pick ~= "shy" or Hot.On())
 		local text
 		if pick == "shy" then
 			text = stands and "Your keys stay set up" or "Your keys are set up, hotkeys and all"
 		else
 			text = stands and "Your abilities stay on your own hotkeys" or "Your abilities go on your own hotkeys"
 		end
+		-- Set up from here: what a hand relies on that moves, by name and where it goes, and that A and D strafe
+		-- (setup's overview shows this sentence, before Finish).
+		if pick == "shy" and not stands then
+			local moves, sides = {}, {}
+			for _, entry in ipairs(Hot.Yours(mine.opts)) do
+				if not entry.kept and entry.must and entry.home then
+					moves[#moves + 1] = ("%s to %s"):format(BindingCalled(entry.from), Keys.Key(entry.home))
+				elseif entry.move and HOT.steer[entry.to] == entry.from then
+					sides[#sides + 1] = Keys.Key(entry.key)
+				end
+			end
+			local parts = {}
+			if #moves > 0 then parts[#parts + 1] = ("Moves %s."):format(Several(moves, HOTVIEW.most)) end
+			if #sides > 0 then parts[#parts + 1] = ("%s strafe; hold the right mouse button to turn."):format(table.concat(sides, " and ")) end
+			if #parts > 0 then
+				parts[#parts + 1] = "Everything of yours is saved, and one click puts it back."
+				return { { text = text, sub = table.concat(parts, " ") } }
+			end
+		end
 		return { { text = text, sub = says.safe } }
 	end,
 	Run = function(plan)
 		local mine = Keys.Mine()
 		local pick = plan.keys and plan.keys.pick
-		if not mine or not pick then return false end
+		if not mine or not pick or pick == "skip" then return false end   -- (No: nothing of your keys is touched)
+		Settle(plan.keys.was)    -- (what was picked in the list: done now, as Finish promises)
 		local laid = Keys.Has(mine.addon)
 		if pick == "off" then
 			if laid then Keys.Unlay(mine.addon) end
@@ -4456,7 +5683,50 @@ Keys.STEP = {
 		return false
 	end,
 }
-if Shy.Setup then Shy.Setup.Step(Keys.STEP) end
+
+-- The walk through your keys: its pages, each a part of the keys' page alone, under setup's heading for it.
+local function Page(build)
+	return function(parent, width, plan)
+		local page = build(parent, math.min(width, Keys.WIDE + 124), plan)
+		page.resized = function()
+			if Shy.Setup and Shy.Setup.Grew then Shy.Setup.Grew() end
+		end
+		return page
+	end
+end
+local function Picked(plan) return plan and plan.keys and plan.keys.pick end
+Keys.WALK = {
+	{ id = "keys.pick", order = 23.51, walk = "keys", title = "Your choice", glyph = "action",
+		ask = "How should your keys work?", lead = "Pick one. The next pages show exactly what it means for you.",
+		brief = function(plan) local def = HOTVIEW.picks[Picked(plan)]; return def and def.title end,
+		Build = Page(function(parent, width, plan) return Keys.Panel(parent, width, plan, "choose") end) },
+	{ id = "keys.move", order = 23.52, walk = "keys", title = "How you move", glyph = "go",
+		ask = "How do you move?", lead = "Your keys are laid out around the hand you move with.",
+		brief = function() return Scheme().name end,
+		Build = Page(function(parent, width) return Keys.Movement(parent, width) end) },
+	{ id = "keys.changes", order = 23.53, walk = "keys", title = "What changes", glyph = "link",
+		ask = function(plan)
+			local pick = Picked(plan)
+			return pick == "shy" and "What changes for you" or pick == "own" and "What stays, and what waits" or "Nothing changes"
+		end,
+		lead = function(plan)
+			local pick = Picked(plan)
+			return pick == "shy" and "Every key of yours that changes, and where what it did goes. Take the new key or keep yours."
+				or pick == "own" and "Your hotkeys stay. These abilities wait, because their keys do something else."
+				or "Every button and hotkey stays as it is."
+		end,
+		Build = Page(function(parent, width, plan) return Keys.Panel(parent, width, plan, "changes") end) },
+	{ id = "keys.board", order = 23.54, walk = "keys", title = "Your new keys", glyph = "window",
+		ask = "Your keys, level by level", lead = "Drag the level to see what comes when. Point at a key to see what it does.",
+		Build = Page(function(parent, width, plan) return Keys.Panel(parent, width, plan, "board") end) },
+	{ id = "keys.review", order = 23.55, walk = "keys", title = "Review", glyph = "done",
+		ask = "Ready when you are", lead = "All of it at a glance. Change anything, or press Done and then Finish.",
+		Build = Page(function(parent, width, plan) return Keys.Review(parent, width, plan) end) },
+}
+if Shy.Setup then
+	Shy.Setup.Step(Keys.STEP)
+	for _, step in ipairs(Keys.WALK) do Shy.Setup.Step(step) end
+end
 
 ---------------------------------------------------------------------------
 -- The guide pulled out: on screen while you play
@@ -4526,14 +5796,17 @@ local function MakeCard()
 		height = 120,
 		-- At the top left, where the windows you talk through open (a quest giver's, the mail, a vendor's): they
 		-- stand over it while open. Dragged by its header anywhere; it keeps where you put it.
-		point = { "TOPLEFT", "TOPLEFT", 16, -116 },
+		point = { "TOPLEFT", "TOPLEFT", 16, -16 },
 		shown = function() return Keys.GuideShown() and Keys.Mine() ~= nil and Keys.Mine().opts.play ~= nil end,
 		hang = true,   -- grows downward, so the heading stays put
 		-- Sized from its sides it flows: the rows take the width, the height is what they need.
 		grip = { flow = function(self, w) self:SetWidth(w) self:Fill() end, min = { CARD.least, 80 } },
 	})
+	-- What it says stands on its body, inside the width the screen's plan gives it, as tall as it needs (UI.Body).
 	box.head = UI.Head(box, { size = "piece", title = "How to play", drag = box, close = function() Keys.ShowGuide(false) end,
-		panel = { hud = true, brackets = false } })
+		panel = { hud = true, brackets = false }, body = true })
+	-- The look keeps another clearance round the body: laid out again.
+	Shy:On("SHY_BODY", function(f) if f == box then box:Fill() end end)
 	box.level = UI.Text(box, "", 12, true, C.head)
 	box.train = CreateFrame("Frame", nil, box)
 	box.train.words = UI.Text(box.train, "", 11, false, C.alert)
@@ -4559,11 +5832,12 @@ local function MakeCard()
 		local mine = Keys.Mine()
 		local level = math.max(1, math.min(GetMaxLevelForPlayerExpansion(), UnitLevel("player")))
 		local play = mine and Keys.Play(mine.jobs, mine.opts, level, mine.addon)
-		local width = self:GetWidth() - 2 * CARD.pad
+		local inside = UI.Body(self)
+		local width = UI.BodySize(self) - 2 * CARD.pad
 		local y = UI.HEAD.piece.line + UI.LINE + CARD.pad
 		local build = mine and mine.opts.build and select(2, mine.opts.build())
 		self.level:ClearAllPoints()
-		self.level:SetPoint("TOPLEFT", CARD.pad, -y)
+		self.level:SetPoint("TOPLEFT", inside, "TOPLEFT", CARD.pad, -y)
 		self.level:SetText(("Level %d%s"):format(level, build and (", " .. build) or ""))
 		y = y + 16
 		-- (what waits at your trainer, and what to buy first)
@@ -4572,14 +5846,14 @@ local function MakeCard()
 		local said = Keys.TrainingSays(list, sum)
 		self.train.list = list
 		self.train:ClearAllPoints()
-		self.train:SetPoint("TOPLEFT", CARD.pad, -y)
+		self.train:SetPoint("TOPLEFT", inside, "TOPLEFT", CARD.pad, -y)
 		self.train.words:SetWidth(width)
 		self.train.words:SetText(said or "")
 		self.train:SetSize(width, said and math.ceil(self.train.words:GetStringHeight()) or 1)
 		self.train:EnableMouse(said ~= nil)
 		if said then y = y + self.train:GetHeight() + 4 end
 		self.tip:ClearAllPoints()
-		self.tip:SetPoint("TOPLEFT", CARD.pad, -y)
+		self.tip:SetPoint("TOPLEFT", inside, "TOPLEFT", CARD.pad, -y)
 		self.tip:SetWidth(width)
 		self.tip:SetText(play and play.tip or "")
 		y = y + (play and math.ceil(self.tip:GetStringHeight()) or 0) + CARD.gap
@@ -4588,11 +5862,11 @@ local function MakeCard()
 		self.keep:SetShown(keep ~= nil)
 		if keep then
 			self.keepCaption:ClearAllPoints()
-			self.keepCaption:SetPoint("TOPLEFT", CARD.pad, -(y + 4))
+			self.keepCaption:SetPoint("TOPLEFT", inside, "TOPLEFT", CARD.pad, -(y + 4))
 			self.keepCaption:SetText(("YOUR %s"):format(keep.word:upper()))
 			y = y + CARD.caption
 			self.keep:ClearAllPoints()
-			self.keep:SetPoint("TOPLEFT", CARD.pad, -y)
+			self.keep:SetPoint("TOPLEFT", inside, "TOPLEFT", CARD.pad, -y)
 			self.keep:SetWidth(width)
 			self.keep:Set(keep)
 			y = y + CARD.row + CARD.gap
@@ -4602,7 +5876,7 @@ local function MakeCard()
 			list.caption:SetShown(#steps > 0)
 			if #steps > 0 then
 				list.caption:ClearAllPoints()
-				list.caption:SetPoint("TOPLEFT", CARD.pad, -(y + 4))
+				list.caption:SetPoint("TOPLEFT", inside, "TOPLEFT", CARD.pad, -(y + 4))
 				y = y + CARD.caption
 			end
 			for n, row in ipairs(list.rows) do
@@ -4610,7 +5884,7 @@ local function MakeCard()
 				row:SetShown(step ~= nil)
 				if step then
 					row:ClearAllPoints()
-					row:SetPoint("TOPLEFT", CARD.pad, -y)
+					row:SetPoint("TOPLEFT", inside, "TOPLEFT", CARD.pad, -y)
 					row:SetWidth(width)
 					row:Set(step)
 					y = y + CARD.row
@@ -4618,7 +5892,8 @@ local function MakeCard()
 			end
 			y = y + CARD.gap
 		end
-		self:SetHeight(y + CARD.pad - CARD.gap)
+		local _, t, _, b = UI.BodyIn(self)
+		self:SetHeight(y + CARD.pad - CARD.gap + t + b)
 	end
 	box:SetScript("OnShow", box.Fill)
 	cardBox = box
@@ -4638,7 +5913,7 @@ function Hot.Follow()
 	if mine and Keys.Old(mine.addon) then return end   -- (an older layout: its keys stay as they are until it is taken)
 	local result = Hot.Take(mine and mine.opts, true)
 	-- (a key that presses another button now, a flyout's bar laid another way: the job on it follows)
-	if result and result.bound > 0 and mine and Keys.Has(mine.addon) and not Keys.Old(mine.addon) then
+	if result and result.bound > 0 and mine and Keys.Has(mine.addon) and not Keys.Old(mine.addon) and not Keys.Paused(mine.addon) then
 		local laid = Keys.Apply(mine.addon, mine.jobs, mine.opts)
 		if laid then mine.waiting = laid.waiting end
 	end
@@ -4677,8 +5952,15 @@ function Keys.On(slot)
 		name = nil
 		local before = mine.addon.db.keysBefore and mine.addon.db.keysBefore[who]
 		local kind, id = GetActionInfo(slot)
-		for held, item in pairs(before and before.last or EMPTY) do
-			if item == id and made[held] and Sort(held, before) == kind then name = held end
+		-- (on a button it was put on, or you moved it to: the same spell on a button of your own is yours)
+		for held in pairs(before and before.last or EMPTY) do
+			if made[held] and Owns(held, before, kind, id) then
+				for _, slots in ipairs({ before.placed[held] or EMPTY, before.pinned[held] or EMPTY }) do
+					for _, at in ipairs(slots) do
+						if at == slot then name = held end
+					end
+				end
+			end
 		end
 	end
 	local job = name and jobs[name]
@@ -4829,4 +6111,58 @@ end
 
 Shy.Command("why", "why each of your keys is where it is, or what it waits for", function()
 	UI.ShowCopyBox("Your keys", Keys.Report())
+end)
+
+---------------------------------------------------------------------------
+-- Every change to your key bindings, whoever makes it
+---------------------------------------------------------------------------
+
+-- What changed your keys, and when: every binding set or let go, every set of them loaded or saved, by this
+-- addon, the game's own window or anything else, with the file that asked (core.db.keysLog, the last 80, kept
+-- through a reload). At each log-in, which key bindings are in use and what a few keys do. /shy bindings shows it.
+HOT.logMost = 80
+local function Noted(what)
+	local db = Shy.core.db
+	if not db then return end
+	db.keysLog = db.keysLog or {}
+	local log = db.keysLog
+	-- (the file that asked: the first line of the stack past this one)
+	local who = "?"
+	for line in (debugstack(3) or ""):gmatch("[^\n]+") do
+		local file, at = line:match("Interface/AddOns/([^%]\"]+%.lua)[^:]*:(%d+)")
+		if file and not file:find("ShyCore/Keys.lua", 1, true) then
+			who = file .. ":" .. at
+			break
+		elseif file then
+			who = file .. ":" .. at
+			break
+		end
+	end
+	log[#log + 1] = ("%s  set %s  %s  (%s)"):format(date("%H:%M:%S"), tostring(GetCurrentBindingSet()), what, who)
+	while #log > HOT.logMost do table.remove(log, 1) end
+end
+for _, name in ipairs({ "SetBinding", "SetBindingClick", "SetBindingSpell", "SetBindingMacro", "SetBindingItem" }) do
+	if type(_G[name]) == "function" then
+		hooksecurefunc(name, function(key, command)
+			Noted(("%s %s = %s"):format(name, tostring(key), tostring(command)))
+		end)
+	end
+end
+for _, name in ipairs({ "LoadBindings", "SaveBindings" }) do
+	if type(_G[name]) == "function" then
+		hooksecurefunc(name, function(set) Noted(("%s(%s)"):format(name, tostring(set))) end)
+	end
+end
+do
+	local login = CreateFrame("Frame")
+	login:RegisterEvent("PLAYER_LOGIN")
+	login:SetScript("OnEvent", function()
+		Noted(("logged in: Q = %s, E = %s, 1 = %s, C = %s, Mouse 4 = %s"):format(GetBindingAction("Q"), GetBindingAction("E"),
+			GetBindingAction("1"), GetBindingAction("C"), GetBindingAction("BUTTON4")))
+	end)
+end
+
+Shy.Command("bindings", "every change to your key bindings lately, and who made it", function()
+	local log = Shy.core.db and Shy.core.db.keysLog
+	UI.ShowCopyBox("Your key bindings, as they changed", log and #log > 0 and table.concat(log, "\n") or "No change to your key bindings yet.")
 end)

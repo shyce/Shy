@@ -15,9 +15,9 @@ local ADDON, ns = ...
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Dots",
+	category = "combat",
 	icon = "Interface\\AddOns\\ShyDots\\Media\\ShyDots",
 	smallIcon = "Interface\\AddOns\\ShyDots\\Media\\ShyDotsSmall",
-	tagline = "Shows when your DoTs will finish a mob",
 	savedVariables = "ShyDotsDB",
 	defaults = {
 		on = true,

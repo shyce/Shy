@@ -165,7 +165,7 @@ local function PaintBuy(at)
 	b.button:SetShown(at ~= nil and cost ~= nil)
 	if not (at and cost) then return end
 	b.button:ClearAllPoints()
-	b.button:SetPoint("TOPLEFT", win, "TOPLEFT", at[1], -at[2])
+	b.button:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", at[1], -at[2])
 	b.button:SetEnabled(can == true)
 	UI.Tint(b.mark, can and GOLD or C.dim)
 	b.mark:SetAlpha(can and 1 or 0.6)
@@ -195,7 +195,7 @@ local function Sockets(x)
 		if not next then
 			PaintSocket(e, socket)
 			e.button:ClearAllPoints()
-			e.button:SetPoint("TOPLEFT", win, "TOPLEFT", x, -y)
+			e.button:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", x, -y)
 		end
 		y = y + SIZE + GAP
 	end
@@ -204,7 +204,7 @@ local function Sockets(x)
 	P.rule:SetShown(#list > 0)
 	if #list == 0 then return 0 end
 	P.rule:ClearAllPoints()
-	P.rule:SetPoint("TOPLEFT", win, "TOPLEFT", x - 7, -TOP)
+	P.rule:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", x - 7, -TOP)
 	P.rule:SetHeight(#list * (SIZE + GAP) - GAP)
 	return #list * (SIZE + GAP) - GAP
 end
@@ -218,13 +218,14 @@ end
 -- Layout
 
 local function Size(W, H)
-	Shy.HUD.Resize(box, W, H)
-	win:SetSize(W, H)
+	-- Its content on its body (UI.Body), the window that much bigger than it.
+	UI.BodyFit(win, W, H)
+	Shy.HUD.Resize(box, win:GetWidth(), win:GetHeight())
 end
 
 local function Foot(width, tall, free, slots, right)
 	P.foot:ClearAllPoints()
-	P.foot:SetPoint("TOPLEFT", win, "TOPLEFT", EDGE, -(TOP + tall))
+	P.foot:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", EDGE, -(TOP + tall))
 	P.foot:SetSize(width, FOOT)
 	P.free:SetText(free == 0 and "Full" or (free .. " free"))
 	UI.Ink(P.free, free == 0 and C.bad or C.text)
@@ -295,7 +296,7 @@ local function Work(live, width, top)
 	P.work:SetShown(shown > 0)
 	if shown == 0 then return 0 end
 	P.work:ClearAllPoints()
-	P.work:SetPoint("TOPLEFT", win, "TOPLEFT", EDGE, -top)
+	P.work:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", EDGE, -top)
 	P.work:SetSize(width, (line + 1) * JOB.tall)
 	return JOB.gap + (line + 1) * JOB.tall
 end
@@ -327,7 +328,7 @@ local function Lay()
 			or "You haven't opened your bank yet.\n\nThe first tab is free.")
 		local tall = 4 * STEP
 		P.fresh:ClearAllPoints()
-		P.fresh:SetPoint("TOPLEFT", win, "TOPLEFT", EDGE, -TOP)
+		P.fresh:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", EDGE, -TOP)
 		P.fresh:SetSize(FRESH_W, tall - Tile.GAP)
 		P.foot:Hide()
 		Work(false)
@@ -356,7 +357,7 @@ local function Lay()
 	local tall = math.max(rows * STEP, colH + Tile.GAP)
 	P.vault:SetShown(true)
 	P.vault.plate:ClearAllPoints()
-	P.vault.plate:SetPoint("TOPLEFT", win, "TOPLEFT", EDGE - Window.VAULT_PAD, -(TOP - Window.VAULT_PAD))
+	P.vault.plate:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", EDGE - Window.VAULT_PAD, -(TOP - Window.VAULT_PAD))
 	P.vault.plate:SetSize(gridW + 2 * Window.VAULT_PAD, rows * STEP - Tile.GAP + 2 * Window.VAULT_PAD)
 	P.foot:Show()
 	local free, slots = grid:Room()
@@ -366,6 +367,11 @@ local function Lay()
 	Size(EDGE + gridW + colW + EDGE, TOP + tall + 24 + work)
 	P.shown = { mode = mode, guid = guid, grid = grid, columns = columns, rows = rows }
 end
+
+-- The look keeps another clearance round the body (UI.Body): laid out again, the window that much bigger.
+Shy:On("SHY_BODY", function(f)
+	if f == win then BankWindow.Refresh() end
+end)
 
 function BankWindow.Refresh()
 	if not win or building then return end
@@ -468,7 +474,7 @@ local function Build()
 	P.live = Grid.New(win, true)
 	P.mem = Grid.New(win, false)
 	for _, grid in ipairs({ P.live, P.mem }) do
-		grid:SetPoint("TOPLEFT", win, "TOPLEFT", EDGE, -TOP)
+		grid:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", EDGE, -TOP)
 		grid:Gild(true)
 		grid.onChange = function()
 			if not building then BankWindow.Refresh() end

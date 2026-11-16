@@ -87,11 +87,7 @@ end
 
 -- Player names need a font family covering every alphabet.
 local function Name(parent, size)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(UI.NameFont(size or 12))
-	fs:SetJustifyH("LEFT")
-	fs:SetWordWrap(false)
-	return fs
+	return UI.Words(parent, UI.NameFont(size or 12), nil, { wrap = false })
 end
 local STEP = 42   -- one row of slots with its gap; must match the window's grid
 
@@ -100,10 +96,7 @@ Views.query = ""   -- the search text, set by Window.lua
 Views.test = nil
 
 local function Rounded(parent, size, color)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFont(Shy.FONT_ROUNDED, size, "")
-	UI.Ink(fs, color or C.text)
-	return fs
+	return UI.Words(parent, size, color, { justify = "CENTER" })
 end
 
 local function ClassColor(fs, class)

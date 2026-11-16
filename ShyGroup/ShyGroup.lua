@@ -6,9 +6,9 @@ local MEDIA = "Interface\\AddOns\\ShyGroup\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Group",
+	category = "social",
 	icon = MEDIA .. "ShyGroup",
 	smallIcon = MEDIA .. "ShyGroupSmall",
-	tagline = "The Group Finder with the work done: pick a run, see who's listed, list yourself, whisper in one click",
 	savedVariables = "ShyGroupDB",
 	defaults = {
 		-- {words} are filled in when sent (see Run.Fill)

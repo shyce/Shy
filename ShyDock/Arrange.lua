@@ -25,18 +25,35 @@ local DECK = { "shyquest", "shygroup-status" }
 -- level a deck box shows for them (ShyQuest's strip).
 local TABS = { "shyquest", "shyxp", "shygroup-status" }
 
--- The top left's column: a farming session (ShyFarm) at the corner where how to play stands, and how to play
--- (ShyCore's keys guide) under it while the session shows; with none, how to play has the corner (its own home).
+-- The top left's column: a farming session (ShyFarm) tight in the corner where how to play stands, and how to
+-- play (ShyCore's keys guide) under it while the session shows; with none, how to play has the corner (its own
+-- home). In a raid on a classic layout the raid's frames hang from the corner (Layout.lua's GroupAt; the game's
+-- party frames too, while they are the ones in use): how to play stands under them, and the session doesn't show.
 local FARM, HOW = "shyfarm", "shy.keys.guide"
 local TOP_LEFT = ns.Parts.TOP_LEFT   -- how to play's own home, the corner both share
-local function FarmAt()
-	return "TOPLEFT", "TOPLEFT", TOP_LEFT.x, TOP_LEFT.y
+
+-- The column's top (an offset from the screen's top): the corner, or under the group's frames hanging from it.
+local function ColumnTop(g, now)
+	if not (now and now.raiding and not (g and g.role)) then return TOP_LEFT.y end
+	local frame = IsInRaid() and _G.CompactRaidFrameContainer or _G.PartyFrame
+	if not frame then return TOP_LEFT.y end
+	local _, bottom = ns.Console.Rect(frame)
+	if not bottom then return TOP_LEFT.y end
+	return bottom - UIParent:GetHeight() - GAP
 end
-local function HowAt()
+
+local function FarmAt(g, now)
+	return "TOPLEFT", "TOPLEFT", TOP_LEFT.x, ColumnTop(g, now)
+end
+local function HowAt(g, now)
+	local top = ColumnTop(g, now)
 	local farm = HUD.Find(FARM)
-	if not (farm and farm:IsShown() and not HUD.IsPlaced(farm)) then return nil end
-	local tall = farm:GetHeight() * farm:GetScale()
-	return "TOPLEFT", "TOPLEFT", TOP_LEFT.x, TOP_LEFT.y - tall - GAP
+	if farm and farm:IsShown() and not HUD.IsPlaced(farm) then
+		top = top - farm:GetHeight() * farm:GetScale() - GAP
+	elseif top == TOP_LEFT.y then
+		return nil   -- its own home, the corner
+	end
+	return "TOPLEFT", "TOPLEFT", TOP_LEFT.x, top
 end
 
 -- ShyThreat's meter while it is on: its piece for the plan (Parts.lua), else nil.
@@ -913,6 +930,7 @@ end
 function A.Start()
 	local events = CreateFrame("Frame")
 	events:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+	events:RegisterEvent("GROUP_ROSTER_UPDATE")   -- a raid's frames come to the top left's corner, or leave it
 	events:RegisterEvent("PLAYER_REGEN_ENABLED")
 	events:RegisterEvent("UI_SCALE_CHANGED")
 	events:RegisterEvent("DISPLAY_SIZE_CHANGED")

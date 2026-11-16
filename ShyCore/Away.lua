@@ -370,7 +370,7 @@ local function BuildWords()
 		chat:Dress(ui.whispers)
 	end
 	-- The header: the emblem, Away, the time, what came in, how things stand.
-	local emblem = B.CreateEmblem(words, Shy.ICON, EMBLEM)
+	local emblem = B.CreateEmblem(words, Shy.core.mark, EMBLEM)
 	emblem:SetPoint("TOPLEFT", board, "TOPLEFT", EDGE, -(EDGE - 8))
 	ui.title = UI.Text(words, "Away", 26, true)
 	ui.title:SetPoint("TOPLEFT", emblem, "TOPRIGHT", 12, -2)

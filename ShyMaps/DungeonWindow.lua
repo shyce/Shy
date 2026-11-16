@@ -206,14 +206,10 @@ end
 local function Kicker(parent)
 	local k = CreateFrame("Frame", nil, parent)
 	k:SetHeight(15)
-	k.text = k:CreateFontString(nil, "OVERLAY")
-	k.text:SetFontObject(UI.NameFont(10))
+	k.text = UI.Words(k, UI.NameFont(10), C.text)
 	k.text:SetPoint("TOPLEFT")
-	UI.Ink(k.text, C.text)
-	k.aside = k:CreateFontString(nil, "OVERLAY")
-	k.aside:SetFontObject(UI.NameFont(10))
+	k.aside = UI.Words(k, UI.NameFont(10), C.dim)
 	k.aside:SetPoint("LEFT", k.text, "RIGHT", 7, 0)
-	UI.Ink(k.aside, C.dim)
 	k.rule = k:CreateTexture(nil, "ARTWORK")
 	k.rule:SetPoint("TOPLEFT", 0, -14)
 	k.rule:SetPoint("TOPRIGHT", 0, -14)
@@ -1428,7 +1424,10 @@ Fill = function()
 	local face = own.face
 	if not (face and Journal.IsOpen()) then return end
 	-- (In its own window it is that window's size under its header, however it came by it.)
-	if own.home == "shell" then own.w, own.h = own.box:GetWidth(), own.box:GetHeight() - HEADER end
+	if own.home == "shell" then
+		local w, h = UI.BodySize(own.box)
+		own.w, own.h = w, h - HEADER
+	end
 	face:SetSize(own.w, own.h)
 	local book = state.map and J.Book(state.map)
 	if book and type(state.page) == "number" and not book.bosses[state.page] then state.page = "overview" end
@@ -1577,19 +1576,21 @@ end
 ---------------------------------------------------------------------------
 -- Making it
 ---------------------------------------------------------------------------
--- The face into its shell, the window's size (its own, or the one it was just given).
+-- The face into its shell, its body's size (its own, or the one it was just given): on its body, clear of the look's
+-- work round the edge (UI.Body).
 local function Shell(width, height)
 	local box, face = own.box, own.face
 	if own.home ~= "shell" then
 		own.home = "shell"
 		face:SetParent(box)
 		face:ClearAllPoints()
-		face:SetPoint("TOPLEFT", box, "TOPLEFT", 0, -HEADER)
+		face:SetPoint("TOPLEFT", UI.Body(box), "TOPLEFT", 0, -HEADER)
 		face:SetFrameLevel(box:GetFrameLevel() + 1)
 		face.ground:Hide()
 		own.barX, own.k = nil, 1
 	end
-	own.w, own.h = width or box:GetWidth(), (height or box:GetHeight()) - HEADER
+	local w, h = UI.BodySize(box)
+	own.w, own.h = width or w, (height or h) - HEADER
 	face:Show()
 end
 
@@ -1613,10 +1614,8 @@ local function MakeBar(face)
 	own.crumbs = { Crumb(bar), Crumb(bar) }
 	own.slashes = {}
 	for i = 1, 2 do
-		local text = bar:CreateFontString(nil, "OVERLAY")
-		text:SetFontObject(UI.NameFont(L.crumb))
+		local text = UI.Words(bar, UI.NameFont(L.crumb), Shy.Skin.colors.idle)
 		text:SetText("/")
-		UI.Ink(text, Shy.Skin.colors.idle)
 		own.slashes[i] = text
 	end
 	Journal.back = own.root
@@ -1761,7 +1760,7 @@ local function Create()
 		maximize = true,
 		onClose = function() T.db.journal.open = false end,
 		close = function() Journal.Toggle(false) end,
-		head = { size = "window", icon = T.smallIcon, title = "Dungeons" },
+		head = { size = "window", icon = T.mark, title = "Dungeons" },
 	})
 	own.box = box
 

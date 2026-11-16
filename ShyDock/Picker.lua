@@ -26,9 +26,33 @@ local COLUMNS, COLUMN_H, COLUMN_GAP = 700, 170, 24
 local CHOICES_W = 3 * SIZE_W + 2 * GAP -- the choices' column: the size's chips
 local LABEL_H, ROW_GAP = 20, 16        -- a label over its chips; between the two
 local LIT = 3                          -- combo points drawn lit
+local CAST_SHARE = 0.6                 -- how far the drawn cast is
 local sections = {}
 
--- Your own pictures: the icons the viewers and the stance bar hold, by row, when they can be read.
+-- Your class's own cooldowns for a row, from the game's list of every one the class gets, learned or not: the
+-- drawing's pictures where the row's own can't be read (nothing learned yet, or out of sight until a fight).
+local CATEGORY = { gems = "Essential", utility = "Utility", buffs = "TrackedBuff", bars = "TrackedBar" }
+function V.ClassPictures(key, limit, out)
+	out = out or {}
+	local api, enum = _G.C_CooldownViewer, Enum.CooldownViewerCategory
+	local category = enum and CATEGORY[key] and enum[CATEGORY[key]]
+	if not (category and api and api.GetCooldownViewerCategorySet and api.GetCooldownViewerCooldownInfo) then return out end
+	local ids = api.GetCooldownViewerCategorySet(category, true)
+	if type(ids) ~= "table" then return out end
+	for _, id in ipairs(ids) do
+		if #out >= limit then break end
+		local info = api.GetCooldownViewerCooldownInfo(id)
+		local spell = info and (info.overrideSpellID or info.spellID)
+		if spell ~= nil and not issecretvalue(spell) then
+			local texture = C_Spell.GetSpellTexture(spell)
+			if texture ~= nil and not issecretvalue(texture) then out[#out + 1] = texture end
+		end
+	end
+	return out
+end
+
+-- Your own pictures: the icons the viewers and the stance bar hold, by row, when they can be read; else your
+-- class's for the row.
 local function Pictures(key, limit)
 	local out = {}
 	local function Take(texture)
@@ -48,10 +72,11 @@ local function Pictures(key, limit)
 		return out
 	end
 	local viewer = ({ gems = EssentialCooldownViewer, utility = UtilityCooldownViewer, buffs = BuffIconCooldownViewer, bars = BuffBarCooldownViewer })[key]
-	if not (type(viewer) == "table" and type(viewer.itemFramePool) == "table") then return out end
+	if not (type(viewer) == "table" and type(viewer.itemFramePool) == "table") then return V.ClassPictures(key, limit, out) end
 	for item in viewer.itemFramePool:EnumerateActive() do
 		Take(Of(item.Icon))
 	end
+	if #out == 0 then V.ClassPictures(key, limit, out) end
 	return out
 end
 
@@ -110,23 +135,31 @@ function V.DrawOn(S, c, now)
 	end
 	local body = Housing("box", box)
 
-	-- The display's block: one frame round its bars (and the swing row, and the cast bar's row while a cast
-	-- is up and nothing hangs between), the gaps its dividers.
+	-- The display's block: one frame round its bars (and the hand row while it is open), the gaps its dividers.
 	local d = c.rects.display
-	local swing = c.rects.swing
 	local castUp = present.cast and c.casting and c.rects.cast ~= nil
-	local castJoined = castUp and c.castIn == "block"
+	local swingUp = not castUp and c.swinging and c.hand ~= nil
+	local rowUp = castUp or swingUp
+	local castJoined = rowUp and c.castIn == "block"
 	local seam = m.seam
-	-- The cast bar's row: the spell's picture, a seam, the bar.
+	-- The hand row: the spell's picture, a seam, the bar; or your weapons' (the off hand's mirrored at the right end).
 	local function CastRow(f)
 		local y = c.cast
-		t.Icon(f, c.castLeft - c.castGap - c.castSide, y, c.castSide)
+		if swingUp then
+			for _, r in ipairs(c.hand.icons) do t.Icon(f, r[1], r[2], r[3] - r[1]) end
+			for _, r in ipairs(c.hand.seams) do t.Flat(f, Theme.skin.metal, 0.85, 2, r[1], r[2], r[3], r[4]) end
+			for _, r in ipairs(c.hand.bars) do t.Bar(f, Theme.SCHOOL[1], 1, r[1], r[2], r[3], r[4], 0.6) end
+			return
+		end
+		-- A cast under way: one of your class's spells, the bar filling from its picture's side.
+		local spell = V.ClassPictures("gems", 1)[1] or V.ClassPictures("utility", 1)[1]
+		Icon(f, { spell }, 1, c.castLeft - c.castGap - c.castSide, y, c.castSide)
 		t.Flat(f, Theme.skin.metal, 0.85, 2, c.castLeft - c.castGap, y, c.castLeft, y + c.castHeight)
-		t.Bar(f, ACCENT, 1, c.castLeft, y, c.castLeft + c.castWidth, y + c.castHeight)
+		t.Bar(f, ACCENT, 1, c.castLeft, y, c.castLeft + c.castWidth, y + c.castHeight, CAST_SHARE)
 	end
 	if present.display then
 		local F = m.frame
-		local foot = (swing and present.swing) and swing[2] or d[2]
+		local foot = d[2]
 		if castJoined then foot = c.cast end
 		local block = t.Piece("block", 6)
 		t.Put(block, d[1] - F, foot - F, d[3] + F, d[4] + F)
@@ -141,20 +174,14 @@ function V.DrawOn(S, c, now)
 			t.Flat(block, Theme.skin.metal, 0.85, 2, d[1], d[2] + m.power, d[3], d[2] + m.power + seam)
 			t.Bar(block, colors.MANA, 1, d[1], d[2], d[3], d[2] + m.power)
 		end
-		if swing and present.swing then
-			t.Flat(block, Theme.skin.metal, 0.85, 2, d[1], swing[4], d[3], swing[4] + seam)
-			t.Bar(block, Theme.SCHOOL[1], 1, swing[1], swing[2], swing[3], swing[4], 0.6)
-		end
 		if castJoined then
 			local top = c.cast + c.castHeight
 			t.Flat(block, Theme.skin.metal, 0.85, 2, d[1], top, d[3], top + seam)
 			CastRow(block)
 		end
-	elseif swing and present.swing then
-		t.Bar(body, Theme.SCHOOL[1], 1, swing[1], swing[2], swing[3], swing[4], 0.6)
 	end
-	-- The cast bar's row in a frame of its own, under what hangs at the plate's foot.
-	if castUp and not castJoined and S.focus and not S.mini then
+	-- With no block, the hand row in a frame of its own where the block would be.
+	if rowUp and not castJoined and S.focus and not S.mini then
 		local rect = c.rects.cast
 		local own = t.Piece("cast", 6)
 		t.Put(own, rect[1], rect[2], rect[3], rect[4])
@@ -378,18 +405,35 @@ function V.Section(parent, width, plan)
 		self:Refresh()
 	end
 
+	-- Pointed at, a choice is drawn: only where the drawing would show something else (a chip of what is picked
+	-- already draws nothing); a leave waits a frame, so passing from one chip to the next draws once.
 	function f:Look(field, key)
+		self.leaving = nil
+		if field == nil and looking ~= nil then
+			self.leaving = true
+			C_Timer.After(0, function()
+				if not self.leaving then return end
+				self.leaving = nil
+				looking = nil
+				self:Refresh(true)
+			end)
+			return
+		end
 		looking = field and { field = field, key = key } or nil
-		self:Refresh()
+		self:Refresh(true)
 	end
 
-	function f:Refresh()
+	-- looked: asked only because the mouse moved (the drawing kept where it would show the same).
+	local drew
+	function f:Refresh(looked)
 		local picks = Picks()
 		local shown = { scale = picks.scale, side = picks.side }
 		if looking then
 			if looking.field == "size" then shown.scale = V.SCALES[looking.key] else shown[looking.field] = looking.key end
 		end
-		stage:Draw(nil, nil, nil, shown)
+		local sign = tostring(shown.scale) .. "|" .. tostring(shown.side) .. "|" .. ns.Preview.From()
+		if not (looked and drew == sign) then stage:Draw(nil, nil, nil, shown) end
+		drew = sign
 		local size = V.SizeOf(picks.scale)
 		for key, chip in pairs(sizes) do chip:Paint(size == key) end
 		for key, chip in pairs(sides) do chip:Paint(picks.side == key) end
@@ -432,8 +476,8 @@ end
 -- The setup window's step, after the screen's: no reload of its own.
 Shy.Setup.Step({
 	id = "cooldowns", order = 21, title = "Cooldowns", glyph = "clock", tab = "screen",
-	ask = "Pick the cooldown manager's size",
-	lead = "Its size and the tracked bars' side, under your character. Drag it, size it or take it apart later in layout mode.",
+	ask = "How big should your cooldowns be?",
+	lead = "They sit under your character, with the tracked bars on the side you pick. You can move or resize them later in layout mode.",
 	brief = function(plan)
 		local p = plan.cooldowns
 		return (SizeWords(p.scale):gsub("^%l", string.upper)) .. ", bars " .. p.side

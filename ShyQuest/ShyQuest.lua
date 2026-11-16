@@ -7,14 +7,15 @@ if Shy.Memory then Shy.Memory.Namespace(ADDON, ns) end   -- (the task manager re
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Quest",
+	category = "leveling",
 	icon = "Interface\\AddOns\\ShyQuest\\Media\\ShyQuest",
 	smallIcon = "Interface\\AddOns\\ShyQuest\\Media\\ShyQuestSmall",
-	tagline = "Always know what to do next",
 	savedVariables = "ShyQuestDB",
 	-- Per account, not per profile: flight times kept before ShyWay kept them (GuideTimers.lua hands them
 	-- over), escorts timed and walked (Escort.lua), how far the quest survey got (Survey.lua), and whether
-	-- this account gathers quest data for the addon's own files (`dev`).
-	keep = { air = true, escorts = true, survey = true, offers = true, dev = true, floors = true },
+	-- this account gathers quest data for the addon's own files (`dev`), and what creatures the game showed
+	-- don't drop (`drops`).
+	keep = { air = true, escorts = true, survey = true, offers = true, dev = true, floors = true, drops = true },
 	defaults = {
 		floors = {},                   -- which floor you said a place is on, by world: north, west, level (World.lua, W.Learn)
 		dev = false,                   -- gather quest data: the survey and givers' lists (/shyquest dev)
@@ -46,6 +47,7 @@ local T = Shy:NewAddon(ADDON, {
 		pinSize = 1,
 		doors = {},                    -- dungeon entrances seen, by instance map: { map, x, y } (ns.NoteDoor)
 		shops = {},                    -- what an NPC showed, by NPC id: 0 no shop, 1 buys and sells, 2 repairs too (D.NoteShop)
+		drops = {},                    -- items a creature was shown not to drop, by NPC id: { [item] = true } (D.NoteDrop)
 		goals = true,                  -- objective pins where the default map marks nothing
 		hover = { units = true, objects = true, items = true,     -- quest lines in tooltips (Hover.lua)
 			careful = true },          -- warnings about dangerous creatures
@@ -96,13 +98,38 @@ ns.T = T
 
 ns.MEDIA = "Interface\\AddOns\\ShyQuest\\Media\\"
 
+-- Levelling help: the guide, quests to pick up, zones to go to and the route's errands. Below the top
+-- level, or at it while this character keeps it on (ns.char.topHelp). Without it the card lists the quests
+-- you have. A dungeon run is a guide of its own and runs at any level.
+function ns.AtTop()
+	return GameRulesUtil.IsPlayerAtEffectiveMaxLevel()
+end
+
+function ns.Levelling()
+	return not ns.AtTop() or (ns.char ~= nil and ns.char.topHelp == true)
+end
+
+-- The guide leads: the setting is on, and levelling help (or a dungeon run).
+function ns.Following()
+	if not T.db.guide.follow then return false end
+	if ns.Levelling() then return true end
+	local state = ns.char and ns.char.guide
+	return state ~= nil and state.run ~= nil
+end
+
+-- Quests to pick up count as steps.
+function ns.Pickups()
+	return T.db.pickups and ns.Levelling()
+end
+
 -- The card's right-click menu takes switches from the files that own them (Card.lua, "Errands"):
---   ns.CardSwitch(section, write)   write(root) adds the entries; section: "errands" (what the route adds
---                                   on its own), "suggestions" (what the card speaks up about), "offers"
---                                   ("Take me to")
+--   ns.CardSwitch(section, write, kept)   write(root) adds the entries; section: "errands" (what the route
+--                                   adds on its own), "suggestions" (what the card speaks up about), "offers"
+--                                   ("Take me to"). kept: an errand's switch that still acts without levelling
+--                                   help (the quests you have, getting back to life).
 ns.cardSwitches = {}
-function ns.CardSwitch(section, write)
-	ns.cardSwitches[#ns.cardSwitches + 1] = { section = section, write = write }
+function ns.CardSwitch(section, write, kept)
+	ns.cardSwitches[#ns.cardSwitches + 1] = { section = section, write = write, kept = kept == true }
 end
 
 local REBUILD_YARDS = 60     -- a log change this far from where the route was built chooses the stops again
@@ -575,6 +602,7 @@ function T:OnLoad()
 end
 
 function T:OnLogin()
+	ns.wasLevelling = ns.Levelling()
 	ns.Guide.Setup()
 	ns.XP.Setup()
 	ns.SetupCard()
@@ -592,6 +620,12 @@ function T:OnLogin()
 		-- What the player did or where they are is built at once; the rest (the log filling, the bags, the
 		-- ground's news) waits for the gap.
 		if NOW_EVENTS[event] then builtAt = nil end
+		if event == "PLAYER_LEVEL_UP" then
+			-- The top level reached: levelling help goes (the new level shows the frame after the event).
+			C_Timer.After(0, function()
+				if ns.Levelling() ~= ns.wasLevelling then ns.Apply() end
+			end)
+		end
 		if event == "QUEST_TURNED_IN" then
 			ns.Log.Left((...), true)
 			ns.Log.ForgetOffers()
@@ -668,6 +702,8 @@ end
 
 -- Applies every setting live: rebuilds the route and redraws.
 function ns.Apply()
+	Shy:Fire("SHY_SWITCH", "shyquest")   -- the quest window's switch in layout mode follows its setting
+	ns.wasLevelling = ns.Levelling()
 	builtAt = nil   -- (a setting changed: shown at once)
 	ns.applied = true   -- (... and drawn whole, though the route comes out the same)
 	ns.Log.ForgetOffers()
@@ -734,41 +770,70 @@ function T:ItemSources(item)
 	return find and find.Sources and find.Sources(item) or nil
 end
 
--- T:FarmAt(item, map, x, y, who)   leads to where you farm an item now (as :Go), its stop the item's, named for it and
---                          `who` it is from: the ground of what you farm it from is lit in the finder's color (a
---                          search result kept on the map lets go), and the stop stays while you are there;
---                          T:EndFarm([item]) when the farming ends
-function T:FarmAt(item, map, x, y, who)
+-- T:FarmAt(item, map, x, y, who [, npc])   leads to where you farm now (as :Go), named for the item and `who` it is
+--                          from: the ground you farm on is lit in the finder's color (a search result kept on the
+--                          map lets go), and the stop stays while you are there. npc: you farm that creature (all
+--                          it drops; item, if given, the one of them you count): its own ground. T:EndFarm() when
+--                          the farming ends
+-- T:FarmKey(item [, npc])   what the farm is known by: in SHY_FARM_GROUND (key, on) and T:FarmGroundYards(key)
+function T:FarmAt(item, map, x, y, who, npc)
 	local plan = ns.Plan
 	if not (plan and ns.char and map and C_Map.CanSetUserWaypointOnMap(map)) then return false end
-	local data = ns.Data.Item(item)
-	local title = (data and data.name or "Where you farm") .. (who and (", " .. who) or "")
+	local data = item and ns.Data.Item(item)
+	local creature = npc and ns.Data.Npc(npc)
+	local title
+	if data then
+		title = data.name .. (who and (", " .. who) or "")
+	else
+		title = creature and creature.name or who or "Where you farm"
+	end
 	plan.EndFarm()
 	-- (What you farm is what the maps light from now: a search result kept there before lets go.)
 	if ns.LetGo then ns.LetGo() end
 	plan.OwnWaypoint(map, x * MAP_SHARE, y * MAP_SHARE)
 	Shy.Waypoint.Set(map, x, y, true)
-	plan.Go({ map = map, x = x * MAP_SHARE, y = y * MAP_SHARE, title = title, from = "map", farm = item })
+	plan.Go({ map = map, x = x * MAP_SHARE, y = y * MAP_SHARE, title = title, from = "map", farm = ns.Route.FarmKey(item, npc) })
 	return true
 end
 
--- T:FarmGroundYards(item)   how far you are from the nearest spawn of the ground you'd farm it on (R.FarmGround),
+function T:FarmKey(item, npc)
+	return ns.Route.FarmKey(item, npc)
+end
+
+-- T:FarmGroundYards(key)   how far you are from the nearest spawn of the ground you'd farm on (R.FarmGround),
 --                          straight; nil off its continent. Cheap: ShyFarm asks it as you stop moving.
-function T:FarmGroundYards(item)
+function T:FarmGroundYards(key)
 	local route = ns.Route
-	return route and route.FarmGroundYards and route.FarmGroundYards(item) or nil
+	return route and route.FarmGroundYards and route.FarmGroundYards(key) or nil
 end
 
-function T:EndFarm(item)
-	if ns.Plan and ns.char then ns.Plan.EndFarm(item) end
+function T:EndFarm(key)
+	if ns.Plan and ns.char then ns.Plan.EndFarm(key) end
 end
 
--- T:FarmSpot(item, left)  where to farm an item: the heart of its best camp you can farm (Route.lua's R.FarmSpot:
+-- T:FarmSpot(item, left [, npc])  where to farm: the heart of the best camp you can farm (Route.lua's R.FarmSpot:
 --                          spawns, drop chance, the walk, your level; no vendors, guards, or elites while a plain
---                          one drops it); left: how many you still want. { map, x, y, yards, among, name, chance }
-function T:FarmSpot(item, left)
+--                          one drops it); left: how many you still want; npc: that creature's camps alone.
+--                          { map, x, y, yards, among, name, chance, id }
+function T:FarmSpot(item, left, npc)
 	local route = ns.Route
-	return route and route.FarmSpot and route.FarmSpot(item, left) or nil
+	return route and route.FarmSpot and route.FarmSpot(item, left, npc) or nil
+end
+
+-- T:Farmable(text [, kinds])   what you could farm whose name holds `text`: items had from creatures you could farm
+--                          or from nodes, and those creatures; never townsfolk, guards, vendors, quest givers or
+--                          places. kinds: { item = true, creature = true } (both when nil). Prefix matches first:
+--                          { kind = "item" | "creature", id, ids (one name, every ID), name, level, from, chance } each
+-- T:FindFarm([opts])       opens the finder on what to farm: the best farms for you, your favorites and a search of
+--                          what you could farm. opts.pick(kind, id): told what was picked, in place of farming it
+--                          (the finder closes); opts.close: it closes after a pick anyway
+function T:Farmable(text, kinds)
+	local farmable = ns.Farmable
+	return farmable and farmable.Search(text, kinds) or {}
+end
+
+function T:FindFarm(opts)
+	if ns.Find and ns.Find.Farm then ns.Find.Farm(opts) end
 end
 
 -- T:CampsOf(npc)           every camp of a creature on every continent, thickest first, from no one place (Route.lua's
@@ -802,11 +867,25 @@ function T:Find(text)
 end
 
 function T:QuestStyle()
-	return self.db.guide.follow and "guide" or "zone"
+	return ns.Following() and "guide" or "zone"
+end
+
+-- At the top level the guide is this character's to take back or put away (levelling help, ns.char.topHelp);
+-- the other characters' style stays as it is, unless the guide is asked for and was off for all.
+function ns.SetTopHelp(on)
+	if not ns.char then return end
+	ns.char.topHelp = on and true or nil
+	ns.Apply()
 end
 
 function T:SetQuestStyle(style)
 	local follow = style == "guide"
+	if ns.AtTop() and ns.char then
+		if follow and not self.db.guide.follow then self.db.guide.follow = true end
+		if not follow and ns.char.guide and ns.char.guide.run and ns.Guide.EndRun then ns.Guide.EndRun(false, true) end
+		ns.SetTopHelp(follow)
+		return
+	end
 	if self.db.guide.follow == follow then return end
 	-- Zone mode ends a dungeon run (Run.lua), the guide kept where it was.
 	if not follow and ns.char and ns.char.guide and ns.char.guide.run and ns.Guide.EndRun then ns.Guide.EndRun(false, true) end

@@ -426,6 +426,8 @@ UI.LookKind("charred", {
 	-- only the burnt edge is the edge's.
 	face = { "charPlain", "charBand", "charCorner1", "charCorner2", "charCorner3", "charCorner4", "charFire", "charFireCore",
 		"charSpot1", "charSpot2", "charSpot3", "charSpotCore1", "charSpotCore2", "charSpotCore3", "charFootSeam", "charBoard" },
+	-- A chat bubble's tail (UI.LookTail): the burnt edge running on round it.
+	tail = function() return "Charred", { { layer = "Edge", color = { 1, 1, 1 } } } end,
 	edge = { "charEdge" },
 	bar = "ember",   -- char, still burning in its cracks
 	slot = "sunken",

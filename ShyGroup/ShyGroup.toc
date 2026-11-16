@@ -1,10 +1,10 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffGroup|r
-## Notes: The Group Finder with the work done: pick a dungeon, raid or zone, see who's listed, list yourself or your group, whisper in one click and track who said yes. |cff888888/shygroup|r
+## Notes: Find a group or fill yours: see who's listed, whisper in one click |cff888888/shygroup|r
 ## Author: Shyce Cream
-## Version: 5.0.6
-## X-Date: 2026-11-15
-## IconTexture: Interface\AddOns\ShyGroup\Media\ShyGroup
+## Version: 5.1.1
+## X-Date: 2026-11-16
+## IconTexture: Interface\AddOns\ShyGroup\Media\ShyGroupMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore
 ## SavedVariables: ShyGroupDB

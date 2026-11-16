@@ -20,7 +20,8 @@
 -- undocked windows that way but doesn't remeasure when the font changes or a window leaves the
 -- dock, and it gives the dock's other tabs an equal share of the strip, so they are fitted after
 -- each of its passes (a post-hook; FCFDock_UpdateTabs is never called, it would taint the dock).
--- A shared tab keeps Blizzard's share while the dock overflows, and a whisper's its fixed width.
+-- A whisper window's tab keeps its fixed width. The tabs after the dock's first ones (and the conversations docked
+-- after them, Whispers.lua) scroll as one row in the dock's own scroll frame, by distance (L.ScrollDock).
 
 local ADDON, ns = ...
 local UI = Shy.UI
@@ -71,6 +72,10 @@ local SEAM_Y, SEAM_IN, SEAM_ENDS, SEAM_SHARE = 2, 3, 48, 0.7
 -- The glow behind a tab's name, under the mouse or open: the tab's own width less TAB_IN at each
 -- end (tabs stand 1 apart), from LIGHT_UP over the name down to the panel's line.
 local LIGHT_UP, TAB_IN = 3, 1
+-- A tab's name: in the strip between its lip and its line (its words on the middle, UI.HEAD_MID), from the top of
+-- that band, above Blizzard's background.
+-- An undocked window's name stands `inset` in from its tab's left, as a window's title does.
+local NAME = { tall = STRIP - UI.HEAD_LIP, top = STRIP_FOOT + STRIP - UI.HEAD_LIP, inset = 10 }
 -- Left inset of the edit box's text: Blizzard's, and ours (aligned with the chat text).
 local BLIZZARD_PAD, EDIT_PAD = 15, 5
 
@@ -162,6 +167,10 @@ local function GripAbove(point)
 			local at = tab and tab:IsShown() and tab:GetFrameLevel()
 			if at and (not level or at > level) then highest, level = tab, at end
 		end
+		-- Conversations docked after the game's tabs.
+		local ours = ns.Whispers and ns.Whispers.Tabs and ns.Whispers.Tabs()
+		local at = ours and ours:GetFrameLevel()
+		if at and (not level or at > level) then highest = ours end
 		return highest
 	end
 	for _, frame in ipairs({ GeneralDockManager.selected or DEFAULT_CHAT_FRAME, DEFAULT_CHAT_FRAME }) do
@@ -254,7 +263,14 @@ local function Piece(frame)
 	piece = Shy.HUD.Adopt(frame, { id = "game." .. frame:GetName(), title = "Chat", editMode = true, plain = true })
 	local tab = _G[frame:GetName() .. "Tab"]
 	if tab then Shy.HUD.Manage(piece, tab, false, Movable) end
-	if Shy.HUD.Grip then grip = Shy.HUD.Grip(piece, { size = true, over = GripRegion, above = GripAbove }) end
+	if Shy.HUD.Grip then
+		grip = Shy.HUD.Grip(piece, { size = true, over = GripRegion, above = GripAbove,
+			-- A conversation docked over the chat fades its text out: the page is what is on screen then.
+			seen = function()
+				local page = ns.Whispers and ns.Whispers.Page and ns.Whispers.Page()
+				return page or frame
+			end })
+	end
 	return piece
 end
 
@@ -541,6 +557,7 @@ end
 -- line's own make in every look (a lit length of the riveted trim, a bar of light on the others). Moved to
 -- the new line when the wing changes; shown while Blizzard has the tab selected (TabColors).
 local marked = setmetatable({}, { __mode = "k" })   -- tab -> its mark
+local covered   -- the window a docked conversation is open over (L.Aside)
 local function TabMark(frame)
 	local tab = _G[frame:GetName() .. "Tab"]
 	if not tab then return end
@@ -551,7 +568,7 @@ local function TabMark(frame)
 	if on then kit:Fade(tab.ActiveMiddle, mark and 0 or 1) end
 	if not mark then return end
 	mark:Span(tab, tab, TAB_IN)
-	mark:SetShown(tab.ActiveMiddle:IsShown())
+	mark:SetShown(tab.ActiveMiddle:IsShown() and frame ~= covered)
 end
 function L.TabMark(tab) return marked[tab] end
 
@@ -596,11 +613,30 @@ Wing = Shy.Clocked("chat: a window's panel fitted", Wing)
 
 local watched = setmetatable({}, { __mode = "k" })
 local frameOf = setmetatable({}, { __mode = "k" })   -- tab -> its chat frame
--- Windows with lines added while out of sight (a docked tab not open): their name is gold until opened.
+-- Windows with lines added while out of sight (a docked tab not open, or covered): their name is gold until opened.
 local unread = setmetatable({}, { __mode = "k" })
 local TabColors
 
 function L.Unread(frame) return unread[frame] == true end
+
+-- A conversation docked in the chat is open over this window's text (Whispers.lua): its tab reads as not
+-- open, and lines that come meanwhile are news. Uncovered, it is the open tab again, its news read.
+local function Recolor(frame)
+	local tab = frame and _G[frame:GetName() .. "Tab"]
+	if not tab then return end
+	if on then kit:Fade(tab.ActiveLeft, frame == covered and 0 or 1) end
+	TabMark(frame)
+	TabColors(tab, tab.ActiveMiddle:IsShown())
+end
+
+function L.Aside(frame)
+	if frame == covered then return end
+	local was = covered
+	covered = frame
+	if was then unread[was] = nil end
+	Recolor(was)
+	Recolor(frame)
+end
 
 -- Refit the panel whenever Blizzard's column shows or hides; note new lines while the window is away.
 local function Watch(frame)
@@ -609,7 +645,7 @@ local function Watch(frame)
 	local tab = _G[frame:GetName() .. "Tab"]
 	if tab then frameOf[tab] = frame end
 	hooksecurefunc(frame, "AddMessage", function(self)
-		if self:IsVisible() or unread[self] then return end
+		if (self:IsVisible() and self ~= covered) or unread[self] then return end
 		unread[self] = true
 		if tab then TabColors(tab, false) end
 	end)
@@ -712,6 +748,8 @@ L.NameColor = NameColor
 -- Post-hook on FCFTab_UpdateColors. A whisper tab (selectedColorTable) keeps Blizzard's colors.
 function TabColors(tab, selected)
 	if not on or not kit:Has(tab.ActiveMiddle) then return end
+	-- Covered by a docked conversation: not the open one, its glow put out with its mark.
+	if covered ~= nil and frameOf[tab] == covered then selected = false end
 	if marked[tab] then marked[tab]:SetShown(selected and true or false) end
 	local own = tab.selectedColorTable
 	if own then
@@ -776,6 +814,189 @@ local function OverflowRowColors(row, frame)
 	end
 end
 
+-- The tab row: past the dock's first tabs, its other tabs and the conversations docked after them (Whispers.lua) stand
+-- in the dock's own scroll frame, one row it cuts to its rect. The wheel anywhere over the tabs moves the row along by
+-- distance (every tab as wide as its name, overflowing or not), and an edge it runs past is shaded over the strip's
+-- band between its lip and its line: the strip's face thickening, a glint of the ink that reads on it (UI.PaintEdge).
+-- The game scrolls the row too, a whole share at a time and gliding (to its open tab, after each of its passes): it
+-- is let glide, and where it comes to rest the row is put right, the open tab all in view and no room left empty past
+-- the row's end. Only the scroll is set: the tabs and their places stay the game's.
+local Dock = { FADE = 24, STEP = 40, WHEEL = 15, SHADES = 26 }   -- frame levels: under our tabs; over every tab
+local tabOf = setmetatable({}, { __mode = "k" })   -- chat frame -> its tab
+
+local function TabFor(frame)
+	local tab = tabOf[frame]
+	if not tab then
+		tab = _G[frame:GetName() .. "Tab"]
+		tabOf[frame] = tab
+	end
+	return tab
+end
+
+-- The dock's scroll frame, how far it is scrolled, how far the row's end stands past the right edge of what it can be
+-- seen up to (less than nothing: room left empty there), and that edge: the scroll frame's, or short of the toolbar's
+-- gear and the overflow arrow that stand over its end (Window.lua). Nil while it can't be told.
+local function DockSpan()
+	local dock = GeneralDockManager
+	local sf, list = dock.scrollFrame, dock.DOCKED_CHAT_FRAMES
+	if type(list) ~= "table" then return nil end
+	local right, at = sf:GetRight(), sf:GetHorizontalScroll()
+	if not right or issecretvalue(right) or issecretvalue(at) then return nil end
+	local primary = dock.primary or DEFAULT_CHAT_FRAME
+	local edge = primary and ns.Window and ns.Window.RowEnd and ns.Window.RowEnd(primary)
+	if edge and edge < right then right = edge end
+	local reach
+	for _, frame in ipairs(list) do
+		if not frame.isStaticDocked then
+			local tab = TabFor(frame)
+			local r = tab and tab:IsShown() and tab:GetRight()
+			if r and not issecretvalue(r) and (not reach or r > reach) then reach = r end
+		end
+	end
+	local r = ns.Whispers and ns.Whispers.StripRight and ns.Whispers.StripRight()
+	if r and not issecretvalue(r) and (not reach or r > reach) then reach = r end
+	return sf, at, reach and reach - right or -at, right
+end
+
+local function DockShades()
+	if not Dock.shades then return end
+	local sf, at, past, edge = DockSpan()
+	local live = on == true and sf ~= nil
+	-- The right one ends where the row can be seen to (short of the gear), moved only when that changes.
+	local inset = live and sf:GetRight() - edge or 0
+	if live and inset ~= Dock.inset then
+		Dock.inset = inset
+		Dock.holder:SetPoint("RIGHT", sf, "RIGHT", -inset, 0)
+	end
+	Dock.shades[1]:SetShown(live and at > 0.5)
+	Dock.shades[2]:SetShown(live and past > 0.5)
+end
+
+local function SetScroll(sf, to)
+	Dock.setting = true
+	sf:SetHorizontalScroll(to)
+	Dock.setting = false
+end
+
+-- The tab that is open in the row: a conversation docked over the chat's text, else the game's open window's (unless
+-- it is one of the dock's first, which don't scroll).
+local function OpenTab()
+	local own = ns.Whispers and ns.Whispers.OpenTab and ns.Whispers.OpenTab()
+	if own then return own end
+	local frame = GeneralDockManager.selected
+	return frame and not frame.isStaticDocked and TabFor(frame) or nil
+end
+
+-- At rest: the open tab all in view, no room left empty past the row's end.
+local function SettleRow()
+	local sf, at, past, edge = DockSpan()
+	if not (on and sf) then
+		DockShades()
+		return
+	end
+	local to = at
+	local open = OpenTab()
+	local l, r, vl, vr = open and open:GetLeft(), open and open:GetRight(), sf:GetLeft(), edge
+	if l and r and vl and vr and not (issecretvalue(l) or issecretvalue(r)) then
+		if l < vl then to = at - (vl - l) elseif r > vr then to = at + (r - vr) end
+	end
+	to = math.max(0, math.min(to, at + math.max(0, past)))
+	if math.abs(to - at) > 0.5 then SetScroll(sf, to) end
+	DockShades()
+end
+L.SettleTabs = SettleRow
+
+function L.ScrollDock(delta)
+	local sf, at, past = DockSpan()
+	if not (on and sf) then return false end
+	local to = delta < 0 and at + math.min(Dock.STEP, math.max(0, past)) or math.max(0, at - Dock.STEP)
+	if math.abs(to - at) < 0.5 then return false end
+	SetScroll(sf, to)
+	DockShades()
+	return true
+end
+
+-- The game set the scroll: gliding, the shades follow; come to rest, the row is put right.
+local function Followed()
+	if Dock.setting or not on then return end
+	Dock.moved = true
+	if GeneralDockManager.scrollFrame:GetScript("OnUpdate") then
+		DockShades()
+		return
+	end
+	SettleRow()
+end
+
+local function DockWheel()
+	if Dock.wheel then
+		Dock.wheel:SetShown(on == true)
+		return
+	end
+	local dock = GeneralDockManager
+	local wheel = CreateFrame("Frame", nil, dock)
+	wheel:SetAllPoints(dock)
+	wheel:SetFrameStrata("MEDIUM")
+	wheel:SetFrameLevel(Dock.WHEEL)
+	wheel:EnableMouse(false)
+	wheel:EnableMouseWheel(true)
+	wheel:SetScript("OnMouseWheel", function(_, delta) L.ScrollDock(delta) end)
+	Dock.wheel = wheel
+	-- Over the row's ends, on the strip's band (between its lip and its line): measured from the dock's foot, which the
+	-- game stands on its first window's background.
+	local holder = CreateFrame("Frame", nil, dock)
+	holder:SetPoint("TOP", dock, "BOTTOM", 0, NAME.top)
+	holder:SetPoint("LEFT", dock.scrollFrame, "LEFT")
+	holder:SetPoint("RIGHT", dock.scrollFrame, "RIGHT")
+	holder:SetHeight(NAME.tall)
+	holder:SetFrameStrata("MEDIUM")
+	holder:SetFrameLevel(Dock.SHADES)
+	holder:EnableMouse(false)
+	Dock.holder, Dock.shades = holder, {}
+	for i, side in ipairs({ "LEFT", "RIGHT" }) do
+		local shade = CreateFrame("Frame", nil, holder)
+		shade:SetPoint("TOP" .. side)
+		shade:SetPoint("BOTTOM" .. side)
+		shade:SetWidth(Dock.FADE)
+		shade:EnableMouse(false)
+		shade.fill, shade.glint = UI.EdgeArt(shade, side)
+		shade:Hide()
+		Dock.shades[i] = shade
+	end
+	hooksecurefunc(dock.scrollFrame, "SetHorizontalScroll", Followed)
+end
+
+-- Where a chat window of the game's carried to the dock would go: the game's own mark, made the bar a carried
+-- conversation shows (UI.TabWindows): a line of your color the band's height, standing at the gap after the tab it
+-- would follow. The game places it as the window moves; it is stood there again each time.
+local INSERT = 2   -- the bar's width
+local function Insert()
+	local mark = GeneralDockManager.insertHighlight
+	if not mark then return end
+	kit:Art(mark, WHITE, { blend = "BLEND" })
+	kit:Tint(mark, UI.colors.hot)
+	kit:Place(mark, INSERT, NAME.tall)
+end
+
+local function Inserted(dock)
+	if not on or dock ~= GeneralDockManager then return end
+	local mark = dock.insertHighlight
+	local _, tab = mark:GetPoint(1)
+	if not tab then return end
+	mark:ClearAllPoints()
+	mark:SetPoint("TOP", dock, "BOTTOM", 0, NAME.top)
+	mark:SetPoint("LEFT", tab, "RIGHT", 0, 0)
+end
+
+-- The shades in the strip's face as the theme has it now.
+local function DockFace()
+	if not Dock.shades then return end
+	local face = UI.colors.hudStrip
+	for i, shade in ipairs(Dock.shades) do
+		UI.PaintEdge(shade.fill, shade.glint, i == 1 and "LEFT" or "RIGHT", face[1], face[2], face[3])
+	end
+	SettleRow()
+end
+
 local OVERFLOW_TITLE = 18
 
 local function PaintOverflow()
@@ -808,9 +1029,12 @@ end
 
 local function PaintTab(tab, housed, frame)
 	local name = tab:GetFontString()
-	kit:FontObject(name, UI.TitleFont())
-	-- Blizzard's anchors (ChatTabArtTemplate).
-	kit:Place(name, nil, nil, { "LEFT", tab.Left, "LEFT", 0, -7 }, { "RIGHT", tab.Right, "RIGHT", 0, -7 })
+	-- (The tab's own state font would come back over the text as it is let go of.)
+	kit:ButtonFont(tab, UI.TitleFont())
+	-- Across the tab, on the strip's middle as every header's words (UI.Tabs' too: the conversations docked after
+	-- them): measured from the panel, not the tab, which the game stands higher in its scrolling part than first.
+	kit:Place(name, nil, NAME.tall, { "TOP", frame.Background, "TOP", 0, NAME.top },
+		{ "LEFT", tab.Left, "LEFT", 0, 0 }, { "RIGHT", tab.Right, "RIGHT", 0, 0 })
 	for _, key in ipairs(TAB_ART) do kit:Hide(tab[key]) end
 	-- Shown by Blizzard while the tab is selected. Its stretch of the panel's accent line is lit by a mark of
 	-- the core's (TabMark), and this art faded out; with no panel (no Background) it is that line itself. It
@@ -862,36 +1086,58 @@ end
 -- the tab was sized.
 local TAB_SIDES = 20
 
+-- Out of the dock a window's tab is its whole header: the game's tab, so carried anywhere along it the window moves
+-- as the game moves it, and let go of on the chat it docks again; its name stands at the left as a window's title
+-- does. Docked, the name stands across its tab. (Placed again only when that changes.)
+local UNDOCKED_IN = 2   -- the game stands an undocked window's tab this far in from its background's left
+local headed = setmetatable({}, { __mode = "k" })   -- tab -> whether its name stands as a whole header's
+local function PlaceName(frame, tab, name, whole)
+	if headed[tab] == whole then return end
+	headed[tab] = whole
+	local top = { "TOP", frame.Background, "TOP", 0, NAME.top }
+	if whole then
+		kit:Place(name, nil, NAME.tall, top, { "LEFT", tab.Left, "LEFT", NAME.inset, 0 })
+		kit:Justify(name, "LEFT")
+	else
+		kit:Place(name, nil, NAME.tall, top, { "LEFT", tab.Left, "LEFT", 0, 0 }, { "RIGHT", tab.Right, "RIGHT", 0, 0 })
+		kit:Justify(name, "CENTER")
+	end
+end
+
 local function FitTab(frame)
 	local tab = _G[frame:GetName() .. "Tab"]
 	if not tab then return end
 	-- A whisper window's tab has a fixed width; its chat type and name can be secret.
 	local kind = frame.chatType
 	if issecretvalue(kind) or kind == "WHISPER" or kind == "BN_WHISPER" then return end
-	-- The dock gives each of its other tabs the same share of the room left, and scrolls them by
-	-- that share once they overflow: they keep it then, and no name gets more than it.
-	local share
-	if frame.isDocked and not frame.isStaticDocked then
-		if GeneralDockManager.overflowButton:IsShown() then return end
-		share = GeneralDockManager.scrollFrame.dynTabSize
-	end
+	-- With the look off, the dock's other tabs keep the share the game gives them. With it on, every tab is as wide
+	-- as its name, overflowing or not: the row scrolls by distance (L.ScrollDock), never cuts a name to the share.
 	local name = tab:GetFontString()
 	local padding = tab.sizePadding or 0
 	local ends = tab.Left:GetWidth() + tab.Right:GetWidth()
-	local most = share and math.max(share, ends)   -- Blizzard's own width for a shared tab
-	local width = most
-	if on or not share then
-		local had = name:GetWidth()
-		name:SetWidth(0)   -- unbounded, to measure the whole name
-		local wide = name:GetStringWidth()
-		if issecretvalue(wide) then
-			name:SetWidth(had)   -- the measured width can be secret: leave Blizzard's
-			return
-		end
-		width = math.max(wide + TAB_SIDES + padding, ends)
-		if most then width = math.min(width, most) end
+	if not on and frame.isDocked and not frame.isStaticDocked then
+		local width = math.max(GeneralDockManager.scrollFrame.dynTabSize, ends)
+		name:SetWidth(width - TAB_SIDES - padding)
+		tab:SetWidth(width)
+		return true
 	end
-	name:SetWidth(width - TAB_SIDES - padding)
+	local had = name:GetWidth()
+	name:SetWidth(0)   -- unbounded, to measure the whole name
+	local wide = name:GetStringWidth()
+	if issecretvalue(wide) then
+		name:SetWidth(had)   -- the measured width can be secret: leave Blizzard's
+		return
+	end
+	local whole = on and not frame.isDocked
+	PlaceName(frame, tab, name, whole)
+	local width = math.max(wide + TAB_SIDES + padding, ends)
+	if whole then
+		local header = frame.Background:GetWidth()
+		if header and not issecretvalue(header) then width = math.max(width, header - UNDOCKED_IN) end
+		name:SetWidth(wide)
+	else
+		name:SetWidth(width - TAB_SIDES - padding)
+	end
 	tab:SetWidth(width)
 	return true
 end
@@ -927,12 +1173,23 @@ local function ResetTab(tab)
 	tab:GetFontString():SetTextColor(NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
 end
 
+-- Out of the dock and sized again (its grip, the game's corner): its tab is as wide as its header still.
+local sizedFollowed = setmetatable({}, { __mode = "k" })
+local function FollowSize(frame)
+	if sizedFollowed[frame] then return end
+	sizedFollowed[frame] = true
+	frame:HookScript("OnSizeChanged", function(self)
+		if on and not self.isDocked then FitTab(self) end
+	end)
+end
+
 local function PaintFrame(frame, strength)
 	local name = frame:GetName()
 	local housed = strength > 0
 	Empty(name)
 	Empty(name .. "ButtonFrame")
 	Watch(frame)
+	FollowSize(frame)
 	Wing(frame)
 	if housed then
 		local housing = math.min(1, strength + 0.25)
@@ -1026,6 +1283,7 @@ function L.Apply()
 	ResetTabArt()
 	wipe(wings)
 	wipe(sided)
+	wipe(headed)   -- the kit put every name back where the game had it
 	for _, grab in pairs(grabs) do grab:Hide() end   -- shown again with each panel drawn
 	ChatFrameUtil.ForEachChatFrame(function(frame)
 		Yield(frame, nil)   -- and each edit box gives its corner up again with its panel
@@ -1053,7 +1311,15 @@ function L.Apply()
 				if watched[frame] then Grab(frame, wings[frame]) end
 			end)
 			hooksecurefunc("FCFDock_UpdateTabs", function()
-				if on then ChatFrameUtil.ForEachChatFrame(Refit) end
+				if not on then return end
+				ChatFrameUtil.ForEachChatFrame(Refit)
+				-- (asked as often as the game asks for its tabs: the row is put right only after a pass that moved it,
+				-- now its names are fitted, or its arrow coming or going)
+				local over = GeneralDockManager.overflowButton:IsShown()
+				if Dock.moved or over ~= Dock.over then
+					Dock.moved, Dock.over = false, over
+					SettleRow()
+				end
 			end)
 			-- A new name is measured even if the dock hands the tab the width it had.
 			hooksecurefunc("FCF_SetWindowName", function(frame)
@@ -1061,11 +1327,17 @@ function L.Apply()
 				if tab then fitted[tab] = nil end
 			end)
 			hooksecurefunc("FCFDockOverflowListButton_SetValue", OverflowRowColors)
+			hooksecurefunc("FCFDock_PlaceInsertHighlight", Inserted)
 		end
 		ChatFrameUtil.ForEachChatFrame(function(frame) PaintFrame(frame, Shy.Theme.Strength()) end)
 		kit:Button(ChatFrameMenuButton, C.metal, C.lit, C.hover)
 		PaintOverflow()
+		DockWheel()
+		DockFace()
+		Insert()
 	elseif was then
+		DockWheel()
+		DockShades()
 		ChatFrameUtil.ForEachChatFrame(function(frame) ResetTab(_G[frame:GetName() .. "Tab"]) end)
 	end
 	-- Each typing row as open as its box is now (closed with either restyle off).
@@ -1073,5 +1345,7 @@ function L.Apply()
 	Lay()
 	-- The tab font just changed.
 	if on or was then FitTabs() end
+	-- The kit put the covered tab's glow back with the rest of its art.
+	if covered then Recolor(covered) end
 	Announce()
 end

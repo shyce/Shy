@@ -329,10 +329,7 @@ local function Mark(m, kit, s)
 	if not issecretvalue(numbered) and not numbered then right = s.skull end
 	if rank then
 		local label = ns.Own(kit, s.labelOn, "rank", function(owner)
-			local fs = owner:CreateFontString(nil, "OVERLAY")
-			fs:SetFontObject(LabelFont())
-			UI.Follow(fs)   -- a title keeps up with the theme's font
-			return fs
+			return UI.Words(owner, LabelFont())
 		end)
 		label:ClearAllPoints()
 		label:SetPoint("RIGHT", right, "LEFT", -4, 0)

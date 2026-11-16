@@ -1,14 +1,26 @@
--- The stats box: a card with the XP bar and stat tiles, a Shy.HUD box. The same card is the options preview.
+-- The stats box: a card with the bar and stat tiles, a Shy.HUD box. The same card is the options preview.
+-- Its head is what the bar is of (your level, or the faction you track) and how far along; under the bar a line of
+-- what is left and when; then the stats, three to a row, close.
 
 local ADDON, ns = ...
 local T, S = ns.T, ns.Stats
 local UI = Shy.UI
 local C = UI.colors
 
-local WIDTH, PAD = 264, 10
+local WIDTH, PAD = 282, 10
+local K = {
+	head = -9,              -- the head's words, down from the top
+	bar = -31, barH = 10,   -- the bar
+	line = -49,             -- the line under it: what is left, and when
+	tiles = -63,            -- the first row of stats
+	columns = 3, gap = 8,   -- stats to a row, and between them
+	tileH = 27, pitch = 32, -- a stat's height, and from one row to the next
+	foot = 8,               -- under the last row
+}
 local GOLD = { 1, 0.78, 0.25 }   -- quest XP ready; matches the default questColor
 local BRONZE = { 0.82, 0.46, 0.22 }   -- the whole log's quest XP; matches the default logColor
 local HINTS = { { "left", "Move" }, { "right", "Menu" }, { "left", "Shift: share" } }   -- the box's hover
+local DOT = "  \194\183  "
 
 ns.cards = {}
 
@@ -18,33 +30,68 @@ ns.TILES = {
 		local eta = S.TimeToLevel()
 		return eta and S.Duration(eta) or "-"
 	end },
-	{ key = "bubbles", label = "Bubbles to go", color = C.text, value = function()
-		return ("%.1f"):format(S.Bubbles())
-	end },
 	{ key = "pace", label = "XP per hour", color = C.text, value = function()
 		local pace = S.Pace()
-		return pace and (S.Short(pace) .. " / h") or "-"
-	end },
-	{ key = "quests", label = "Quest XP ready", color = GOLD, value = function()
-		local q, n = S.QuestXP()
-		return n > 0 and ("+" .. S.Short(q) .. "  (" .. n .. ")") or "none"
-	end },
-	{ key = "log", label = "Quest XP in log", color = BRONZE, value = function()
-		local q, n = S.LogXP()
-		return n > 0 and ("+" .. S.Short(q) .. "  (" .. n .. ")") or "none"
+		return pace and S.Short(pace) or "-"
 	end },
 	{ key = "kills", label = "Kills to level", color = C.text, value = function()
 		local kills = S.KillsToLevel()
 		return kills and ("~" .. kills) or "-"
 	end },
+	{ key = "quests", label = "Quests ready", color = GOLD, value = function()
+		local q, n = S.QuestXP()
+		return n > 0 and ("+" .. S.Short(q) .. " (" .. n .. ")") or "none"
+	end },
+	{ key = "log", label = "In your log", color = BRONZE, value = function()
+		local q, n = S.LogXP()
+		return n > 0 and ("+" .. S.Short(q) .. " (" .. n .. ")") or "none"
+	end },
 	{ key = "rested", label = "Rested", color = C.hot, value = function()
 		local rested, fraction = S.Rested()
 		return rested > 0 and ("+" .. math.floor(fraction * 100) .. "%") or "none"
 	end },
-	{ key = "level", label = "This level", color = C.dim, value = function()
+	{ key = "bubbles", label = "Bubbles to go", color = C.text, value = function()
+		return ("%.1f"):format(S.Bubbles())
+	end },
+	{ key = "level", label = "This level", color = C.text, value = function()
 		return S.Duration((S.ThisLevel()))
 	end },
 }
+
+-- The stats while the box shows a reputation (Rep.lua).
+ns.REP_TILES = {
+	{ key = "eta", label = "Time to next", color = C.text, value = function()
+		local eta = ns.Rep.TimeToNext()
+		return eta and S.Duration(eta) or "-"
+	end },
+	{ key = "pace", label = "Per hour", color = C.text, value = function()
+		local pace = ns.Rep.Pace()
+		return pace and S.Short(pace) or "-"
+	end },
+	{ key = "count", label = "Kills or quests", color = C.text, value = function()
+		local count = ns.Rep.GainsToNext()
+		return count and ("~" .. S.Number(count)) or "-"
+	end },
+	{ key = "session", label = "This session", color = C.good, value = function()
+		local got = ns.Rep.Session()
+		return got > 0 and ("+" .. S.Short(got)) or "none"
+	end },
+	{ key = "quests", label = "Quests for it", color = GOLD, value = function()
+		local ready, all = ns.Rep.Quests()
+		if all == 0 then return "none" end
+		return ready > 0 and (ready .. " ready of " .. all) or tostring(all)
+	end },
+	{ key = "time", label = "This standing", color = C.text, value = function()
+		local rec = ns.Rep.Record()
+		return rec and S.Duration(rec.time) or "-"
+	end },
+}
+
+-- The tiles and their switches for what the box shows now.
+local function Tiles(card)
+	if S.Mode() == "rep" then return card.repTiles, T.db.box.repTiles end
+	return card.tiles, T.db.box.tiles
+end
 
 -- A text is told its words only when they change: the card is said again at every XP and quest change.
 local function Say(fs, text)
@@ -57,34 +104,73 @@ local function SetFontSize(fs, size)
 	UI.TitleFace(fs, size)
 end
 
+-- The line under the bar: what is left and when. "9,991 XP to go · ~1h 12m to 19"; "Honored · 6,600 to Revered · ~2h".
+local function Line()
+	if S.Mode() == "rep" then
+		local into, span, data = ns.Rep.Progress()
+		local word, color = ns.Rep.Standing(data.reaction)
+		local text = UI.Wrap(color, word)
+		local next_ = ns.Rep.Next(data.reaction)
+		if next_ then
+			text = text .. DOT .. UI.Wrap(C.text, S.Number(span - into)) .. " to " .. next_
+			local eta = ns.Rep.TimeToNext()
+			if eta then text = text .. DOT .. "~" .. S.Duration(eta) end
+		end
+		return text
+	end
+	local cur, max, level = S.Progress()
+	local text = UI.Wrap(C.text, S.Number(max - cur)) .. " XP to go"
+	local eta = S.TimeToLevel()
+	if eta then text = text .. DOT .. "~" .. S.Duration(eta) .. " to " .. (level + 1) end
+	return text
+end
+
 -- interactive: takes the mouse and shows the stats tooltip.
 function ns.CreateCard(parent, onResize, interactive)
 	local card = CreateFrame("Frame", nil, parent)
 	card:SetWidth(WIDTH)
 	UI.Panel(card, { hud = true })   -- hud: uses the shared background opacity
 
-	card.level = UI.Text(card, "", 18, true)
-	card.percent = UI.Text(card, "", 18, true, C.hot)
+	card.level = UI.Text(card, "", 16, true)
+	card.percent = UI.Text(card, "", 16, true, C.hot)
 	card.detail = UI.Text(card, "", 12, false, C.dim)
+	card.line = UI.Text(card, "", 11, false, C.dim)
+	card.line:SetWordWrap(false)
 
 	local bar = ns.CreateXPBar(card)
 	card.bar = bar
 
-	card.tiles = {}
-	for i, def in ipairs(ns.TILES) do
-		local tile = CreateFrame("Frame", nil, card)
-		tile:SetSize((WIDTH - PAD * 2 - 10) / 2, 34)
-		tile.label = UI.Text(tile, def.label:upper(), 10, false, C.dim)
-		tile.label:SetPoint("TOPLEFT")
-		tile.value = UI.Text(tile, "", 16, true, def.color)
-		tile.value:SetPoint("TOPLEFT", tile.label, "BOTTOMLEFT", 0, -2)
-		tile.def = def
-		card.tiles[i] = tile
+	local tileW = (WIDTH - PAD * 2 - (K.columns - 1) * K.gap) / K.columns
+	local function MakeTiles(defs)
+		local list = {}
+		for i, def in ipairs(defs) do
+			local tile = CreateFrame("Frame", nil, card)
+			tile:SetSize(tileW, K.tileH)
+			tile.label = UI.Text(tile, def.label:upper(), 9, false, C.dim)
+			tile.label:SetPoint("TOPLEFT")
+			tile.label:SetWidth(tileW)
+			tile.label:SetWordWrap(false)
+			tile.value = UI.Text(tile, "", 13, true, def.color)
+			tile.value:SetPoint("TOPLEFT", tile.label, "BOTTOMLEFT", 0, -2)
+			tile.value:SetWidth(tileW)
+			tile.value:SetWordWrap(false)
+			tile.value:SetJustifyH("LEFT")
+			tile.def = def
+			tile:Hide()
+			list[i] = tile
+		end
+		return list
 	end
+	card.tiles = MakeTiles(ns.TILES)
+	card.repTiles = MakeTiles(ns.REP_TILES)
+	-- A faction's name may be long: it is cut short before the percent, never written over it.
+	card.level:SetWordWrap(false)
 
 	function card:Layout()
 		local db = T.db.box
 		local compact = db.style == "compact"
+		local tiles, switches = Tiles(self)
+		for _, tile in ipairs(tiles == self.tiles and self.repTiles or self.tiles) do tile:Hide() end
 		self.level:ClearAllPoints()
 		self.percent:ClearAllPoints()
 		bar:ClearAllPoints()
@@ -97,52 +183,75 @@ function ns.CreateCard(parent, onResize, interactive)
 			self.detail:ClearAllPoints()
 			self.detail:SetPoint("RIGHT", self, "TOPRIGHT", -PAD, -15)
 			self.detail:Show()
+			self.line:Hide()
+			self.level:SetWidth(0)
 			bar:SetPoint("TOPLEFT", PAD, -27)
 			bar:SetPoint("TOPRIGHT", -PAD, -27)
 			bar:SetHeight(5)
-			for _, tile in ipairs(self.tiles) do tile:Hide() end
+			for _, tile in ipairs(tiles) do tile:Hide() end
 			height = 40
 		else
-			SetFontSize(self.level, 18)
-			SetFontSize(self.percent, 18)
-			self.level:SetPoint("TOPLEFT", PAD, -10)
-			self.percent:SetPoint("TOPRIGHT", -PAD, -10)
+			SetFontSize(self.level, 16)
+			SetFontSize(self.percent, 16)
+			self.level:SetPoint("TOPLEFT", PAD, K.head)
+			self.level:SetPoint("RIGHT", self.percent, "LEFT", -8, 0)
+			self.level:SetJustifyH("LEFT")
+			self.percent:SetPoint("TOPRIGHT", -PAD, K.head)
 			self.detail:Hide()
-			bar:SetPoint("TOPLEFT", PAD, -36)
-			bar:SetPoint("TOPRIGHT", -PAD, -36)
-			bar:SetHeight(10)
+			bar:SetPoint("TOPLEFT", PAD, K.bar)
+			bar:SetPoint("TOPRIGHT", -PAD, K.bar)
+			bar:SetHeight(K.barH)
+			self.line:ClearAllPoints()
+			self.line:SetPoint("LEFT", self, "TOPLEFT", PAD, K.line)
+			self.line:SetPoint("RIGHT", self, "TOPRIGHT", -PAD, K.line)
+			self.line:Show()
 			local shown = 0
-			for _, tile in ipairs(self.tiles) do
-				local on = db.tiles[tile.def.key]
+			for _, tile in ipairs(tiles) do
+				local on = switches[tile.def.key]
 				tile:SetShown(on)
 				if on then
-					local col, row = shown % 2, math.floor(shown / 2)
+					local col, row = shown % K.columns, math.floor(shown / K.columns)
 					tile:ClearAllPoints()
-					tile:SetPoint("TOPLEFT", PAD + col * (tile:GetWidth() + 10), -56 - row * 40)
+					tile:SetPoint("TOPLEFT", PAD + col * (tileW + K.gap), K.tiles - row * K.pitch)
 					shown = shown + 1
 				end
 			end
-			height = 56 + math.ceil(shown / 2) * 40 + (shown > 0 and 0 or -6)
+			local rows = math.ceil(shown / K.columns)
+			height = rows > 0 and (-K.tiles + (rows - 1) * K.pitch + K.tileH + K.foot) or (-K.line + 8 + K.foot)
 		end
 		self:SetHeight(height)
 		if onResize then onResize(WIDTH, height) end
 	end
 
 	function card:Refresh()
-		local cur, max, level = S.Progress()
-		Say(self.level, "Level " .. level)
-		Say(self.percent, ("%.1f%%"):format(cur / max * 100))
+		-- The mode changed since the tiles were laid out (a faction picked, the top level reached).
+		local mode = S.Mode()
+		if mode ~= self.mode then
+			self.mode = mode
+			self:Layout()
+		end
+		if mode == "rep" then
+			local into, span, data = ns.Rep.Progress()
+			Say(self.level, data.name)
+			Say(self.percent, ("%.1f%%"):format(into / span * 100))
+		else
+			local cur, max, level = S.Progress()
+			Say(self.level, "Level " .. level)
+			Say(self.percent, ("%.1f%%"):format(cur / max * 100))
+		end
 		bar:Update()
+		if self.line:IsShown() then Say(self.line, Line()) end
 
+		local tiles, switches = Tiles(self)
 		local parts = {}
-		for _, tile in ipairs(self.tiles) do
+		for _, tile in ipairs(tiles) do
 			local value = tile.def.value()
 			Say(tile.value, value)
-			if T.db.box.tiles[tile.def.key] and #parts < 2 and value ~= "-" and value ~= "none" then
+			if switches[tile.def.key] and #parts < 2 and value ~= "-" and value ~= "none" then
 				parts[#parts + 1] = value
 			end
 		end
-		Say(self.detail, table.concat(parts, "  \194\183  "))
+		Say(self.detail, table.concat(parts, DOT))
 	end
 
 	if interactive then
@@ -162,8 +271,9 @@ local fighting = false   -- from the fight's start, which the game tells just be
 
 local function Shown()
 	local db = T.db.box
-	-- dockedBy: another addon shows the level itself (API.lua).
-	return db.shown and S.Active() and not ns.dockedBy and not (db.hideInCombat and (fighting or InCombatLockdown()))
+	-- (On the quest window while it can't carry them, hidden, the bars stand here.)
+	local place = ns.Place()
+	return (place == "box" or (place == "quest" and not ns.dockedBy)) and S.Mode() ~= nil and not (db.hideInCombat and (fighting or InCombatLockdown()))
 end
 
 local switched   -- the switch as the bus last heard it
@@ -179,6 +289,14 @@ end
 
 local function BoxMenu(root)
 	local db = T.db.box
+	if ns.Rep then
+		local track = root:CreateButton("Track")
+		track:SetIcon(UI.MenuGlyph("track"))
+		local data = ns.Rep.On() and ns.Rep.Watched()
+		track:SetSub(data and data.name or "Experience")
+		ns.Rep.Menu(track)
+		root:CreateDivider()
+	end
 	root:CreateRadio("Card: bar and stat tiles", function() return db.style == "card" end, function()
 		db.style = "card"
 		ns.Refresh()
@@ -188,9 +306,11 @@ local function BoxMenu(root)
 		ns.Refresh()
 	end)
 	local stats = root:CreateButton("Stats shown")
-	for _, def in ipairs(ns.TILES) do
-		stats:CreateCheckbox(def.label, function() return db.tiles[def.key] end, function()
-			db.tiles[def.key] = not db.tiles[def.key]
+	local rep = S.Mode() == "rep"
+	local switches = rep and db.repTiles or db.tiles
+	for _, def in ipairs(rep and ns.REP_TILES or ns.TILES) do
+		stats:CreateCheckbox(def.label, function() return switches[def.key] end, function()
+			switches[def.key] = not switches[def.key]
 			ns.Refresh()
 		end)
 	end
@@ -201,11 +321,10 @@ local function BoxMenu(root)
 	root:CreateDivider()
 	root:CreateButton("Share my progress", ns.Share)
 	root:CreateButton("Options", function() T:OpenOptions() end)
-	root:CreateButton("Hide this box", function()
-		db.shown = false
-		ns.Refresh()
-		T:Print("stats box hidden. Turn it back on in the options: /shyxp")
-	end)
+	local move = root:CreateButton("Move the bars")
+	for _, place in ipairs(ns.Places()) do
+		if place.value ~= "box" then move:CreateButton(place.text, function() ns.SetPlace(place.value) end) end
+	end
 end
 
 function ns.SetupBox()
@@ -218,8 +337,8 @@ function ns.SetupBox()
 		shown = Shown,
 		-- Last in the column down from the top's middle, under the zone's name.
 		top = { order = 50 },
-		-- Another piece (ShyQuest's guide) shows the level: the box is out of layout mode too.
-		away = function() return ns.dockedBy ~= nil end,
+		-- The bars are elsewhere: the box is out of layout mode too.
+		away = function() return not Shown() end,
 	})
 	local card = ns.CreateCard(box, function(w, h) box:SetSize(w, h) end, true)
 	card:SetPoint("TOPLEFT")

@@ -6,7 +6,9 @@
 -- said and type out as the voice reaches them (as the voice addon's settings ask), its pages turn with the
 -- voice, and a key of the stage's plays and stops it. The voice addon's own windows show the line as they
 -- do, standing on a piece of Shy's layout ("Voice captions"): placed by layout mode like any other, at home
--- at the foot of the screen's empty middle, growing up from it. A quest or gossip line is already on screen
+-- at the top of the screen's empty middle (under what runs along the top, clear of the character), hanging
+-- from it; placed low on the screen, they grow up from it instead. Layout mode offers the piece only when
+-- its captions can show: the voices on, quest text not immersive, and instant turn-in. A quest or gossip line is already on screen
 -- in the quest window whatever kind of quest text is picked, so its captions show only with instant turn-in,
 -- where no window does; every other line (places, books, bosses) keeps them.
 --
@@ -290,8 +292,14 @@ local veil = CreateFrame("Frame", nil, UIParent)
 veil:SetAllPoints(UIParent)
 local begun          -- the line last begun, of any part
 
+-- Captions on screen at all (the "Voice captions" piece's switch: ShyCoreDB.voice.captions; on unless turned off).
+local function Captions()
+	local db = rawget(_G, "ShyCoreDB")
+	return not (db and db.voice and db.voice.captions == false)
+end
+
 local function Veil()
-	veil:SetShown(not Ours(begun) or Shy.Immersion.InstantTurnIn() == true)
+	veil:SetShown(Captions() and (not Ours(begun) or Shy.Immersion.InstantTurnIn() == true))
 end
 
 -- A line queued: one of a page the talk has left never begins, and the voice addon's own read of a quest
@@ -460,10 +468,18 @@ end
 local held = {}      -- its windows put on the stand, each hooked once
 local placing = false
 
+-- From the stand's top while it stands in the screen's upper half (they grow down), else from its foot (up).
+local function Edge()
+	local _, y = V.stand:GetCenter()
+	if y == nil or issecretvalue(y) then return "BOTTOM" end
+	return y * V.stand:GetEffectiveScale() / UIParent:GetEffectiveScale() > UIParent:GetHeight() / 2 and "TOP" or "BOTTOM"
+end
+
 local function Hold(frame)
 	placing = true
+	local edge = Edge()
 	frame:ClearAllPoints()
-	frame:SetPoint("BOTTOM", V.stand, "BOTTOM", 0, 0)
+	frame:SetPoint(edge, V.stand, edge, 0, 0)
 	placing = false
 end
 
@@ -486,11 +502,29 @@ local function Take()
 	end
 end
 
--- At home at the foot of the screen's empty middle, clear of the bars: what Shy's layout leaves open.
+-- At home at the top of the screen's empty middle, under what runs along the top: what Shy's layout leaves
+-- open, and clear of your character and the bars. Under the top's column as it stands whole (Shy.Top.Plan:
+-- every piece in its place, showing or not, so it is the same in play and in layout mode), and under anything
+-- else across the middle up there (HUD.Room).
+local UNDER = 8   -- its gap under what runs along the top
 local function Home()
 	if not V.stand or HUD.IsPlaced(V.stand) then return end
-	local left, bottom, right = HUD.Room(V.stand)
-	HUD.SetHome(V.stand, { "BOTTOM", "BOTTOMLEFT", (left + right) / 2, bottom })
+	local left, _, right, top = HUD.Room(V.stand)
+	if Shy.Top and Shy.Top.Plan then
+		local foot = 0
+		for _, piece in ipairs(Shy.Top.Plan()) do
+			if piece.box ~= V.stand and not HUD.IsPlaced(piece.box) then foot = math.max(foot, piece.y + piece.height) end
+		end
+		top = math.min(top, UIParent:GetHeight() - foot - UNDER)
+	end
+	HUD.SetHome(V.stand, { "TOP", "BOTTOMLEFT", (left + right) / 2, top })
+end
+
+-- Its captions can show: the voices on, and a line's words on no window of the game's (quest text not
+-- immersive, instant turn-in). Only then does layout mode offer the piece.
+local function Captioned()
+	local I = Shy.Immersion
+	return V.Has() and V.On() == true and I ~= nil and I.QuestText() ~= "immersive" and I.InstantTurnIn() == true
 end
 
 local function Stand()
@@ -498,9 +532,21 @@ local function Stand()
 		id = "shycore.voice", title = "Voice captions",
 		width = STAND.w, height = STAND.h,
 		point = { "BOTTOM", "BOTTOM", 0, 220 },
-		-- Only in layout mode, and only with a voice to place: the windows on it show themselves.
+		-- Only in layout mode, and only while its captions can show: the windows on it show themselves.
 		shown = function() return false end,
-		away = function() return not V.Has() end,
+		away = function() return not Captioned() end,
+		-- Off, the voices still speak; their words stay off the screen.
+		switch = {
+			get = Captions,
+			set = function(on)
+				local db = rawget(_G, "ShyCoreDB")
+				if not db then return end
+				db.voice = db.voice or {}
+				db.voice.captions = (not on) and false or nil
+				Veil()
+			end,
+			hint = "The voice's words on screen as it speaks",
+		},
 	})
 	local say = Shy.UI.Text(box, "Voice captions show here", 12, false, Shy.UI.colors.dim)
 	say:SetPoint("CENTER")
@@ -539,7 +585,13 @@ Shy:On("SHY_LOGIN", Hook)
 Shy:On("SHY_HUD_LAYOUT", Home)
 Shy:On("SHY_IMMERSION", function(what)
 	if what == "turnIn" then Veil() end
+	if V.stand then HUD.Update(V.stand) end
 end)
 Shy:On("SHY_HUD_MOVED", function(box)
-	if box ~= V.stand then Home() end
+	if box ~= V.stand then
+		Home()
+		return
+	end
+	-- The stand moved: its windows hang from the edge that suits where it is now.
+	for frame in pairs(held) do Hold(frame) end
 end)

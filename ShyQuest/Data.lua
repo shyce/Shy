@@ -315,13 +315,65 @@ function D.Item(id)
 	return item or nil
 end
 
+-- What the game showed a creature doesn't drop, kept for the account (ShyQuestDB.drops; Hover.lua notes it):
+-- by NPC ID, the items it was seen not to drop. The game names on a creature every objective it counts for;
+-- the data's lists of who drops what are wider than that.
+D.dropsVersion = 0
+
+local function Drops()
+	local db = ns.T and ns.T.db
+	return db and db.drops
+end
+
+-- Whether the game showed this creature doesn't drop the item.
+function D.Dropless(npc, item)
+	local drops = Drops()
+	local seen = drops and drops[npc]
+	return seen ~= nil and seen[item] == true
+end
+
+-- Notes whether a creature drops an item, as the game showed. Returns true when that changed anything.
+function D.NoteDrop(npc, item, drops)
+	local all = Drops()
+	if not all or not npc or not item then return false end
+	local seen = all[npc]
+	if (seen ~= nil and seen[item] == true) == not drops then return false end
+	if drops then
+		seen[item] = nil
+		if next(seen) == nil then all[npc] = nil end
+	else
+		if not seen then
+			seen = {}
+			all[npc] = seen
+		end
+		seen[item] = true
+	end
+	D.dropsVersion = D.dropsVersion + 1
+	return true
+end
+
+-- Whether the data says this creature drops the item (the game may since have shown otherwise: D.Dropless).
+function D.ListsDropper(id, npc)
+	local item = D.Item(id)
+	if not item then return false end
+	for _, source in ipairs(item.sources) do
+		if source.kind == "n" and source.id == npc then return true end
+	end
+	for _, each in ipairs(item.more or {}) do
+		if each == npc then return true end
+	end
+	return false
+end
+
 -- The NPCs that drop an item: { { npc, chance = in a hundred, nil where unknown }, ... }.
 function D.Droppers(id)
 	local out, item = {}, D.Item(id)
 	for _, source in ipairs(item and item.sources or {}) do
-		if source.kind == "n" then out[#out + 1] = { npc = source.id, chance = source.chance } end
+		if source.kind == "n" and not D.Dropless(source.id, id) then out[#out + 1] = { npc = source.id, chance = source.chance } end
 	end
-	for _, npc in ipairs(item and item.more or {}) do out[#out + 1] = { npc = npc } end
+	for _, npc in ipairs(item and item.more or {}) do
+		if not D.Dropless(npc, id) then out[#out + 1] = { npc = npc } end
+	end
 	return out
 end
 

@@ -8,9 +8,9 @@ local MEDIA = "Interface\\AddOns\\ShyBuffs\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Buffs",
+	category = "combat",
 	icon = MEDIA .. "ShyBuffs",
 	smallIcon = MEDIA .. "ShyBuffsSmall",
-	tagline = "Buffs and debuffs where you're looking in a fight",
 	savedVariables = "ShyBuffsDB",
 	defaults = {
 		shelf = true,          -- long buffs beside the minimap

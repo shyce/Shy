@@ -1,5 +1,6 @@
 -- Reading the auction house. A whole scan asks the server for every listing at once (ReplicateItems) and reads them a
--- few hundred a frame into each item's lowest buyout each, how many and in how many listings; the server allows one
+-- few hundred a frame into each item's lowest buyout each, how many, in how many listings and its going price (the
+-- price book says what that is); the server allows one
 -- now and then (K.EVERY), and one it doesn't answer is given up (K.WAIT). Every search made there (ours or the game's)
 -- is noted too. Only while the auction house is open.
 
@@ -77,12 +78,15 @@ local function Stop(why)
 	if why then ns.Fire(why) end
 end
 
--- Stops a scan under way (what it read so far is let go).
+-- Stops a scan under way (what it read so far is let go; once all of it is read, it goes into the book first).
+local Noted
 function S.Stop()
-	if scan then Stop("stopped") end
+	if not scan then return end
+	if scan.noting ~= nil then Noted() else Stop("stopped") end
 end
 
--- One listing into the results: its item, its buyout over how many it is (no buyout: a bid only, left out).
+-- One listing into the results: its item, its buyout over how many it is (a whole scan's buyout is the listing's whole;
+-- no buyout: a bid only, left out), kept with the item's other listings for its going price.
 local function Read(results, index)
 	-- (Counted as each item is first met: how many so far, and how many under what the book had.)
 	local _, _, count, _, _, _, _, _, _, buyout, _, _, _, _, _, _, item = C_AuctionHouse.GetReplicateItemInfo(index)
@@ -92,7 +96,7 @@ local function Read(results, index)
 	local unit = math.floor(buyout / count + 0.5)
 	local r = results[item]
 	if not r then
-		results[item] = { u = unit, q = count, n = 1 }
+		results[item] = { u = unit, q = count, n = 1, l = { { unit, count } } }
 		scan.found = (scan.found or 0) + 1
 		local was = ns.Book.Price(item)
 		if not was then scan.fresh = (scan.fresh or 0) + 1
@@ -100,13 +104,25 @@ local function Read(results, index)
 	else
 		if unit < r.u then r.u = unit end
 		r.q, r.n = r.q + count, r.n + 1
+		r.l[r.n] = { unit, count }
 	end
 end
 
-local function Done()
+-- Each item's going price from its listings, a few hundred items a frame: true once every one has its own.
+local function Priced(started)
 	local results = scan.results
+	local item, r = next(results, scan.priced)
+	while item do
+		r.p, r.l = ns.Book.Going(r.l), nil
+		scan.priced = item
+		if debugprofilestop() - started > K.BUDGET then return false end
+		item, r = next(results, item)
+	end
+	return true
+end
+
+local function Done(count)
 	local fresh, cheaper = scan.fresh or 0, scan.cheaper or 0
-	local count = ns.Book.Scanned(results, time())
 	S.last = { count = count, new = fresh, deals = cheaper, at = time() }
 	Stop()
 	ns.Fire("scan", count)
@@ -118,13 +134,30 @@ local function Done()
 	end
 end
 
+-- Read and priced: into the price book a few hundred items a frame (Book.lua's B.Noting); with no budget, all that is
+-- left at once. Begun, it is always finished, even as the house closes or the scan is stopped: all of it was read,
+-- and the book never holds half a scan. True once it is in.
+function Noted(started, budget)
+	if scan.noting == nil then scan.noting = ns.Book.Scanning(scan.results, time()) or false end
+	local count = 0
+	if scan.noting then
+		count = ns.Book.Noting(scan.noting, started, budget)
+		if not count then return false end
+	end
+	Done(count)
+	return true
+end
+
 -- (The listings come in as the server sends them: read once their count has held still a moment.)
 driver:SetScript("OnUpdate", Shy.Clocked("auction: the house scanned", function()
 	if not scan then
 		driver:Hide()
 		return
 	end
-	if not open then return Stop("closed") end
+	if not open then
+		if scan.noting ~= nil then Noted() else Stop("closed") end
+		return
+	end
 	local now = GetTime()
 	if scan.state == "asked" then
 		local n = C_AuctionHouse.GetNumReplicateItems() or 0
@@ -146,24 +179,27 @@ driver:SetScript("OnUpdate", Shy.Clocked("auction: the house scanned", function(
 		scan.i = scan.i + 1
 		if scan.i % 50 == 0 and debugprofilestop() - started > K.BUDGET then return end
 	end
-	Done()
+	if scan.noting == nil and not Priced(started) then return end
+	Noted(started, K.BUDGET)
 end))
 
--- A search's results: the lowest each, how many, in how many listings (commodities by the unit, items by their
--- buyout over how many).
+-- A search's results: the lowest each, how many, in how many listings, and their going price (commodities by the
+-- unit, items by their buyout, which is the price each however many a listing holds).
 local function Searched(item, key)
-	local least, quantity, listings = nil, 0, 0
+	local least, quantity, listings, all = nil, 0, 0, {}
 	local function Take(unit, n)
 		if not unit or issecretvalue(unit) or unit <= 0 then return end
+		n = n or 1
 		if not least or unit < least then least = unit end
-		quantity, listings = quantity + (n or 1), listings + 1
+		quantity, listings = quantity + n, listings + 1
+		all[listings] = { unit, n }
 	end
 	if key then
 		local n = C_AuctionHouse.GetNumItemSearchResults(key) or 0
 		for i = 1, math.min(n, K.LOOK) do
 			local r = C_AuctionHouse.GetItemSearchResultInfo(key, i)
 			if r and r.buyoutAmount and r.quantity and not issecretvalue(r.quantity) and r.quantity > 0 then
-				Take(math.floor(r.buyoutAmount / r.quantity + 0.5), r.quantity)
+				Take(r.buyoutAmount, r.quantity)
 			end
 		end
 	else
@@ -173,7 +209,7 @@ local function Searched(item, key)
 			if r and not issecretvalue(r.quantity) then Take(r.unitPrice, r.quantity) end
 		end
 	end
-	ns.Book.Seen(item, least, quantity, listings)
+	ns.Book.Seen(item, least, quantity, listings, ns.Book.Going(all))
 end
 
 local handlers = {
@@ -190,7 +226,9 @@ local handlers = {
 	AUCTION_HOUSE_CLOSED = function()
 		open = false
 		ns.Book.House(false)
-		if scan then Stop() end
+		if scan then
+			if scan.noting ~= nil then Noted() else Stop() end
+		end
 		ns.Fire("closed")
 	end,
 	COMMODITY_SEARCH_RESULTS_UPDATED = function(item)

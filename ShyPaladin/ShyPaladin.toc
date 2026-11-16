@@ -1,10 +1,10 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffPaladin|r
-## Notes: Colors your swing bar by seal and helps you seal twist: shows when your next swing carries an Echo, with a sound when it lands. |cff888888/shypaladin|r
+## Notes: Your seal on the swing bar, help seal twisting, and your keys laid out |cff888888/shypaladin|r
 ## Author: Shyce Cream
-## Version: 5.0.6
-## X-Date: 2026-11-15
-## IconTexture: Interface\AddOns\ShyPaladin\Media\ShyPaladin
+## Version: 5.1.1
+## X-Date: 2026-11-16
+## IconTexture: Interface\AddOns\ShyPaladin\Media\ShyPaladinMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyDock
 ## Group: ShyCore

@@ -506,6 +506,8 @@ UI.LookKind("comic", {
 	rims = false,
 	-- Ink round the panel, its printed shadow, the caption and the swipe in the head, the balloon in the foot:
 	-- nothing across the face.
+	-- A chat bubble's tail (UI.LookTail): the panel's ink at its weight, brushed on round it.
+	tail = function() return "Comic" .. (Option("ink") == "fine" and "Fine" or "Bold"), { { layer = "Ink", color = { 1, 1, 1 } } } end,
 	edge = { "comicRun", "comicCap", "comicDropRight", "comicDropFoot", "comicRimTop", "comicRimBottom", "comicRimLeft",
 		"comicRimRight", "comicRimDots", "comicCaption", "comicCaptionDots", "comicCaptionInk", "comicCaptionKey", "comicRule",
 		"comicCaptionInside", "comicBallooninkL", "comicBallooninkM", "comicBallooninkR", "comicBallooninsideL",

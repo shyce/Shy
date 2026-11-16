@@ -7,9 +7,9 @@ local MEDIA = "Interface\\AddOns\\ShyRogue\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Rogue",
+	category = "combat",
 	icon = MEDIA .. "ShyRogue",
 	smallIcon = MEDIA .. "ShyRogueSmall",
-	tagline = "Poisons, combo points, lockboxes and pick pocket",
 	savedVariables = "ShyRogueDB",
 	keep = { keysMade = true, keysBuild = true, keysBefore = true },   -- what was made for your keys, and what stood there before
 	defaults = {

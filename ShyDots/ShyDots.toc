@@ -1,10 +1,10 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffDots|r
-## Notes: Tracks the DoT damage you have left to tick, so nameplates and the target frame show when a mob is as good as dead. |cff888888/shydots|r
+## Notes: Shows on health bars when your DoTs will finish a mob |cff888888/shydots|r
 ## Author: Shyce Cream
-## Version: 5.0.6
-## X-Date: 2026-11-15
-## IconTexture: Interface\AddOns\ShyDots\Media\ShyDots
+## Version: 5.1.1
+## X-Date: 2026-11-16
+## IconTexture: Interface\AddOns\ShyDots\Media\ShyDotsMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore
 ## SavedVariables: ShyDotsDB

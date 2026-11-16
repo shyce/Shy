@@ -6,9 +6,9 @@ local MEDIA = "Interface\\AddOns\\ShyFrames\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Frames",
+	category = "combat",
 	icon = MEDIA .. "ShyFrames",
 	smallIcon = MEDIA .. "ShyFramesSmall",
-	tagline = "Compact unit frames for you, your target and your party",
 	savedVariables = "ShyFramesDB",
 	defaults = {
 		units = { player = true, target = true, targettarget = true, pet = true, focus = true, party = true, partypet = true },

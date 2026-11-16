@@ -46,13 +46,7 @@ end
 
 -- Player names: a font family that covers every alphabet.
 function W.Name(parent, size)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(UI.NameFont(size))
-	fs:SetShadowOffset(1, -1)
-	fs:SetShadowColor(0, 0, 0, 1)
-	fs:SetJustifyH("LEFT")
-	fs:SetWordWrap(false)
-	return fs
+	return UI.Words(parent, UI.NameFont(size), nil, { wrap = false })
 end
 
 -- A menu of the words in braces, each with what it says right now; a click
@@ -104,11 +98,8 @@ end
 
 -- Player-written chat text: Blizzard font objects, which cover every alphabet.
 function W.ChatText(parent, color, small)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(small and GameFontHighlightSmall or ChatFontNormal)
-	fs:SetJustifyH("LEFT")
+	local fs = UI.Words(parent, small and GameFontHighlightSmall or ChatFontNormal, color)
 	fs:SetJustifyV("TOP")
-	UI.Ink(fs, color or C.text)
 	return fs
 end
 
@@ -418,9 +409,7 @@ end
 -- tall at least, `lines.max` at most, scrolling past that. f:SetText(text).
 function W.TextView(parent, width, lines, color)
 	local f = UI.ScrollArea(parent, width, 10)
-	local fs = f.content:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(GameFontHighlightSmall)
-	fs:SetJustifyH("LEFT")
+	local fs = UI.Words(f.content, GameFontHighlightSmall, color)
 	fs:SetJustifyV("TOP")
 	fs:SetWordWrap(true)
 	fs:SetNonSpaceWrap(true)   -- a run of letters with no space in it breaks too, as it does in an edit box
@@ -428,7 +417,6 @@ function W.TextView(parent, width, lines, color)
 	-- A width and no height: the text takes every line it needs (as the Replies bubbles do), and
 	-- the frame clips what is past its own height.
 	fs:SetWidth(width - 18)
-	UI.Ink(fs, color or C.text)
 	f.text = fs
 	local line = LineHeight()
 	local least, most = lines.min * line + 4, lines.max * line + 4

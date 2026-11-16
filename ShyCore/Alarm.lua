@@ -147,15 +147,7 @@ local function Card(parent)
 	c.sweep:AddMaskTexture(c.drain.mask)
 	c.sweep:SetAlpha(0)
 	local function Words(size, font)
-		local fs = over:CreateFontString(nil, "OVERLAY")
-		fs:SetFontObject(font(size))
-		UI.Follow(fs)   -- a title keeps up with the theme's font
-		fs:SetShadowOffset(1, -1)
-		fs:SetShadowColor(0, 0, 0, 1)
-		fs:SetWordWrap(false)
-		fs:SetJustifyH("LEFT")
-		UI.Ink(fs, WHITE)
-		return fs
+		return UI.Words(over, font(size), WHITE, { wrap = false })
 	end
 	c.title = Words(TITLE, UI.TitleFont)
 	c.under = Words(UNDER, UI.NameFont)

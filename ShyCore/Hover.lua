@@ -4,8 +4,8 @@
 -- (opts.dock) it opens from that frame's edge and stays put while the mouse moves between rows;
 -- otherwise it is placed beside its owner. Its height follows its content. The foot (lines not needed at a
 -- glance) slides down after the mouse has rested (the Hover delay setting in the /shy window, a second by
--- default; everything that waits for a rest waits a share of it). A click on a hover keeps it up; another
--- closes it. What the mouse does is never said: clicking, pinning and the menus are plain to anyone using
+-- default; everything that waits for a rest waits a share of it). A click on a hover that asks for it
+-- (opts.keep = true) keeps it up, while Hover.pinning is on (it is off); another closes it. What the mouse does is never said: clicking, pinning and the menus are plain to anyone using
 -- the UI, so `hints` are taken and not shown, and a hover with nothing more to say has no foot.
 --
 --   Shy.Hover.Show(owner, content, opts)   -- returns the frame
@@ -18,6 +18,7 @@
 --   Shy.Hover.Keep(owner)          -- keep the current hover of `owner` up, as a click on it does
 --   Shy.Hover.Kept()               -- the kept hover, if any (.key is what it is about)
 --   Shy.Hover.Each(fn)             -- fn(frame) for every hover frame made, shown or not
+--   Shy.Hover.Restack()            -- after a menu opens or closes: the hovers it doesn't own go under it, or back
 --
 --   content = {
 --     strip = "Guide step",  note = "1-8 TELDRASSIL",     -- header, and text at the header's right
@@ -51,7 +52,8 @@
 --   opts = { dock = frame, side = "LEFT" | "RIGHT" | "TOP" | "BOTTOM" (default: where there is room)
 --            | "CURSOR" (goes with the cursor, on whichever side of it has room),
 --            outside = frame (placed beside that frame, never over it: what the mouse points into, a minimap),
---            gap = 5, width = 262, keep = false (can't be kept up),
+--            gap = 5, width = 262, keep = true (a click keeps it up; otherwise it can't be),
+--            keep = false (nor does it take the mouse: no lingering on it, no scrolling it),
 --            key = anything (a kept hover with the same key is not shown twice),
 --            onKeep = function(frame, kept) end,
 --            at = { point, frame, relativePoint, x, y } (explicit position), scale = 1 }
@@ -103,6 +105,10 @@ local C = UI.colors
 
 local Hover = {}
 Shy.Hover = Hover
+
+-- Pinning (a click keeping a hover up) is off for now: hovers that ask for it (keep = true) still say
+-- so, and turn it back on with this.
+Hover.pinning = false
 
 -- Cells of HoverGlyphs.tga, eight across, in sheet order.
 Hover.GLYPHS = { "kill", "loot", "talk", "go", "book", "bag", "up", "use", "fly", "home", "left", "right", "coin", "star", "clock", "note" }
@@ -338,14 +344,7 @@ end
 
 -- Content is often player or quest text in any alphabet, so font families are used, never one file.
 local function Words(parent, size, color, named)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(named and UI.TitleFont(size) or UI.TextFont(size))
-	UI.Follow(fs)   -- a title keeps up with the theme's font
-	fs:SetShadowOffset(1, -1)
-	fs:SetShadowColor(0, 0, 0, 1)
-	UI.Ink(fs, color or C.text)
-	fs:SetJustifyH("LEFT")
-	return fs
+	return UI.Words(parent, named and UI.TitleFont(size) or UI.TextFont(size), color)
 end
 
 local function Sliced(owner, layer, sublevel, file, side, top, foot)
@@ -484,7 +483,7 @@ local function Build()
 	f:SetMovable(true)
 	f:SetClampedToScreen(true)
 	f:SetScript("OnMouseDown", function(self, button)
-		if button ~= "LeftButton" or not self.keeps then return end
+		if button ~= "LeftButton" or not self.pins then return end
 		self.pressX, self.pressY = GetCursorPosition()
 		self.dragging = false
 	end)
@@ -677,6 +676,13 @@ local CARD = {
 	ground = function() return C.tip[1], C.tip[2], C.tip[3], 1 end,
 	lane = 10,                     -- what scrolling words leave their thumb at the right
 }
+-- The theme's own colors (Lit leaves them as they are).
+CARD.palette = { [WHITE] = true }
+for _, list in ipairs({ UI.colors, Theme.skin }) do
+	for _, c in pairs(list) do
+		if type(c) == "table" then CARD.palette[c] = true end
+	end
+end
 local BLACK = { 0, 0, 0 }
 
 local function Face(size, face)
@@ -702,6 +708,22 @@ local function Pooled(card, kind, make)
 	return thing
 end
 
+-- A content's own color (an item's quality, a line the game colored) kept its color where it reads on the hover's fill
+-- in the look worn, made vivid just far enough where it doesn't (Theme.Vivid): r, g, b. The theme's own colors (the
+-- palette's tables, the accent) are worn as they are: they read already, and follow the theme. nil: as it is.
+local function Lit(color)
+	if type(color) ~= "table" or CARD.palette[color] then return nil end
+	local tip = C.tip
+	local gr, gg, gb = UI.LookFill(Theme.Look(), tip[1], tip[2], tip[3], 1)
+	return Theme.Vivid(color[1], color[2], color[3], gr, gg, gb, Theme.LC_LABEL)
+end
+
+-- A font string inked in `color` (Lit: a content's color made to read).
+local function InkLit(fs, color)
+	local r, g, b = Lit(color)
+	if r then UI.Ink(fs, r, g, b) else UI.Ink(fs, color) end
+end
+
 local function Text(card, size, face, color)
 	local fs = Pooled(card, "text" .. (face or "") .. size, function(c)
 		local made = c:CreateFontString(nil, "OVERLAY")
@@ -716,7 +738,7 @@ local function Text(card, size, face, color)
 	fs:SetWidth(0)
 	fs:SetWordWrap(false)
 	fs:SetSpacing(0)
-	UI.Ink(fs, color or C.text)
+	InkLit(fs, color or C.text)
 	return fs
 end
 
@@ -1291,14 +1313,9 @@ local function NewCard(f)
 	card.seats, card.pools, card.rulers = {}, {}, {}
 	card.name = card:CreateFontString(nil, "OVERLAY")
 	UI.TitleFace(card.name, CARD.name)
-	card.name:SetShadowOffset(1, -1)
-	card.name:SetShadowColor(0, 0, 0, 1)
 	card.name:SetJustifyH("LEFT")
 	card.name:SetWordWrap(false)
-	card.word = card:CreateFontString(nil, "OVERLAY")
-	card.word:SetFontObject(UI.TextFont(CARD.small))
-	card.word:SetJustifyH("RIGHT")
-	UI.Ink(card.word, C.dim)
+	card.word = UI.Words(card, UI.TextFont(CARD.small), C.dim, { justify = "RIGHT" })
 	-- content.way: the way to the thing, turning at the head's right with the distance before it.
 	card.way = card:CreateTexture(nil, "OVERLAY")
 	card.way:SetSize(WAY, WAY)
@@ -1679,11 +1696,7 @@ local function NewPlate(f)
 	plate.crest = top:CreateTexture(nil, "ARTWORK", nil, 2)
 	plate.crest:SetPoint("LEFT", plate, "TOPLEFT", PLATE.ring + 6, -(PLATE.top + PLATE.tall / 2))
 	plate.crest:Hide()
-	bar.said = top:CreateFontString(nil, "OVERLAY")
-	bar.said:SetFontObject(UI.NameFont(PLATE.percent))
-	bar.said:SetShadowOffset(1, -1)
-	bar.said:SetShadowColor(0, 0, 0, 1)
-	bar.said:SetTextColor(1, 1, 1)
+	bar.said = UI.Words(top, UI.NameFont(PLATE.percent), WHITE)
 	-- Centred on the bar by its digits' ink (as the name is by its capitals'), PLATE.said in from the bar's end.
 	bar.said:SetPoint("RIGHT", bar, "RIGHT", -PLATE.said, UI.NameLift(PLATE.percent))
 	-- Under pcall: once the unit is gone the getters error, and the last values stay.
@@ -1928,7 +1941,7 @@ function Card(f, content, width, asked)
 		local room = most - x - CARD.right
 		card.name:SetWidth(0)
 		card.name:SetText(content.title)
-		UI.Ink(card.name, content.titleColor or WHITE)
+		InkLit(card.name, content.titleColor or WHITE)
 		local name = math.min(card.name:GetStringWidth(), room - kindWide)
 		card.name:SetWidth(name)
 		card.name:ClearAllPoints()
@@ -2215,6 +2228,20 @@ local function Place(f, to, opts, width)
 	Slot(f, side, ratio, l, t - tall, l + wide, t)
 end
 
+-- Over the menu or under it
+-- An open menu stands over every hover but its own rows': one kept up, or about something beside the menu,
+-- slips a layer under it while it is open, and comes back up when it closes (UI.Menu and UI.CloseMenu).
+
+local function Stack(f)
+	local by = f.owner or (f.of and f.of.owner)
+	local want = (UI.MenuOwner() and not UI.InMenu(by)) and "FULLSCREEN" or "TOOLTIP"
+	if f:GetFrameStrata() ~= want then f:SetFrameStrata(want) end
+end
+
+function Hover.Restack()
+	for _, f in ipairs(built) do Stack(f) end
+end
+
 -- Showing, hiding, keeping
 
 function Hover.Owner()
@@ -2260,6 +2287,8 @@ function Hover.Show(by, content, opts)
 	local width = opts.width or (content.title and WIDTH or TIP_WIDTH)
 	wing.owner, wing.dock, wing.opts, wing.key = by, opts.dock, opts, opts.key
 	wing.keeps = opts.keep ~= false and content.title ~= nil
+	-- A click keeps it up only where that was asked for, and while pinning is on.
+	wing.pins = Hover.pinning and opts.keep == true and wing.keeps
 	wing.kept, wing.lingering, wing.away = false, false, 0
 	wing.placed, wing.pressX, wing.dragging = nil, nil, false
 	-- A hover that can't be kept takes no mouse: it may cover the next thing to click.
@@ -2268,6 +2297,7 @@ function Hover.Show(by, content, opts)
 	Fill(wing, content, width)
 	Stand(wing)
 	Place(wing, opts.dock or opts.outside or by, opts, width)
+	Stack(wing)
 	if fresh then
 		wing.rising = 0
 		wing:SetAlpha(0)
@@ -2318,7 +2348,7 @@ function Keep(f)
 		Hover.Close(f)
 		return
 	end
-	if not f.keeps then return end
+	if not f.pins then return end
 	if kept and kept ~= f then Hover.Close(kept) end
 	kept, wing, owner = f, nil, nil
 	generation = generation + 1
@@ -2348,7 +2378,7 @@ end
 
 -- True when the hover was kept.
 function Hover.Keep(by)
-	if not (wing and wing:IsShown() and owner == by and wing.keeps) then return false end
+	if not (wing and wing:IsShown() and owner == by and wing.pins) then return false end
 	Keep(wing)
 	return true
 end
@@ -2359,7 +2389,7 @@ end
 local function Picture(f, content, opts)
 	local width = opts.width or (content.title and WIDTH or TIP_WIDTH)
 	f.owner, f.dock, f.opts, f.key = nil, nil, opts, nil
-	f.keeps, f.kept, f.lingering, f.footNow = false, false, false, 0
+	f.keeps, f.pins, f.kept, f.lingering, f.footNow = false, false, false, false, 0
 	f:EnableMouse(false)
 	f:SetWidth(width)
 	Fill(f, content, width)
@@ -2410,6 +2440,7 @@ function Hover.Beside(index, content, opts)
 	end
 	f.rising = of.rising   -- fades in with its host
 	f:SetAlpha(of.rising and of:GetAlpha() or 1)
+	Stack(f)
 	f:Show()
 	return f
 end
@@ -2458,6 +2489,7 @@ function Hover.Stay(id, content, opts)
 		f.rising = 0
 		f:SetAlpha(0)
 	end
+	Stack(f)
 	f:Show()
 	return f
 end

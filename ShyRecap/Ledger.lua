@@ -22,20 +22,18 @@ local DOT = " \194\183 "
 
 -- Helpers
 
--- SetFontObject also sets color, shadow and alignment, so apply ours after it.
+-- Another font for words made below: SetFontObject also sets alignment and shadow, so ours go back after it (the
+-- text effect is worn again the frame after).
 local function Face(fs, font, justify)
 	fs:SetFontObject(font)
 	fs:SetJustifyH(justify or "LEFT")
 	fs:SetShadowOffset(1, -1)
 	fs:SetShadowColor(0, 0, 0, 1)
+	Shy.Theme.Wear(fs)
 end
 
 local function Text(parent, font, color, justify)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	Face(fs, font, justify)
-	fs:SetWordWrap(false)
-	UI.Ink(fs, color or C.text)
-	return fs
+	return UI.Words(parent, font, color, { justify = justify or "LEFT", wrap = false })
 end
 
 -- Text in the display font (Latin only).
@@ -443,11 +441,11 @@ local function Head(f, view)
 	if line ~= "" then x = x + Fit(f.sub, room) + 4 end
 	if guild then
 		f.guild:ClearAllPoints()
-		f.guild:SetPoint("TOPLEFT", x, -34)
+		f.guild:SetPoint("TOPLEFT", UI.Body(f), "TOPLEFT", x, -34)
 		x = x + Fit(f.guild, math.max(30, room - (x - LEDGER.pad))) + 4
 	end
 	f.chip:ClearAllPoints()
-	f.chip:SetPoint("TOPLEFT", x + 2, -33)
+	f.chip:SetPoint("TOPLEFT", UI.Body(f), "TOPLEFT", x + 2, -33)
 end
 
 -- Footer: "174 health in 4.1 s" at the left, the day's earlier deaths at the right.
@@ -503,7 +501,7 @@ local function Foot(f, view)
 		local entry = f.entries[i]
 		entry:SetSize(entry.wide, 16)
 		entry:ClearAllPoints()
-		entry:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", x, 5)
+		entry:SetPoint("BOTTOMRIGHT", UI.Body(f), "BOTTOMRIGHT", x, 5)
 		x = x - entry.wide
 		if i == 2 then
 			f.dot:ClearAllPoints()
@@ -512,7 +510,7 @@ local function Foot(f, view)
 		end
 	end
 	f.kicker:ClearAllPoints()
-	f.kicker:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", x - 6, 8)
+	f.kicker:SetPoint("BOTTOMRIGHT", UI.Body(f), "BOTTOMRIGHT", x - 6, 8)
 end
 
 local function LedgerSet(f, view)
@@ -540,8 +538,8 @@ local function LedgerSet(f, view)
 		end
 		local y = -(LEDGER.top + down + (i - 1) * LEDGER.step)
 		row:ClearAllPoints()
-		row:SetPoint("TOPLEFT", 8, y)
-		row:SetPoint("TOPRIGHT", -8, y)
+		row:SetPoint("TOPLEFT", UI.Body(f), "TOPLEFT", 8, y)
+		row:SetPoint("TOPRIGHT", UI.Body(f), "TOPRIGHT", -8, y)
 		RowSet(row, death, blow, i == n, i == biggest and n > 1)
 		row:Show()
 	end
@@ -549,7 +547,7 @@ local function LedgerSet(f, view)
 	f.none:SetShown(n == 0)
 
 	Foot(f, view)
-	f:SetHeight(LEDGER.top + down + math.max(n, 1) * LEDGER.step + LEDGER.foot)
+	UI.BodyFit(f, LEDGER.w, LEDGER.top + down + math.max(n, 1) * LEDGER.step + LEDGER.foot)   -- (and the look's clearance: UI.Body)
 end
 
 local function LedgerTick(f)
@@ -579,6 +577,10 @@ function ns.CreateLedger(parent)
 	f:SetHeight(LEDGER.top + LEDGER.step + LEDGER.foot)
 	-- The killer's name and the time stand in the window header; who they were, under it.
 	local head = UI.Head(f, { size = "window", close = function() if f.onClose then f.onClose() end end })
+	-- Everything under the header stands on its body: clear of the look's work round the edge, the ledger that much
+	-- bigger (UI.Body).
+	local body = UI.Body(f)
+	UI.BodyFit(f, LEDGER.w, LEDGER.top + LEDGER.step + LEDGER.foot)
 	f:EnableMouse(true)
 	local pad = LEDGER.pad
 
@@ -589,7 +591,7 @@ function ns.CreateLedger(parent)
 	f.second = Text(f, UI.NameFont(11))
 	f.second:SetPoint("BOTTOMLEFT", f.joint, "BOTTOMRIGHT", 0, 0)
 	f.sub = Text(f, UI.TextFont(11))
-	f.sub:SetPoint("TOPLEFT", pad, -34)
+	f.sub:SetPoint("TOPLEFT", body, "TOPLEFT", pad, -34)
 	f.guild = Text(f, UI.TextFont(11), C.dim)
 	f.chip = CreateFrame("Frame", nil, f)
 	f.chip:SetHeight(14)
@@ -602,28 +604,28 @@ function ns.CreateLedger(parent)
 	f.ago = Brand(f, head.size.text, C.head, "RIGHT")
 	f.ago:SetPoint("RIGHT", head.close, "LEFT", -8, 0)
 	f.where = Text(f, UI.TextFont(11), C.dim, "RIGHT")
-	f.where:SetPoint("TOPRIGHT", -pad, -34)
+	f.where:SetPoint("TOPRIGHT", body, "TOPRIGHT", -pad, -34)
 	f.close = head.close
 
 	f.rows = {}
 	f.none = Text(f, UI.TextFont(12), C.dim, "CENTER")
-	f.none:SetPoint("TOP", 0, -(LEDGER.top + 4))
+	f.none:SetPoint("TOP", body, "TOP", 0, -(LEDGER.top + 4))
 	f.none:SetText("No damage was recorded for this death.")
 
 	local hair = f:CreateTexture(nil, "ARTWORK")
 	hair:SetHeight(1)
-	hair:SetPoint("BOTTOMLEFT", 8, 25)
-	hair:SetPoint("BOTTOMRIGHT", -8, 25)
+	hair:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 8, 25)
+	hair:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -8, 25)
 	UI.Paint(hair, C.rowEdge)
 	f.lost = Text(f, UI.NameFont(11), C.head)
-	f.lost:SetPoint("BOTTOMLEFT", pad, 7)
+	f.lost:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", pad, 7)
 	f.lostWord = Text(f, UI.TextFont(11), C.dim)
 	f.lostWord:SetPoint("BOTTOMLEFT", f.lost, "BOTTOMRIGHT", 0, 0)
 	f.span = Text(f, UI.NameFont(11), C.head)
 	f.span:SetPoint("BOTTOMLEFT", f.lostWord, "BOTTOMRIGHT", 0, 0)
 
 	f.first = Text(f, UI.TextFont(11), C.dim, "RIGHT")
-	f.first:SetPoint("BOTTOMRIGHT", -pad, 7)
+	f.first:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -pad, 7)
 	f.first:SetText("Your first death today")
 	f.kicker = Brand(f, 9, Theme.Accent, "RIGHT")
 	f.kicker:SetText("EARLIER")

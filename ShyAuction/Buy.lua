@@ -130,11 +130,12 @@ local function Ladder()
 		return out
 	end
 	state.commodity = false
+	-- (An item listing's buyout is the price each, however many it holds.)
 	n = C_AuctionHouse.GetNumItemSearchResults(state.key) or 0
 	for i = 1, math.min(n, L.ladder) do
 		local r = C_AuctionHouse.GetItemSearchResultInfo(state.key, i)
 		if r and r.buyoutAmount and not issecretvalue(r.buyoutAmount) and (r.quantity or 0) > 0 then
-			out[#out + 1] = { quantity = r.quantity, unit = math.floor(r.buyoutAmount / r.quantity + 0.5), buyout = r.buyoutAmount,
+			out[#out + 1] = { quantity = r.quantity, unit = r.buyoutAmount, buyout = r.buyoutAmount,
 				auction = r.auctionID, mine = r.containsOwnerItem }
 		end
 	end
@@ -262,9 +263,10 @@ local function DrawCard(width, height)
 	if color then card.name:SetTextColor(color.r, color.g, color.b) end
 	local price = ns.Book.Price(item)
 	card.market:SetText(price and ("Market %s each"):format(UI.Money(price.market, true, 11, card.market)) or "No market price yet")
-	card.listed:SetText(price and ("%s listed"):format(BreakUpLargeNumbers(price.quantity or 0)) or "")
+	card.listed:SetText(price and ("%s listed  ·  %s"):format(BreakUpLargeNumbers(price.quantity or 0), ns.Book.Basis(price)) or "")
 	local h = ns.Book.History(item)
-	card.kick1:Say("Last scans", h and #h >= 2 and (h[#h] <= math.min(unpack(h)) and "the lowest of them" or "") or "not enough yet")
+	card.kick1:Say("By day", h and #h >= 2 and (h[#h] <= math.min(unpack(h)) and ("the lowest in %d days"):format(#h) or ("%d days"):format(#h))
+		or "scan on another day to see it")
 	card.chart:Set(h, width - 4, 56, h and #h >= 2 and h[#h] < h[1] and C.good or C.hot)
 	card.chart:SetShown(h ~= nil and #h >= 2)
 

@@ -307,8 +307,8 @@ function Plan.Stops()
 		end
 		stop.yards = continent and continent == W.continent and W.WalkTo(north, west) or nil
 		stop.click = function() ns.ShowOnMap(each.title, { { map = each.map, x = each.x, y = each.y } }, true) end
-		-- Where you farm an item (ShyFarm): the ground of what you farm it from, lit in the finder's color, the stop
-		-- at the heart of the camp chosen in it; a click shows it all on the map.
+		-- Where you farm (ShyFarm): an item, the ground of what you farm it from; a creature ("n" and its ID), its own.
+		-- Lit in the finder's color, the stop at the heart of the camp chosen in it; a click shows it all on the map.
 		if each.farm and R.FarmGround then
 			local ground = R.FarmGround(each.farm)
 			if #ground > 0 then
@@ -325,9 +325,10 @@ function Plan.Stops()
 					FARM.was[each.farm] = on
 					Shy:Fire("SHY_FARM_GROUND", each.farm, on)
 				end
-				local item = ns.Data.Item(each.farm)
+				local npc = R.FarmCreature and R.FarmCreature(each.farm)
+				local thing = npc and ns.Data.Npc(npc) or (type(each.farm) == "number" and ns.Data.Item(each.farm))
 				stop.among = on and "farm" or nil
-				stop.found = ("Farm %s here"):format(item and item.name or "it")
+				stop.found = ("Farm %s here"):format(thing and thing.name or "it")
 				stop.caption = ("WHERE YOU FARM  \194\183  %d OF %d"):format(i, count)
 				stop.click = function()
 					ns.ShowOnMap(each.title, { { map = each.map, x = each.x, y = each.y } }, false, ground)

@@ -22,6 +22,33 @@ local C = UI.colors
 local P = {}
 ns.Preview = P
 
+-- A drawing's plan inputs (`all`, Layout.Shown's) with a row of cooldowns the character has nothing in yet (none
+-- learned, or the row never seen in a fight) given a few of your class's cooldowns (Picker.lua draws their
+-- pictures), or plain tiles: the vessel's drawing asks how big your cooldowns should be, and an empty plate can't
+-- say. Returns `all`.
+local SAMPLE = { essential = 4, utility = 4 }
+local PICTURED = { essential = "gems", utility = "utility" }   -- the row's name in Picker.lua
+function P.Sampled(all)
+	local copy = {}
+	for _, field in ipairs({ "wide", "tall", "count", "shown" }) do
+		copy[field] = {}
+		for key, value in pairs(all[field] or {}) do copy[field][key] = value end
+	end
+	for _, def in ipairs(ns.Layout.ROWS) do
+		local n = SAMPLE[def.key]
+		if n and not copy.wide[def.key] then
+			local class = ns.Vessel and ns.Vessel.ClassPictures and ns.Vessel.ClassPictures(PICTURED[def.key], n)
+			if class and #class > 0 then n = #class end
+			local size, gap = def.height, def.gap or 2
+			local across = math.min(n, def.limit or 8)
+			copy.wide[def.key], copy.tall[def.key], copy.count[def.key] = across * (size + gap) - gap, size, n
+			copy.shown[def.key] = true
+		end
+	end
+	for field, value in pairs(copy) do rawset(all, field, value) end
+	return all
+end
+
 local MEDIA = "Interface\\AddOns\\ShyDock\\Media\\"
 
 P.NAMES = { compact = "Compact", roomy = "Roomy", grand = "Grand" }
@@ -45,7 +72,7 @@ local STYLE_WORDS = {
 	center = "Your frames either side of your character, the bars under your feet. For damage and levelling.",
 	healer = "Your party or raid right under your character, your own frames out to the sides.",
 	tank = "The threat meter tall beside your target, your target's target over it.",
-	minimal = "Everything small and close to your character. Bars 2 and 3 and the meter only in a fight.",
+	minimal = "Only your main bar. The others show while you point at them, the meter in a fight.",
 }
 P.STYLE_WORDS = STYLE_WORDS
 
@@ -127,9 +154,15 @@ end
 
 -- The stage: the scaled drawing
 
-local FIELD = { 0.03, 0.035, 0.045, 1 }            -- backdrop
-local WORLD = MEDIA .. "World"                     -- the world behind the drawing: a view of Durotar
-local WORLD_SHAPE = 16 / 9                         -- the view's width to its height
+local FIELD = { 0.03, 0.035, 0.045, 1 }            -- under the backdrop
+-- The backdrop the pieces stand on: one deep slate, flat, so the pieces stand clear of it.
+local BACKDROP = { 0.105, 0.12, 0.155 }
+-- A card's flat drawing (S:Draw, `band`): the layout told in shapes, not its art. Your bars in your color (the side
+-- bars a shade softer), chat, the meter and the cooldown manager in a soft grey, your frames in their meaning colors;
+-- what shows only now and then (in a fight, or while you point at the bars) as its outline. Strengths, and the
+-- grey.
+local FLAT = { ink = { 0.62, 0.67, 0.76 }, bars = 0.95, sides = 0.62, wing = 0.28, box = 0.45, frame = 0.85, small = 0.55,
+	cell = 0.4, track = 0.22, hint = 0.55 }
 local WELL = { 0.02, 0.02, 0.025 }                 -- bar track
 local MAP = { 0.09, 0.14, 0.15 }                   -- minimap face
 local GEM = { 0.20, 0.23, 0.29 }                   -- placeholder icon
@@ -142,6 +175,7 @@ P.COLORS ={ HEALTH = HEALTH, POWER = POWER, MANA = MANA, GEM = GEM }   -- for th
 -- The bags drawn open: slots across and down, a slot's size, the gap, the pad round them, the seam before the column.
 local BAG = { across = 8, down = 4, size = 34, gap = 4, pad = 10, seam = 13 }
 local FAINT = 0.5                                  -- a piece that comes and goes, drawn where it would stand
+local HIDDEN = 0.18                                -- a bar shown only while you point at the bars, and its housing
 
 local function Stage(parent, width, opts)
 	opts = opts or {}
@@ -156,22 +190,10 @@ local function Stage(parent, width, opts)
 	holder:SetSize(width, height)
 	holder:SetClipsChildren(true)
 	UI.Skin(holder, FIELD, C.rowEdge)
-	-- The world behind: a view of the game, so the pieces read as standing on a screen in it. The
-	-- view is 16:9; a screen of another shape takes its middle,
-	-- cropped to the screen's shape, never stretched.
-	local world = holder:CreateTexture(nil, "BACKGROUND", nil, 1)
-	world:SetPoint("TOPLEFT", 1, -1)
-	world:SetPoint("BOTTOMRIGHT", -1, 1)
-	world:SetTexture(WORLD)
-	local shape = (sw / sh) / WORLD_SHAPE
-	local u0, u1, v0, v1 = 0, 1, 0, 1
-	if shape > 1 then
-		local keep = 1 / shape
-		v0, v1 = 0.5 - keep / 2, 0.5 + keep / 2
-	else
-		u0, u1 = 0.5 - shape / 2, 0.5 + shape / 2
-	end
-	world:SetTexCoord(u0, u1, v0, v1)
+	local ground = holder:CreateTexture(nil, "BACKGROUND", nil, 1)
+	ground:SetPoint("TOPLEFT", 1, -1)
+	ground:SetPoint("BOTTOMRIGHT", -1, 1)
+	UI.Paint(ground, BACKDROP)
 	local stage = CreateFrame("Frame", nil, holder)
 	stage:SetSize(sw, sh)
 	stage:SetScale(width / sw)
@@ -186,24 +208,19 @@ local function Stage(parent, width, opts)
 		return self.look and self.look() or nil
 	end
 
-	-- A part of the screen fitted to the holder exactly (no margin): a card's band. The world behind is
-	-- cropped to that part.
+	-- A part of the screen fitted to the holder exactly (no margin): a card's band.
 	function S:Band(l, b, r, t)
 		local hw, hh = holder:GetWidth(), holder:GetHeight()
 		local fit = min(hw / max(1, r - l), hh / max(1, t - b))
 		local cx, cy = mid + (l + r) / 2, (b + t) / 2
+		self.fit = fit
 		stage:SetScale(fit)
 		stage:ClearAllPoints()
 		stage:SetPoint("BOTTOMLEFT", holder, "CENTER", -cx, -cy)
-		local wx, wy = hw / 2 / fit, hh / 2 / fit
-		local function U(x) return u0 + (u1 - u0) * max(0, min(1, x / sw)) end
-		local function V(y) return v0 + (v1 - v0) * max(0, min(1, 1 - y / sh)) end
-		world:SetTexCoord(U(cx - wx), U(cx + wx), V(cy + wy), V(cy - wy))
 	end
 
 	-- Focused on the vessel: the stage scaled so the vessel's group at its largest chip size (Picker.lua)
-	-- fills the holder (a little past life size at most), so a smaller size draws smaller; centred; the
-	-- world behind cropped to that part of the screen. k: the vessel's scale in this drawing. A `corner`
+	-- fills the holder (a little past life size at most), so a smaller size draws smaller; centred. k: the vessel's scale in this drawing. A `corner`
 	-- stage shows the group's top left corner at life size instead (a look's thumbnail: the rim, the
 	-- gems' socket, the light), `corner` being how far down from the group's top its window's top lies.
 	-- `fixed`: the stage's scale as an earlier fit had it (the vessel planned again for that scale). Returns
@@ -222,11 +239,6 @@ local function Stage(parent, width, opts)
 		stage:SetScale(fit)
 		stage:ClearAllPoints()
 		stage:SetPoint("BOTTOMLEFT", holder, "CENTER", -cx, -cy - (self.inset or 0) / 2 / fit)
-		-- The screen's part on show: half the holder each way, in screen units.
-		local wx, wy = hw / 2 / fit, hh / 2 / fit
-		local function U(x) return u0 + (u1 - u0) * max(0, min(1, x / sw)) end
-		local function V(y) return v0 + (v1 - v0) * max(0, min(1, 1 - y / sh)) end
-		world:SetTexCoord(U(cx - wx), U(cx + wx), V(cy + wy), V(cy - wy))
 		return fit
 	end
 
@@ -323,6 +335,7 @@ local function Stage(parent, width, opts)
 		UI.SetFill(f, fill or ns.Graphite)
 		UI.SetLook(f, S:Look())
 		Put(f, l, b, r, t)
+		f:SetAlpha(1)
 		return f
 	end
 
@@ -361,6 +374,20 @@ local function Stage(parent, width, opts)
 	S.tools = { Put = Put, Piece = Piece, Region = Region, Flat = Flat, Art = Art, Panel = Panel, Tile = Tile, Icon = Icon, Bar = Bar,
 		Wash = Wash, Picture = Picture }
 
+	-- A drawing is some 17 ms and 450 KB to lay. Shows: it stands as asked already (from: P.From, what it is
+	-- planned from besides the choice); Lay: laid for it. One asked for what it shows is left as it is, at a
+	-- showing too: laid again, the game lays the whole room out again for it.
+	local function Sign(size, style, grow, from)
+		return tostring(size) .. "|" .. tostring(style) .. "|" .. tostring(grow) .. "|" .. from
+	end
+	function S:Shows(size, style, grow, from)
+		return self.shows == Sign(size, style, grow, from)
+	end
+	function S:Lay(size, style, grow, from)
+		self.shows = Sign(size, style, grow, from)
+		self:Draw(size, style, grow)
+	end
+
 	-- size, style: the console's, or nil for the one in use. grow: draw the
 	-- bars of the step the abilities call for (see Layout.Plan). vessel: the
 	-- cooldown manager's scale and bars' side to draw, or nil for the ones in use.
@@ -391,7 +418,7 @@ local function Stage(parent, width, opts)
 			-- The vessel with everything it has showing, the cooldowns that wait for a fight and the cast
 			-- bar's row too: one state, planned and drawn, so every piece stands in the plate and nothing is
 			-- planned where another will come.
-			local all = L.Shown(now, true)
+			local all = P.Sampled(L.Shown(now, true))
 			local function Show(plan, fixed)
 				local l, b, r, t = ns.Vessel.DrawOn(self, plan, all)
 				if self.corner then
@@ -413,6 +440,11 @@ local function Stage(parent, width, opts)
 			return
 		end
 
+		if band then
+			self:Flat(g, now, c)
+			return
+		end
+
 		-- Every piece as Parts.lua lists it, each kind drawn its way: the panels (chat, the meter, the
 		-- housing, the racks, the minimap, the guide and the objectives) are frames of their own with
 		-- the console's art; the rest (buttons, plates, icons, cells) are textures in one frame over them.
@@ -421,6 +453,14 @@ local function Stage(parent, width, opts)
 		local FILL = { health = HEALTH, bad = C.bad, mana = MANA }
 		local share = { 1, 0.78, 0.6, 0.41 }   -- the meter's bars
 		local parts = Pieces(g, now)
+		-- What comes and goes is drawn faint: in a layout that reveals its bars (the minimal one) every bar but the main
+		-- one, with its housing and the racks; in one whose meter shows only in a fight, the meter.
+		local fights = g.role and g.role.combat
+		local reveal = g.role and g.role.reveal
+		local main = g.rows.main
+		local function Faint(l, b, r)   -- a button off the main bar: a row over it, or a rack's
+			return reveal and (math.abs(b - main) > 0.5 or l < -g.width / 2 - 0.5 or r > g.width / 2 + 0.5)
+		end
 		for _, part in ipairs(parts) do
 			local l, b, r, t, kind = part[1], part[2], part[3], part[4], part.kind
 			if part.group then
@@ -430,17 +470,30 @@ local function Stage(parent, width, opts)
 				Lines(chat, l + 12, b + 10, r - 12, t - UI.HEAD_STRIP - 6)
 			elseif kind == "meter" then
 				local meter = Panel("meter", 2, WING, l, b, r, t)
+				if fights then meter:SetAlpha(FAINT) end
 				local top = t - UI.HEAD_STRIP - 6
 				for i = 1, #share do
 					local y = top - (i - 1) * 18
 					if y - 16 > b + 6 then Bar(meter, ACCENT, 0.85, l + 6, y - 16, r - 6, y, share[i]) end
 				end
+			elseif kind == "housing" and reveal then
+				-- the main bar's housing, and over it the rows' own (Drawers.lua's reveal), faint
+				local half = g.width / 2
+				local wl, wb, wr, wt = Console.Wrap(-half, main, half, main + g.button)
+				Panel("housing", 2, HOUSING, wl, wb, wr, wt)
+				if g.shown > 1 then
+					wl, wb, wr, wt = Console.Wrap(-half, main + g.pitch, half, main + (g.shown - 1) * g.pitch + g.button)
+					Panel("rows", 2, HOUSING, wl, wb, wr, wt):SetAlpha(HIDDEN)
+				end
 			elseif kind == "housing" then
 				Panel("housing", 2, HOUSING, l, b, r, t)
 			elseif kind == "rack" then
-				Panel(l < 0 and "rackLeft" or "rackRight", 2, HOUSING, l, b, r, t)
+				local rack = Panel(l < 0 and "rackLeft" or "rackRight", 2, HOUSING, l, b, r, t)
+				if reveal then rack:SetAlpha(HIDDEN) end
 			elseif kind == "tray" then
 				Panel("tray", 2, HOUSING, l, b, r, t)
+			elseif kind == "pull" and reveal and part.side ~= "top" then
+				-- the side bars come with the reveal: no drawer of their own
 			elseif kind == "pull" then
 				-- a drawer's pull: a steel strip with the accent's light along the edge it hangs from
 				Flat(loose, C.border, 1, 1, l, b, r, t)
@@ -449,9 +502,12 @@ local function Stage(parent, width, opts)
 				elseif part.side == "left" then Flat(loose, ACCENT, 0.9, 3, r - 2, b + 2, r - 1, t - 2)
 				else Flat(loose, ACCENT, 0.9, 3, l + 1, b + 2, l + 2, t - 2) end
 			elseif kind == "button" then
-				Tile(loose, l, b, r - l)
+				Tile(loose, l, b, r - l, Faint(l, b, r) and HIDDEN or 1)
 			elseif kind == "xp" then
-				Bar(loose, ACCENT, 0.8, l, b, r, t, part.share)
+				-- ShyXP's piece: a steel edge round the HUD's graphite, your experience filled in your color
+				Flat(loose, C.border, 1, 0, l, b, r, t)
+				Flat(loose, C.hud, 1, 1, l + 1, b + 1, r - 1, t - 1)
+				Art(loose, Skin.HATCH, ACCENT, 0.9, 2, l + 1, b + 1, l + 1 + (r - l - 2) * (part.share or 1), t - 1)
 			elseif kind == "plate" or kind == "small" then
 				Plate(loose, l, b, r, t, FILL[part.color] or HEALTH, part.faint and 0.5 or 1)
 			elseif kind == "petbar" then
@@ -543,12 +599,64 @@ local function Stage(parent, width, opts)
 
 		-- The cockpit (Picker.lua draws it with the stage's tools).
 		if ns.Vessel and ns.Vessel.DrawOn then ns.Vessel.DrawOn(self, c, now) end
-		-- A card's band: the screen's middle, from the floor up over the plates, where the layouts differ; by role
-		-- from the experience bar up over your frames, which stand round your character.
-		if band then
-			local foot = g.role and max(0, (g.xp or 0) - Console.SEAM) or 0
-			self:Band(-P.BAND[1] / 2, foot, P.BAND[1] / 2, foot + P.BAND[2])
+	end
+
+	-- A card (FLAT): the screen's whole width from its foot up over your frames, where the layouts differ, at one
+	-- scale in every card so their sizes compare, each piece a flat shape. A line is a screen pixel wide (`px`).
+	function S:Flat(g, now, c)
+		local half = now.screen / 2
+		self:Band(-half, 0, half, now.screen * P.BAND_SHAPE)
+		local px = 1 / max(0.01, self.fit)
+		local f = Piece("flat", 3)
+		Put(f, -half, 0, half, sh)
+		local ink = FLAT.ink
+		-- Shapes never overlap but the experience bar's fill on its track (`sub` 1 over 0).
+		local function Fill(color, alpha, l, b, r, t, sub)
+			Flat(f, color, alpha, sub or 0, l, b, r, t)
 		end
+		local function Outline(color, alpha, l, b, r, t)
+			Flat(f, color, alpha, 0, l, t - px, r, t)
+			Flat(f, color, alpha, 0, l, b, r, b + px)
+			Flat(f, color, alpha, 0, l, b + px, l + px, t - px)
+			Flat(f, color, alpha, 0, r - px, b + px, r, t - px)
+		end
+		local role = g.role
+		local reveal, fights = role and role.reveal, role and role.combat
+		local main = g.rows.main
+		local FILL = { health = HEALTH, bad = C.bad, mana = MANA }
+		-- The bars: a strip a row, a pixel apart; a row shown only while you point at the bars as its outline.
+		local w = g.width / 2
+		for _, bar in ipairs(g.stacked) do
+			local y = g.rows[bar]
+			local l, b, r, t = -w, y + px / 2, w, y + g.button + g.gap - px / 2
+			if reveal and bar ~= "main" then Outline(ACCENT, FLAT.hint, l, b, r, t) else Fill(ACCENT, FLAT.bars, l, b, r, t) end
+		end
+		for _, part in ipairs(Pieces(g, now)) do
+			local l, b, r, t, kind = part[1], part[2], part[3], part[4], part.kind
+			if part.group then
+				-- a labelled outline round smaller pieces: nothing to draw
+			elseif kind == "chat" then
+				Fill(ink, FLAT.wing, l, b, r, t)
+			elseif kind == "meter" then
+				if fights then Outline(ink, FLAT.hint, l, b, r, t) else Fill(ink, FLAT.wing, l, b, r, t) end
+			elseif kind == "rack" then
+				if reveal then Outline(ACCENT, FLAT.hint, l, b, r, t) else Fill(ACCENT, FLAT.sides, l, b, r, t) end
+			elseif kind == "xp" then
+				Fill(ink, FLAT.track, l, b, r, t)
+				Fill(ACCENT, FLAT.bars, l, b, l + (r - l) * (part.share or 1), t, 1)
+			elseif kind == "plate" then
+				Fill(FILL[part.color] or HEALTH, FLAT.frame * (part.faint and FAINT or 1), l, b, r, t)
+			elseif kind == "small" then
+				Fill(FILL[part.color] or HEALTH, FLAT.small * (part.faint and FAINT or 1), l, b, r, t)
+			elseif kind == "petbar" then
+				Fill(ink, FLAT.cell * FAINT, l, b, r, t)
+			elseif kind == "threat" then
+				Outline(ink, FLAT.hint, l, b, r, t)
+			end
+		end
+		-- The cooldown manager: its box over the bars.
+		local box = c and c.rects and c.rects.box
+		if box then Fill(ink, FLAT.box, box[1], box[2], box[3], box[4]) end
 	end
 
 	return S
@@ -557,13 +665,43 @@ end
 P.Stage = Stage
 P.WORDS, P.STYLE_WORDS = WORDS, STYLE_WORDS
 
+-- What a drawing is planned from besides the choice: the console's inputs as its setup signs them
+-- (L.Signatures) and the look it wears (a plan's pick, nil: the theme's). Unreadable: never the same, so every
+-- drawing is laid.
+function P.From(look)
+	local ok, _, inputs = pcall(ns.Layout.Signatures)
+	if not ok or inputs == nil then return tostring(GetTime()) end
+	return tostring(inputs) .. "|" .. tostring(look or Shy.Theme.Look())
+end
+
+-- A row of drawings laid one a frame, so a row of cards asked for another size is no one long hitch. A stage
+-- already as asked is left alone. painter:Ask(stage, size, style, grow, from) (in the order to lay them);
+-- painter:Forget() before asking anew.
+function P.Painter(parent)
+	local painter = CreateFrame("Frame", nil, parent)
+	painter:Hide()
+	local waiting = {}
+	painter:SetScript("OnUpdate", function(self)
+		local job = table.remove(waiting, 1)
+		if job then job[1]:Lay(job[2], job[3], job[4], job[5]) end
+		if not waiting[1] then self:Hide() end
+	end)
+	function painter:Forget()
+		wipe(waiting)
+		self:Hide()
+	end
+	function painter:Ask(st, size, style, grow, from)
+		if st:Shows(size, style, grow, from) then return end
+		waiting[#waiting + 1] = { st, size, style, grow, from }
+		self:Show()
+	end
+	return painter
+end
+
 -- A layout card: a thumbnail of the screen's bottom band with that layout, its name under it, "in use"
--- when the console is set up with it. The band is BAND[1] wide and BAND[2] tall in screen units, so a
--- thumbnail is BAND_SHAPE as tall as it is wide: 200 x 58 on the setup page.
--- Wide enough for the console at its grand size with both wings (470 each) and the seams, so no layout's
--- thumbnail cuts its wings off.
-P.BAND = { 1560, 348 }
-P.BAND_SHAPE = P.BAND[2] / P.BAND[1]
+-- when the console is set up with it. The band is the screen's whole width, BAND_SHAPE of that tall from its
+-- foot: chat and the meter in their corners and your frames round your character all in it.
+P.BAND_SHAPE = 0.36
 local CARD_PAD, CARD_NAME = 6, 15   -- the thumbnail's inset; the name's line
 
 function P.CardHeight(width)
@@ -621,28 +759,49 @@ function P.Card(parent, width, key, onClick, onLook, look)
 	return b
 end
 
+-- The small drawings beside the choices: each block of buttons stands in a housing of its own, a steel edge round
+-- the HUD's graphite, as the bars do on screen. HOUSED: from the buttons to the edge's outside.
+local HOUSED = 2
+
+-- A housing behind the buttons from (x, y), w x h, in f; returns its two textures.
+local function Housing(f, x, y, w, h)
+	local edge = f:CreateTexture(nil, "BACKGROUND")
+	edge:SetPoint("BOTTOMLEFT", x - HOUSED, y - HOUSED)
+	edge:SetSize(w + 2 * HOUSED, h + 2 * HOUSED)
+	UI.Paint(edge, C.border, 1)
+	local fill = f:CreateTexture(nil, "BORDER")
+	fill:SetPoint("BOTTOMLEFT", x - HOUSED + 1, y - HOUSED + 1)
+	fill:SetSize(w + 2 * HOUSED - 2, h + 2 * HOUSED - 2)
+	UI.Paint(fill, C.hud, 1)
+	return edge, fill
+end
+
 -- A small drawing of the bars of a step: three rows of twelve from the floor up, the side bars
--- beside them (the first at the right). f:Paint(have, want): what step `have` has in the text color,
--- what `want` adds in the accent, every other button an empty slot. Either may be nil.
+-- beside them (the first at the right), each block in its housing. f:Paint(have, want): what step `have` has in
+-- the text color, what `want` adds in the accent, every other button an empty slot. Either may be nil.
 function P.BarsDrawing(parent, dot, gap)
 	dot, gap = dot or 5, gap or 1
 	local f = CreateFrame("Frame", nil, parent)
 	local across = 12 * dot + 11 * gap
 	local side = 2 * dot + gap
-	local apart = dot - gap + 2
-	f:SetSize(across + 2 * (side + apart), 3 * dot + 2 * gap)
+	local tall = 3 * dot + 2 * gap
+	local apart = 2 * HOUSED + 3
+	local o = HOUSED
+	f:SetSize(across + 2 * (side + apart) + 2 * o, tall + 2 * o)
 	f.dots = {}
 	local function Dot(key, n, x, y)
 		local t = f:CreateTexture(nil, "ARTWORK")
 		t:SetSize(dot, dot)
-		t:SetPoint("BOTTOMLEFT", x, y)
+		t:SetPoint("BOTTOMLEFT", o + x, o + y)
 		f.dots[#f.dots + 1] = { t, key, n }
 	end
+	Housing(f, o + side + apart, o, across, tall)
 	for row = 1, 3 do
 		for i = 0, 11 do Dot("rows", row, side + apart + i * (dot + gap), (row - 1) * (dot + gap)) end
 	end
 	for s = 1, 2 do
 		local x = s == 1 and side + apart + across + apart or 0
+		Housing(f, o + x, o, side, tall)
 		for row = 0, 2 do
 			for i = 0, 1 do Dot("sides", s, x + i * (dot + gap), row * (dot + gap)) end
 		end
@@ -663,17 +822,29 @@ function P.BarsDrawing(parent, dot, gap)
 end
 
 -- A small drawing of where the bag buttons are. f:Paint("window"): the bags with a column of slots at
--- their side, in the accent; f:Paint("screen"): the menu's row with the bags' row under it.
+-- their side, in the accent; f:Paint("screen"): the menu's row with the bags' row under it. Each in its housing.
 function P.BagsDrawing(parent)
 	local f = CreateFrame("Frame", nil, parent)
-	f:SetSize(34, 24)
+	local o = HOUSED
+	f:SetSize(34 + 2 * o, 24)
 	f.sets = { window = {}, screen = {} }
+	f.housings = { window = {}, screen = {} }
 	local function Dot(set, x, y, w, h, lit)
 		local t = f:CreateTexture(nil, "ARTWORK")
 		t:SetSize(w, h)
-		t:SetPoint("TOPLEFT", x, -y)
+		t:SetPoint("TOPLEFT", o + x, -y)
 		table.insert(f.sets[set], { t, lit })
 	end
+	-- The housings, by their foot from the drawing's: the bags and their column; the menu's row and the bags' row.
+	local function House(set, x, top, w, h)
+		local edge, fill = Housing(f, o + x, 24 - top - h, w, h)
+		table.insert(f.housings[set], edge)
+		table.insert(f.housings[set], fill)
+	end
+	House("window", 0, 3, 23, 17)
+	House("window", 28, 3, 5, 17)
+	House("screen", 0, 3, 34, 7)
+	House("screen", 7, 13, 27, 6)
 	for row = 0, 2 do
 		for i = 0, 3 do Dot("window", i * 6, 3 + row * 6, 5, 5) end
 		Dot("window", 28, 3 + row * 6, 5, 5, true)
@@ -686,6 +857,7 @@ function P.BagsDrawing(parent)
 				d[1]:SetShown(key == where)
 				if d[2] then UI.Paint(d[1], ACCENT, 1) else UI.Paint(d[1], C.text, 0.4) end
 			end
+			for _, t in ipairs(self.housings[key]) do t:SetShown(key == where) end
 		end
 		self.where = where
 	end
@@ -693,21 +865,27 @@ function P.BagsDrawing(parent)
 end
 
 -- A small drawing of the side bars beside the bars: f:Paint(out, there), each { left =, right = }. A bar out
--- stands as its block of buttons, in the accent; one tucked away is only its pull, a line at the bars' side;
--- with no bar on that side (there) nothing stands there.
+-- stands as its block of buttons in its housing, in the accent; one tucked away is only its pull, a line at the
+-- bars' side; with no bar on that side (there) nothing stands there.
 function P.SidesDrawing(parent)
-	local dot, gap, apart = 4, 1, 4
+	local dot, gap, apart = 4, 1, 2 * HOUSED + 3
 	local rowsW, block = 10 * dot + 9 * gap, 2 * dot + gap
 	local tall = 3 * dot + 2 * gap
+	local o = HOUSED
 	local f = CreateFrame("Frame", nil, parent)
-	f:SetSize(rowsW + 2 * (block + apart), 24)
+	f:SetSize(rowsW + 2 * (block + apart) + 2 * o, 24)
 	local y = (24 - tall) / 2
-	f.rows, f.blocks, f.pulls = {}, { left = {}, right = {} }, {}
+	f.rows, f.blocks, f.pulls, f.housings = {}, { left = {}, right = {} }, {}, { left = {}, right = {} }
 	local function Dot(list, x, row)
 		local t = f:CreateTexture(nil, "ARTWORK")
 		t:SetSize(dot, dot)
-		t:SetPoint("BOTTOMLEFT", x, y + row * (dot + gap))
+		t:SetPoint("BOTTOMLEFT", o + x, y + row * (dot + gap))
 		list[#list + 1] = t
+	end
+	Housing(f, o + block + apart, y, rowsW, tall)
+	for side, x in pairs({ left = 0, right = block + apart + rowsW + apart }) do
+		local edge, fill = Housing(f, o + x, y, block, tall)
+		f.housings[side] = { edge, fill }
 	end
 	for row = 0, 2 do
 		for i = 0, 9 do Dot(f.rows, block + apart + i * (dot + gap), row) end
@@ -716,20 +894,23 @@ function P.SidesDrawing(parent)
 			Dot(f.blocks.right, block + apart + rowsW + apart + i * (dot + gap), row)
 		end
 	end
-	for side, x in pairs({ left = block + apart - 3, right = block + apart + rowsW + 1 }) do
+	-- A tucked bar's pull: astride the seam beside the bars' housing.
+	for side, x in pairs({ left = block + apart - HOUSED - 3, right = block + apart + rowsW + HOUSED + 1 }) do
 		local t = f:CreateTexture(nil, "ARTWORK")
 		t:SetSize(2, tall)
-		t:SetPoint("BOTTOMLEFT", x, y)
+		t:SetPoint("BOTTOMLEFT", o + x, y)
 		f.pulls[side] = t
 	end
 	for _, t in ipairs(f.rows) do UI.Paint(t, C.text, 0.4) end
 	function f:Paint(out, there)
 		for _, side in ipairs({ "left", "right" }) do
 			local here = there[side] and true or false
+			local shown = here and out[side] == true
 			for _, t in ipairs(self.blocks[side]) do
-				t:SetShown(here and out[side] == true)
+				t:SetShown(shown)
 				UI.Paint(t, ACCENT, 1)
 			end
+			for _, t in ipairs(self.housings[side]) do t:SetShown(shown) end
 			self.pulls[side]:SetShown(here and out[side] ~= true)
 			UI.Paint(self.pulls[side], ACCENT, 1)
 		end
@@ -926,33 +1107,10 @@ function P.Section(parent, width)
 		end
 	end
 
-	-- A drawing is some 17 ms and 450 KB to lay, and there are nine: the console's own and a card's each.
-	-- One asked for what it already shows is left as it is while only the mouse has moved (looking); the
-	-- console's own is laid at once and the cards' one a frame after it (waiting, the painter).
-	-- (from: what a drawing is planned from besides the choice: the console's inputs as its setup signs them,
-	-- L.Signatures, and the look worn. A card's drawing is left while all of it is the same, at a showing too:
-	-- laid again, the game lays the whole room out again for it.)
-	local function Shows(st, size, style, grow, from)
-		return st.shows == size .. "|" .. style .. "|" .. tostring(grow) .. "|" .. from
-	end
-	local function Draw(st, size, style, grow, from)
-		st.shows = size .. "|" .. style .. "|" .. tostring(grow) .. "|" .. from
-		st:Draw(size, style, grow)
-	end
-	local function From()
-		local ok, _, inputs = pcall(L.Signatures)
-		-- (Unreadable: never the same, so every drawing is laid.)
-		if not ok or inputs == nil then return tostring(GetTime()) end
-		return tostring(inputs) .. "|" .. tostring(Shy.Theme.Look())
-	end
-	local waiting = {}
-	local painter = CreateFrame("Frame", nil, f)
-	painter:Hide()
-	painter:SetScript("OnUpdate", function(self)
-		local job = table.remove(waiting, 1)
-		if job then Draw(job[1], job[2], job[3], job[4], job[5]) end
-		if not waiting[1] then self:Hide() end
-	end)
+	-- There are nine drawings: the console's own and a card's each (P.Painter). The console's own is laid at
+	-- once, again only where it would show something else while only the mouse has moved (looking); the cards'
+	-- one a frame after it.
+	local painter = P.Painter(f)
 
 	-- looking: asked only because the mouse rests on another choice, or on none.
 	function f:Refresh(looking)
@@ -960,17 +1118,14 @@ function P.Section(parent, width)
 		local picks = Picks()
 		local drawn = { style = picks.style, size = picks.size, grow = picks.grow }
 		if self.looking then drawn[self.looking.field] = self.looking.key end
-		local from = From()
-		if not (looking and Shows(stage, drawn.size, drawn.style, drawn.grow, from)) then Draw(stage, drawn.size, drawn.style, drawn.grow, from) end
+		local from = P.From()
+		if not (looking and stage:Shows(drawn.size, drawn.style, drawn.grow, from)) then stage:Lay(drawn.size, drawn.style, drawn.grow, from) end
 		for key, b in pairs(buttons) do b:Paint(picks.size == key, active and size == key) end
-		wipe(waiting)
+		painter:Forget()
 		for key, b in pairs(styles) do
-			if not Shows(b.stage, drawn.size, key, drawn.grow, from) then
-				waiting[#waiting + 1] = { b.stage, drawn.size, key, drawn.grow, from }
-			end
+			painter:Ask(b.stage, drawn.size, key, drawn.grow, from)
 			b:Paint(picks.style == key, active and style == key)
 		end
-		painter:SetShown(waiting[1] ~= nil)
 		grow:Refresh()
 		bars:SetText(P.BarsWords(drawn.grow))
 		local pending = Pending(picks)

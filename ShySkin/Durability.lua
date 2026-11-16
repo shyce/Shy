@@ -99,11 +99,7 @@ local function Build(parent)
 		if p.at then art[p.name]:SetPoint(p.at[1], art[p.at[2]], p.at[3], p.at[4], p.at[5]) end
 	end
 	off:SetPoint(OFF_WEAPON.at[1], art.Wrists, OFF_WEAPON.at[3], OFF_WEAPON.at[4], OFF_WEAPON.at[5])
-	local said = plate:CreateFontString(nil, "OVERLAY")
-	said:SetFontObject(UI.NameFont(SAID))
-	said:SetShadowOffset(1, -1)
-	said:SetShadowColor(0, 0, 0, 1)
-	said:SetJustifyH("CENTER")
+	local said = UI.Words(plate, UI.NameFont(SAID), nil, { justify = "CENTER" })
 	said:SetPoint("BOTTOM", plate, "BOTTOM", 0, PAD - 1)
 	plate.art, plate.off, plate.said = art, off, said
 

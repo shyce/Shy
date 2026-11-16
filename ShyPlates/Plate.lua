@@ -88,13 +88,7 @@ function P.MeasureDigit()
 end
 
 local function Text(parent, size, justify)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(P.Font(size))
-	fs:SetShadowColor(0, 0, 0, 1)
-	fs:SetShadowOffset(0.8, -0.8)
-	fs:SetWordWrap(false)
-	fs:SetJustifyH(justify or "CENTER")
-	return fs
+	return UI.Words(parent, P.Font(size), nil, { world = true, wrap = false, justify = justify or "CENTER" })
 end
 P.Text = Text
 

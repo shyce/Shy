@@ -200,14 +200,7 @@ local function Rows(def)
 end
 
 local function Words(parent, font)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(font)
-	UI.Follow(fs)   -- a title keeps up with the theme's font
-	fs:SetShadowOffset(1, -1)
-	fs:SetShadowColor(0, 0, 0, 1)
-	fs:SetWordWrap(false)
-	fs:SetJustifyH("LEFT")
-	return fs
+	return UI.Words(parent, font, nil, { wrap = false })
 end
 
 -- A width the string needs, or `none` where the game keeps it secret.

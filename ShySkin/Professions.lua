@@ -129,8 +129,8 @@ local SIDE = { side = "LEFT", reach = TAB.w }
 -- The game's tooltip for a piece of the window, at its picture's top right corner.
 local function TipAt(piece) return UI.GameTipAt(piece, piece.icon) end
 
--- The room the recipe has now: the window flows, so what is measured is laid at its width.
-local function Wide() return math.floor(own.box:GetWidth() - L.detail - L.right) end
+-- The room the recipe has now: the window flows, so what is measured is laid at its body's width (UI.Body).
+local function Wide() return math.floor(UI.BodySize(own.box) - L.detail - L.right) end
 
 local function Text(parent, font, color)
 	return Shop.Text(parent, font, color)
@@ -845,8 +845,9 @@ local function SetRibbon(rb, id, learnedAt, skill, wide)
 end
 
 local function BuildCraft(box)
+	-- Everything under the header stands on the window's body: clear of the look's work round the edge (UI.Body).
 	local craft = CreateFrame("Frame", nil, box)
-	craft:SetAllPoints()
+	craft:SetAllPoints(UI.Body(box))
 	own.craft = craft
 	own.rows, own.heads, own.reagents, own.needs, own.lines = {}, {}, {}, {}, {}
 
@@ -1335,8 +1336,9 @@ local function Build()
 	close:SetFrameLevel(box.head:GetFrameLevel() + 10)
 	own.close = close
 
+	-- On the window's body, as the craft is: clear of the look's work round the edge (UI.Body).
 	own.book = CreateFrame("Frame", nil, box)
-	own.book:SetAllPoints()
+	own.book:SetAllPoints(UI.Body(box))
 	local inner = L.w - 2 * L.pad
 	own.cards = {
 		Card("p1", inner, L.pane), Card("p2", inner, L.pane),
@@ -1353,10 +1355,10 @@ local function Build()
 	own.cards[2]:SetPoint("TOPLEFT", own.cards[1], "BOTTOMLEFT", 0, -L.cardGap)
 	own.cards[2]:SetPoint("TOPRIGHT", own.cards[1], "BOTTOMRIGHT", 0, -L.cardGap)
 	own.cards[3]:SetPoint("TOPLEFT", own.cards[2], "BOTTOMLEFT", 0, -L.cardGap)
-	own.cards[3]:SetPoint("BOTTOM", box, "BOTTOM", 0, L.pad)
+	own.cards[3]:SetPoint("BOTTOM", own.book, "BOTTOM", 0, L.pad)
 	for i = 4, 5 do
 		own.cards[i]:SetPoint("TOPLEFT", own.cards[i - 1], "TOPRIGHT", L.cardGap, 0)
-		own.cards[i]:SetPoint("BOTTOM", box, "BOTTOM", 0, L.pad)
+		own.cards[i]:SetPoint("BOTTOM", own.book, "BOTTOM", 0, L.pad)
 	end
 
 	BuildCraft(box)
@@ -1436,7 +1438,7 @@ end
 local function DrawBook()
 	local list = Yours()
 	-- The three small cards share the window's width (it flows).
-	local small = math.floor((own.box:GetWidth() - 2 * L.pad - 2 * L.cardGap) / 3)
+	local small = math.floor((UI.BodySize(own.box) - 2 * L.pad - 2 * L.cardGap) / 3)
 	for i = 3, 5 do
 		if Free(own.cards[i]) then own.cards[i]:SetWidth(small) end
 	end
@@ -1908,7 +1910,7 @@ local function DrawRecipe()
 	own.itemKick:SetPoint("RIGHT", d, "RIGHT")
 	own.itemKick:Say(WORDS.makes)
 	local ly = 8
-	local room = (own.box:GetHeight() - L.top - L.pad - L.foot - 8) - y - 30
+	local room = (select(2, UI.BodySize(own.box)) - L.top - L.pad - L.foot - 8) - y - 30
 	local inner = Wide() - 20   -- the box's width inside its padding
 	for i = 2, #lines do
 		local line = lines[i]
@@ -2030,8 +2032,8 @@ local function DrawStage()
 		own.paint:SetAtlas(atlas)
 		own.paint:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0.7), CreateColor(1, 1, 1, 0))
 		-- Cover the stage: the window's room less the list and the band, at the painting's own proportions.
-		local w = own.box:GetWidth() - (L.pad + L.list + L.gap / 2 + 1) - 2
-		local h = own.box:GetHeight() - (L.head0 + L.band) - 2
+		local w = UI.BodySize(own.box) - (L.pad + L.list + L.gap / 2 + 1) - 2
+		local h = select(2, UI.BodySize(own.box)) - (L.head0 + L.band) - 2
 		local aw, ah = info.width or 0, info.height or 0
 		if aw > 0 and ah > 0 then
 			local k = math.max(w / aw, h / ah)

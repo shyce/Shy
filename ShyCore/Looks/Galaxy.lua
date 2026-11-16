@@ -490,6 +490,8 @@ UI.LookKind("galaxy", {
 	content = M.CLEAR,
 	text = "shadow",   -- words are set off from the sky behind them while no text effect is picked
 	face = { "galaxyNeb", "galaxySkyKey", "galaxyFar", "galaxyNear", "galaxyGlass", "galaxyGlint", "galaxyStreak" },
+	-- A chat bubble's tail (UI.LookTail): the mini rim at its weight running on round it.
+	tail = function(h) return "Galaxy" .. Weight(h)[1], { { layer = "Edge", color = WHITE } } end,
 	edge = { "galaxyHalo", "galaxyDepth", "galaxyBezel" },
 	behind = { "galaxyHalo" },
 	bar = "galaxy",

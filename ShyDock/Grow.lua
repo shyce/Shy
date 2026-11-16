@@ -63,17 +63,20 @@ local function Build()
 	card:EnableMouse(true)   -- so clicks don't fall through to the world
 	card:Hide()
 	UI.Head(card, { title = "More room" })
+	-- What it says stands on its body: clear of the look's work round the edge, the card that much bigger (UI.Body).
+	local body = UI.Body(card)
+	UI.BodyFit(card, W, H)
 	-- What is on in the text color, what would come in the accent.
-	card.drawing = ns.Preview.BarsDrawing(card, 5, 1)
+	card.drawing = ns.Preview.BarsDrawing(body, 5, 1)
 	card.drawing:SetPoint("TOPLEFT", 12, -32)
-	card.words = UI.Text(card, "", 12)
+	card.words = UI.Text(body, "", 12)
 	card.words:SetPoint("TOPLEFT", card.drawing, "TOPRIGHT", 14, 2)
 	card.words:SetWidth(W - 14 - card.drawing:GetWidth() - 14 - 10)
 	card.words:SetWordWrap(true)
-	local later = UI.Text(card, "Turn this off in /shydock.", 10, false, C.dim)
+	local later = UI.Text(body, "Turn this off in /shydock.", 10, false, C.dim)
 	later:SetPoint("BOTTOMLEFT", 10, 14)
 
-	card.add = UI.Button(card, "Add bars", 96, function()
+	card.add = UI.Button(body, "Add bars", 96, function()
 		if InCombatLockdown() then return end
 		local need = card.need
 		ns.char.asked = math.max(ns.char.asked or 0, need)
@@ -82,7 +85,7 @@ local function Build()
 	end)
 	card.add:SetPoint("BOTTOMRIGHT", -8, 8)
 	UI.SetFill(card.add, C.fill)
-	card.later = UI.Button(card, "Not now", 76, function()
+	card.later = UI.Button(body, "Not now", 76, function()
 		-- Asked again only when a later step is needed.
 		ns.char.asked = math.max(ns.char.asked or 0, card.need or 0)
 		G.Hide()

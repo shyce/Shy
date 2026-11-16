@@ -48,21 +48,23 @@ local function Make()
 		grip = { flow = true, min = L.least },
 		strata = "HIGH",
 		maximize = true,
-		head = { size = "window", icon = T.smallIcon, title = "Map" },
+		head = { size = "window", icon = T.mark, title = "Map" },
 	})
+	-- Everything under the header stands on the body: clear of the look's work round the edge (UI.Body).
+	local body = UI.Body(box)
 	-- The strip: the breadcrumb at its left, the bar at its right (Nav.lua, Controls.lua), dark as the game's.
 	strip = CreateFrame("Frame", nil, box)
-	strip:SetPoint("TOPLEFT", box, "TOPLEFT", L.pad, -L.head)
-	strip:SetPoint("TOPRIGHT", box, "TOPRIGHT", -L.reach, -L.head)
+	strip:SetPoint("TOPLEFT", body, "TOPLEFT", L.pad, -L.head)
+	strip:SetPoint("TOPRIGHT", body, "TOPRIGHT", -L.reach, -L.head)
 	strip:SetHeight(L.strip)
 	local band = box:CreateTexture(nil, "BACKGROUND", nil, 2)
 	band:SetPoint("TOPLEFT", strip, "TOPLEFT", 0, 0)
-	band:SetPoint("BOTTOMRIGHT", box, "TOPRIGHT", -L.pad, -L.head - L.strip)
+	band:SetPoint("BOTTOMRIGHT", body, "TOPRIGHT", -L.pad, -L.head - L.strip)
 	band:SetColorTexture(0, 0, 0, 0.85)
 	-- The map's menu, where the game's filter stands on its own window: a plate as the bar's buttons are.
 	local plate = CreateFrame("Frame", nil, box)
 	plate:SetSize(L.menu, L.menu)
-	plate:SetPoint("TOPRIGHT", box, "TOPRIGHT", -L.pad - 6, -L.head - L.line)
+	plate:SetPoint("TOPRIGHT", body, "TOPRIGHT", -L.pad - 6, -L.head - L.line)
 	plate:SetFrameLevel(View.Level("PIN_FRAME_LEVEL_TOPMOST") + 200)
 	UI.Skin(plate, C.bgHot)
 	local menu = CreateFrame("Button", nil, plate)
@@ -78,8 +80,8 @@ local function Make()
 	menu:SetScript("OnLeave", function(self) UI.TipHide(self) end)
 	-- The well: the map, under the strip to the window's foot.
 	well = CreateFrame("Frame", nil, box)
-	well:SetPoint("TOPLEFT", box, "TOPLEFT", L.pad, -L.head - L.strip)
-	well:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -L.pad, L.pad)
+	well:SetPoint("TOPLEFT", body, "TOPLEFT", L.pad, -L.head - L.strip)
+	well:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -L.pad, L.pad)
 	box:HookScript("OnShow", function() View.Host({ box = box, well = well, strip = strip }) end)
 	box:HookScript("OnHide", function() View.Host(nil) end)
 	return box

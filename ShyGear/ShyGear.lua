@@ -13,9 +13,9 @@ local MEDIA = "Interface\\AddOns\\ShyGear\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Gear",
+	category = "items",
 	icon = MEDIA .. "ShyGear",
 	smallIcon = MEDIA .. "ShyGearSmall",
-	tagline = "Marks gear upgrades and picks quest rewards",
 	savedVariables = "ShyGearDB",
 	defaults = {
 		lean = "balanced",   -- damage | balanced | tough

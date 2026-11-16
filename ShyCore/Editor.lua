@@ -88,6 +88,15 @@ local function Build()
 			if piece and v ~= Size() then Act.SetScale(piece, Act.Base(piece) * v / 100) end
 		end })
 	panel.size:SetPoint("TOPLEFT", PAD, y)
+	-- A piece that can be switched off (its box's `switch`): on or off, first.
+	panel.on = group:Checkbox(panel, "On",
+		function() return piece ~= nil and piece.switch ~= nil and piece.switch.get() == true end,
+		function(on)
+			if not (piece and piece.switch) then return end
+			piece.switch.set(on)
+			HUD.Switched(piece)
+		end,
+		{ desc = "Off, it doesn't show at all, and shows grey here." })
 	panel.lock = group:Checkbox(panel, "Lock in place",
 		function() return piece ~= nil and Act.IsLocked(piece) end,
 		function(on) if piece then Act.Lock(piece, on) end end,
@@ -111,9 +120,10 @@ end
 -- Lays the panel out for `piece`: only what applies to it.
 local function Fill()
 	local y = -(UI.HEAD_STRIP + 10)
+	-- (on its body: clear of the look's work round the edge, UI.Body)
 	local function Put(widget, height)
 		widget:ClearAllPoints()
-		widget:SetPoint("TOPLEFT", PAD, y)
+		widget:SetPoint("TOPLEFT", UI.Body(panel), "TOPLEFT", PAD, y)
 		widget:Show()
 		y = y - height - GAP
 	end
@@ -123,6 +133,8 @@ local function Fill()
 		Act.Outline(nil)
 	end
 	-- A piece with sizes of its own (ownSize) lays its own Size control in `panel`.
+	panel.on:SetShown(piece.switch ~= nil)
+	if piece.switch then Put(panel.on, 20) end
 	local sized = Act.Scalable(piece) and not piece.ownSize
 	panel.size:SetShown(sized)
 	if sized then Put(panel.size, 38) end
@@ -149,28 +161,44 @@ local function Fill()
 			panel.edit:SetPoint("LEFT", panel.more, "RIGHT", GAP, 0)
 		end
 	end
-	panel:SetHeight(-y + PAD - GAP)
+	UI.BodyFit(panel, WIDTH, -y + PAD - GAP)
 	group:Refresh()
 	Stand()
 end
 
 -- Picked (a left click, or by arrow keys): the panel follows the pick while it is open; nothing picked
--- closes it. Opened (a right click): the panel shows for the piece.
+-- closes it. Opened (a right click): the panel shows for the piece. A piece picked up and dragged isn't a
+-- pick to show: the panel it followed to closes as the drag starts (`followed`), and stays for the one it was
+-- opened on.
+local followed = false   -- the panel's piece is the last one picked, not the one it was opened on
 function HUD.OnSelect(box)
 	piece = box
 	if not box then
 		if panel then panel:Hide() end
 		return
 	end
-	if panel and panel:IsShown() then Fill() end
+	if panel and panel:IsShown() then
+		followed = true
+		Fill()
+	end
 end
 
 function HUD.OnOpen(box)
 	piece = box
+	followed = false
 	if not panel then Build() end
 	Fill()
 	panel:Show()
 end
+
+-- A switch's setting changed elsewhere (its addon's options): the panel's "On" follows.
+Shy:On("SHY_SWITCH", function(id)
+	if panel and panel:IsShown() and piece and (id == nil or piece.id == id) then group:Refresh() end
+end)
+
+Shy:On("SHY_HUD_MOVING", function(box)
+	if panel and panel:IsShown() and box == piece and followed then panel:Hide() end
+end)
 
 Shy:On("SHY_HUD_MOVED", function(box)
 	if panel and panel:IsShown() and box == piece then

@@ -36,10 +36,7 @@ local function Pieces(frame, w, h, rim)
 	edge:SetTextureSliceMargins(L.EDGE_SLICE, L.EDGE_SLICE, L.EDGE_SLICE, L.EDGE_SLICE)
 	edge:SetVertexColor(rim[1], rim[2], rim[3])
 	local function Label(size, point, x, y)
-		local fs = over:CreateFontString(nil, "OVERLAY")
-		fs:SetFontObject(UI.NameFont(size, "OUTLINE"))
-		fs:SetShadowColor(0, 0, 0, 1)
-		fs:SetShadowOffset(0.8, -0.8)
+		local fs = UI.Words(over, UI.NameFont(size, "OUTLINE"), nil, { world = true, justify = "CENTER" })
 		fs:SetPoint(point, x, y)
 		return fs
 	end

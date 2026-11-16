@@ -160,6 +160,7 @@ function O.Build(parent, width, plan)
 		end
 		y = y - P.CardHeight(cardW) - GAP
 	end
+	local painter = P.Painter(f)
 
 	-- Under the cards, a row each: the size, the bars, the menu. The cards are the drawing: a big one over
 	-- them would be too much and take the page's height.
@@ -310,8 +311,14 @@ function O.Build(parent, width, plan)
 		local bars = grow and true or "all"
 		-- The bag buttons where the choice puts them; pointed at, the drawer out and the bags open to show them.
 		local where = bagWords and (lookingBags or pick.bags) or nil
+		-- (Each card laid again only where it would show something else, one a frame: a layout pointed at changes
+		-- none of them, a size pointed at all.)
+		local from = P.From(Look())
+		painter:Forget()
+		for _, row in ipairs(P.STYLE_ROWS) do
+			for _, key in ipairs(row[2]) do painter:Ask(cards[key].stage, shown, key, bars, from) end
+		end
 		for key, card in pairs(cards) do
-			card.stage:Draw(shown, key, bars)
 			card:Paint(pick.on and pick.style == key, active and inUse == key, not pick.on)
 		end
 		for key, chip in pairs(chips) do
@@ -328,8 +335,11 @@ function O.Build(parent, width, plan)
 		local shownOut = { left = out.left ~= false, right = out.right ~= false }
 		if lookingSide then shownOut[lookingSide.side] = lookingSide.out end
 		local there = SidesThere({ size = shown, style = style, grow = grow })
+		-- A layout that reveals its bars (the minimal one) has the side bars show with the others: no choice here.
+		local role = ns.Console.ROLE[style]
+		local revealed = role ~= nil and role.reveal == true
 		for _, side in ipairs(SIDES) do
-			local here = pick.on and there[side.key]
+			local here = pick.on and there[side.key] and not revealed
 			for i, chip in ipairs(sideChips[side.key]) do
 				chip:Paint(pick.on and (out[side.key] ~= false) == OUT[i].key)
 				chip:SetAlpha(here and 1 or 0.4)
@@ -338,7 +348,8 @@ function O.Build(parent, width, plan)
 		end
 		sideDrawing:Paint(shownOut, there)
 		sideDrawing:SetAlpha(pick.on and 1 or 0.5)
-		sideWords:SetText(pick.on and SideWords(shownOut, there) or "Your side bars stay as they are.")
+		sideWords:SetText((not pick.on and "Your side bars stay as they are.")
+			or (revealed and "They show with your other bars while you point at them.") or SideWords(shownOut, there))
 		if bagWords then
 			for i, chip in ipairs(bagChips) do
 				chip:Paint(pick.on and pick.bags == BAGS[i].key)
@@ -453,9 +464,9 @@ function O.Wear(plan)
 end
 
 S.Step({
-	id = "screen", order = 20, title = "Layout", glyph = "window",
-	ask = "Pick a layout",
-	lead = "A layout and size for the console. The drawing shows your screen once it's set up.",
+	id = "screen", order = 20, title = "Screen", glyph = "window",
+	ask = "How do you want your screen laid out?",
+	lead = "Pick a layout and a size for your bars and chat. The picture shows how your screen will look.",
 	brief = function(plan)
 		local pick = plan.screen
 		if not pick.on then return "As it is" end

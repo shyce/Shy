@@ -256,7 +256,7 @@ local function Figures(sums, isMe)
 	local each = math.floor((w - 2 * L.figGap) / 3)
 	for i, f in ipairs(P.figures) do
 		f:ClearAllPoints()
-		f:SetPoint("TOPLEFT", win, "TOPLEFT", L.edge + (i - 1) * (each + L.figGap), -L.top)
+		f:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", L.edge + (i - 1) * (each + L.figGap), -L.top)
 		f:SetWidth(each)
 		f.rule:SetShown(i > 1)
 	end
@@ -331,24 +331,30 @@ local function Lay()
 	local tall = math.max(L.row * 2, math.min(y, L.most * L.row))
 	P.list.content:SetSize(width, math.max(1, y))
 	P.list:ClearAllPoints()
-	P.list:SetPoint("TOPLEFT", win, "TOPLEFT", L.edge, -listTop)
+	P.list:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", L.edge, -listTop)
 	P.list:SetSize(width, tall)
 	P.list:Update()
 	P.none:ClearAllPoints()
-	P.none:SetPoint("TOPLEFT", win, "TOPLEFT", L.edge + 4, -(listTop + 8))
+	P.none:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", L.edge + 4, -(listTop + 8))
 	-- The foot.
 	local at = Shy.addons.Auction
 	local open = isMe and ns.Auctions.IsOpen() and at and at.Show
 	P.foot:ClearAllPoints()
-	P.foot:SetPoint("TOPLEFT", win, "TOPLEFT", L.edge, -(listTop + tall + 6))
+	P.foot:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", L.edge, -(listTop + tall + 6))
 	P.foot:SetSize(width, L.foot)
 	P.seen:SetText(isMe and ns.Auctions.IsOpen() and WORDS.live or (c.auctions and c.auctions.at and WORDS.seen:format(ns.Ago(c.auctions.at)) or ""))
 	P.go:SetShown(open and true or false)
 	P.hint:SetShown(not open and isMe and c.auctions ~= nil)
 	local W, H = L.w, listTop + tall + 6 + L.foot + L.edge
-	Shy.HUD.Resize(box, W, H)
-	win:SetSize(W, H)
+	-- Its content on its body (UI.Body), the window that much bigger than it.
+	UI.BodyFit(win, W, H)
+	Shy.HUD.Resize(box, win:GetWidth(), win:GetHeight())
 end
+
+-- The look keeps another clearance round the body (UI.Body): laid out again, the window that much bigger.
+Shy:On("SHY_BODY", function(f)
+	if f == win then AuctionWindow.Refresh() end
+end)
 
 function AuctionWindow.Refresh()
 	if not win or building then return end

@@ -39,8 +39,9 @@ function W.Box() return box end
 function W.Page() return current end
 
 local function Body()
-	local width = math.floor((box and box:GetWidth()) or L.w)
-	local height = math.floor((box and box:GetHeight()) or L.h)
+	local w, h = L.w, L.h
+	if box then w, h = UI.BodySize(box) end   -- (its body's: clear of its look's work round the edge, UI.Body)
+	local width, height = math.floor(w), math.floor(h)
 	if issecretvalue(width) or width <= 0 then width = L.w end
 	if issecretvalue(height) or height <= 0 then height = L.h end
 	return width, height - W.Top() - L.foot
@@ -103,7 +104,7 @@ local function Build()
 		id = "shyauction", title = "Auction house", width = L.w, height = L.h,
 		point = { "TOPLEFT", "TOPLEFT", 16, -116 },
 		shown = function() return T.db.window == true end,
-		head = { size = "window", title = "Auction House", icon = T.smallIcon or T.icon,
+		head = { size = "window", title = "Auction House", icon = T.mark,
 			tabs = { labels, function(i) Show(pages[i].key) end } },
 		grip = { flow = function() W.Stale() end, min = { L.least[1], L.least[2] } },
 		-- (Closed by its ×: the auction house closes, as the game's own window does it.)
@@ -111,14 +112,16 @@ local function Build()
 	})
 	box:SetParent(AuctionHouseFrame)
 	tabs = box.head.tabs
+	-- Its pages and foot stand on its body: clear of its look's work round the edge (UI.Body).
+	local body = UI.Body(box)
 	for _, def in ipairs(pages) do
-		local frame = CreateFrame("Frame", nil, box)
+		local frame = CreateFrame("Frame", nil, body)
 		frame:SetPoint("TOPLEFT", 0, -W.Top())
 		frame:SetPoint("BOTTOMRIGHT", 0, L.foot)
 		frame:Hide()
 		def.frame = frame
 	end
-	if ns.Foot then ns.Foot.Build(box, L.foot) end
+	if ns.Foot then ns.Foot.Build(body, L.foot) end
 	current = byKey[T.db.page] and T.db.page or pages[1].key
 end
 

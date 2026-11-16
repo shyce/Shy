@@ -42,16 +42,18 @@ function Shy.WriteMenu(root, done)
 	end
 	-- The setup window first, on its own: the quick way back to every choice made in it.
 	if Shy.Setup then
-		root:CreateButton(B.Icon(Shy.SMALL_ICON, 16) .. " Set up", Then(function() Shy.Setup.Open() end))
+		root:CreateButton("Set up", Then(function() Shy.Setup.Open() end)):SetIcon({ Theme.MarkArt(Shy.MEDIA .. "SetupMark", UI.MENU_ROW.icon) })
 		root:CreateDivider()
 	end
 	-- (ShyMonitor loads as it is first asked for.)
 	local fresh = Shy.Errors and Shy.Errors.Fresh() or 0
-	local monitor = root:CreateButton(B.Icon("Interface\\AddOns\\ShyMonitor\\Media\\ShyMonitorSmall", 16) .. " Task manager", Then(function() Shy.Monitor() end))
+	local monitor = root:CreateButton("Task manager", Then(function() Shy.Monitor() end))
+	monitor:SetIcon({ Theme.MarkArt("Interface\\AddOns\\ShyMonitor\\Media\\ShyMonitorMark", UI.MENU_ROW.icon) })
 	if fresh > 0 then monitor:SetDetail(Shy.UI.Wrap(Shy.UI.colors.alert, fresh == 1 and "1 error" or (fresh .. " errors"))) end
-	root:CreateButton(B.Icon(Shy.SMALL_ICON, 16) .. " Open /shy", Then(OpenHub))
+	root:CreateButton("Open /shy", Then(OpenHub)):SetIcon({ Theme.MarkArt(Shy.core.mark, UI.MENU_ROW.icon) })
 	-- Edit Mode, dressed as Shy's layout editor, opens from a secure row.
-	local layout = root:CreateButton(B.Icon(Shy.SMALL_ICON, 16) .. " Layout mode")
+	local layout = root:CreateButton("Layout mode")
+	layout:SetIcon({ Theme.MarkArt(Shy.MEDIA .. "LayoutMark", UI.MENU_ROW.icon) })
 	layout:SetSecure({ type = "macro", macrotext = SLASH_EDITMODE1 }, done)
 
 	local byAddon, loose = Folded()
@@ -76,13 +78,15 @@ function Shy.WriteMenu(root, done)
 		end
 	end
 
+	-- The addons with something to open, under their categories, by name (as the /shy window lists them).
 	root:CreateDivider()
-	root:CreateTitle("Addons")
-	for _, a in ipairs(Shy.order) do
-		if not a.internal and (a.options or a.OpenWindow) then
-			local entry = root:CreateButton(B.Icon(a.smallIcon, 16) .. " " .. B.Name(a.suffix), Then(function()
+	for _, group in ipairs(Shy.Listed(function(a) return a.options or a.OpenWindow end)) do
+		root:CreateTitle(group.title)
+		for _, a in ipairs(group.addons) do
+			local entry = root:CreateButton(a.suffix, Then(function()
 				if a.OpenWindow then a:OpenWindow() else a:OpenOptions() end
 			end))
+			entry:SetIcon({ Theme.MarkArt(a.mark, UI.MENU_ROW.icon) })
 			local folded = byAddon[a]
 			if folded and (folded.unread or 0) > 0 then entry:SetDetail(Shy.UI.Wrap(Shy.UI.colors.alert, tostring(folded.unread) .. " new")) end
 		end

@@ -26,7 +26,8 @@
 --   center    DPS and levelling: your frame and your target's at about 290 either side, three bars
 --   healer    the party or raid in the middle under your character, your frames out to the sides
 --   tank      the threat meter a tall panel beside your target, your target's target over it
---   minimal   everything pulled in round your character and smaller; bars 2 and 3 and the meter only in a fight
+--   minimal   everything pulled in round your character and smaller; the main bar alone on the floor, bars 2 and 3
+--             over it and the side bars beside them showing while you point there (Drawers.lua), the meter in a fight
 -- Where each of their pieces stands is Parts.lua's (P.Role): one plan the game's layout, the live homes
 -- (Arrange.lua, ShyFrames through Dock:UnitHomes) and every drawing read.
 --
@@ -110,7 +111,10 @@ C.STYLE = "console"
 --             column this wide beside your frames, whatever the group's place and width, which are the raid's
 --             then (Parts.lua, out.partyAt). Every role with a column has it: one rule, one width.
 --   chat      the corners' height (chat and the meter alike: mirrors)
---   combat    the bars and the meter that show only in a fight (the minimal layout)
+--   combat    the meter shows only in a fight (the minimal layout)
+--   order     the bars from the floor up, when it is to be another than C.ORDER
+--   reveal    every bar but the main one shows only while you point at the bars (Drawers.lua): faded, never
+--             hidden, so their keys work all the while
 C.ROLE = {
 	center = { bars = -249, unitX = 290, unitY = -150, small = "beside", chat = 190,
 		threat = { under = "targettarget", w = 200, rows = 4 },
@@ -124,7 +128,7 @@ C.ROLE = {
 	minimal = { bars = -244, unitX = 230, unitY = -170, small = "over", chat = 150,
 		threat = { under = "target", w = 190, rows = 2 },
 		group = { x = -470, y = -90, w = 200, h = 260, near = 165, party = "column", raid = "SeparateGroupsHorizontal" },
-		combat = true },
+		combat = true, order = { "main", "bar2", "bar3" }, reveal = true },
 }
 C.ROLE_BASE, C.ROLE_LEAST = 1080, 0.85   -- the board's screen height; the least its middle offsets shrink to
 -- How much the board's offsets anchored to the middle grow on a screen `height` tall.
@@ -506,7 +510,7 @@ function C.Build(want)
 	g.floor = (want.under or 0) + C.SHELF
 	g.under = 0
 	local on = { main = true, bar2 = want.bar2, bar3 = want.bar3 }
-	local sequence = want.order or C.ORDER
+	local sequence = want.order or (role and role.order) or C.ORDER
 	if style == "stack" then
 		on.right, on.left = want.rackRight, want.rackLeft
 		sequence = want.order or C.STACK_ORDER
@@ -568,6 +572,13 @@ function C.Build(want)
 	if C.CORNERS[style] then
 		Corners(want, g, size)
 		if C.RACKED[style] then Flanks(want, g) elseif style == "open" then Shelves(want, g) else Stacked(want, g) end
+		-- What lies under the floor spans what always stands across it: in a layout that reveals its side bars
+		-- only while you point at them (the minimal one), the main bar's housing alone.
+		if role and role.reveal then
+			g.span = { left = g.housing.left, right = g.housing.right }
+		else
+			g.span = { left = g.left, right = g.right }
+		end
 		return g
 	end
 
@@ -634,5 +645,6 @@ function C.Build(want)
 
 	-- Deck beside the console's left end when the screen is wide enough; else on the chat roof (Arrange.lua).
 	g.deck = { left = g.left - C.SEAM - C.DECK, beside = g.left - C.SEAM - C.DECK >= -want.screen / 2 }
+	g.span = { left = g.left, right = g.right }
 	return g
 end

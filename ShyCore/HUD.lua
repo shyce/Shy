@@ -24,6 +24,15 @@
 --                                                    -- and a caret down while on, turned onward while off
 --           onText = "Just what's next",              -- optional: two or three words for what a click does
 --           offText = "The whole guide" },            -- while on / off, when it isn't plain show / hide
+--       switch = { get = function() return on end,  -- optional: it can be switched off. Its layout panel has an
+--           set = function(on) end,                  -- "On" box (Editor.lua); off, it shows grey in layout mode
+--           hint = "Hold Shift on a target." },      -- with `hint`, a few words on what it does and when. Whoever
+--                                                    -- changes the setting behind it elsewhere (an options page)
+--                                                    -- says so on the bus: "SHY_SWITCH" (id)
+--       label = "TOP",                               -- optional: its name in layout mode at its top, not its middle
+--                                                    -- (a piece another's mover stands in the middle of)
+--       grey = function() return words end,         -- optional: while it gives words, it shows grey in layout
+--                                                    -- mode with them under its name (it stands in for something)
 --       docked = function(box, on) end,             -- optional: taken into or out of a column of boxes;
 --                                                    -- docked, a box hides its own panel art
 --       fit = function(box, width, own) end,        -- optional: can be given another width (HUD.Fit); own:
@@ -53,6 +62,8 @@
 --   box.panel = function(panel, Put, group, width) end   -- adds the box's own controls to the editor's panel
 --                                                        -- (Editor.lua): build once, Put(widget, height) each time
 --   Shy.HUD.Update(box)                 -- re-check `shown`
+--   Shy.HUD.Switched(box)               -- its `switch` was turned: says so on the bus ("SHY_SWITCH"), and its look
+--                                       -- in layout mode and its panel follow, as they do whoever says it
 --   Shy.HUD.Resize(box, w, h)           -- new size; a `hang` box keeps its top edge (room allowing)
 --   Shy.HUD.Folded(box, on)             -- folded away to its header (UI.FoldHead): no size to drag it to, so
 --                                       -- its corner and sides offer none while it is (bus "SHY_HUD_FOLDED")
@@ -100,6 +111,8 @@
 --       plain = true,                                -- optional: anchor with SetPointBase (see Anchor)
 --       scale = true,                                -- optional: layout mode may resize it
 --       mover = false,                               -- optional: no mover in layout mode
+--       ghost = true,                                -- optional: its mover shows while the game hides the frame
+--                                                    -- (a cast bar), over any piece it stands within
 --   })
 --   Shy.HUD.Apply(box)                  -- after `active` changes
 --   Shy.HUD.Adopted(frame)              -- the box a Blizzard frame was adopted as, or nil
@@ -136,6 +149,8 @@
 --
 -- Bus: "SHY_HUD_LAYOUT" (on) as layout mode opens and closes; "SHY_HUD_MOVING" / "SHY_HUD_MOVED" (box)
 -- as a drag or resize starts and ends; "SHY_HUD_RESIZED" (box) from HUD.Resize, when the size changed;
+-- "SHY_HUD_STILL" (box) when a box becomes still (built into another piece) or free again: what draws its place in
+-- Edit Mode (ShySkin) shows or hides it.
 -- "SHY_HUD_SCALED" (box) whenever a box's scale is set (what is drawn in whole screen pixels fits again);
 -- "SHY_HUD_COVERED" (on) as the world map takes the whole screen and gives it back (HUD.IsCovered()).
 
@@ -155,6 +170,7 @@ local selected             -- the box arrow keys nudge
 local waiting = {}         -- secure boxes with changes to apply after combat
 local Follow               -- places again what is docked to a box (Docking, below)
 local Rect                 -- a box's rectangle in UIParent units (Dragging with snapping, below)
+local MoverShown           -- whether a box's mover shows (Boxes, below)
 local GRID, SNAP = 16, 8
 local SEAM = 4             -- the gap two pieces keep: a dragged box snaps this far off another's side
 local SEAT = 24            -- a box let go of this near its home goes home
@@ -439,6 +455,8 @@ function HUD.Update(box)
 	local show = (unlocked and not box.window and not away) or box.shownFn()
 	-- Under the world map at full screen nothing of the HUD shows; a window is its player's to open.
 	if covered and not box.window then show = false end
+	-- Its mover follows the same rule (`away` can change while layout mode is open).
+	if box.mover and unlocked then box.mover:SetShown(MoverShown(box)) end
 	if not box.secure then
 		box:SetShown(show)
 	elseif InCombatLockdown() then
@@ -815,6 +833,7 @@ local SHADE = { idle = 0.42, hover = 0.34, picked = 0.46 }   -- the flat shade u
 local GLASS = { idle = 0.55, hover = 0.5, picked = 0.6 }     -- the glass over it
 local WASH = { idle = 0.06, hover = 0.18, picked = 0.08 }    -- the accent in it
 local BAND_H, BAND_PAD = 18, 10   -- the chip under the name
+local LABEL_IN = 6                -- a name at its piece's top (`label = "TOP"`): this far in
 local RAISE = 20                  -- frame levels a hovered or picked mover rises
 
 function HUD.Overlay(frame, opts)
@@ -849,25 +868,40 @@ function HUD.Overlay(frame, opts)
 		o.label:SetPoint("CENTER")
 		o.label:SetWordWrap(false)
 	end
+	o.frame = frame
 	o:Look("idle")
 	return o
 end
 
-function Overlay:Look(state)
+-- `off`: the piece is switched off (a box's `switch`) or stands in for something that isn't there (`grey`): grey
+-- all through, the accent gone, and under its name `hint`, a few words on what it would do.
+function Overlay:Look(state, off, hint)
 	local gold = state == "picked"
-	local edge = gold and UI.colors.alert or UI.colors.hot
+	local edge = gold and UI.colors.alert or (off and UI.colors.border or UI.colors.hot)
 	Theme.Paint(self.shade, UI.colors.panel, SHADE[state] or SHADE.idle)
 	Theme.Tint(self.glass, UI.colors.panel, GLASS[state] or GLASS.idle)
-	Theme.Paint(self.wash, gold and UI.colors.alert or Theme.Accent, WASH[state] or WASH.idle)
-	Theme.Tint(self.edge, edge, state == "idle" and 0.6 or 1)
+	Theme.Paint(self.wash, gold and UI.colors.alert or Theme.Accent, off and 0 or (WASH[state] or WASH.idle))
+	Theme.Tint(self.edge, edge, (state == "idle" or off) and 0.6 or 1)
 	if self.label then
-		Theme.Ink(self.label, gold and UI.colors.alert or UI.colors.text)
+		Theme.Ink(self.label, gold and UI.colors.alert or (off and UI.colors.dim or UI.colors.text))
 		Theme.Paint(self.band, UI.colors.panel, 0.92)
 		Theme.Paint(self.bandLine, edge, state == "idle" and 0.6 or 1)
 		local wide = self.label:GetStringWidth()
 		if wide and not issecretvalue(wide) then self.band:SetWidth(wide + 2 * BAND_PAD) end
+		if off and hint and not self.hint then
+			self.hint = UI.Text(self.frame, "", 11, false, UI.colors.dim)
+			self.hint:SetPoint("TOP", self.band, "BOTTOM", 0, -3)
+			self.hint:SetPoint("LEFT", self.frame, "LEFT", 6, 0)
+			self.hint:SetPoint("RIGHT", self.frame, "RIGHT", -6, 0)
+			self.hint:SetJustifyH("CENTER")
+			self.parts[#self.parts + 1] = self.hint
+		end
+		if self.hint then
+			self.hint:SetText(off and hint or "")
+			self.hint:SetShown(off and hint ~= nil and self.label:IsShown())
+		end
 	end
-	self.state = state
+	self.state, self.off = state, off
 end
 
 function Overlay:SetShown(on)
@@ -901,6 +935,14 @@ local function Look(box)
 	-- Over its neighbours while it is the one in hand.
 	if m.baseLevel then m:SetFrameLevel(m.baseLevel + (state ~= "idle" and RAISE or 0)) end
 	m.label:SetText(IsLocked(box) and (box.title .. "  \194\183  locked") or box.title)
+	-- Switched off: grey, with what it does under its name. Or grey with a word of its own (`grey`).
+	local switch, grey = box.switch, box.greyFn and box.greyFn()
+	if grey then
+		m.overlay:Look(state, true, grey)
+	elseif switch then
+		local off = not switch.get()
+		m.overlay:Look(state, off, off and switch.hint and ("Off  \194\183  " .. switch.hint) or nil)
+	end
 	if HUD.OnLook then HUD.OnLook(box) end
 end
 
@@ -1205,11 +1247,14 @@ end
 
 -- Boxes
 
-local function MoverShown(box)
+function MoverShown(box)
 	if not unlocked or box.still or box.carried or box.retired or not Active(box) then return false end
 	if box.awayFn ~= nil and box.awayFn() == true then return false end
-	if alongside and box.editMode then return false end   -- Edit Mode shows its own frames
+	-- Edit Mode shows its own frames; a ghost it leaves out (its own setting for that frame off) keeps ours.
+	if alongside and box.editMode and not (box.ghost and not Visible(box.foreign)) then return false end
 	if box.foreign then
+		-- A ghost's place is shown whether the game shows the frame or not (it shows only while it is in use).
+		if box.ghost then return Rect(box) ~= nil end
 		-- Not over a frame faded out of sight (ShyDock's swing row stands in for the game's swing bars).
 		local alpha = box.foreign:GetEffectiveAlpha()
 		if issecretvalue(alpha) or alpha < 0.05 then return false end
@@ -1229,7 +1274,8 @@ local function Mover(box)
 		m:SetAllPoints(box.foreign)
 		local strata = box.foreign:GetFrameStrata()
 		m:SetFrameStrata((STRATA[strata] or 0) > STRATA.HIGH and strata or "HIGH")
-		m:SetFrameLevel(50)
+		-- A ghost stands within another piece (its mover under ours otherwise): over it, so it can be taken out.
+		m:SetFrameLevel(box.ghost and 120 or 50)
 	else
 		m = CreateFrame("Frame", nil, box)
 		m:SetAllPoints()
@@ -1240,8 +1286,14 @@ local function Mover(box)
 	m.overlay = HUD.Overlay(m, { label = box.title, size = box.foreign and 12 or 14 })
 	m.label = m.overlay.label
 	m.label:ClearAllPoints()
-	m.label:SetPoint("LEFT", 6, 0)
-	m.label:SetPoint("RIGHT", -6, 0)
+	if box.labelAt == "TOP" then
+		-- At its top, the chip a little in: the middle is another piece's (a mover of its own stands there).
+		m.label:SetPoint("TOPLEFT", 6, -LABEL_IN)
+		m.label:SetPoint("TOPRIGHT", -6, -LABEL_IN)
+	else
+		m.label:SetPoint("LEFT", 6, 0)
+		m.label:SetPoint("RIGHT", -6, 0)
+	end
 	m.label:SetJustifyH("CENTER")
 	m.overlay.band:ClearAllPoints()
 	m.overlay.band:SetPoint("CENTER", m.label, "CENTER")
@@ -1300,6 +1352,16 @@ watch:SetScript("OnUpdate", function(self, elapsed)
 	ShowMovers()
 end)
 
+-- How much of a window stays on the screen across and down (its top edge always does): the clamp's rect is its
+-- own less the rest (a positive left and bottom, a negative right, as the engine reads insets).
+local REACH = 96
+local function Reach(box)
+	local w, h = box:GetWidth(), box:GetHeight()
+	if issecretvalue(w) or issecretvalue(h) then return end
+	local across, down = math.max(0, w - REACH), math.max(0, h - REACH)
+	box:SetClampRectInsets(across, -across, 0, down)
+end
+
 function HUD.Create(def)
 	local box = CreateFrame("Frame", def.name, UIParent)
 	box.id, box.title, box.defaultPoint, box.shownFn = def.id, def.title, def.point, def.shown
@@ -1307,7 +1369,8 @@ function HUD.Create(def)
 	box.secure, box.inCombat = def.secure, def.inCombat
 	box.hang, box.window = def.hang, def.window
 	box.dock = def.window and def.dock or nil
-	box.toggle, box.dockedFn, box.fitFn = def.toggle, def.docked, def.fit
+	box.toggle, box.dockedFn, box.fitFn, box.switch, box.greyFn = def.toggle, def.docked, def.fit, def.switch, def.grey
+	box.labelAt = def.label
 	box.grip = def.grip
 	box.top, box.madePoint = def.top, def.point   -- madePoint: the place its own addon made it with
 	box:SetSize(def.width, def.height)
@@ -1319,6 +1382,10 @@ function HUD.Create(def)
 		-- and menu with the rest: as the game's own windows do.
 		box:SetToplevel(true)
 		windows[#windows + 1] = box
+		-- It may be carried partly off the screen (to lay it on what stands at the edge), never past its top edge
+		-- and never past REACH of it each other way: its header can always be taken hold of again.
+		Reach(box)
+		box:HookScript("OnSizeChanged", Reach)
 	else
 		Mover(box)
 	end
@@ -1409,7 +1476,7 @@ function HUD.Adopt(frame, def)
 	-- onto Blizzard's frame.
 	local box = setmetatable({
 		id = def.id, title = def.title, foreign = frame, activeFn = def.active, home = {},
-		plain = def.plain, still = def.mover == false, editMode = def.editMode, generic = def.generic,
+		plain = def.plain, still = def.mover == false, editMode = def.editMode, generic = def.generic, ghost = def.ghost,
 		scalable = def.scale == true, homeScale = frame:GetScale(),
 	}, { __index = function(proxy, key)
 		local value = frame[key]
@@ -1808,6 +1875,7 @@ function HUD.SetStill(box, on)
 	if box.still == on then return end
 	box.still = on
 	if box.mover then box.mover:SetShown(MoverShown(box)) end
+	Shy:Fire("SHY_HUD_STILL", box)
 end
 
 -- Drops the saved position (back to its home); lock is kept, and scale unless `size`.
@@ -1881,6 +1949,21 @@ local function Unlock(on, along)
 	Shy:Fire("SHY_HUD_LAYOUT", on)
 	if on and not along then Bar.Look() end   -- after every box is out
 end
+
+function HUD.Switched(box)
+	Shy:Fire("SHY_SWITCH", box.id)
+end
+
+-- A switch's setting changed, wherever it was changed (its panel, its addon's options): the piece's look follows.
+-- `id` nil: every switched piece looks again.
+Shy:On("SHY_SWITCH", function(id)
+	for _, box in ipairs(boxes) do
+		if box.switch and (id == nil or box.id == id) then
+			Look(box)
+			HUD.Update(box)
+		end
+	end
+end)
 
 function HUD.SetUnlocked(on)
 	if on and InCombatLockdown() then

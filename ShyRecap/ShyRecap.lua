@@ -16,9 +16,9 @@ local C = UI.colors
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Recap",
+	category = "combat",
 	icon = MEDIA .. "ShyRecap",
 	smallIcon = MEDIA .. "ShyRecapSmall",
-	tagline = "Who killed you, how long ago and how",
 	savedVariables = "ShyRecapDB",
 	defaults = {
 		on = true,
@@ -43,6 +43,7 @@ end
 function ns.Apply()
 	for _, fn in ipairs(appliers) do fn() end
 	if ns.RefreshOptions then ns.RefreshOptions() end
+	Shy:Fire("SHY_SWITCH", "shyrecap")   -- its piece's switch in layout mode follows its setting
 end
 
 -- Text

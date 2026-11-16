@@ -45,9 +45,9 @@ local MEDIA = "Interface\\AddOns\\ShyBags\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Bags",
+	category = "items",
 	icon = MEDIA .. "ShyBags",
 	smallIcon = MEDIA .. "ShyBagsSmall",
-	tagline = "Your bags, your bank and every character's, in one window",
 	savedVariables = "ShyBagsDB",
 	defaults = {},   -- each file adds its own (T.defaults.x = ...)
 	-- One-time migration flags: account facts that a reset must not clear.

@@ -1,5 +1,16 @@
--- The swing timer: a row in the cockpit under health and power. One bar, or two
--- side by side (main hand left) with an off-hand weapon; a ranged swing takes the one bar.
+-- The swing timer. In the cockpit it is the hand row under health and power, the cast bar's own place
+-- (Layout.lua's Finish): there only while your weapons swing, and a cast takes the row from it. The row is
+-- the cast bar's to the pixel: your weapon's picture where the spell's is, a seam, the bar; with a weapon in
+-- each hand the off hand's mirrors the main hand's at the right end, its bar filling from that end, the two
+-- bars a seam apart. A ranged swing (a shot, a wand) takes the one bar with the ranged weapon's picture.
+-- Taken out (Pieces.lua) it is the player's to place: the bars side by side in frames of their own.
+--
+-- Swinging: auto-attack on (PLAYER_ENTER_COMBAT / PLAYER_LEAVE_COMBAT), a shot repeating (START_ / STOP_
+-- AUTOREPEAT_SPELL), or a swing still filling its bar; the row stays a moment after, for the next. The
+-- layout reads W.Wanted() and W.Hands(); a change touches the cockpit. The stance and totem bars ride the
+-- plate's foot and are protected: in a fight they can't follow it. So when a fight begins (still free to move
+-- them) the row opens at once for a character who swung in their last fight, and in a fight it neither opens
+-- nor closes while one of those bars shows; it closes when the fight is over.
 --
 -- Fill: white (Theme.SCHOOL physical), the temporary weapon enchant's color
 -- (C_Item.GetWeaponEnchantInfo + Coatings.lua; a module's, such as ShyRogue's
@@ -7,16 +18,13 @@
 -- may lay a fill of its own over the main hand's (ShyPaladin's seal, colored from
 -- the aura even while that is secret). A queued next-swing ability (NextSwing.lua
 -- + C_Spell.IsCurrentSpell) fills the main-hand bar gold over any of those, with a
--- gold frame and a sheen; out of range it stays red, the frame still gold.
+-- gold frame round the main hand and a sheen; out of range it stays red, the frame still gold.
 -- Timing is PLAYER_SWING (duration, hand), the event Blizzard_SwingTimer uses;
 -- the combat log isn't available to addons on this client.
--- The bars stand in a Shy.HUD box of the display's width, a piece of the cockpit:
--- Move.lua seats it at rects.swing in the plan (Layout.lua) at the vessel's size,
--- and taken out (Pieces.lua) it is the player's to place.
--- While the row shows, the showSwingTimer CVar is turned on so the client keeps
--- time, and its three default bars are faded, in Edit Mode too (the row stands in
+-- While the timer is on, the showSwingTimer CVar is turned on so the client keeps
+-- time, and its three default bars are faded, in Edit Mode too (ours stand in
 -- for them). Edit Mode's own "Swing Timer" switch is turned off, so after a reload
--- it doesn't lay them out either. All of it is restored when the row hides.
+-- it doesn't lay them out either. All of it is restored when the timer is off.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -29,14 +37,23 @@ local ID = "shydock-swing"
 
 local MAIN, OFF, RANGED = Enum.PlayerSwingType.MainHand, Enum.PlayerSwingType.OffHand, Enum.PlayerSwingType.Ranged
 local FRAME = 2           -- how far a bar's frame extends outside it
-local BETWEEN = 7         -- gap between the two bars (their frames end up 3 apart)
+local BETWEEN = 7         -- taken out: the gap between the two bars (their frames end up 3 apart)
 local RANGE_EVERY = 0.25  -- seconds between looks at the target's reach and a queued blow
+local HOLD = 0.35         -- seconds the row stays after the swing stops (the cast bar's row holds as long)
+local ATTACK = 6603       -- Auto Attack (the game's own action bars ask by it): bare hands' picture
+local CROP = 0.08         -- the pictures' dark rim, cropped away as the cast bar's is
 local CVAR = "showSwingTimer"
 local SHOWN_IN_EDIT_MODE = Enum.EditModeAccountSetting.ShowSwingTimer
 local NATIVE = { "SwingTimerMainHandFrame", "SwingTimerOffHandFrame", "SwingTimerRangedFrame" }
 local EVENTS = { "PLAYER_SWING", "PLAYER_SWING_RANGE_UPDATE", "PLAYER_TARGET_CHANGED", "WEAPON_SLOT_CHANGED",
-	"PLAYER_ENTERING_WORLD", "UNIT_ATTACK_SPEED", "EDIT_MODE_LAYOUTS_UPDATED", "WEAPON_ENCHANT_CHANGED" }
+	"PLAYER_ENTERING_WORLD", "UNIT_ATTACK_SPEED", "EDIT_MODE_LAYOUTS_UPDATED", "WEAPON_ENCHANT_CHANGED",
+	"PLAYER_EQUIPMENT_CHANGED", "UPDATE_SHAPESHIFT_FORM" }
+-- Whether you swing at all: followed while the timer is on, shown or not.
+local STATE_EVENTS = { "PLAYER_ENTER_COMBAT", "PLAYER_LEAVE_COMBAT", "START_AUTOREPEAT_SPELL", "STOP_AUTOREPEAT_SPELL",
+	"PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }
 local HAND = { [MAIN] = Enum.WeaponSlot.MainHand, [OFF] = Enum.WeaponSlot.OffHand }
+-- The protected bars in the foot row (Layout.ROWS' stances and its stead, Move.lua's totems).
+local PINNED = { "StanceBar", "PossessActionBar", "MultiCastActionBarFrame" }
 
 -- Bar colors by temporary weapon enchant (keys from Coatings.lua): what any class can put on a weapon.
 -- Hand-picked: fixed for every player, independent of the theme, and clear of the white, red and gold
@@ -75,9 +92,12 @@ local FLASH, FLASH_TIME = 0.8, 0.28        -- flash alpha and duration when the 
 local kit = Skin.NewKit()        -- our bars
 local nativeKit = Skin.NewKit()  -- the default swing bars, faded
 local bars = {}                  -- [MAIN], [OFF]
+local icons = {}                 -- [MAIN], [OFF]: the weapons' pictures, in the cockpit's row
+local wells = {}                 -- [MAIN], [OFF]: under each bar's track, as under the cast bar's
 local box                        -- the row's HUD box
+local face                       -- the pictures and bars: shown while the row is the swing's
 local driver, events
-local up = false        -- the row shows
+local up = false        -- the timer is on and has a place: the cockpit's row, or the player's
 local ranged = false    -- the last swing was ranged
 local far = false       -- target out of range
 local queued = false    -- a next-swing ability is queued
@@ -87,12 +107,21 @@ local art               -- the queued-state textures on the main-hand bar (Loade
 local loaded = false    -- they are showing
 local setting           -- T.db.swing as last applied
 local sinceRange = 0
+-- Swinging, and the row's opening and closing.
+local attacking = false   -- auto-attack is on
+local repeating = false   -- a shot (or a wand) repeats
+local busyWas = false     -- swinging when last looked
+local idleSince           -- when the swing stopped: the row stays HOLD after
+local held = false        -- opened in this fight with a protected bar in the foot row: open until it ends
+local swung = false       -- a swing in this fight (ns.char.swings after it)
+local told = false        -- W.Wanted() as the layout was last told
+local handsTold = 1       -- W.Hands() as the layout was last told
 
 local Native
 
 -- Modules: other addons adding to the bar (T:AddSwingModule, ShyDock.lua). Each is a table of any of
 --   Attach(bar)   the main-hand bar, once it exists: art of the module's own on it
---   Shown(up)     whether the row shows, at once and on every change
+--   Shown(up)     whether the timer is on, at once and on every change
 --   Coat(kind)    a color { r, g, b } for a coating kind (Coatings.lua's keys), or nil: asked before COAT
 -- Adding one returns a handle: handle.Overlay() gives a frame over the main-hand bar's fill, exactly as
 -- wide as the fill is now, shown only while the fill is a module's to color (in reach, no blow queued,
@@ -137,6 +166,88 @@ local function TwoHands()
 	return not issecretvalue(speed) and speed ~= nil and speed > 0
 end
 
+-- The bars the swing has: one per hand in melee with two weapons, else one.
+function W.Hands()
+	return (up and not ranged and TwoHands()) and 2 or 1
+end
+
+local function Busy()
+	return attacking or repeating or (bars[MAIN] ~= nil and (bars[MAIN].ends ~= nil or bars[OFF].ends ~= nil))
+end
+
+-- A stance or totem bar shows: protected, it can't follow the plate's foot in a fight.
+local function Pinned()
+	for _, name in ipairs(PINNED) do
+		local frame = _G[name]
+		if frame then
+			local shown = frame:IsShown()
+			if not issecretvalue(shown) and shown then return true end
+		end
+	end
+	return false
+end
+
+-- Does the hand row want to be open for the swing? (Layout.lua's plan reads it.) In a fight with a stance or
+-- totem bar in the foot row it stays as the fight found it, open or closed: that bar can't follow the foot.
+-- Closed so, the next fight opens it at its start (ns.char.swings).
+function W.Wanted()
+	if not T.db.swing then return false end
+	if InCombatLockdown() and Pinned() then return told end
+	return Busy() or held or (idleSince ~= nil and GetTime() - idleSince < HOLD)
+end
+
+-- The plan changes: the cockpit is planned again (Move.lua seats the pieces and measures it, else it measures itself).
+local function Changed()
+	if ns.Move and ns.Move.Touch() == true and ns.Layout.IsActive() then return end
+	if ns.Cockpit then ns.Cockpit.Touch() end
+end
+
+-- The cockpit holds the row (the plate is up, the timer not taken out).
+local function Seated()
+	return T.CockpitHolds ~= nil and T:CockpitHolds("swing")
+end
+
+-- The pictures and bars show: in the cockpit while the plate has the row open for the swing, and not while a
+-- cast is taking it (gone at once, before the plate is drawn again); taken out, while you swing (and in layout mode).
+local function Showing()
+	if not up then return false end
+	if not Seated() then return W.Wanted() or HUD.IsUnlocked() end
+	local plan = ns.Cockpit.Plan()
+	if not (plan and plan.swinging) then return false end
+	return not (T:CockpitHolds("cast") and ns.Layout.Casting())
+end
+
+local Pictures
+local function Show()
+	if not face then return end
+	local now = Showing()
+	if face:IsShown() == now then return end
+	if now then Pictures() end
+	face:SetShown(now)
+end
+
+-- Is the swing busy, and has the layout been told? Called on every change of either.
+local Recheck, Rechecked
+function Recheck()
+	local busy = T.db.swing and Busy() or false
+	if busy then
+		idleSince = nil
+	elseif busyWas then
+		idleSince = GetTime()
+		C_Timer.After(HOLD + 0.05, Rechecked)
+	end
+	busyWas = busy
+	local want = W.Wanted()
+	if want ~= told then
+		told = want
+		Changed()
+	end
+	Show()
+end
+
+-- The row's hold after the swing stops, run out.
+Rechecked = Shy.Clocked("ShyDock swing hold", function() Recheck() end)
+
 -- Fill color: out of range, then a queued blow (the main hand's), then the coating; the modules' overlays
 -- show over the main hand's fill only when neither of the first two has it.
 local function Color()
@@ -164,8 +275,6 @@ local function LoadedArt(bar)
 	a.lit:SetTexture(Skin.FRAME)
 	a.lit:SetTextureSliceMargins(Skin.FRAME_SLICE, Skin.FRAME_SLICE, Skin.FRAME_SLICE, Skin.FRAME_SLICE)
 	a.lit:SetScale(HEAVY)
-	a.lit:SetPoint("TOPLEFT", bar, "TOPLEFT", -FRAME, FRAME)
-	a.lit:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", FRAME, -FRAME)
 	a.lit:Hide()
 	local clip = CreateFrame("Frame", nil, bar)
 	clip:SetAllPoints(bar)
@@ -197,6 +306,14 @@ local function LoadedArt(bar)
 	return a
 end
 
+-- The gold frame: round the main hand's picture and bar in the cockpit's row, round the bar alone taken out.
+local function Ring(seated)
+	local bar = bars[MAIN]
+	art.lit:ClearAllPoints()
+	art.lit:SetPoint("TOPLEFT", seated and icons[MAIN] or bar, "TOPLEFT", -FRAME, FRAME)
+	art.lit:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", FRAME, -FRAME)
+end
+
 -- The sheen's travel depends on the bar's width, which changes with one or two bars.
 local function Crossing()
 	art.cross:SetOffset(bars[MAIN]:GetWidth() + SHEEN_W, 0)
@@ -219,19 +336,39 @@ local function Arm()
 	end
 end
 
--- In the cockpit the row stands in the display's block, which frames it with the bars (Cockpit.lua): the
--- bars get a frame of their own only out of it.
+-- In the cockpit the row stands in the display's block, which frames it (Cockpit.lua): the bars get a frame
+-- of their own only out of it. Under each bar's track the well the cast bar has under its own.
 local framed
 
 local function Paint()
-	local alone = not (T.CockpitHolds and T:CockpitHolds("swing"))
+	local alone = not Seated()
 	if framed ~= nil and framed ~= alone then kit:Restore() end
 	framed = alone
-	for _, bar in pairs(bars) do
+	local well = Skin.colors.well
+	for kind, bar in pairs(bars) do
 		kit:Bar(bar)
 		if alone then kit:Frame(bar, { x = -FRAME, y = -FRAME }) end
+		wells[kind]:SetColorTexture(well[1], well[2], well[3], well[4] or 1)
 	end
 	Color()
+end
+
+-- The weapons' pictures: the ranged weapon's for a shot, else each hand's; bare hands show Auto Attack's.
+-- A druid in a form fights with what the form has, not the weapon held: Auto Attack's picture.
+local function Clawed()
+	local _, class = UnitClassBase("player")
+	return class == "DRUID" and GetShapeshiftFormID() ~= nil
+end
+
+function Pictures()
+	local fist = C_Spell.GetSpellTexture(ATTACK)
+	if Clawed() then
+		icons[MAIN]:SetTexture(fist)
+		icons[OFF]:SetTexture(fist)
+		return
+	end
+	icons[MAIN]:SetTexture(GetInventoryItemTexture("player", ranged and INVSLOT_RANGED or INVSLOT_MAINHAND) or fist)
+	icons[OFF]:SetTexture(GetInventoryItemTexture("player", INVSLOT_OFFHAND) or fist)
 end
 
 -- The frame driver runs only while there is something to move or watch: a swing filling its bar, a queued blow
@@ -245,9 +382,11 @@ local function Run()
 end
 
 local function Clear(bar)
+	local was = bar.ends ~= nil
 	bar.duration, bar.ends = nil, nil
 	bar:SetValue(0)
 	Run()
+	if was then Recheck() end
 end
 
 local function Begin(bar, duration)
@@ -255,38 +394,75 @@ local function Begin(bar, duration)
 	bar.duration, bar.ends = duration, GetTime() + duration
 	bar:SetValue(0)
 	Run()
+	Recheck()
 end
 
--- One bar across the box, or two side by side with a weapon in each hand.
+-- A region at a plan's rect (UIParent units), in the box seated at the plan's rect for it and its scale.
+local function Put(region, rect, origin, scale)
+	region:ClearAllPoints()
+	region:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", (rect[1] - origin[1]) / scale, (rect[2] - origin[2]) / scale)
+	region:SetSize((rect[3] - rect[1]) / scale, (rect[4] - rect[2]) / scale)
+end
+
+-- The row as the plan has it in the cockpit; taken out, one bar across the box, or two side by side.
 local function Place()
 	local main, off = bars[MAIN], bars[OFF]
+	-- One bar or two: the plan is planned again for the other, open or not (the row is one height either way), so
+	-- the first blows find both bars there.
+	local hands = W.Hands()
+	if hands ~= handsTold then
+		handsTold = hands
+		Changed()
+	end
 	if not up then
-		main:Hide()
-		off:Hide()
+		Show()
 		return
 	end
-	local width, height = box:GetWidth(), box:GetHeight()
-	-- In the cockpit the row is the plan's: as wide as the display and as tall as the grid has it, to the pixel
-	-- (the box's own size times its scale can be a fraction of one off).
+	if face:IsShown() then Pictures() end
 	local plan = ns.Cockpit.Plan()
-	local scale = plan and plan.rects.swing and plan.scales.swing
-	if scale and T:CockpitHolds("swing") then width, height = plan.m.displayW / scale, plan.m.swing / scale end
-	local two = not ranged and TwoHands()
-	local each = two and (width - BETWEEN) / 2 or width
-	main:ClearAllPoints()
-	main:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", 0, 0)
-	main:SetSize(each, height)
-	main:Show()
-	if loaded then Crossing() end
-	if two then
-		off:ClearAllPoints()
-		off:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", each + BETWEEN, 0)
-		off:SetSize(each, height)
-		off:Show()
+	local hand = plan and plan.hand
+	if hand and Seated() then
+		local origin, scale = plan.rects.swing, plan.scales.swing
+		Put(icons[MAIN], hand.icons[1], origin, scale)
+		Put(main, hand.bars[1], origin, scale)
+		icons[MAIN]:Show()
+		main:Show()
+		local two = hand.bars[2] ~= nil
+		if two then
+			Put(icons[OFF], hand.icons[2], origin, scale)
+			Put(off, hand.bars[2], origin, scale)
+		else
+			Clear(off)
+		end
+		icons[OFF]:SetShown(two)
+		off:SetShown(two)
+		-- The off hand's bar fills from its own picture, at the right end.
+		off:SetReverseFill(two)
+		Ring(true)
 	else
-		Clear(off)
-		off:Hide()
+		local width, height = box:GetWidth(), box:GetHeight()
+		local two = hands == 2
+		local each = two and (width - BETWEEN) / 2 or width
+		icons[MAIN]:Hide()
+		icons[OFF]:Hide()
+		main:ClearAllPoints()
+		main:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", 0, 0)
+		main:SetSize(each, height)
+		main:Show()
+		off:SetReverseFill(false)
+		if two then
+			off:ClearAllPoints()
+			off:SetPoint("BOTTOMLEFT", box, "BOTTOMLEFT", each + BETWEEN, 0)
+			off:SetSize(each, height)
+			off:Show()
+		else
+			Clear(off)
+			off:Hide()
+		end
+		Ring(false)
 	end
+	if loaded then Crossing() end
+	Show()
 end
 
 local function Range()
@@ -352,6 +528,7 @@ end
 
 local function Swung(duration, kind)
 	if issecretvalue(kind) then return end
+	if InCombatLockdown() then swung = true end
 	if kind == RANGED then
 		Mode(true)
 		Begin(bars[MAIN], duration)
@@ -370,15 +547,44 @@ local function Rearmed()
 	if bars[OFF].ends and bars[OFF]:IsShown() then Begin(bars[OFF], off) end
 end
 
+-- A fight begins. This is the last moment the stance and totem bars may move: a character who swings (now, or
+-- in their last fight) gets the row open at once, and the pieces are seated for it now, not a frame on.
+-- (Told is not enough: auto-attack may have told it this same frame, and Move.lua seats the pieces a frame on.)
+local function Fight()
+	swung = false
+	if not (T.db.swing and Pinned() and (Busy() or ns.char.swings)) then return end
+	held = true
+	local plan = ns.Cockpit.Plan()
+	if told and plan and plan.swinging then return end
+	told = true
+	ns.Move.Sync()
+	Show()
+end
+
 local function OnEvent(_, event, a, b)
 	if event == "PLAYER_SWING" then
 		Swung(a, b)
 		Queue()   -- the swing may have used the queued ability
+	elseif event == "PLAYER_ENTER_COMBAT" or event == "PLAYER_LEAVE_COMBAT" then
+		attacking = event == "PLAYER_ENTER_COMBAT"
+		Recheck()
+	elseif event == "START_AUTOREPEAT_SPELL" or event == "STOP_AUTOREPEAT_SPELL" then
+		repeating = event == "START_AUTOREPEAT_SPELL"
+		Recheck()
+	elseif event == "PLAYER_REGEN_DISABLED" then
+		Fight()
+	elseif event == "PLAYER_REGEN_ENABLED" then
+		-- Learned for the next fight: did this one swing?
+		if T.db.swing then ns.char.swings = swung or nil end
+		held = false
+		Recheck()
 	elseif event == "CURRENT_SPELL_CAST_CHANGED" or event == "ACTIONBAR_UPDATE_STATE" then
 		Queue()
 	elseif event == "WEAPON_SLOT_CHANGED" then
 		Rearmed()
 		Coat()
+	elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "UPDATE_SHAPESHIFT_FORM" then
+		if face:IsShown() then Pictures() end
 	elseif event == "WEAPON_ENCHANT_CHANGED" then
 		Coat()
 	elseif event == "UNIT_ATTACK_SPEED" then
@@ -417,7 +623,7 @@ local function OnUpdate(_, elapsed)
 	Run()
 end
 
--- Fade the default swing bars while ours show.
+-- Fade the default swing bars while ours stand in for them.
 function Native()
 	nativeKit:Restore()
 	if not up then return end
@@ -435,7 +641,7 @@ local function EditModeShows()
 	return 1
 end
 
--- Turn showSwingTimer on and Edit Mode's swing timer switch off while the row shows; restore the
+-- Turn showSwingTimer on and Edit Mode's swing timer switch off while the timer is on; restore the
 -- saved values after.
 local function Switch()
 	if up then
@@ -457,7 +663,7 @@ local function Switch()
 	end
 end
 
--- The row shows with the cockpit's box, or wherever the player put it once taken out.
+-- The timer has a place with the cockpit's plate, or wherever the player put it once taken out.
 local function Sync()
 	local now = T.db.swing and (ns.Cockpit.rect ~= nil or ns.char.loose.swing == true) or false
 	if now ~= up then
@@ -491,34 +697,48 @@ end
 
 function W.Apply()
 	if not driver then return end
-	-- The row changes the box's height, which moves everything under it.
+	-- On or off: the row may open or close, which moves everything under it.
 	if setting ~= nil and setting ~= T.db.swing then
 		ns.Move.Touch()
 		ns.Arrange.Soon()
 	end
 	setting = T.db.swing
 	Sync()
+	Recheck()
 end
 
 function W.Start()
 	local U = ns.Layout.UNITS
+	-- In the cockpit the box is the hand row inside its frame: the display's width, the health bar's height.
 	box = HUD.Create({
 		id = ID, title = "Swing timer",
-		width = U.DISPLAY_W, height = U.SWING_H,
+		width = U.DISPLAY_W, height = U.HEALTH,
 		point = { "BOTTOM", "BOTTOM", 0, 300 },   -- placeholder: Move.lua seats it
 		shown = function() return up end,
 	})
 	box:EnableMouse(false)
 	W.box = box
+	face = CreateFrame("Frame", nil, box)
+	face:SetAllPoints(box)
+	face:SetFrameLevel(box:GetFrameLevel() + 1)
+	face:Hide()
+	W.face = face
 	for _, kind in ipairs({ MAIN, OFF }) do
-		local bar = CreateFrame("StatusBar", nil, box)
-		bar:SetFrameLevel(box:GetFrameLevel() + 2)
+		local icon = face:CreateTexture(nil, "ARTWORK")
+		icon:SetTexCoord(CROP, 1 - CROP, CROP, 1 - CROP)
+		icon:Hide()
+		icons[kind] = icon
+		local bar = CreateFrame("StatusBar", nil, face)
+		bar:SetFrameLevel(face:GetFrameLevel() + 1)
 		bar:SetMinMaxValues(0, 1)
 		bar:SetValue(0)
 		bar:Hide()
+		local well = bar:CreateTexture(nil, "BACKGROUND")
+		well:SetAllPoints(bar)
+		wells[kind] = well
 		bars[kind] = bar
 	end
-	W.bars = bars
+	W.bars, W.icons = bars, icons
 	art = LoadedArt(bars[MAIN])
 	W.art = art
 	Paint()   -- the fill exists before the modules' frame is hung on it
@@ -526,21 +746,35 @@ function W.Start()
 	own:SetAllPoints(bars[MAIN]:GetStatusBarTexture() or bars[MAIN])
 	own:SetFrameLevel(bars[MAIN]:GetFrameLevel() + 1)
 	for _, module in ipairs(modules) do Tell(module, "Attach", bars[MAIN]) end
-	-- A child of the box, so OnUpdate only runs while the row shows.
+	-- A child of the box, so OnUpdate only runs while the timer is on (the pictures and bars may be out of sight).
 	driver = CreateFrame("Frame", nil, box)
-	driver:SetScript("OnUpdate", OnUpdate)
+	driver:SetScript("OnUpdate", Shy.Clocked("ShyDock swing", OnUpdate))
 	events = CreateFrame("Frame")
 	events:SetScript("OnEvent", OnEvent)
-	-- The plate moved or changed shape: the bars are dressed again only when the plate takes up or lets go of the row.
+	-- Auto-attack already on (a reload mid-fight): nothing says so again.
+	local on = C_Spell.IsCurrentSpell(ATTACK)
+	attacking = not issecretvalue(on) and on == true
+	for _, event in ipairs(STATE_EVENTS) do events:RegisterEvent(event) end
+	-- The plate moved, changed shape or handed the row over: placed again, and dressed again only when the plate
+	-- takes up or lets go of the row.
 	Shy:On("SHY_COCKPIT", function()
 		Sync()
-		local alone = not (T.CockpitHolds and T:CockpitHolds("swing"))
+		local alone = not Seated()
 		if alone ~= framed then Paint() end
 	end)
 	Shy:On("SHY_THEME", Paint)
-	-- Sized with the vessel, or by the player once taken out: the bars fill the box again.
+	Shy:On("SHY_HUD_LAYOUT", Show)
+	-- A cast takes the row from the swing at once; the swing comes back when the plate hands it back.
+	local cast = PlayerCastingBarFrame
+	if cast then
+		local Shown = Shy.Clocked("ShyDock swing: cast bar", Show)
+		cast:HookScript("OnShow", Shown)
+		cast:HookScript("OnHide", Shown)
+	end
+	-- Taken out and sized by the player: the bars fill the box again.
 	box:HookScript("OnSizeChanged", function() if up then Place() end end)
 	-- Edit Mode resets the default bars' alpha as it opens and closes.
 	EventRegistry:RegisterCallback("EditMode.Enter", Native, W)
 	EventRegistry:RegisterCallback("EditMode.Exit", Native, W)
+	Recheck()
 end

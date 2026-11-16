@@ -246,7 +246,7 @@ end
 local way
 local function Way()
 	local guide, main = G.current, G.active and G.active[1]
-	if not (T.db.guide.follow and guide and main and not main.side and Side and Following) then
+	if not (ns.Following() and guide and main and not main.side and Side and Following) then
 		way = nil
 		return nil
 	end
@@ -1370,7 +1370,7 @@ ns.CardSwitch("errands", function(root)
 		T.db.stash.away = not T.db.stash.away
 		ns.Apply()
 	end)
-end)
+end, true)
 
 R.AddErrand("bank", Find, "Quest items in your bank")
 R.AddErrand("mailbox", FindMail, "Quest items in your mailbox")

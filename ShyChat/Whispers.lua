@@ -1,8 +1,14 @@
 -- Whisper windows: each conversation a tab, the header the chat's, the words the chat's size. Tabs dock together
--- and come apart (UI.TabWindows): drag one onto another window's tabs, or off into a window of its own. A whisper
--- opens its conversation (a new window a step down and right of the last, or a blinking tab in the window you
--- have), never in a fight. A window maximizes to the screen or minimizes into the whisper dock, a piece of the
--- layout where each conversation waits as a plate that lights up with news and opens on a click.
+-- and come apart (UI.TabWindows): drag one onto another window's tabs, onto the chat, or off into a window of its
+-- own. A whisper opens its conversation where you put that person last (someone new: where you usually put people,
+-- or as the setting says), never in a fight. A window maximizes to the screen or minimizes into the whisper dock, a
+-- piece of the layout where each conversation waits as a plate that lights up with news and opens on a click.
+-- Docked in the chat (restyled windows only): tabs of ours after the game's in its strip; the open one lays its
+-- conversation over the chat's text, which fades out under it (its alpha alone: nothing of the chat's is moved,
+-- called or written), until a game tab is clicked.
+-- Keys go where you were: Enter to the conversation you last typed in (or the one open in the chat) while it shows,
+-- the reply keys to the person's conversation, and "/" to the chat box as ever. A command typed in a conversation's
+-- row runs as the chat box's do (Window.lua). The keys are override bindings of our own, set only out of a fight.
 -- Conversations are kept per character, and the head's whispers notice counts the ones with news.
 
 local ADDON, ns = ...
@@ -32,10 +38,24 @@ local DOCK_W = 230
 local DOCK_HEAD = UI.HEAD_STRIP + UI.LINE
 local DOCK_FOOT = 3       -- the panel's edge under the last row
 local ROW, ROW_GAP, ROW_PAD, ROW_IN = 34, 2, 4, 4
+-- In the chat: its strip's tabs (the panel's header, the line under it), a little clear of the game's last tab, over
+-- the chat's own frames (the toolbar stands higher still); the page over its text.
+local CHAT = { tall = UI.HEAD_STRIP + UI.LINE, gap = 1, strip = 20, page = 25 }
+local HABIT = 6           -- the places you last put conversations in, for where someone new goes
+local TAB_REST = 0.55     -- a tab at rest: this much of the way from the dim ink to its whisper's color
+local COMMAND = "^/[^%s/]"   -- a line that is a command, not words to whisper
+-- The keys: buttons our override bindings click, and the game's commands they stand in for.
+local KEYS = { owner = nil, word = nil,
+	talk = { "OPENCHAT", "ShyChatWhisperTalk" }, reply = { "REPLY", "ShyChatWhisperReply" }, retell = { "REPLY2", "ShyChatWhisperRetell" } }
 
 local talks = {}         -- key -> { key, name, first, bn, rec, unread, held }
 local set                -- the windows (UI.TabWindows): set.wins[n], set.of[key]
+local host               -- the chat, as a place conversations dock (set:Host); nil without the chat's dock
+local hostUp = false     -- a conversation docked in the chat is open over its text
+local covered, boxWas    -- the chat window under the page; whether its box ignored its alpha before
 local lastUsed           -- the window a whisper went to or was typed in last
+local talkTo             -- where Enter goes: the window you were typing in, while it shows
+local lastFrom, lastTo   -- who whispered you last; whom you whispered last
 local started = time()   -- lines before it are a session ago
 local quiet = false      -- we are hiding a window ourselves: it isn't being closed
 local fighting = false   -- from the fight's start, which comes just before the lockdown, to its end
@@ -43,7 +63,7 @@ local sending            -- the conversation a line was just typed in, until its
 local blinker, lit = nil, false
 local dock
 
-local Fill, Post, Paint, Docked, Menu
+local Fill, Post, Paint, Docked, Menu, HostLay, Keys, GameDrags
 
 -- Names: the key is the name chat gives (a first name and a surname, the realm when not yours).
 
@@ -137,6 +157,54 @@ local function Named(talk)
 	return c and UI.Wrap(c, talk.name) or talk.name
 end
 
+-- Where you put conversations: each person's place (rec.home: "chat", "tab" or "window"), and the last few places
+-- you put anyone (db.whisperHabit), the most of them where someone new goes.
+
+-- Conversations can dock in the chat: whisper windows on, the chat's windows restyled, and the chat's dock there.
+local function InChat()
+	return host ~= nil and db.whispers and db.windowSkin
+end
+
+local function Habit()
+	local list = db.whisperHabit
+	if type(list) ~= "table" or not list[1] then return "window" end
+	local chat, tab, window = 0, 0, 0
+	for _, home in ipairs(list) do
+		if home == "chat" then chat = chat + 1 elseif home == "tab" then tab = tab + 1 else window = window + 1 end
+	end
+	local most = math.max(chat, tab, window)
+	-- Even: the latest of the ones that tie.
+	for i = #list, 1, -1 do
+		local home = list[i]
+		if (home == "chat" and chat == most) or (home == "tab" and tab == most) or (home == "window" and window == most) then
+			return home
+		end
+	end
+	return "window"
+end
+
+local function Home(talk)
+	local how = db.whisperOpen
+	if how == "auto" then how = talk.rec.home or Habit() end
+	if how == "chat" and not InChat() then how = "window" end
+	return how
+end
+
+-- You put a conversation in `w` (carried there, or from a menu).
+local function Remember(key, w)
+	local talk = talks[key]
+	if not (talk and w) then return end
+	local home = (w == host and "chat") or (#w.keys > 1 and "tab") or "window"
+	talk.rec.home = home
+	local list = db.whisperHabit
+	if type(list) ~= "table" then
+		list = {}
+		db.whisperHabit = list
+	end
+	list[#list + 1] = home
+	while #list > HABIT do table.remove(list, 1) end
+end
+
 -- Lines
 
 -- A line from a session ago is in the dim ink, its links still in theirs.
@@ -166,9 +234,16 @@ local function Who(talk)
 	return table.concat(parts, "  \194\183  ")
 end
 
+-- The chat window a conversation's words are sized by, and whose text size its menu sets: the one it lies over in
+-- the chat (the chat's open window while it isn't), the chat's first window for a whisper window.
+local function Chat(w)
+	if w == host then return covered or GeneralDockManager.selected or DEFAULT_CHAT_FRAME end
+	return DEFAULT_CHAT_FRAME
+end
+
 -- The words are the chat's: its face at its size.
 local function Face(w)
-	local chat = SELECTED_CHAT_FRAME or DEFAULT_CHAT_FRAME
+	local chat = Chat(w)
 	local file, size, flags
 	if chat then file, size, flags = chat:GetFont() end
 	if type(file) == "string" and type(size) == "number" and size > 0 then
@@ -180,13 +255,31 @@ local function Face(w)
 	ns.Window.Dress(w.msg)
 end
 
--- The typing row: "To Mira:" in the whisper's color, the words after it.
+local function Ink(edit, words, c)
+	edit.header:SetText(words)
+	edit.header:SetTextColor(c[1], c[2], c[3])
+	edit:SetTextColor(c[1], c[2], c[3])
+	edit:SetTextInsets(8 + edit.header:GetStringWidth() + 4, 8, 0, 0)
+end
+
+-- The typing row: "To Mira:" in the whisper's color, the words after it; "Command:" while a command is typed.
 local function Header(w, talk)
+	w.command = false
 	local info = Kind(talk, false)
-	w.edit.header:SetText("To " .. talk.first .. ":")
-	w.edit.header:SetTextColor(info.r, info.g, info.b)
-	w.edit:SetTextColor(info.r, info.g, info.b)
-	w.edit:SetTextInsets(8 + w.edit.header:GetStringWidth() + 4, 8, 0, 0)
+	Ink(w.edit, "To " .. talk.first .. ":", { info.r, info.g, info.b })
+end
+
+local function Typed(w)
+	local text = w.edit:GetText()
+	local command = not issecretvalue(text) and text:find(COMMAND) ~= nil
+	if command == w.command then return end
+	local talk = talks[w.current]
+	if command then
+		w.command = true
+		Ink(w.edit, "Command:", C.text)
+	elseif talk then
+		Header(w, talk)
+	end
 end
 
 function Fill(w)
@@ -206,6 +299,7 @@ function Fill(w)
 	end
 	w.who:SetText(Who(talk))
 	Header(w, talk)
+	Typed(w)
 end
 
 local function Read(talk)
@@ -224,22 +318,39 @@ local function Blinking()
 	return false
 end
 
-function Paint()
-	for _, w in pairs(set.wins) do
-		if w.open then
-			for i, key in ipairs(w.keys) do
-				local tab, talk = w.tabs.tabs[i], talks[key]
-				local news = talk.unread > 0 and key ~= w.current
-				w.tabs:SetBadge(i, news and talk.unread or 0)
-				w.tabs:SetTint(i, ClassColor(talk))
-				if news then
-					UI.Ink(tab.text, lit and C.alert or C.dim)
-				else
-					UI.Ink(tab.text, key == w.current and C.text or C.dim)
-				end
-			end
-		end
+-- A conversation's tab words in its whisper's color, as chat writes whispers: whole while open or under the mouse,
+-- stepped back toward the dim ink at rest. (Kept on the conversation and filled again: this runs at every blink.)
+local function Inks(talk)
+	local inks = talk.inks
+	if not inks then
+		inks = { open = {}, rest = {} }
+		talk.inks = inks
 	end
+	local info, dim = Kind(talk, false), C.dim
+	inks.open[1], inks.open[2], inks.open[3] = info.r, info.g, info.b
+	for i, v in ipairs(inks.open) do inks.rest[i] = dim[i] + (v - dim[i]) * TAB_REST end
+	return inks
+end
+
+-- A window's tabs (the chat's: its open one reads as open only while it is in view).
+local function PaintWin(w)
+	if not w.open then return end
+	local shown = w ~= host or hostUp
+	for i, key in ipairs(w.keys) do
+		local tab, talk = w.tabs.tabs[i], talks[key]
+		local open = key == w.current and shown
+		local news = talk.unread > 0 and not open
+		local inks = Inks(talk)
+		w.tabs:SetBadge(i, news and talk.unread or 0)
+		w.tabs:SetTint(i, ClassColor(talk))
+		w.tabs:SetInk(i, inks.open, inks.rest)
+		if news then UI.Ink(tab.text, lit and C.alert or inks.rest) end
+	end
+end
+
+function Paint()
+	for _, w in pairs(set.wins) do PaintWin(w) end
+	if host then PaintWin(host) end
 	if dock then dock:Paint() end
 	if Blinking() then
 		if not blinker then
@@ -255,6 +366,12 @@ function Paint()
 end
 
 local function Picked(w, key)
+	-- A docked tab clicked: its conversation over the chat, and Enter goes there.
+	if w == host and not hostUp then
+		hostUp = true
+		talkTo = host
+		HostLay()
+	end
 	lastUsed = w
 	Fill(w)
 	if w.box:IsVisible() then Read(talks[key]) end
@@ -268,12 +385,17 @@ end
 -- Windows
 
 local function Refresh(w)
-	quiet = true
-	HUD.Update(w.box)
-	quiet = false
+	if w == host then
+		HostLay()
+	else
+		quiet = true
+		HUD.Update(w.box)
+		quiet = false
+	end
 	if w.box:IsVisible() and w.current then Read(talks[w.current]) end
 	Docked()
 	Paint()
+	Keys()
 end
 
 -- A window let go of: its conversations wait for the next whisper.
@@ -284,9 +406,11 @@ local function Shut(w)
 	set:Clear(w)
 	w.edit:ClearFocus()
 	if lastUsed == w then lastUsed = nil end
+	if talkTo == w then talkTo = nil end
 	Post()
 	Docked()
 	Paint()
+	Keys()
 end
 
 -- What happened to the windows lately, for /shychat whispers.
@@ -315,8 +439,22 @@ local function Closed(w)
 	Shut(w)
 end
 
+-- The chat's last conversation taken out: its text is back.
+local function HostDown()
+	hostUp = false
+	if talkTo == host then talkTo = nil end
+	if host.tabs.selected then host.tabs:Select(nil) end
+	HostLay()
+	Paint()
+end
+
 -- Its last conversation docked elsewhere or closed: the window goes quietly.
 local function Emptied(w)
+	if w == host then
+		HostDown()
+		Post()
+		return
+	end
 	quiet = true
 	w.box:Hide()
 	quiet = false
@@ -353,20 +491,24 @@ local function Minimize(w, on)
 	if not on then w.box:Raise() end
 end
 
--- A window's body: who it is, the lines, the typing row.
+-- A window's body: who it is, the lines, the typing row. The chat's page lies on its text, edge to edge with it.
 local function Build(w)
 	local box = w.box
-	local top = HEAD.line + UI.LINE
+	local docked = w.host ~= nil
+	local top = docked and 0 or HEAD.line + UI.LINE
+	local pad = docked and 0 or PAD
+	-- On the window's body: clear of the look's work round the edge (UI.Body).
+	local body = docked and box or UI.Body(box)
 
-	w.who = UI.Text(box, "", 11, false, C.dim)
-	w.who:SetPoint("TOPLEFT", PAD + 2, -(top + 5))
-	w.who:SetPoint("RIGHT", box, "RIGHT", -PAD, 0)
+	w.who = UI.Text(body, "", 11, false, C.dim)
+	w.who:SetPoint("TOPLEFT", pad + (docked and 0 or 2), -(top + 5))
+	w.who:SetPoint("RIGHT", body, "RIGHT", -pad, 0)
 	w.who:SetJustifyH("LEFT")
 	w.who:SetWordWrap(false)
 
-	local msg = CreateFrame("ScrollingMessageFrame", nil, box)
-	msg:SetPoint("TOPLEFT", PAD + 2, -(top + 5 + WHO))
-	msg:SetPoint("BOTTOMRIGHT", -PAD - 2, PAD + TYPING + 5)
+	local msg = CreateFrame("ScrollingMessageFrame", nil, body)
+	msg:SetPoint("TOPLEFT", pad + (docked and 0 or 2), -(top + 5 + WHO))
+	msg:SetPoint("BOTTOMRIGHT", -pad - (docked and 0 or 2), pad + TYPING + 5)
 	msg:SetFontObject(ChatFontNormal)
 	msg:SetJustifyH("LEFT")
 	msg:SetFading(false)
@@ -381,9 +523,9 @@ local function Build(w)
 	msg:SetScript("OnHyperlinkLeave", function() ns.Window.LinkLeave() end)
 	w.msg = msg
 
-	local edit = CreateFrame("EditBox", nil, box)
-	edit:SetPoint("BOTTOMLEFT", PAD, PAD)
-	edit:SetPoint("BOTTOMRIGHT", -PAD, PAD)
+	local edit = CreateFrame("EditBox", nil, body)
+	edit:SetPoint("BOTTOMLEFT", pad, pad)
+	edit:SetPoint("BOTTOMRIGHT", -pad, pad)
 	edit:SetHeight(TYPING)
 	edit:SetAutoFocus(false)
 	edit:SetFontObject(ChatFontNormal)
@@ -395,7 +537,14 @@ local function Build(w)
 	edit.header:SetFontObject(ChatFontNormal)
 	edit.header:SetPoint("LEFT", 8, 0)
 	edit:SetScript("OnEnterPressed", function(self) Wh.Send(w, self) end)
-	edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	-- Esc leaves the row; Enter no longer comes back to a window (the chat's open conversation still takes it).
+	edit:SetScript("OnEscapePressed", function(self)
+		self:ClearFocus()
+		if talkTo == w and w ~= host then
+			talkTo = nil
+			Keys()
+		end
+	end)
 	edit:SetScript("OnTabPressed", function()
 		local now = 1
 		for i, key in ipairs(w.keys) do
@@ -408,30 +557,37 @@ local function Build(w)
 	edit:SetScript("OnEditFocusGained", function(self)
 		UI.SetBorder(self, C.hot)
 		lastUsed = w
+		talkTo = w
+		Keys()
 	end)
 	edit:SetScript("OnEditFocusLost", function(self) UI.SetBorder(self, C.border) end)
+	edit:SetScript("OnTextChanged", function() Typed(w) end)
 	w.edit = edit
+	-- Commands typed here run as the chat box's do (a protected one through the chat's own button).
+	ns.Window.Commands(edit)
 	Face(w)
 
 	-- A click anywhere in the window puts the cursor in its typing row.
+	if docked then box:EnableMouse(true) end
 	box:HookScript("OnMouseDown", function() edit:SetFocus() end)
 	box:HookScript("OnHide", function()
 		-- Hidden by this file (stepping aside, closing): no stack to read.
 		local by = quiet and "ShyChat" or (debugstack(2, 6, 0) or ""):gsub("Interface/AddOns/", ""):gsub("\n", " < ")
-		Log(("window %d OnHide (open %s, min %s, quiet %s) by %s"):format(w.n, tostring(w.open), tostring(w.min), tostring(quiet), by))
+		Log(("window %s OnHide (open %s, min %s, quiet %s) by %s"):format(tostring(w.n), tostring(w.open), tostring(w.min), tostring(quiet), by))
 	end)
 end
 
+-- A whisper window up to join as a tab (never the chat).
 local function AnyOpen()
-	if lastUsed and lastUsed.open and not lastUsed.min then return lastUsed end
+	if lastUsed and lastUsed ~= host and lastUsed.open and not lastUsed.min then return lastUsed end
 	for n = 1, MOST do
 		local w = set.wins[n]
 		if w and w.open and not w.min then return w end
 	end
 end
 
--- Opens a conversation as the setting says. `focus`: bring it up with the cursor in it (a whisper you sent,
--- a plate clicked). A minimized window stays in the dock for news alone.
+-- Opens a conversation where it goes (Home). `focus`: bring it up with the cursor in it (a whisper you sent, a plate
+-- clicked, a reply key). Without it, news alone: a minimized window stays in the dock, the chat shows its own text.
 local function Open(talk, focus)
 	if not db.whispers then return end
 	if Held() then
@@ -444,7 +600,10 @@ local function Open(talk, focus)
 	if w then
 		was = true
 	else
-		if db.whisperOpen == "tab" then
+		local home = Home(talk)
+		if home == "chat" then
+			w = host
+		elseif home == "tab" then
 			w = AnyOpen()
 			if w and not set:Fits(w, talk.first) then w = nil end
 		end
@@ -452,6 +611,14 @@ local function Open(talk, focus)
 		if not w then return end
 		was = w.open
 		set:Join(w, talk.key)
+	end
+	if w == host then
+		HostLay()
+		if focus then
+			Show(talk)
+			host.edit:SetFocus()
+		end
+		return
 	end
 	if focus then w.min = nil end
 	Refresh(w)
@@ -466,6 +633,249 @@ function Wh.Open(key)
 	local talk = talks[key]
 	if not talk then return end
 	Open(talk, true)
+end
+
+-- Docked in the chat. The chat's dock holds its first window and the ones docked with it; the selected one is the
+-- one in view. Our strip stands after the game's last tab (or its overflow arrow) to the strip's end, on the chat's
+-- header; a drop anywhere on the chat docks there. Its line is the chat's own: ours is laid along it unseen, for
+-- the open tab's mark to stand on.
+
+-- What the strip stands after; asked each time the game lays its tabs out, so only a change is worked on.
+-- (Asked each time the game lays its tabs out: only a change of its windows is worked on.)
+local after = {}
+local function Anchor()
+	local manager = GeneralDockManager
+	local list = manager.DOCKED_CHAT_FRAMES
+	local count, last = #list, list[#list] or false
+	if after.laid and count == after.count and last == after.last then return end
+	after.laid, after.count, after.last = true, count, last
+	local dynamic
+	for i = count, 1, -1 do
+		if not list[i].isStaticDocked then
+			dynamic = list[i]
+			break
+		end
+	end
+	local strip, bg = host.head, DEFAULT_CHAT_FRAME.Background
+	strip:ClearAllPoints()
+	strip:SetPoint("BOTTOM", bg, "TOP", 0, ns.Look.STRIP_FOOT - UI.LINE)
+	if dynamic then
+		strip:SetPoint("LEFT", _G[dynamic:GetName() .. "Tab"], "RIGHT", CHAT.gap, 0)
+	else
+		strip:SetPoint("LEFT", manager.scrollFrame:GetScrollChild(), "LEFT", CHAT.gap, 0)
+	end
+end
+
+-- The game's window under the page: its text faded out, the page laid over it, its tab no longer the open one. Its
+-- box and our toolbar on it (children of it) stay seen. Uncovered as it was.
+local function Cover(on)
+	local frame = on and (GeneralDockManager.selected or DEFAULT_CHAT_FRAME) or nil
+	if frame == covered then return end
+	if covered then
+		covered:SetAlpha(1)
+		covered.editBox:SetIgnoreParentAlpha(boxWas)
+		local bar = ns.Window.Tools(covered)
+		if bar then bar:SetIgnoreParentAlpha(false) end
+	end
+	covered = frame
+	if frame then
+		host.box:ClearAllPoints()
+		host.box:SetAllPoints(frame)
+		Face(host)   -- in the size of the window it lies over
+		boxWas = frame.editBox:IsIgnoringParentAlpha()
+		frame:SetAlpha(0)
+		frame.editBox:SetIgnoreParentAlpha(true)
+		local bar = ns.Window.Tools(frame)
+		if bar then bar:SetIgnoreParentAlpha(true) end
+	end
+	ns.Look.Aside(frame)
+end
+
+-- The chat as a place to dock, as things stand: taking drops, its strip while it holds tabs, its page while one is open.
+function HostLay()
+	if not host then return end
+	local can = InChat()
+	host.zone:SetShown(can)
+	host.head:SetShown(can and host.open)
+	local up = can and host.open and hostUp and not Held()
+	if host.box:IsShown() ~= up then
+		quiet = true
+		host.box:SetShown(up)
+		quiet = false
+	end
+	Cover(up)
+	if up and host.current then Read(talks[host.current]) end
+	-- Ours came, went or opened: the row as the chat's look keeps it (the open tab in view).
+	ns.Look.SettleTabs()
+	Keys()
+end
+
+local function MakeHost()
+	local manager, chat = GeneralDockManager, DEFAULT_CHAT_FRAME
+	local bg = chat.Background
+	local zone = CreateFrame("Frame", nil, manager)
+	zone:SetFrameStrata("BACKGROUND")
+	zone:SetPoint("TOPLEFT", bg, "TOPLEFT", 0, ns.Look.STRIP_FOOT + UI.HEAD_STRIP)
+	zone:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT")
+	zone:Hide()
+	-- Our tabs in the row of the game's that scroll, after its last: they scroll with it and are cut to its view.
+	local strip = CreateFrame("Frame", nil, manager.scrollFrame:GetScrollChild())
+	strip:SetFrameStrata("MEDIUM")
+	strip:SetFrameLevel(CHAT.strip)
+	strip:SetHeight(CHAT.tall)
+	strip.shyStripColor = C.hudStrip
+	strip.shyLine = UI.HeadLine(strip)
+	strip.shyLine:SetPoint("TOPLEFT", strip, "TOPLEFT", 0, -UI.HEAD_STRIP)
+	strip.shyLine:SetPoint("TOPRIGHT", strip, "TOPRIGHT", 0, -UI.HEAD_STRIP)
+	strip.shyLine:SetAlpha(0)
+	strip:Hide()
+	-- The chat's whole header row: a tab let go of along it lands among ours where the cursor is.
+	local band = CreateFrame("Frame", nil, zone)
+	band:SetPoint("BOTTOMLEFT", bg, "TOPLEFT")
+	band:SetPoint("BOTTOMRIGHT", bg, "TOPRIGHT")
+	band:SetHeight(ns.Look.STRIP_FOOT + UI.HEAD_STRIP)
+	local page = CreateFrame("Frame", nil, manager)
+	page:SetFrameStrata("MEDIUM")
+	page:SetFrameLevel(CHAT.page)
+	page:SetAllPoints(chat)
+	page:Hide()
+	-- Kept readable with the chat while the HUD is faded.
+	local immersion = Shy.Immersion
+	if immersion and immersion.Watch then
+		immersion.Watch("chat", page)
+		immersion.Watch("chat", strip)
+	end
+	host = set:Host({ box = page, zone = zone, strip = strip, band = band, tall = CHAT.tall, mid = UI.HEAD_MID,
+		gap = CHAT.gap, up = function() return hostUp end })
+	Anchor()
+	hooksecurefunc("FCFDock_UpdateTabs", function(manager)
+		if manager == GeneralDockManager then Anchor() end
+	end)
+	-- A game tab picked: its text is back. Clicked, even the one under the page (the game selects nothing then, it
+	-- already is): its text is back too.
+	hooksecurefunc("FCFDock_SelectWindow", function(manager)
+		if manager == GeneralDockManager and hostUp then HostDown() end
+	end)
+	hooksecurefunc("FCF_Tab_OnClick", function(_, button)
+		if hostUp and button ~= "RightButton" and button ~= "MiddleButton" then HostDown() end
+	end)
+	-- The chat box in use: the page's own row makes way for it; let go of, Enter comes back to the page.
+	EventRegistry:RegisterCallback("ChatFrame.OnEditBoxFocusGained", function()
+		host.edit:SetShown(not covered)
+		talkTo = nil
+		Keys()
+	end, Wh)
+	EventRegistry:RegisterCallback("ChatFrame.OnEditBoxFocusLost", function()
+		host.edit:Show()
+		if host.box:IsShown() then talkTo = host end
+		Keys()
+	end, Wh)
+end
+
+-- For the chat's toolbar, grip and menu: how far our tabs reach, the page while it covers the chat, our tabs while
+-- they show, how many are docked, whether one is open, a row each.
+function Wh.Page() return covered and host.box or nil end
+function Wh.Tabs() return host and host.head:IsVisible() and host.tabs or nil end
+-- The conversation open over the chat: its tab, for the row to keep in view.
+function Wh.OpenTab()
+	if not (hostUp and host.current and host.head:IsVisible()) then return nil end
+	for i, key in ipairs(host.keys) do
+		if key == host.current then return host.tabs.tabs[i] end
+	end
+end
+
+-- (Our last tab's own right edge: the row ends there, not at the spacing after it.)
+function Wh.StripRight()
+	if not (host and host.open and host.head:IsVisible()) then return nil end
+	local last = host.tabs.tabs[#host.keys]
+	return last and last:GetRight() or nil
+end
+
+function Wh.InChat() return host and #host.keys or 0 end
+function Wh.Covering() return covered ~= nil end
+-- Whether a conversation lies over this chat window now (its tools are the conversation's then).
+function Wh.Over(frame) return covered ~= nil and covered == frame end
+
+-- A conversation's lines in the copy box, as they read; its lines let go of.
+function Wh.Copy(talk)
+	local out = {}
+	for _, line in ipairs(talk.rec.lines) do out[#out + 1] = UI.PlainText(Written(talk, line, true)) end
+	ns.Window.ShowCopy(talk.name, table.concat(out, "\n"))
+end
+
+function Wh.Clear(w, talk)
+	wipe(talk.rec.lines)
+	if w.current == talk.key then Fill(w) end
+end
+
+function Wh.CopyOpen()
+	local talk = host.current and talks[host.current]
+	if talk then Wh.Copy(talk) end
+end
+
+function Wh.ClearOpen()
+	local talk = host.current and talks[host.current]
+	if talk then Wh.Clear(host, talk) end
+end
+
+function Wh.MenuRows(root)
+	for _, key in ipairs(host.keys) do
+		local talk = talks[key]
+		local row = root:CreateButton(Named(talk), function() Wh.Open(key) end)
+		if talk.unread > 0 then
+			row:SetDetail(Gold(talk.unread .. " new"))
+		elseif hostUp and key == host.current then
+			row:SetDetail("open")
+		end
+	end
+end
+
+-- Keys: Enter to the conversation you were typing in while it shows; the reply keys to the person's. Bound only
+-- while there is somewhere for them to go, and never changed in a fight (a fight that hides the windows lets them go
+-- as it starts, just before the lockdown). The game's keys for each are read as they are bound: keys changed in its
+-- settings are taken up the next time where they go changes.
+
+local function Showing(w)
+	return w ~= nil and w.open and w.box:IsVisible()
+end
+
+local function Bind(pair, out)
+	local a, b = GetBindingKey(pair[1])
+	if a then SetOverrideBindingClick(KEYS.owner, false, a, pair[2]) end
+	if b then SetOverrideBindingClick(KEYS.owner, false, b, pair[2]) end
+	return out .. " " .. pair[1] .. "=" .. tostring(a) .. "," .. tostring(b)
+end
+
+-- (A word for what is bound, so only a change binds again: this runs as often as windows come and go.)
+function Keys(again)
+	if not KEYS.owner or InCombatLockdown() then return end
+	local live = db.whispers and not Held()
+	local talk = live and Showing(talkTo)
+	local reply = live and lastFrom ~= nil
+	local retell = live and lastTo ~= nil
+	local word = (talk and "t" or "") .. (reply and "r" or "") .. (retell and "w" or "")
+	if word == KEYS.word and not again then return end
+	ClearOverrideBindings(KEYS.owner)
+	local out = ""
+	if talk then out = Bind(KEYS.talk, out) end
+	if reply then out = Bind(KEYS.reply, out) end
+	if retell then out = Bind(KEYS.retell, out) end
+	KEYS.word, KEYS.bound = word, out
+end
+
+local function MakeKeys()
+	KEYS.owner = CreateFrame("Frame")
+	local function Button(pair, click)
+		local b = CreateFrame("Button", pair[2], UIParent)
+		b:Hide()
+		b:SetScript("OnClick", click)
+	end
+	Button(KEYS.talk, function()
+		local w = Showing(talkTo) and talkTo or (host and host.box:IsVisible() and host) or nil
+		if w then w.edit:SetFocus() end
+	end)
+	Button(KEYS.reply, function() if lastFrom then Wh.Open(lastFrom) end end)
+	Button(KEYS.retell, function() if lastTo then Wh.Open(lastTo) end end)
 end
 
 -- The whisper dock: a piece of the console's make (capped, its header strip and line), standing where you put it
@@ -686,22 +1096,37 @@ function Menu(owner, w, key)
 			end
 		end
 		root:CreateDivider()
-		if #w.keys > 1 then root:CreateButton("Own window", function() set:Own(talk.key) end) end
-		root:CreateButton("Clear lines", function()
-			wipe(talk.rec.lines)
-			if w.current == talk.key then Fill(w) end
-		end)
+		if w ~= host and InChat() then
+			root:CreateButton("Dock in chat", function()
+				set:Join(host, talk.key)
+				Remember(talk.key, host)
+				Open(talk, true)
+			end)
+		end
+		if #w.keys > 1 or w == host then
+			root:CreateButton("Own window", function() Remember(talk.key, set:Own(talk.key)) end)
+		end
+		-- The chat's own tools, as its windows have them.
+		root:CreateButton("Copy chat", function() Wh.Copy(talk) end)
+		root:CreateButton("Clear window", function() Wh.Clear(w, talk) end)
+		ns.Window.SizeRows(root, Chat(w))
+		root:CreateDivider()
 		root:CreateButton("Close", function() set:Leave(talk.key) end)
 	end)
 end
 
--- Typing: Enter whispers the conversation open in the window.
+-- Typing: Enter whispers the conversation open in the window. A command got here only when it couldn't run.
 
 function Wh.Send(w, edit)
 	local talk = talks[w.current]
 	local text = edit:GetText()
 	if not talk or not text:find("%S") then
 		edit:SetText("")
+		return
+	end
+	if text:find(COMMAND) then
+		T:Print(InCombatLockdown() and "commands typed in a whisper run once the fight is over. Your words are still in the box."
+			or "that command didn't run. Your words are still in the box.")
 		return
 	end
 	if C_ChatInfo.InChatMessagingLockdown() then
@@ -755,6 +1180,7 @@ local function Heard(event, text, sender, _, _, _, _, _, _, _, _, _, guid, bnID)
 		if class then talk.rec.class, talk.rec.race = class, race end
 	end
 	Add(talk, { t = time(), m = text, me = me or nil })
+	if me then lastTo = key else lastFrom = key end
 	if not db.whispers then return end
 	if me then
 		talk.unread = 0
@@ -771,6 +1197,7 @@ local function Heard(event, text, sender, _, _, _, _, _, _, _, _, _, guid, bnID)
 	Post()
 	Docked()
 	Paint()
+	Keys()
 end
 
 -- Settings, fights and keeping
@@ -782,8 +1209,23 @@ function Wh.Apply()
 		Refresh(w)
 		if w.open then Fill(w) end
 	end
+	if host then
+		-- The chat no longer restyled: what was docked there goes to a window of its own (as tabs, once every
+		-- window is in use).
+		if host.open and db.whispers and not db.windowSkin then
+			local w = set:Window() or AnyOpen()
+			if w then
+				set:Merge(host, w)
+				Refresh(w)
+			end
+		end
+		Face(host)
+		if host.open then Fill(host) end
+		HostLay()
+	end
 	Docked()
 	Post()
+	Keys(true)
 end
 
 function Wh.Forget()
@@ -793,14 +1235,20 @@ function Wh.Forget()
 		quiet = false
 		Shut(w)
 	end
+	if host then
+		set:Clear(host)
+		HostDown()
+	end
 	wipe(talks)
+	lastFrom, lastTo = nil, nil
 	Docked()
 	Post()
+	Keys()
 end
 
 -- In a fight the windows step aside (HUD.Update reads it); after it they and what came are back.
 -- Only whether a window shows changes: the dock and the tabs stand as they were, unless a window
--- that came back holds news, which is read now.
+-- that came back holds news, which is read now. The keys go to the chat in it, and come back after.
 local function Fight(now)
 	fighting = now
 	local read = false
@@ -814,12 +1262,48 @@ local function Fight(now)
 			read = true
 		end
 	end
+	HostLay()
 	if read then Paint() end
 	if fighting then return end
 	for _, talk in pairs(talks) do
 		if talk.held then Open(talk, false) end
 	end
 	Post()
+	Keys()
+end
+
+-- A chat window of the game's carried by its tab (the game carries it whole) can dock in the chat and nowhere else:
+-- the chat lights as the place it can go, as it does for a conversation carried, until the mouse is let go. (Not the
+-- chat's first window: its tab carries the whole chat.)
+local dragged = setmetatable({}, { __mode = "k" })   -- tabs followed
+local letGo = CreateFrame("Frame")
+letGo:SetScript("OnEvent", function(self)
+	self:UnregisterEvent("GLOBAL_MOUSE_UP")
+	set:Unhint()
+end)
+
+-- Any chat window's text size changed (its menu, the game's settings): the conversations' words follow.
+local function Refont()
+	for _, w in pairs(set.wins) do Face(w) end
+	Face(host)
+end
+
+local function GameDrag(frame)
+	local tab = _G[frame:GetName() .. "Tab"]
+	if not tab or dragged[tab] then return end
+	dragged[tab] = true
+	hooksecurefunc(frame, "SetFont", Refont)
+	tab:HookScript("OnDragStart", function()
+		if frame == DEFAULT_CHAT_FRAME or not InChat() then return end
+		set:Hint(host)
+		letGo:RegisterEvent("GLOBAL_MOUSE_UP")
+	end)
+end
+
+function GameDrags()
+	ChatFrameUtil.ForEachChatFrame(GameDrag)
+	hooksecurefunc("FCF_OpenNewWindow", function() ChatFrameUtil.ForEachChatFrame(GameDrag) end)
+	hooksecurefunc("FCF_OpenTemporaryWindow", function() ChatFrameUtil.ForEachChatFrame(GameDrag) end)
 end
 
 local function Windows()
@@ -844,6 +1328,7 @@ local function Windows()
 		moved = Refresh,
 		emptied = Emptied,
 		menu = Menu,
+		placed = Remember,
 		row = function(entry, key, w)
 			local talk = talks[key]
 			local said = LastSaid(talk)
@@ -868,7 +1353,10 @@ function Wh.Init(settings)
 		end
 	end
 	Windows()
+	MakeHost()
 	MakeDock()
+	MakeKeys()
+	GameDrags()
 	local events = CreateFrame("Frame")
 	for event in pairs(EVENTS) do events:RegisterEvent(event) end
 	events:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -891,13 +1379,8 @@ function Wh.Init(settings)
 		for _, w in pairs(set.wins) do
 			if w.edit:HasFocus() then w.edit:Insert(text) end
 		end
+		if host.edit:HasFocus() then host.edit:Insert(text) end
 	end)
-	-- The chat's text size changed: the windows' words follow.
-	if ChatFrame1 then
-		hooksecurefunc(ChatFrame1, "SetFont", function()
-			for _, w in pairs(set.wins) do Face(w) end
-		end)
-	end
 	-- A maximized window dragged or sized is put back to its own size first.
 	Shy:On("SHY_HUD_MOVING", function(box)
 		for _, w in pairs(set.wins) do
@@ -908,26 +1391,37 @@ function Wh.Init(settings)
 		for _, w in pairs(set.wins) do
 			if w.open then Fill(w) end
 		end
+		if host.open then Fill(host) end
 		Docked()
 		Paint()
 	end)
 end
 
--- Across a reload or relog the windows come back as they were: their tabs, the one open, minimized or maximized.
--- (Where each stands is the HUD's, by window.) Battle.net conversations last a session, so they don't.
+-- Across a reload or relog the windows come back as they were: their tabs, the one open, minimized or maximized,
+-- and what was docked in the chat (n "chat"), open over it or not. (Where each window stands is the HUD's, by
+-- window.) Battle.net conversations last a session, so they don't.
+local function Kept(w)
+	local keys = {}
+	for _, key in ipairs(w.keys) do
+		if not talks[key].bn then keys[#keys + 1] = key end
+	end
+	return keys
+end
+
 function Wh.Keep()
 	local kept = {}
 	for n = 1, MOST do
 		local w = set.wins[n]
 		if w and w.open then
-			local keys = {}
-			for _, key in ipairs(w.keys) do
-				if not talks[key].bn then keys[#keys + 1] = key end
-			end
+			local keys = Kept(w)
 			if keys[1] then
 				kept[#kept + 1] = { n = n, keys = keys, current = w.current, min = w.min, maxed = w.maxed ~= nil }
 			end
 		end
+	end
+	if host.open then
+		local keys = Kept(host)
+		if keys[1] then kept[#kept + 1] = { n = "chat", keys = keys, current = host.current, up = hostUp } end
 	end
 	ShyChatHistory.whisperWindows = kept[1] and kept or nil
 end
@@ -938,7 +1432,19 @@ function Wh.Restore()
 	if not db.whispers or type(kept) ~= "table" then return end
 	for _, saved in ipairs(kept) do
 		local n = tonumber(saved.n)
-		if n and n >= 1 and n <= MOST and not (set.wins[n] and set.wins[n].open) and type(saved.keys) == "table" then
+		if saved.n == "chat" and type(saved.keys) == "table" then
+			for _, key in ipairs(saved.keys) do
+				local talk = talks[key]
+				if talk and not Win(talk) then set:Join(host, key) end
+			end
+			local current = talks[saved.current]
+			if saved.up and InChat() and current and Win(current) == host then
+				Show(current)
+			else
+				HostLay()
+			end
+			Log(("restored the chat's %d tabs, open %s"):format(#host.keys, tostring(hostUp)))
+		elseif n and n >= 1 and n <= MOST and not (set.wins[n] and set.wins[n].open) and type(saved.keys) == "table" then
 			local w = set.wins[n] or set:Make(n)
 			w.min = saved.min and true or nil
 			for _, key in ipairs(saved.keys) do
@@ -976,11 +1482,15 @@ function Wh.Report()
 				table.concat(w.keys, " / "), tostring(w.current))
 		end
 	end
+	out[#out + 1] = ("chat: can dock %s, tabs %s, current %s, open %s, covering %s"):format(tostring(InChat()),
+		table.concat(host.keys, " / "), tostring(host.current), tostring(hostUp), tostring(covered and covered:GetName()))
+	out[#out + 1] = ("keys: %s (habit %s)"):format(tostring(KEYS.bound),
+		type(db.whisperHabit) == "table" and table.concat(db.whisperHabit, " ") or "none")
 	out[#out + 1] = "lately:"
 	for _, line in ipairs(log) do out[#out + 1] = "  " .. line end
 	return table.concat(out, "\n")
 end
 
 -- For tests and /shychat: the windows, conversations and the dock as they stand, and the windows' set.
-function Wh.State() return set.wins, talks, dock, set end
+function Wh.State() return set.wins, talks, dock, set, host end
 Wh.Minimize, Wh.Maximize = Minimize, Maximize

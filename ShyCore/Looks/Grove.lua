@@ -620,6 +620,15 @@ UI.LookKind("grove", {
 	content = M.CLEAR,
 	text = "shadow",   -- words are set off from the garden behind them while no text effect is picked
 	face = { "groveFace", "groveRays", "groveMote" },
+	-- A chat bubble's tail (UI.LookTail): the mini rim and the garden's run along the foot, grown on round it, over
+	-- the garden's own ground.
+	tail = function(h)
+		local world = World(h)
+		local accent = UI.LookAccent(h)
+		return "Grove" .. world.files, { { layer = "Rim", color = WHITE }, { layer = "Vine", color = WHITE },
+			{ layer = "Key", color = accent }, { layer = "Light", color = Lifted(accent, world.glow), blend = "ADD" } },
+			{ { fill = true }, { file = MEDIA .. "Grove" .. world.files .. "Face", tile = M.FACE, color = WHITE, alpha = world.face } }
+	end,
 	edge = EDGE,
 	bar = function() return World().bar end,
 	slot = function() return World().slot end,

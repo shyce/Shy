@@ -29,10 +29,11 @@ local GOLD = { frame = { 1.0, 0.80, 0.38 }, well = { 0.20, 0.14, 0.05 }, finish 
 Tile.GOLD = GOLD
 
 -- The slot as it is worn: its wells as clear as the Background setting makes the window; a stored slot a print of
--- the hardware, but a gold one is the hardware itself.
+-- the hardware, but a gold one is the hardware itself. A special bag's slot has its kind's well (Tile.Well).
 local function Dress(s)
 	s.slot:Set({ icon = s.icon, flat = not s.live and not s.gold, hover = s.live, glazed = true,
-		style = s.gold and GOLD.finish or nil, color = s.steel or (s.gold and GOLD.frame or nil), fill = s.gold and GOLD.well or nil })
+		style = s.gold and GOLD.finish or nil, color = s.steel or (s.gold and GOLD.frame or nil),
+		fill = s.well or (s.gold and GOLD.well or nil) })
 end
 
 local function Make(tile, grid, live, icon, count)
@@ -310,6 +311,19 @@ function Tile.Steel(tile, color)
 	if s.steel == color then return end
 	s.steel = color
 	s.slot:Steel(color or (s.gold and GOLD.frame or nil))
+end
+
+-- The well in a color of its own (a special bag's kind, deep), or back to the look's (gold on a bank's slot).
+function Tile.Well(tile, color)
+	local s = tiles[tile]
+	if s.well == color then return end
+	s.well = color
+	Dress(s)
+	Settle(s)
+end
+
+function Tile.Welled(tile)
+	return tiles[tile].well
 end
 
 -- A bank's slot in gold (Tile.GOLD), or the bags' again.

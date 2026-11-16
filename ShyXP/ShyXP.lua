@@ -4,16 +4,17 @@ local ADDON, ns = ...
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "XP",
+	category = "leveling",
 	icon = "Interface\\AddOns\\ShyXP\\Media\\ShyXP",
 	smallIcon = "Interface\\AddOns\\ShyXP\\Media\\ShyXPSmall",
-	tagline = "XP per hour, time to level, quest XP ready",
 	savedVariables = "ShyXPDB",
 	keep = { runs = true },                -- every character's levels belong to the account (Splits.lua)
 	defaults = {
 		runs = {},                         -- by character GUID: name, class, realm, levels
 		compare = "auto",                  -- the run splits are set against: auto (the furthest) | off | a GUID
 		barStyle = "shy",                  -- shy (our bar over the default one) | blizzard
-		hideWhenDocked = true,             -- hide the default bar while another addon shows the level (API.lua)
+		place = "quest",                -- where the bars go: quest (the quest window, with ShyQuest) | under (the
+		                                   -- game's own bars under the action bars, restyled) | box (the stats window)
 		bubbles = true,
 		blizzText = false,                 -- the default "XP: 1234 / 5000" text (blizzard style only)
 		questOverlay = true,
@@ -24,15 +25,19 @@ local T = Shy:NewAddon(ADDON, {
 		lines = { pace = true, eta = true, bubbles = true, quests = true, kills = true, rested = true, level = true, splits = true },
 		paceWindow = 20,                   -- minutes
 		levelSummary = true,
+		repAtTop = true,                   -- at the top level the bar shows the reputation you watch (Rep.lua)
 		box = {
-			shown = true,
 			style = "card",                -- card | compact
 			hideInCombat = false,
-			tiles = { eta = true, bubbles = false, pace = true, quests = true, log = false, kills = true, rested = false, level = false },
+			tiles = { eta = true, bubbles = true, pace = true, quests = true, log = true, kills = true, rested = true, level = true },
+			repTiles = { eta = true, pace = true, count = true, session = true, quests = true, time = true },
 		},
 	},
 })
 ns.T = T
+
+-- The stats as they came before every one was on (T:OnLoad tells them from ones you switched).
+local FIRST_TILES = { eta = true, bubbles = false, pace = true, quests = true, log = false, kills = true, rested = false, level = false }
 
 local S = {}
 ns.Stats = S
@@ -72,6 +77,37 @@ end
 
 function S.Active()
 	return not GameRulesUtil.IsPlayerAtEffectiveMaxLevel() and not IsXPUserDisabled()
+end
+
+-- Where the bars go (T.db.place). The quest window is offered only with ShyQuest loaded; without it the
+-- bars go under the action bars.
+function ns.Place()
+	if T.db.place == "quest" and not Shy.addons.Quest then return "under" end
+	return T.db.place
+end
+
+function ns.Places()
+	local list = {}
+	if Shy.addons.Quest then list[#list + 1] = { value = "quest", text = "On the quest window" } end
+	list[#list + 1] = { value = "under", text = "Under the action bars" }
+	list[#list + 1] = { value = "box", text = "Stats window" }
+	return list
+end
+
+function ns.SetPlace(place)
+	local moved = T.db.place ~= place
+	T.db.place = place
+	ns.Refresh()
+	if ns.ApplyBlizzardBar then ns.ApplyBlizzardBar() end
+	if moved then Shy:Fire("SHY_XP_PLACE") end
+end
+
+-- What the bar shows: "rep" (the faction you track, Rep.lua), "xp", or nil (nothing: the top level with
+-- no reputation watched).
+function S.Mode()
+	if ns.Rep and ns.Rep.On() then return "rep" end
+	if S.Active() then return "xp" end
+	return nil
 end
 
 -- While zoning the client can briefly report 0 max XP or level 0; reuse the last good reading.
@@ -249,9 +285,38 @@ events:SetScript("OnEvent", function(_, event, ...)
 	end
 end)
 
+-- Settings saved before the bars had a place (box.full unset), carried over once. fresh: nothing was saved.
+--   The stats window turned off, or the game's bar kept beside the quest window: the bars go under the
+--   action bars (shown and hideWhenDocked are read here alone).
+--   Stats never switched from how they came: every one on, the card has room for them all now.
+function ns.CarryOver(db, fresh)
+	local box = db.box
+	if box.full then return end
+	if not fresh then
+		if box.shown == false or db.hideWhenDocked == false then db.place = "under" end
+		local untouched = true
+		for key, was in pairs(FIRST_TILES) do
+			if box.tiles[key] ~= was then untouched = false end
+		end
+		if untouched then
+			for key in pairs(box.tiles) do box.tiles[key] = true end
+		end
+	end
+	box.shown, db.hideWhenDocked = nil, nil
+	box.full = true
+end
+
 function T:OnLoad()
 	ShyXPCharDB = ShyXPCharDB or {}
 	char = ShyXPCharDB
+	ns.char = char
+	ns.CarryOver(self.db, self.isNew)
+	-- A reputation stat new since the switches were saved starts on.
+	local box = self.db.box
+	box.repTiles = box.repTiles or {}
+	for _, def in ipairs(ns.REP_TILES or {}) do
+		if box.repTiles[def.key] == nil then box.repTiles[def.key] = true end
+	end
 	self:RegisterOptions(ns.CreateOptions())
 end
 
@@ -265,13 +330,16 @@ function T:OnLogin()
 		events:RegisterEvent(event)
 	end
 	C_Timer.NewTicker(5, function() if S.Active() then char.time = char.time + 5 end end)
+	if ns.Rep then ns.Rep.Start() end
 	ns.SetupBar()
 	ns.SetupBox()
+	if ns.Under then ns.Under.Start() end
 	if ns.Splits then ns.Splits.Start() end
 end
 
-function ns.Share()
-	local text = S.ShareText()
+-- source: "xp" or "rep"; else what the bar shows.
+function ns.Share(source)
+	local text = (source or S.Mode()) == "rep" and ns.BarText("rep") or S.ShareText()
 	local editBox = ChatFrameUtil.GetActiveWindow()
 	if editBox then editBox:Insert(text) else ChatFrameUtil.OpenChat(text) end
 end

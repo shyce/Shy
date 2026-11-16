@@ -292,10 +292,12 @@ local function WhispersPage(page, g)
 	At(g:Checkbox(page, "Whisper windows", Get("whispers"), Set("whispers"),
 		{ desc = "Each conversation gets a window, with the people you talk to as tabs. Whispers still show in chat too." }), page, LEFT, -32)
 	At(g:Dropdown(page, "New whispers open", {
+		{ value = "auto",   text = "Where you put them" },
 		{ value = "window", text = "In a new window" },
 		{ value = "tab",    text = "As a blinking tab" },
+		{ value = "chat",   text = "Docked in chat" },
 	}, Get("whisperOpen"), Set("whisperOpen"), { width = COL, enabled = Windowed,
-		desc = "A new window opens a step down and right of the last, on top. A tab joins the window you have and blinks until you look." }), page, LEFT, -60)
+		desc = "Where you put them: each person goes back where you last put them, and someone new where you usually put people." }), page, LEFT, -60)
 	At(g:Checkbox(page, "Hide them in a fight", Get("whisperFight"), Set("whisperFight"),
 		{ enabled = Windowed, desc = "The windows step aside while you fight and come back after, with anything whispered meanwhile." }), page, LEFT, -112)
 	At(g:Slider(page, "Lines kept per person", 10, 200, 10, Get("whisperLines"), Set("whisperLines"),
@@ -304,7 +306,11 @@ local function WhispersPage(page, g)
 	At(UI.Header(page, "Using them", COL), page, RIGHT, 0)
 	local tips = UI.Text(page,
 		"Whisper someone from chat and their window opens.\n" ..
-		"Drag a tab off to give it a window, or onto another window to join it.\n" ..
+		"Drag a tab: every place it can go lights up.\n" ..
+		"Let go of it on a lit tab strip to join it there, anywhere else for a window of its own.\n" ..
+		"A chat window of the game's docks in the chat alone, as the game has it.\n" ..
+		"Enter goes back to the conversation you were typing in, R replies in theirs.\n" ..
+		"Commands like /rl work in a conversation too.\n" ..
 		"Right-click a tab to invite, add a friend or close it.\n" ..
 		"Minimize a window into the whisper dock; move the dock in layout mode.\n" ..
 		"Tab moves between conversations while you type.", 12, false, UI.colors.dim)

@@ -227,16 +227,10 @@ function Chooser.Preview(parent, width, height)
 	if chat.shyLook then UI.LookZones(chat.shyLook, nil, CHAT_FOOT) end
 	local y = strip + 8
 	for _, line in ipairs(CHAT_LINES) do
-		local fs = chat:CreateFontString(nil, "OVERLAY")
-		fs:SetFontObject(UI.TextFont(11))
+		local fs = UI.Words(chat, UI.TextFont(11), C.text, { wrap = false })
 		fs:SetPoint("TOPLEFT", 9, -y)
 		fs:SetPoint("RIGHT", chat, "RIGHT", -8, 0)
-		fs:SetJustifyH("LEFT")
-		fs:SetWordWrap(false)
-		fs:SetShadowOffset(1, -1)
-		fs:SetShadowColor(0, 0, 0, 1)
 		fs:SetText(line[1] == "" and line[2] or (UI.Wrap(C.dim, line[1]) .. line[2]))
-		Theme.Ink(fs, C.text)
 		y = y + 15
 	end
 	local seam = chat:CreateTexture(nil, "ARTWORK")
@@ -244,13 +238,9 @@ function Chooser.Preview(parent, width, height)
 	seam:SetPoint("BOTTOMLEFT", 4, CHAT_FOOT)
 	seam:SetPoint("BOTTOMRIGHT", -4, CHAT_FOOT)
 	Theme.Paint(seam, C.border, 0.8)
-	local typing = chat:CreateFontString(nil, "OVERLAY")
-	typing:SetFontObject(UI.TextFont(11))
+	local typing = UI.Words(chat, UI.TextFont(11), C.text)
 	typing:SetPoint("BOTTOMLEFT", 9, (CHAT_FOOT - 11) / 2)
-	typing:SetShadowOffset(1, -1)
-	typing:SetShadowColor(0, 0, 0, 1)
 	typing:SetText("Say: on my way|")
-	Theme.Ink(typing, C.text)
 	f.plate, f.console, f.chat = plate, console, chat
 
 	function f:Refresh()
@@ -980,7 +970,7 @@ end
 S.Step({
 	id = "theme", order = 15, title = "Theme", glyph = "star",
 	ask = "Pick a theme",
-	lead = "A whole theme at once, or any part made yours. Your screen follows as you pick.",
+	lead = "Pick a ready-made theme, or change just the parts you want. You'll see it on your screen right away.",
 	brief = function(plan)
 		local t = plan.theme
 		local worn = Theme.PresetWorn({ look = t.look, accent = t.pick, bar = t.bar, slot = t.slot, health = t.health,

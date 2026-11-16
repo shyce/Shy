@@ -322,14 +322,14 @@ function GoalPlaces(token, out, ground, from)
 			-- Every source, not only the best dropper: the nearest one is where to go.
 			for _, source in ipairs(item.sources) do
 				local thing = D.Thing(source.kind, source.id)
-				if thing and (source.kind ~= "v" or L.Friendly(thing)) then
+				if thing and (source.kind ~= "v" or L.Friendly(thing)) and not (source.kind == "n" and D.Dropless(source.id, item.id)) then
 					local gives = source.kind == "n" and not source.chance and (thing.gives or thing.takes) ~= nil
 					local how = source.kind == "v" and "sells" or source.kind == "o" and "holds" or gives and "gives" or "drops"
 					Add(thing, how, source.chance or (how == "drops" and least) or nil)
 				end
 			end
 			for _, id in ipairs(item.more or {}) do
-				local npc = D.Npc(id)
+				local npc = not D.Dropless(id, item.id) and D.Npc(id)
 				if npc then Add(npc, "drops", least) end
 			end
 		end
@@ -1335,19 +1335,34 @@ local function Farmables(item, pass)
 	return keep, kept
 end
 
--- The ground you farm an item on: the spawns of what R.FarmSpot chooses among (the first pass that has any), as
--- the maps shade it (ShyFarm's farm stop, lit in the finder's color). Kept by item and level: the route asks it
--- at every build.
+-- What is farmed, as a key: an item's ID (anywhere it is had), or "n" and a creature's ID (that creature, all it
+-- drops). R.FarmCreature reads the creature's back out of a key, or nil for an item's.
+function R.FarmKey(item, npc)
+	if npc then return "n" .. npc end
+	return item
+end
+function R.FarmCreature(key)
+	return type(key) == "string" and tonumber(key:match("^n(%d+)$")) or nil
+end
+
+-- The ground you farm on: an item's, the spawns of what R.FarmSpot chooses among (the first pass that has any); a
+-- creature's, its own spawns. As the maps shade it (ShyFarm's farm stop, lit in the finder's color). Kept by key
+-- and level: the route asks it at every build.
 local farmGround = {}
-function R.FarmGround(item)
-	local kept = farmGround[item]
+function R.FarmGround(key)
+	local kept = farmGround[key]
 	if kept and kept.level == L.Level() then return kept.lists end
 	local lists = {}
-	for pass = 1, 3 do
-		lists = Farmables(item, pass)
-		if #lists > 0 then break end
+	local npc = R.FarmCreature(key)
+	if npc then
+		lists = R.GroundOf({ kind = "c", id = npc })
+	elseif type(key) == "number" then
+		for pass = 1, 3 do
+			lists = Farmables(key, pass)
+			if #lists > 0 then break end
+		end
 	end
-	farmGround[item] = { level = L.Level(), lists = lists }
+	farmGround[key] = { level = L.Level(), lists = lists }
 	return lists
 end
 
@@ -1355,12 +1370,12 @@ end
 -- game won't say. The spawns' places in the world are worked out once (by item, continent and level), so asking is
 -- a look over plain numbers.
 local farmWorld = {}
-function R.FarmGroundYards(item)
+function R.FarmGroundYards(key)
 	if not W.Update() then return nil end
-	local kept = farmWorld[item]
+	local kept = farmWorld[key]
 	if not (kept and kept.continent == W.continent and kept.level == L.Level()) then
 		kept = { continent = W.continent, level = L.Level(), north = {}, west = {} }
-		for _, list in ipairs(R.FarmGround(item)) do
+		for _, list in ipairs(R.FarmGround(key)) do
 			for _, place in ipairs(list) do
 				if not place.dungeon then
 					for i = 1, #place.points, 2 do
@@ -1372,7 +1387,7 @@ function R.FarmGroundYards(item)
 				end
 			end
 		end
-		farmWorld[item] = kept
+		farmWorld[key] = kept
 	end
 	local least
 	local n, w = W.north, W.west
@@ -1413,8 +1428,20 @@ function R.CampsOf(npc)
 	return kept
 end
 
-function R.FarmSpot(item, left)
+-- npc: farm that creature (all it drops, or `item` of it): its best camp, by the same weighing as a quest's kills.
+function R.FarmSpot(item, left, npc)
 	left = math.max(left or 0, FARM.least)
+	if npc then
+		local lists, _, from = R.GroundOf({ kind = "c", id = npc })
+		local spot = R.BestOf(lists, from, "farm:n" .. npc, left)
+		if not spot then return nil end
+		local chance
+		for _, source in ipairs(item and D.Item(item) and D.Item(item).sources or {}) do
+			if source.kind == "n" and source.id == npc then chance = source.chance end
+		end
+		return { map = spot.map, x = spot.x / 10000, y = spot.y / 10000, yards = spot.yards, among = spot.among,
+			name = spot.source and spot.source.name, chance = chance, id = npc, how = "drops", supply = spot.supply }
+	end
 	for pass = 1, 3 do
 		local keep, kept = Farmables(item, pass)
 		local spot = #keep > 0 and R.BestOf(keep, kept, "farm:" .. item, left)
@@ -1549,11 +1576,12 @@ function R.Where(id, objective)
 end
 
 -- R.Where's points on one map ({ x, y } each), kept while the log and the bags say the same of the quest
--- (L.version, L.stamp): the maps ask it for every objective each time they gather, and it is the same.
-local whereOn = { version = -1, stamp = -1 }
+-- (L.version, L.stamp) and nothing new is known of who drops what (D.dropsVersion): the maps ask it for
+-- every objective each time they gather, and it is the same.
+local whereOn = { version = -1, stamp = -1, drops = -1 }
 function R.WhereOn(id, objective, map)
-	if whereOn.version ~= L.version or whereOn.stamp ~= L.stamp then
-		whereOn = { version = L.version, stamp = L.stamp }
+	if whereOn.version ~= L.version or whereOn.stamp ~= L.stamp or whereOn.drops ~= D.dropsVersion then
+		whereOn = { version = L.version, stamp = L.stamp, drops = D.dropsVersion }
 	end
 	local of = id .. ":" .. (objective or 0)
 	local key = of .. ":" .. map
@@ -1639,7 +1667,7 @@ local function Build()
 		return stop
 	end
 
-	local zoneMode = T:QuestStyle() == "zone"
+	local zoneMode = not ns.Following()
 	for _, entry in ipairs(L.order) do
 		local id = entry.id
 		local quest = D.Quest(id)
@@ -1712,7 +1740,7 @@ local function Build()
 			local giver = quest and NearestGiver(quest.starts)
 			local guided
 			local retakeSkipped = false
-			if T.db.guide.follow and G.current then
+			if ns.Following() and G.current then
 				local guide, saved = G.current, G.lib.Saved(G.current)
 				for index = 1, #guide.raw do
 					local step = G.lib.Step(guide, index)
@@ -1740,7 +1768,7 @@ local function Build()
 		end
 	end
 
-	if T.db.pickups and W.map then
+	if ns.Pickups() and W.map then
 		for _, quest in ipairs(L.StartsOn(W.map)) do
 			local giver = NearestGiver(quest.starts)
 			-- Only reachable ones that are worth the walk (R.Worth). Class quests (`own`) always count.
@@ -1771,7 +1799,7 @@ local function Build()
 		end
 	end
 	-- A quest-starting item already in the bags: a stop with no position.
-	if T.db.pickups then
+	if ns.Pickups() then
 		for _, held in ipairs(L.Carried()) do
 			local quest = held.quest
 			local name = C_Item.GetItemNameByID(held.item) or (D.Item(held.item) or {}).name or "An item you carry"
@@ -1971,7 +1999,7 @@ local function AddZones(route)
 	for _, stop in ipairs(route) do
 		if stop.kind == "guide" and not stop.side then guided = true end
 	end
-	if not W.Known() or (guided and T.db.zones ~= "always") then
+	if not W.Known() or not ns.Levelling() or (guided and T.db.zones ~= "always") then
 		want = 0
 	elseif T.db.zones == "always" then
 		want = 2
@@ -2718,7 +2746,7 @@ end
 -- Quests in the log the guide doesn't use, less those kept (ns.char.kept), in a chosen zone, or complete.
 function R.Strays()
 	local list = {}
-	if not T.db.guide.follow or not G.current or G.finished then return list end
+	if not ns.Following() or not G.current or G.finished then return list end
 	local chosen = {}
 	for map, on in pairs(ns.char.zones) do
 		if on then chosen[W.MapName(map) or ""] = true end
@@ -3032,10 +3060,14 @@ function R.Hush(id, hushed)
 	ns.Refresh()
 end
 
+-- Errands that serve the quests you have, or getting back to life: kept without levelling help (ns.Levelling).
+local ALWAYS = { death = true, bank = true, mailbox = true }
+
 ns.CardSwitch("errands", function(root)
 	local any = false
+	local levelling = ns.Levelling()
 	for _, id in ipairs(errandIds) do
-		if R.Hushed(id) and errandNames[id] then
+		if R.Hushed(id) and errandNames[id] and (levelling or ALWAYS[id]) then
 			if not any then
 				root:CreateTitle("Turned off")
 				any = true
@@ -3044,7 +3076,7 @@ ns.CardSwitch("errands", function(root)
 		end
 	end
 	if any then root:CreateDivider() end
-end)
+end, true)
 
 -- Whether a fight can change the route as last built. A fight only ever holds an errand back (a finder's
 -- `busy`) or takes it off (none in a fight); nothing else in a build asks about one.
@@ -3170,14 +3202,16 @@ end
 -- Returns the errands that go first (nearest first), the rest, and those that lead everything.
 -- R.held: the route is chosen again only for a walk (ShyQuest.lua). Then an errand goes first just as it
 -- did the last time, and the one that led still leads: two near ones would trade the lead at every step.
+-- Without levelling help only the ALWAYS errands are asked for.
 local function Errands(lead)
 	local first, rest, now, urgent = {}, {}, {}, {}
 	local was, held = ranFirst, R.held and ranFirst ~= nil
+	local levelling = ns.Levelling()
 	for _, id in ipairs(errandIds) do
 		-- pcall: one finder's error must not break the route. (Each timed on its own: /shymon names the slow one.)
 		local tick = debugprofilestop()
 		local ok, stop = true, nil
-		if not R.Hushed(id) then ok, stop = pcall(errands[id], lead) end
+		if not R.Hushed(id) and (levelling or ALWAYS[id]) then ok, stop = pcall(errands[id], lead) end
 		Shy.Clock("errand: " .. tostring(id)):Lap(debugprofilestop() - tick)
 		if not ok then
 			geterrorhandler()(stop)
@@ -3429,7 +3463,7 @@ end
 -- A dungeon run leads (Run.lua): the route is its steps alone.
 function R.Running()
 	local G = ns.Guide
-	return G.current ~= nil and G.current.run ~= nil and T.db.guide.follow == true
+	return G.current ~= nil and G.current.run ~= nil and ns.Following()
 end
 
 function R.Build()
@@ -3454,7 +3488,7 @@ function R.Build()
 	-- R.offGuide: guide-only mode is in force. R.skipped: available quests on this map left out by it.
 	R.offGuide, R.skipped = nil, 0
 	local leading = guided[1]
-	if not run and leading and not leading.side and not OnlyGrind(leading) and T.db.pickups and not R.Extras() then
+	if not run and leading and not leading.side and not OnlyGrind(leading) and ns.Pickups() and not R.Extras() then
 		R.offGuide = true
 		for _, quest in ipairs(W.map and L.StartsOn(W.map) or {}) do
 			if not led[quest.id] and not G.Uses(quest.id) then R.skipped = R.skipped + 1 end

@@ -634,12 +634,43 @@ local function RangeArt(h)
 	return art
 end
 
+-- The wash multiplies what is under it (MOD), and the game draws a multiply whatever the button's alpha: on a bar
+-- faded out (a drawer tucked, the minimal layout's bars away, the screen quieted) it would redden the world behind.
+-- So it shows only while the button is wholly there, looked at every frame while any button is far; the ring
+-- fades with the button as everything else on it does.
+local farOnes, farWatch = {}, nil
+
+local function Washed(h)
+	local alpha = h.frame:GetEffectiveAlpha()
+	local whole = not issecretvalue(alpha) and alpha >= 0.99
+	if whole ~= h.washed then
+		h.washed = whole
+		h.range.wash:SetShown(whole)
+	end
+end
+
+local function WatchFar()
+	for h in pairs(farOnes) do Washed(h) end
+end
+
 local function SetFar(h, far)
 	if far == (h.far or false) then return end
 	h.far = far
 	local art = RangeArt(h)
-	art.wash:SetShown(far)
 	art.ring:SetShown(far)
+	if far then
+		farOnes[h], h.washed = true, nil
+		Washed(h)
+	else
+		farOnes[h] = nil
+		art.wash:Hide()
+	end
+	if not farWatch then
+		farWatch = CreateFrame("Frame")
+		farWatch:SetScript("OnUpdate", Shy.Clocked("ShyTweaks out of range", WatchFar))
+		ns.RangeWatch = farWatch
+	end
+	farWatch:SetShown(next(farOnes) ~= nil)
 end
 
 -- The hook only fires when the game's answer changes; a new target or page needs asking.

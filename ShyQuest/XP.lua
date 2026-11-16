@@ -14,6 +14,7 @@ ns.XP = X
 
 local PAD = 10
 local HEIGHT = 42
+local REP_ROW = 26           -- the reputation's row under the XP's: its bar on the first line, the faction under it
 -- The strip's two lines, each laid on its middle: the level, the bar and the percent; under them the time left
 -- and the bar's quest figures.
 local STRIP = {
@@ -22,8 +23,11 @@ local STRIP = {
 	gap = 8,                  -- between the level, the bar and the percent; the least between the time left and the figures
 	pip = 6, lead = 4,        -- a figure's swatch of its band's color, and how far its words stand past it
 	apart = 12,               -- between two figures
+	repTop = -4, repUnder = -17,   -- the reputation row's two lines' middles, down from its top
+	repBar = 6,                    -- its bar's height
 }
 local EVERY = 5              -- seconds between refreshes when nothing prompts one
+local STRIP_HINTS = { { "right", "Track" } }
 local stale, refreshed = true, 0
 
 -- ShyXP's addon object, when it is loaded.
@@ -41,10 +45,27 @@ local function Levelling()
 	return xp ~= nil and xp.Stats.Active()
 end
 
--- The card is the one place for the level, always while there is a level to gain (never at the top one):
--- ShyXP's own box steps aside while the card carries it (X.Apply).
+-- The reputation ShyXP watches, a bar of its own beside your XP: { name, word, color, next, into, span, eta } or nil.
+local function Watched()
+	local xp = Other()
+	return xp and xp.Reputation and xp:Reputation(true) or nil
+end
+
+-- ShyXP's bars go on this card (its setting: the quest window, under the action bars or its stats window).
+local function Here()
+	local xp = Other()
+	return xp ~= nil and (not xp.IsOn or xp:IsOn())
+end
+
+-- The card carries your XP while there is a level to gain, and the reputation you watch at any level: one
+-- bar each, the XP's first. ShyXP's own bars step aside while it does (X.Apply).
 local function Carried()
-	return Levelling()
+	return Here() and (Levelling() or Watched() ~= nil)
+end
+
+-- A second, slimmer row for the reputation, under the XP's.
+local function Both()
+	return Levelling() and Watched() ~= nil
 end
 
 function X.StripWanted()
@@ -148,6 +169,12 @@ local function CreateStrip(card)
 	local S = xp.Stats
 	local strip = CreateFrame("Frame", nil, card)
 	strip:SetHeight(HEIGHT)
+	-- The strip's figures, short: 2,635 is "2.6k" (the card is narrow; the hover has them whole).
+	local function Short(n)
+		if n >= 1e6 then return ("%.1fm"):format(n / 1e6) end
+		if n >= 1000 then return ("%.1fk"):format(n / 1e3) end
+		return S.Number(n)
+	end
 
 	strip.rule = strip:CreateTexture(nil, "ARTWORK")
 	strip.rule:SetHeight(1)
@@ -189,7 +216,7 @@ local function CreateStrip(card)
 		figure:SetShown(on)
 		figure.pip:SetShown(on)
 		if not on then return after, 0 end
-		figure:SetText(UI.Wrap(C.text, S.Short(xp)) .. " " .. figure.word)
+		figure:SetText(UI.Wrap(C.text, Short(xp)) .. " " .. figure.word)
 		figure.pip:SetColorTexture(color[1], color[2], color[3], 1)
 		if figure.after ~= (after or false) then
 			figure.after = after or false
@@ -203,7 +230,85 @@ local function CreateStrip(card)
 		return figure, figure:GetStringWidth() + STRIP.lead + STRIP.pip + (after and STRIP.apart or 0)
 	end
 
+	-- The reputation you track: its standing in its color, how far through it; under the bar the faction and
+	-- what is left to the next standing.
+	local function Reputation(self, rep)
+		self.level:SetText(UI.Wrap(rep.color, rep.word))
+		self.percent:SetText(("%d%%"):format(math.floor(rep.into / rep.span * 100)))
+		self.bar:Update()
+		Stand(self.log, 0)
+		Stand(self.ready, 0)
+		if self.bound ~= false then
+			self.bound = false
+			self.eta:ClearAllPoints()
+			self.eta:SetPoint("LEFT", self, "TOPLEFT", PAD, STRIP.under)
+			self.eta:SetPoint("RIGHT", self, "TOPRIGHT", -PAD, STRIP.under)
+		end
+		local left = ""
+		if rep.next then
+			left = (rep.eta and ("~" .. S.Duration(rep.eta)) or Short(rep.span - rep.into)) .. " to " .. rep.next
+		end
+		self.eta:SetText(UI.Wrap(C.text, rep.name) .. (left ~= "" and ("  " .. left) or ""))
+	end
+
+	-- The reputation's own row under the XP's: its bar under the XP bar, edge to edge, and its percent under the
+	-- XP's; under them the faction with its standing, and what is left to the next.
+	local function Second(self, rep)
+		local row = self.second
+		if not row then
+			row = CreateFrame("Frame", nil, self)
+			row:SetPoint("TOPLEFT", 0, -HEIGHT)
+			row:SetPoint("TOPRIGHT", 0, -HEIGHT)
+			row:SetHeight(REP_ROW)
+			row.percent = UI.Text(row, "", 11, true, C.hot)
+			row.percent:SetPoint("RIGHT", row, "TOPRIGHT", -PAD, STRIP.repTop)
+			row.bar = xp:CreateBar(row, "rep")
+			row.bar:SetHeight(STRIP.repBar)
+			-- (Under the XP bar, its edges the XP bar's: from the XP bar's foot down to the row's first line.)
+			local drop = (HEIGHT - STRIP.repTop - STRIP.repBar / 2) - (1 - STRIP.top + STRIP.bar / 2)
+			row.bar:SetPoint("TOPLEFT", self.bar, "BOTTOMLEFT", 0, -drop)
+			row.bar:SetPoint("TOPRIGHT", self.bar, "BOTTOMRIGHT", 0, -drop)
+			row.left = UI.Text(row, "", 11, false, C.dim)
+			row.left:SetPoint("RIGHT", row, "TOPRIGHT", -PAD, STRIP.repUnder)
+			row.name = UI.Text(row, "", 11, false, C.text)
+			row.name:SetWordWrap(false)
+			row.name:SetPoint("LEFT", row, "TOPLEFT", PAD, STRIP.repUnder)
+			row.name:SetPoint("RIGHT", row.left, "LEFT", -STRIP.gap, 0)
+			row:EnableMouse(true)
+			row:SetScript("OnEnter", function(r) xp:ShowTooltip(r, STRIP_HINTS, "rep") end)
+			row:SetScript("OnLeave", function(r) UI.TipHide(r) end)
+			row:SetScript("OnMouseUp", function(r, button)
+				if button == "RightButton" then xp:TrackMenu(r) end
+			end)
+			self.second = row
+		end
+		row.percent:SetText(("%d%%"):format(math.floor(rep.into / rep.span * 100)))
+		row.bar:Update()
+		-- The faction, and its standing in its color: what the bar is of.
+		row.name:SetText(rep.name .. "  " .. UI.Wrap(rep.color, rep.word))
+		local left = ""
+		if rep.next then
+			left = UI.Wrap(C.text, rep.eta and ("~" .. S.Duration(rep.eta)) or Short(rep.span - rep.into)) .. " to " .. rep.next
+		end
+		row.left:SetText(left)
+		-- A long name and its standing that don't fit beside what is left: the name alone (what is left names the
+		-- next standing, so the one you're in goes without saying).
+		local room = row:GetWidth() - PAD * 2 - row.left:GetStringWidth() - STRIP.gap
+		if room > 0 and row.name:GetUnboundedStringWidth() > room then row.name:SetText(rep.name) end
+		row:Show()
+	end
+
 	function strip:Refresh()
+		local levelling = S.Active()
+		self.bar.source = levelling and "xp" or "rep"
+		local rep = Watched()
+		self:SetHeight(X.Height())
+		if not levelling then
+			if self.second then self.second:Hide() end
+			if rep then Reputation(self, rep) end
+			return
+		end
+		if rep then Second(self, rep) elseif self.second then self.second:Hide() end
 		local cur, max, level = S.Progress()
 		self.level:SetText(tostring(level))
 		self.percent:SetText(("%d%%"):format(math.floor(cur / max * 100)))
@@ -217,7 +322,7 @@ local function CreateStrip(card)
 		local readyRoom
 		first, readyRoom = Stand(self.ready, ready, readyColor, first)
 
-		-- The time left at your pace, or the XP left without one, up to the figures: a time that has no room
+		-- The time left at your pace, or the XP left without one, up to the figures: one that has no room
 		-- beside them goes without its words, and anything longer still is cut short, never written over them.
 		if self.bound ~= (first or false) then
 			self.bound = first or false
@@ -230,15 +335,19 @@ local function CreateStrip(card)
 			end
 		end
 		local eta = S.TimeToLevel()
-		local left = UI.Wrap(C.text, eta and ("~" .. S.Duration(eta)) or S.Short(max - cur))
+		local left = UI.Wrap(C.text, eta and ("~" .. S.Duration(eta)) or Short(max - cur))
 		self.eta:SetText(left .. " to go")
 		local room = self:GetParent():GetWidth() - PAD * 2 - logRoom - readyRoom - (first and STRIP.gap or 0)
-		if eta and self.eta:GetUnboundedStringWidth() > room then self.eta:SetText(left) end
+		-- (Before the card has a width there is nothing to measure against.)
+		if room > 0 and self.eta:GetUnboundedStringWidth() > room then self.eta:SetText(left) end
 	end
 
 	strip:EnableMouse(true)
-	strip:SetScript("OnEnter", function(self) xp:ShowTooltip(self) end)
+	strip:SetScript("OnEnter", function(self) xp:ShowTooltip(self, xp.TrackMenu and STRIP_HINTS or nil, self.bar.source) end)
 	strip:SetScript("OnLeave", function(self) UI.TipHide(self) end)
+	strip:SetScript("OnMouseUp", function(self, button)
+		if button == "RightButton" and xp.TrackMenu then xp:TrackMenu(self) end
+	end)
 	return strip
 end
 
@@ -255,7 +364,10 @@ function X.Strip(card)
 	return card.strip
 end
 
-X.HEIGHT = HEIGHT
+-- The strip's height: the XP's block, and the reputation's row under it while both show.
+function X.Height()
+	return HEIGHT + (Both() and REP_ROW or 0)
+end
 
 -- Hides ShyXP's own box while the card carries the level.
 function X.Apply()
@@ -276,17 +388,24 @@ function X.Setup()
 		X.Apply()
 		ns.ApplyCard()
 	end)
+	-- Where ShyXP's bars go changed: the card takes them or gives them back.
 	Shy:On("SHY_XP_SWITCH", function()
-		stale = true
+		X.Apply()
+		ns.ApplyCard()
+	end)
+	-- The bars went from XP to a reputation or back, or to nothing at the top level.
+	Shy:On("SHY_XP_MODE", function()
+		X.Apply()
 		ns.ApplyCard()
 	end)
 
 	local events = CreateFrame("Frame")
-	for _, event in ipairs({ "PLAYER_XP_UPDATE", "UPDATE_EXHAUSTION", "PLAYER_LEVEL_UP", "PLAYER_UPDATE_RESTING" }) do
+	for _, event in ipairs({ "PLAYER_XP_UPDATE", "UPDATE_EXHAUSTION", "PLAYER_LEVEL_UP", "PLAYER_UPDATE_RESTING", "UPDATE_FACTION" }) do
 		events:RegisterEvent(event)
 	end
 	events:SetScript("OnEvent", function(_, event)
 		stale = true
+		if event == "UPDATE_FACTION" then return end
 		-- Step text (turn-in XP, grind to go) depends on XP too. A kill's XP rewrites the card's rows (a
 		-- hand-in's worth, whether it dings) and nothing else: the guide asks again itself while a step waits
 		-- on XP (Guide.lua). Only a level gained builds the route again (what is too high or gray moves).

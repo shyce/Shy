@@ -15,9 +15,9 @@ local ADDON, ns = ...
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Plates",
+	category = "combat",
 	icon = "Interface\\AddOns\\ShyPlates\\Media\\ShyPlates",
 	smallIcon = "Interface\\AddOns\\ShyPlates\\Media\\ShyPlatesSmall",
-	tagline = "Nameplates with casts, debuffs, threat and combo points",
 	savedVariables = "ShyPlatesDB",
 	defaults = {
 		on = true,

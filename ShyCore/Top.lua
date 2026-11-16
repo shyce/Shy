@@ -828,14 +828,7 @@ local function Hue(color)
 end
 
 local function Words(parent, font, side)
-	local fs = parent:CreateFontString(nil, "OVERLAY")
-	fs:SetFontObject(font)
-	UI.Follow(fs)   -- a title keeps up with the theme's font
-	fs:SetShadowOffset(1, -1)
-	fs:SetShadowColor(0, 0, 0, 1)
-	fs:SetWordWrap(false)
-	fs:SetJustifyH(side)
-	return fs
+	return UI.Words(parent, font, nil, { wrap = false, justify = side })
 end
 
 -- The width a string's words need whole, or nil where the game keeps it secret.

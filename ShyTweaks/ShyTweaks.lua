@@ -10,9 +10,9 @@ local ADDON, ns = ...
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Tweaks",
+	category = "interface",
 	icon = "Interface\\AddOns\\ShyTweaks\\Media\\ShyTweaks",
 	smallIcon = "Interface\\AddOns\\ShyTweaks\\Media\\ShyTweaksSmall",
-	tagline = "Quality-of-life tweaks you switch on and off",
 	savedVariables = "ShyTweaksDB",
 	defaults = { features = {}, options = {}, frames = {}, bagOffset = { x = 0, y = 0 } },
 })

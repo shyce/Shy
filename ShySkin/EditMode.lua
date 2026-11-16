@@ -233,6 +233,12 @@ module = ns.Module({
 		EventRegistry:RegisterCallback("EditMode.Enter", function()
 			if m.on then PaintAll(m) end
 		end, m)
+		-- A piece seated in another, taken out or taken apart (ShyDock's cockpit): its highlight shows or hides at once.
+		Shy:On("SHY_HUD_STILL", function(box)
+			local frame = box and box.foreign
+			local selection = frame and frame.Selection
+			if selection and overlays[selection] then Look(selection) end
+		end)
 	end,
 
 	Paint = PaintAll,

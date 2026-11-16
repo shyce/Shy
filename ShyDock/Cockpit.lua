@@ -1,10 +1,11 @@
 -- The cockpit: the art behind the HUD under the character. One plate round the personal
 -- resource display and the cooldowns' rows (Layout.lua plans the rows; nothing is drawn
--- round a row: the rows stand in the plate). While a cast is up the cast bar is a row of it,
--- joined to the display's block (one frame round the bars, the swing row and the cast bar's row,
--- hairlines of its steel between): the plate grows down round it, quickly, the foot row riding its
--- foot down with it, and shrinks back after a moment's hold. With the display out of the vessel the
--- row hangs under what is left, framed alone in the same steel. Beside it, a flap of the same make
+-- round a row: the rows stand in the plate). While a cast is up the cast bar is a row of it, and
+-- while your weapons swing the swing timer is, in the same place (the hand row; a cast takes it):
+-- joined to the display's block (one frame round the bars and the row, hairlines of its steel
+-- between): the plate grows down round it, quickly, the foot row riding its foot down with it, and
+-- shrinks back after a moment's hold. With the display out of the vessel the
+-- row stands where the block would, framed alone in the same steel. Beside it, a flap of the same make
 -- for the tracked bars while any is up, joined to the plate by a rib.
 --
 -- Layout.lua seats the Blizzard frames (Layout.Cockpit); this file draws behind
@@ -19,7 +20,7 @@
 -- The plate and the flap are housings of the family's make (ShyCore's UI.Panel, as the bar housing is),
 -- so they wear the theme's look (Theme.Look: forged, steel, clear or eclipse; UI.lua, "The looks") like
 -- every piece on screen, and follow the Background strength unless "See-through" is off (cockpitFollow).
--- The display is one block whatever the look: one steel frame round its bars (and the swing row), with
+-- The display is one block whatever the look: one steel frame round its bars (and the hand row), with
 -- nothing drawn in the gaps between them, so the plate shows through. The art eases between plans; the
 -- look's light (in the top edge, or round the slab) brightens in a fight; a row lights gold for a moment
 -- when an essential cooldown ends (the gems') or a form changes (the stances').
@@ -32,7 +33,8 @@
 --                                                a fight will have it: where ShyTip's pings and markers stand
 --   Shy.addons.Dock:CockpitWing(out, rider)      the plate grows over the bay (false: back in), sliding like a hover's
 --                                                foot; `rider` is a frame faded in as it slides out (ShyTip's pings and markers)
---   "SHY_COCKPIT" on the bus (up)       the plate showed, hid or moved, the strip's bay changed, or the cast bar's numbers changed
+--   "SHY_COCKPIT" on the bus (up)       the plate showed, hid or moved, the strip's bay changed, the cast bar's numbers
+--                                       changed, or the hand row passed between the swing and a cast (or its hands changed)
 
 local ADDON, ns = ...
 local T = ns.T
@@ -85,6 +87,7 @@ local GLIDE = 0.22
 local CAST_OPEN, CAST_CLOSE, CAST_HOLD = 0.1, 0.2, 0.35
 local castEnded   -- when the last cast ended (GetTime), while the row is held open for the next
 local drawn, glide, glider
+local shapedTo     -- where the plate was last sent: its plan (K.rect), or round the hand row alone
 local later        -- the layout shows the essential cooldowns only in combat
 local fighting = false
 local apart = false   -- the vessel is taken apart (Pieces.lua): the plate stays up whatever stands in it
@@ -117,7 +120,8 @@ local function Held(c)
 		end
 	end
 	-- Neither core piece can hold it up: both taken out, or neither there by design (a layout by role has no
-	-- display, and the gems wait for a fight). Then whatever is left holds it up, from the first draw on.
+	-- display, and the gems wait for a fight). Then whatever is left holds it up, from the first draw on (with
+	-- nothing of it showing, Draw leaves the plate out of sight, or round the hand row alone).
 	local noDisplay = ns.char.loose.display or not present.display
 	local noGems = ns.char.loose.essential or ns.Layout.CombatOnly("essential")
 	if noDisplay and noGems then
@@ -312,9 +316,10 @@ end
 -- keep: the flap stays as it is (a home of the bars' own: Apart redraws it); else it goes with the plate.
 local function Down(keep)
 	local had = K.rect ~= nil
-	K.rect, plan, bayWas, drawn, glide, rowsWas = nil, nil, nil, nil, nil, nil
+	K.rect, plan, bayWas, drawn, glide, rowsWas, shapedTo = nil, nil, nil, nil, nil, nil, nil
 	glider:Hide()
 	box:Hide()
+	box.shyCast:Hide()
 	if not keep then
 		Fade(flap, false)
 		flapPlan = nil
@@ -630,19 +635,19 @@ end
 -- The tracked bars' flap while a bar is up: beside the plate, the plan's barsWing rect, as tall as the bars that
 -- show, joined to the plate by its rib (the plan's rib rect, as tall as the shorter of the two); or, in a home of
 -- their own (c.barsApart, a layout by role), from the edge the home keeps (c.barsGrow) round the bars that show,
--- up whether the plate is or not. Fades in; goes at once.
+-- up whether the plate is or not. Fades in; goes at once. Returns whether it is up (secret: taken as up).
 function Flap(c, quiet)
 	local r = c.rects.barsWing
 	flapPlan = r and c or nil
 	if not r or ns.char.loose.bars then
 		Fade(flap, false, quiet)
-		return
+		return false
 	end
 	local l, b, _, t = ns.Layout.RowRect(Rows().bars)
-	if l == false then return end   -- secret: as it was
+	if l == false then return true end   -- secret: as it was
 	if not l then
 		Fade(flap, false, quiet)
-		return
+		return false
 	end
 	-- The icon fills the row and the bar fills the icon, so the flap hugs the row. The bottom follows the
 	-- bars, and a hidden row under the one that is up leaves no empty band.
@@ -674,6 +679,7 @@ function Flap(c, quiet)
 	else
 		flap.rib:Hide()
 	end
+	return true
 end
 
 -- The look is the theme's and ShyCore dresses the housings; what was drawn is only signed, so a change
@@ -749,7 +755,7 @@ local function PulseEssential()
 	end
 end
 
--- The display's block: one frame round the display's bars and the swing row, which stand a seam apart
+-- The display's block: one frame round the display's bars and the hand row, which stand a seam apart
 -- (Tighten); each seam a hairline of the frame's steel, so the block reads as one piece cut by its own frame.
 local SEAM_ALPHA = 0.85
 
@@ -770,26 +776,31 @@ local function Framed(b, rect, lines)
 	for i = #lines + 1, #b.seams do b.seams[i]:Hide() end
 end
 
--- The block, and the cast bar's row while a cast is up: joined to the block (a seam under its last bar,
--- in its frame) or in a frame of its own under what hangs at the plate's foot; in the row a hairline
--- between the spell's picture and the bar. The grid's measures: the frame, the bars and their seams are
--- whole pixels.
+-- The block, and the hand row while it is open (a cast up, or your weapons swinging): joined to the block (a
+-- seam under its last bar, in its frame) or with no block in a frame of its own where the block would be; in the
+-- row a hairline between each picture and its bar (and between the two hands' bars). The grid's measures:
+-- the frame, the bars and their seams are whole pixels.
 local function Block(c, present)
 	local b, own = box.shyBlock, box.shyCast
 	local d = c.rects.display
 	local m = c.m
 	local F, seam = m.frame, m.seam
-	local castUp = casting and c.casting and c.rects.cast ~= nil
-	local joined = castUp and c.castIn == "block" and d ~= nil and present.display
-	local function CastLine(lines)
-		lines[#lines + 1] = { c.castLeft - c.castGap, c.cast, c.castLeft, c.cast + c.castHeight }
+	local castUp = casting and c.casting
+	local rowUp = (castUp or (c.swinging and c.hand ~= nil)) and c.rects.cast ~= nil
+	local joined = rowUp and c.castIn == "block" and d ~= nil and present.display
+	local function RowLines(lines)
+		if castUp then
+			lines[#lines + 1] = { c.castLeft - c.castGap, c.cast, c.castLeft, c.cast + c.castHeight }
+		else
+			for _, line in ipairs(c.hand.seams) do lines[#lines + 1] = line end
+		end
 	end
-	if castUp and not joined then
+	if rowUp and not joined then
 		local lines = {}
-		CastLine(lines)
+		RowLines(lines)
 		local fresh = not own:IsShown()
 		Framed(own, c.rects.cast, lines)
-		-- Hanging under the plate, it fades in (the plate has nothing to glide for it).
+		-- It fades in as the plate glides open round it.
 		if fresh then
 			own:SetAlpha(0)
 			Drift(own, 1)
@@ -799,29 +810,21 @@ local function Block(c, present)
 		own:SetAlpha(1)
 		own:Hide()
 	end
-	local sw = c.rects.swing
 	if not (d and present.display) then
-		-- The slim display of a layout by role (no health or power): the swing row in the block's frame alone.
-		if sw and present.swing then
-			Framed(b, { sw[1] - F, sw[2] - F, sw[3] + F, sw[4] + F }, {})
-		else
-			b:Hide()
-		end
+		b:Hide()
 		return
 	end
 	local foot = d[2]
-	if sw and present.swing then foot = sw[2] end
 	if joined then foot = c.cast end
 	local lines = {}
 	local y = d[4] - m.health
 	lines[#lines + 1] = { d[1], y - seam, d[3], y }
 	y = y - seam - m.power
 	if d[2] < y - seam / 2 then lines[#lines + 1] = { d[1], y - seam, d[3], y } end
-	if sw and present.swing then lines[#lines + 1] = { d[1], sw[4], d[3], sw[4] + seam } end
 	if joined then
 		local top = c.cast + c.castHeight
 		lines[#lines + 1] = { d[1], top, d[3], top + seam }
-		CastLine(lines)
+		RowLines(lines)
 	end
 	Framed(b, { d[1] - F, foot - F, d[3] + F, d[4] + F }, lines)
 end
@@ -834,14 +837,15 @@ local function Draw(c, quiet)
 	local changed = not (was and was[1] == r[1] and was[2] == r[2] and was[3] == r[3] and was[4] == r[4])
 	local present = Present(c)
 	local span
-	if plan ~= nil and (plan.casting or false) ~= (c.casting or false) then span = c.casting and CAST_OPEN or CAST_CLOSE end
+	local opened, wasOpen = c.casting or c.swinging or false, plan ~= nil and (plan.casting or plan.swinging) or false
+	if plan ~= nil and opened ~= wasOpen then span = opened and CAST_OPEN or CAST_CLOSE end
+	-- The hand row handed from the swing to a cast or back, or the swing's hands changed: the plate keeps its shape,
+	-- so the swing timer is told all the same.
+	local handed = plan ~= nil and ((plan.casting or false) ~= (c.casting or false) or (plan.swinging or false) ~= (c.swinging or false)
+		or #(plan.hand and plan.hand.bars or "") ~= #(c.hand and c.hand.bars or ""))
 	plan = c
 	local dressed = Dress(c)
-	if changed then
-		K.rect = { r[1], r[2], r[3], r[4] }
-		Shape(r, quiet or not box:IsShown(), span)
-		Fade(box, true, quiet)
-	end
+	if changed then K.rect = { r[1], r[2], r[3], r[4] } end
 	-- The display's class bar is kept off only while the display is seated.
 	Bare(present.display)
 	Block(c, present)
@@ -878,8 +882,26 @@ local function Draw(c, quiet)
 	buffsAt = BuffSlot(c)
 	if buffsAt then Seat(buffs, buffsAt, quiet) else Fade(buffs, false, quiet) end
 	FitItems(c)
-	Flap(c, quiet)
-	box:Show()
+	local flapUp = Flap(c, quiet)
+	-- Nothing of the plate's own shows (a layout by role out of a fight): no empty plate. With the hand row open
+	-- (a cast, your weapons swinging) the plate is round the row alone, its padding on every side; with neither,
+	-- nothing is drawn. Not empty: taken apart (it stays up), the tracked bars' flap joined to it, or the Shift
+	-- strip out over its bay.
+	local empty = not apart and not (flapUp and not c.barsApart) and not wingOut
+		and not (present.display and not ns.char.loose.display) and not gemsAt and not tilesAt and not stancesAt
+		and not buffsAt and not K.blades
+	local rowUp = ((casting and c.casting) or (c.swinging and c.hand ~= nil)) and c.rects.cast ~= nil
+	local shape = r
+	if empty and rowUp then
+		local row, P = c.rects.cast, c.m.pad
+		shape = { row[1] - P, row[2] - P, row[3] + P, row[4] + P }
+	end
+	local to = shapedTo
+	if not (to and to[1] == shape[1] and to[2] == shape[2] and to[3] == shape[3] and to[4] == shape[4]) then
+		shapedTo = { shape[1], shape[2], shape[3], shape[4] }
+		Shape(shape, quiet or not box:IsShown() or (empty and not rowUp), span)
+	end
+	Fade(box, not empty or rowUp, quiet)
 	-- The Shift strip's bay goes by the plate: it is told when the bay changes, and the plate reaches as far.
 	local bay = c.strip
 	local bayNow = table.concat({ bay.side, bay.left, bay.bottom, bay.width, bay.height, bay.cell, bay.rows }, " ")
@@ -887,7 +909,7 @@ local function Draw(c, quiet)
 	bayWas = bayNow
 	Reach()
 	local cast = Cast(c)
-	if cast or ((changed or dressed or bayChanged) and not quiet) then Tell(true) end
+	if cast or handed or ((changed or dressed or bayChanged) and not quiet) then Tell(true) end
 end
 
 -- The plate is down (or not yet up): the tracked bars' home of their own (a layout by role) is drawn all the same,
@@ -1021,8 +1043,9 @@ function K.Start()
 	box:Hide()
 	Boxed(box)
 	-- The display's block: its frame. And the cast bar's row's, for when it stands apart from the block.
-	local function Steel()
-		local f = CreateFrame("Frame", nil, box)
+	local function Steel(parent)
+		local f = CreateFrame("Frame", nil, parent or box)
+		f:SetFrameStrata(box:GetFrameStrata())
 		f:SetFrameLevel(box:GetFrameLevel() + 1)
 		f.frame = f:CreateTexture(nil, "BORDER")
 		f.frame:SetAllPoints()
@@ -1034,7 +1057,8 @@ function K.Start()
 		return f
 	end
 	box.shyBlock = Steel()
-	box.shyCast = Steel()
+	-- The hand row's own frame stands beside the plate's frame, not in it: it shows while the plate is out of sight.
+	box.shyCast = Steel(UIParent)
 	K.frame = box
 
 	gems = Area()

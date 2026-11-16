@@ -1132,10 +1132,13 @@ local function Build()
 	})
 	own.box = box
 
+	-- The band and the foot stand on the window's body: clear of the look's work round the edge (UI.Body).
+	local body = UI.Body(box)
+
 	-- The band: your color's wash from the left, a groove along its foot.
 	local band = CreateFrame("Frame", nil, box)
-	band:SetPoint("TOPLEFT", 2, -L.head0)
-	band:SetPoint("TOPRIGHT", -2, -L.head0)
+	band:SetPoint("TOPLEFT", body, "TOPLEFT", 2, -L.head0)
+	band:SetPoint("TOPRIGHT", body, "TOPRIGHT", -2, -L.head0)
 	band:SetHeight(L.band)
 	band:SetFrameLevel(box:GetFrameLevel() + 2)
 	own.band = band
@@ -1176,8 +1179,8 @@ local function Build()
 
 	-- The foot: a hover's foot, its floor under a groove and a lip of light.
 	local foot = CreateFrame("Frame", nil, box)
-	foot:SetPoint("BOTTOMLEFT", 2, 2)
-	foot:SetPoint("BOTTOMRIGHT", -2, 2)
+	foot:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 2, 2)
+	foot:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -2, 2)
 	foot:SetHeight(L.foot)
 	foot:SetFrameLevel(box:GetFrameLevel() + 6)
 	own.foot = foot
@@ -1245,7 +1248,7 @@ end
 
 local function Pills(list)
 	local x, y = own.left, -36
-	local room = own.box:GetWidth() - 4 - L.pad
+	local room = UI.BodySize(own.box) - 4 - L.pad
 	local shown = 0
 	for _, fact in ipairs(list) do
 		local pill = Pill(shown + 1)
@@ -1465,7 +1468,7 @@ local function DrawFoot()
 	end
 	own.status:SetText("")
 	local gap = L.between
-	local room = own.box:GetWidth() - 4 - 2 * L.button
+	local room = UI.BodySize(own.box) - 4 - 2 * L.button
 	local need = 0
 	for i, b in ipairs(list) do
 		local quiet = not (first and i == 1)
@@ -1507,7 +1510,7 @@ local function Draw()
 		end
 	end
 	local box = own.box
-	local wide, tall = box:GetWidth(), box:GetHeight()
+	local wide, tall = UI.BodySize(box)   -- (what it holds stands on its body: UI.Body)
 	if issecretvalue(wide) or not wide or wide <= 0 then wide = L.w end
 	if issecretvalue(tall) or not tall or tall <= 0 then tall = L.h end
 	local page = S.page

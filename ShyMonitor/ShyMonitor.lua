@@ -12,9 +12,9 @@ local MEDIA = "Interface\\AddOns\\ShyMonitor\\Media\\"
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Monitor",
+	category = "interface",
 	icon = MEDIA .. "ShyMonitor",
 	smallIcon = MEDIA .. "ShyMonitorSmall",
-	tagline = "The task manager: what every addon costs your game, down to what's behind each number",
 	savedVariables = "ShyMonitorDB",
 	defaults = {
 		watch = 30,   -- seconds between clean-ups while Watch is on

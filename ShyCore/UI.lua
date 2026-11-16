@@ -32,6 +32,8 @@
 -- Headers and windows (one design, three sizes: UI.HEAD):
 --   UI.Head(frame, opts)    -- the panel and its header: title strip, accent line, title, icon, ×, buttons, tabs
 --   UI.Window(opts)         -- a Shy.HUD window on a panel with a header; Esc closes it
+--   UI.Body(window)         -- where a window's content stands: clear of its look's work round the edge, the window
+--                              that much bigger (UI.BodyFit(f, w, h) for one that sizes itself, UI.BodySize)
 --   UI.Close(parent, size, glyph, onClick)   -- the × button
 --
 -- Colors: UI.colors tables change in place with the theme. Color regions through
@@ -367,6 +369,9 @@ end
 --   UI.LOOK_NAMES / UI.LOOK_WORDS / UI.LOOK_SHORT   a look's name, its sentence and its few words
 --   UI.LookAlpha(look, a)          the fill's alpha in that look for a piece that would be `a` in the forged make
 --   UI.SetLook(frame, look)        dress a UI.Panel in a look (nil: the theme's again; false: none, an inner piece)
+--   UI.SetAccent(frame, color)     its look's parts in your color wear `color` instead, for what the piece means (a
+--                                  yell's red on a chat bubble); nil: the theme's again
+--   UI.LookTail(h), UI.LookEdges(h)   a tail off its foot in the look's own make; the regions drawing its edge
 --   UI.LookCard(parent, w, look, opts)   a card showing a housing in that look over a scene (setup, the hub)
 --   UI.LookArt                     the files and measures, for whoever draws a housing as a picture
 --   UI.LookBuild / UI.LookDress    the regions and their dressing, for Shy.Skin's plates
@@ -523,7 +528,9 @@ local looked = setmetatable({}, { __mode = "k" })   -- housing -> function dress
 --   fit(h, g)              laid out by size while it is worn and the housing shown, only when what it goes by
 --                          changed (UI.LookFit; h.dressed counts its dresses, for what a fit sets once a dress):
 --                          g = { w, tall, per, head, foot,
---                          inset, to, sunk, well = { l, t, r, b } (units in from the plate) or nil, rim = { pixels
+--                          inset, to, sunk, cleared (its content stands clear of `content`: a window's body,
+--                          UI.Body; lay work inside the edge only then), well = { l, t, r, b } (units in from the
+--                          plate) or nil, rim = { pixels
 --                          each side } or nil, content, footInfo (UI.LookFoot), title (UI.LookTitle: the head's
 --                          title words, or nil), titleOwn (they're ours to ink) }; again when the UI's scale changes
 --                          or the title's words change
@@ -1398,6 +1405,9 @@ function UI.LookFit(h, again)
 		h.fitting = g
 		g.w, g.tall, g.per, g.head, g.foot, g.inset, g.to = w, tall, per, head, foot, inset, to
 		g.sunk, g.rim, g.content, g.footInfo, g.title, g.titleOwn = sunk, rimPx, keep, h.footInfo, h.titleText, h.titleOwn
+		-- Whether its content stands clear of the look's work inside the edge (a window's body: UI.Body). A look
+		-- lays that work (an inset band) only where it is: on any other piece it would lie under what the piece holds.
+		g.cleared = h.owner.shyBody ~= nil
 		if sunk then
 			local gw = h.fittingWell or {}
 			h.fittingWell = gw
@@ -1613,8 +1623,7 @@ function UI.Badge(parent)
 	b.glyph = b:CreateTexture(nil, "OVERLAY")
 	UI.GlyphFit(b.glyph, 8)
 	b.glyph:SetPoint("LEFT", 6, 0)
-	b.text = b:CreateFontString(nil, "OVERLAY")
-	b.text:SetFontObject(UI.NameFont(10))
+	b.text = UI.Words(b, UI.NameFont(10))
 	function b:Set(item)
 		self.glyph:SetShown(item.glyph ~= nil)
 		if item.glyph then
@@ -1862,8 +1871,7 @@ do
 				onSelect(i)
 			end)
 			b:SetHeight(s.opts.height or 24)
-			b.count = b:CreateFontString(nil, "OVERLAY")
-			b.count:SetFontObject(UI.NameFont(10))
+			b.count = UI.Words(b, UI.NameFont(10))
 			b.count:SetPoint("LEFT", b.text, "RIGHT", 4, 0)
 			b.count:Hide()
 			s.buttons[i] = b
@@ -1971,14 +1979,104 @@ end
 
 -- left, top, right, bottom: how much further in than the family's own margins a window lays its content in this look
 -- (the top's under its head), so nothing it holds stands on the look's work round its edge (a look of its own file's
--- `content`: a number for all four sides, a table of four, or function(housing)); 0 for the core's looks. Pass the
--- window's housing (its shyLook). A window lays its content again on SHY_THEME.
+-- `content`: a number for all four sides, a table of four, or function(housing)); 0 for the core's looks. A window
+-- never reads it: it lays its content on its body (UI.Body), which the core keeps there.
 function UI.LookContentIn(x)
 	local name, h = LookOf(x)
 	local kind = name and KINDS[name]
 	local c = kind and kind.content
 	if type(c) == "function" then c = c(h) end
 	return Sides(c or 0)
+end
+
+-- A window's body: the frame its content is laid on, the window's own rect less what its look keeps clear round the
+-- edge (UI.LookContentIn), moved whenever the look or its options change. Everything a window holds below its head,
+-- its foot included, stands on the body with the family's own margins, never on the window's edge, and the window is
+-- that much bigger than its content, so no window measures a look. UI.Head gives every window with a header one.
+--   local body = UI.Body(box)
+--   list:SetPoint("TOPLEFT", body, "TOPLEFT", 8, -40)
+-- Its size is the window's less the clearance (UI.BodySize). A window that flows (a grip with `flow`) is told its
+-- body's size, and every size it is made, kept and held at is its body's (Grip.lua); one that sizes itself says how
+-- big it is as though its look kept nothing clear (UI.BodyFit), and wears the clearance besides, now and whenever
+-- it changes. "SHY_BODY" (window) fires as a body's clearance changes.
+-- A window holding a protected frame (a secure button) is protected itself: in a fight its body is placed and its
+-- size worn once the fight is over.
+UI.BodyWaiting = setmetatable({}, { __mode = "k" })
+do
+	local wait = CreateFrame("Frame")
+	wait:RegisterEvent("PLAYER_REGEN_ENABLED")
+	wait:SetScript("OnEvent", function()
+		for f in pairs(UI.BodyWaiting) do
+			UI.BodyWaiting[f] = nil
+			UI.PlaceBody(f)
+			local fit = f.shyBodyFit
+			if fit then UI.BodyFit(f, fit[1], fit[2]) end
+		end
+	end)
+end
+
+function UI.PlaceBody(f)
+	local body = f.shyBody
+	if not body then return end
+	if InCombatLockdown() and f:IsProtected() then
+		UI.BodyWaiting[f] = true
+		return
+	end
+	local l, t, r, b = UI.LookContentIn(f.shyLook)
+	local was = body.shyIn
+	if was[1] == l and was[2] == t and was[3] == r and was[4] == b and body.shyPlaced then return end
+	was[1], was[2], was[3], was[4], body.shyPlaced = l, t, r, b, true
+	body:ClearAllPoints()
+	body:SetPoint("TOPLEFT", f, "TOPLEFT", l, -t)
+	body:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -r, b)
+	local fit = f.shyBodyFit
+	if fit then UI.BodyFit(f, fit[1], fit[2]) end
+	Shy:Fire("SHY_BODY", f)
+end
+
+function UI.Body(f)
+	local body = f.shyBody
+	if not body then
+		body = CreateFrame("Frame", nil, f)
+		body.shyIn = { 0, 0, 0, 0 }
+		f.shyBody = body
+		if f.shyLook then UI.LookFit(f.shyLook, true) end   -- (its look may lay its inset work now: g.cleared)
+	end
+	UI.PlaceBody(f)
+	return body
+end
+
+-- left, top, right, bottom the body stands in from its window's edges now; 0 for a window without a body.
+function UI.BodyIn(f)
+	local body = f and f.shyBody
+	if not body then return 0, 0, 0, 0 end
+	local i = body.shyIn
+	return i[1], i[2], i[3], i[4]
+end
+
+-- The body's width and height: the window's less its look's clearance.
+function UI.BodySize(f)
+	local l, t, r, b = UI.BodyIn(f)
+	return f:GetWidth() - l - r, f:GetHeight() - t - b
+end
+
+-- A window that sizes itself to what it holds: `width` and `height` as though its look kept nothing clear round
+-- its edge (its body's size plus the family's own margins). The window wears that and the look's clearance (a
+-- piece of the HUD through Shy.HUD.Resize), and again whenever the clearance changes.
+function UI.BodyFit(f, width, height)
+	local fit = f.shyBodyFit
+	if not fit then
+		fit = {}
+		f.shyBodyFit = fit
+	end
+	fit[1], fit[2] = width, height
+	if InCombatLockdown() and f:IsProtected() then
+		UI.BodyWaiting[f] = true
+		return
+	end
+	local l, t, r, b = UI.BodyIn(f)
+	width, height = width + l + r, height + t + b
+	if f.id and Shy.HUD.Resize then Shy.HUD.Resize(f, width, height) else f:SetSize(width, height) end
 end
 
 -- How far past a housing's edge its frame is drawn, in units (a look of its own file's `out`: a number, or
@@ -1990,6 +2088,68 @@ function UI.LookOut(x)
 	local out = kind and kind.out
 	if type(out) == "function" then out = out(h) end
 	return tonumber(out) or 0
+end
+
+-- A tail off a housing's foot (a chat bubble's) in the look it wears: the look's own foot edge running on down the
+-- tail's flanks to its point (Media/Tail<name><layer>, measured in Shy.Tails), over the look's own face laid again
+-- inside it. Returns the tail's name, its measures, its edge layers as the look colors its own edge ({ layer =,
+-- color = (a table or function), alpha =, blend = }) and its inside as the look lays its face, bottom up ({ fill =
+-- true }: the housing's fill; { color =, alpha =, file =, tile = units a repeat, blend = }), cut to
+-- Media/Tail<name>Inside. Media/Tail<name>Notch is cut from the housing's own edge (UI.LookEdges). A look of its own
+-- file says its own (UI.LookKind's `tail(h) -> name, layers, inside`); the core's are here.
+local TAIL = { dark = { 0, 0, 0 }, fill = { { fill = true } } }
+function TAIL.Bordered(h)
+	return function()
+		local metal = h and h.owner and h.owner.shyMetal or Theme.skin.metal
+		return Color(metal)
+	end
+end
+TAIL.core = {
+	forged = function(h) return "Forged", { { layer = "Edge", color = TAIL.Bordered(h) } } end,
+	steel = function(h) return "Steel", { { layer = "Edge", color = TAIL.Bordered(h) } } end,
+	clear = function() return "Clear", { { layer = "Edge", color = WHITE } } end,
+	eclipse = function() return "Eclipse", { { layer = "Edge", color = TAIL.dark } } end,
+	riveted = function()
+		return "Riveted", { { layer = "Edge", color = WHITE } }, { { fill = true }, { file = LOOK.BRUSHED, tile = 128, color = WHITE } }
+	end,
+}
+-- The core's parts that draw a housing's edge (not its face, not what lies behind it).
+TAIL.edges = { "edge", "pane", "metalEdge", "well", "footWell", "rimTop", "rimBottom", "rimLeft", "rimRight" }
+function UI.LookTail(x)
+	local name, h = LookOf(x)
+	local tails = Shy.Tails or {}
+	local kind = name and KINDS[name]
+	if kind and kind.tail then
+		local tail, layers, inside = kind.tail(h)
+		if tails[tail] then return tail, tails[tail], layers, inside or TAIL.fill end
+	end
+	local tail, layers, inside = (TAIL.core[name] or TAIL.core.forged)(h)
+	return tail, tails[tail], layers, inside or TAIL.fill
+end
+
+-- The regions that draw a housing's edge in the look it wears now (the forged edge, the core's edge parts, its
+-- rivets, a look kind's `edge` regions and pools but what lies behind the piece): what a tail is cut from. Into
+-- `out` if given.
+function UI.LookEdges(h, out)
+	out = out or {}
+	if not h then return out end
+	local function Add(t)
+		if t and t.AddMaskTexture then out[#out + 1] = t end
+	end
+	if h.owner and h.owner.shyEdge then Add(h.owner.shyEdge) end
+	for _, key in ipairs(TAIL.edges) do Add(h[key]) end
+	for _, t in ipairs(h.rivets or {}) do Add(t) end
+	local kind = KINDS[h.look]
+	for _, key in ipairs(kind and kind.edge or {}) do
+		if not Kin.Listed(kind.behind, key) then
+			Add(h[key])
+			local pool = h.pools and h.pools[key]
+			if pool then
+				for _, t in ipairs(pool.list) do Add(t) end
+			end
+		end
+	end
+	return out
 end
 
 -- The border's right side alone, as the header makers of old asked it.
@@ -2397,6 +2557,7 @@ function UI.LookDress(h, look, p)
 	h.shade:SetAlpha(clear and LOOK.CLEAR.shade or eclipse and LOOK.ECLIPSE.shade or riveted and RV.shade
 		or kind and kind.shade or 1)
 	h.halo:SetShown(eclipse)
+	Theme.Tint(h.halo, UI.LookAccent(h), 1)
 	h.edge:SetShown(steel)
 	Theme.Tint(h.edge, p.metal)
 	h.pane:SetShown(clear or eclipse)
@@ -2408,6 +2569,7 @@ function UI.LookDress(h, look, p)
 	h.foot:SetAlpha(riveted and RV.foot or 1)
 	if not glassy then h.sheen:Hide() end   -- frosted: LookFit shows it when the pane is wide enough
 	h.light:SetShown(steel or clear)
+	Theme.Tint(h.light, UI.LookAccent(h), 1)
 	-- The steel: its brushing and sheen fade with the fill on screen (the world through it is never filmed over),
 	-- the sheen a little softer in a window, over what is written there.
 	h.brushed:SetShown(riveted)
@@ -2471,6 +2633,25 @@ end
 
 -- A UI.Panel's housing, dressed in `look`, or in the theme's when nil (and again whenever that changes);
 -- false: in none, as a piece standing inside another housing (a card docked in a deck).
+-- A housing's own accent in place of the theme's, for what it means (a chat bubble's yell, in yell red): every part
+-- of its look that wears your color wears this one instead, in every look (a galaxy's halo and glow, a grove's gems
+-- and leaves, the matrix's phosphor, a leather's neon and stitching), and it is dressed again at once. A table
+-- of r, g, b (kept: asking again for the same one changes nothing), or nil for the theme's again.
+function UI.SetAccent(f, color)
+	if f.shyAccentOf == color then return end
+	f.shyAccentOf = color
+	local accent = nil
+	if type(color) == "table" then
+		accent = function() return color[1], color[2], color[3] end
+	end
+	f.shyAccent = accent
+	local h = f.shyLook
+	if h then
+		h.accent = accent
+		UI.SetLook(f, f.shyLookFixed)
+	end
+end
+
 function UI.SetLook(f, look)
 	local h = f.shyLook
 	if not h then return end
@@ -2481,6 +2662,7 @@ function UI.SetLook(f, look)
 		-- (A header put away, UI.PanelHead, stays so: its gloss isn't shown again.)
 		UI.LookDress(h, wear, { fill = f.shyBg, fitTo = h.fitTo, fitInset = h.fitInset, forged = h.forged, metal = f.shyMetal or Theme.skin.metal,
 			gloss = not f.shyHeadless and f.shyGloss or nil, line = f.shyLine, strip = f.shyStrip })
+		UI.PlaceBody(f)   -- its content clear of this look's work round the edge (UI.Body)
 		UI.SetFill(f, f.shyFill)
 		if f.shyStrip then
 			-- The strip by look (UI.LookStrip), at the look's opacity as the fill is (a window's stays solid).
@@ -2778,15 +2960,52 @@ function UI.LookCard(parent, width, look, opts)
 	return card
 end
 
+-- Shy's own words, the one way they are made: every string of ours on the screen comes from UI.Text or UI.Words (or
+-- is a slot's count, Slot:Count, or a game window's own text the skin dresses), so it wears the text effect and
+-- reads on any look's ground.
+--   UI.Text(parent, text, size, brand, color)   brand: the theme's title font (Theme.Face); else the game's plain one
+--   UI.Words(parent, font, color, opts)         any font object: UI.NameFont (names, figures, every alphabet),
+--                                               UI.TextFont (running text), UI.TitleFont (kept in the theme's font);
+--                                               or a number: the rounded face at that very size (10.5 too), for
+--                                               figures and marks of our own (Latin only)
+--       opts.layer ("OVERLAY"), opts.justify ("LEFT"), opts.wrap (false: one line)
+--       opts.world: words over the world, a bar or the map, not on a housing (a nameplate's, a buff's count, a map
+--                   pin's name): the font object brings its outline ("OUTLINE"), a fine shadow under it, no look's
+--                   effect, and no ink unless `color` is given (their owner colors them as they change)
+-- Words on a face of their own color (a button, a caption, a paper) are inked for it: UI.FaceInk, UI.Letter.
 function UI.Text(parent, text, size, brand, color)
 	local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	if brand then Theme.Face(fs, size or 14)   -- Shy's own words: the theme's font, following it
 	elseif size then fs:SetFont((GameFontHighlight:GetFont()), size, "") end
 	fs:SetShadowOffset(1, -1)
 	fs:SetShadowColor(0, 0, 0, 1)
+	if not brand then Theme.Wear(fs) end
 	Theme.Ink(fs, color or C.text)
 	fs:SetText(text or "")
 	fs:SetJustifyH("LEFT")
+	return fs
+end
+
+local WORLD_SHADOW = 0.8   -- under outlined words over the world: a fine shadow, so the outline isn't doubled
+
+function UI.Words(parent, font, color, opts)
+	opts = opts or {}
+	local fs = parent:CreateFontString(nil, opts.layer or "OVERLAY")
+	if type(font) == "number" then fs:SetFont(Shy.FONT_ROUNDED, font, "") else fs:SetFontObject(font) end
+	fs:SetJustifyH(opts.justify or "LEFT")
+	if opts.wrap == false then fs:SetWordWrap(false) end
+	if opts.world then
+		fs:SetShadowOffset(WORLD_SHADOW, -WORLD_SHADOW)
+		fs:SetShadowColor(0, 0, 0, 1)
+	else
+		UI.Follow(fs)   -- a title keeps up with the theme's font
+		fs:SetShadowOffset(1, -1)
+		fs:SetShadowColor(0, 0, 0, 1)
+		Theme.Wear(fs)
+	end
+	-- (After the font: a font object brings its own color. Words over the world are colored by their owner as they
+	-- change, unless a color is given.)
+	if color or not opts.world then UI.Ink(fs, color or C.text) end
 	return fs
 end
 
@@ -5343,14 +5562,10 @@ local function MenuRow(index)
 	row.text = body:CreateFontString(nil, "OVERLAY")
 	row.text:SetJustifyH("LEFT")
 	row.text:SetWordWrap(false)
-	row.sub = body:CreateFontString(nil, "OVERLAY")
-	row.sub:SetFontObject(UI.NameFont(10))
-	row.sub:SetJustifyH("LEFT")
-	row.sub:SetWordWrap(false)
+	Theme.Wear(row.text)
+	row.sub = UI.Words(body, UI.NameFont(10), nil, { wrap = false })
 	Theme.Ink(row.sub, C.dim)
-	row.detail = body:CreateFontString(nil, "OVERLAY")
-	row.detail:SetFont(Shy.FONT_ROUNDED, 10.5, "")
-	row.detail:SetJustifyH("RIGHT")
+	row.detail = UI.Words(body, 10.5, nil, { justify = "RIGHT" })
 	row.check = body:CreateTexture(nil, "ARTWORK")
 	row.check:SetTexture(Shy.MEDIA .. "GlyphCheckS")   -- the check drawn for 12 units and under
 	row.check:SetSize(MENU.check, MENU.check)
@@ -5717,7 +5932,7 @@ end
 --   local parts = UI.MenuHousing(f)   -- fill, steel, inside, rail, railRule, accent
 -- (rail: the rail's width; railIcons: its width in a menu whose rows wear pictures, `icon` across.)
 UI.MENU_ROW = { edge = MENU.edge, pad = MENU.pad, rail = MENU.rail, railIcons = math.max(MENU.rail, MENU.icon + 10),
-	inset = MENU.inset, gap = MENU.gap, check = MENU.check, icon = MENU.icon, row = MENU.row }
+	inset = MENU.inset, gap = MENU.gap, check = MENU.check, icon = MENU.icon, row = MENU.row, rule = MENU.rule }
 
 function UI.MenuHousing(f)
 	local parts = {}
@@ -5768,13 +5983,8 @@ local function MenuBuild()
 	f.footRule = f:CreateTexture(nil, "ARTWORK")
 	f.footRule:SetHeight(1)
 	Theme.Paint(f.footRule, C.border, 0.9)
-	f.footLeft = f:CreateFontString(nil, "OVERLAY")
-	f.footLeft:SetFontObject(UI.NameFont(10))
-	Theme.Ink(f.footLeft, C.dim)
-	f.foot = f:CreateFontString(nil, "OVERLAY")
-	f.foot:SetFont(Shy.FONT_ROUNDED, 10.5, "")
-	f.foot:SetJustifyH("RIGHT")
-	Theme.Ink(f.foot, C.text)
+	f.footLeft = UI.Words(f, UI.NameFont(10), C.dim)
+	f.foot = UI.Words(f, 10.5, C.text, { justify = "RIGHT" })
 	f.fade = f:CreateAnimationGroup()
 	local alpha = f.fade:CreateAnimation("Alpha")
 	alpha:SetFromAlpha(0)
@@ -5840,12 +6050,24 @@ function UI.MenuOwner()
 	return menu and menu:IsShown() and menu.owner or nil
 end
 
+-- True when frame is part of the menu (one of its rows).
+function UI.InMenu(frame)
+	while frame do
+		if frame == menu then return true end
+		frame = frame:GetParent()
+	end
+	return false
+end
+
 function UI.CloseMenu()
 	if not (menu and menu:IsShown()) then return end
 	local owner, opts = menu.owner, menu.opts
 	menu:Hide()
 	menuKeys:Hide()
-	if Shy.Hover then Shy.Hover.Close() end
+	if Shy.Hover then
+		Shy.Hover.Close()
+		Shy.Hover.Restack()
+	end
 	if opts.onHide then opts.onHide(owner) end
 end
 
@@ -5864,6 +6086,11 @@ function UI.Menu(owner, items, opts)
 	-- A long list opens scrolled to its current pick.
 	menu.area:SetVerticalScroll(max(0, min(height - view, (onY or 0) - (view - MENU.row) / 2)))
 	menu:Show()
+	-- The hover of what it was opened on goes: the menu is what you read now. One kept up slips under it.
+	if Shy.Hover then
+		Shy.Hover.Close()
+		Shy.Hover.Restack()
+	end
 	menu.area:Update()
 	menu.fade:Stop()
 	menu.fade:Play()
@@ -6215,12 +6442,8 @@ function UI.MenuButton(parent, opts)
 	local inset = opts.inset or 9
 	local b = CreateFrame("Button", nil, parent)
 	b:SetHeight(opts.height or 18)
-	b.text = b:CreateFontString(nil, "OVERLAY")
-	b.text:SetFontObject(opts.font or UI.TextFont(12))
-	b.text:SetJustifyH("LEFT")
-	b.text:SetWordWrap(false)
+	b.text = UI.Words(b, opts.font or UI.TextFont(12), C.text, { wrap = false })
 	b.text:SetPoint("LEFT", inset, 0)
-	Theme.Ink(b.text, C.text)
 	b.caret = b:CreateTexture(nil, "ARTWORK")
 	b.caret:SetTexture(Shy.MEDIA .. "GlyphCaret")
 	b.caret:SetSize(10, 10)
@@ -6617,12 +6840,46 @@ end
 -- A strip whose tabs come and go (a window's conversations):
 --   tabs:SetLabels(labels)   other tabs in place of these; returns the tabs, for scripts of the caller's own
 --   tabs:SetTint(i, color)   tab i's lit stretch and glow in this color (nil: the theme's)
+--   tabs:SetInk(i, open, rest)  tab i's words in colors of their own, open (or under the mouse) and at rest (nil: the strip's)
 --   tabs:SetCount(i, n)      a quiet dim count after tab i's words (nil: none); SetBadge is the gold one, for attention
 --   tabs:SetRoom(width)      the most they take: past it they scroll (the wheel; the open tab is kept in view),
 --                            and an edge they run past is shaded, the strip's face thickening over them, a click
 --                            there scrolling that way. tabs.overflow says whether they do
 --   tabs:ScrollBy(dx)        scrolls them dx along (held within what there is)
 --   tabs:Reveal(i)           scrolls tab i into view
+
+-- An edge that tabs run past (a strip scrolled along): the strip's own face thickening over them, and at the very edge
+-- a glint in your color, held to read on that face (drawn lighter on a dark strip, darker on a light one, just far
+-- enough: Theme.Legible), so it shows there is more that way. UI.EdgeArt makes the two on a frame along its `side`;
+-- UI.PaintEdge paints them for a face of r, g, b (again as the theme changes).
+-- The face's and the glint's alpha at the edge, the glint's share of the width, and how far it stands off the face.
+local EDGE = { face = 0.95, glint = 0.5, reach = 0.5, ratio = 3 }
+
+function UI.EdgeArt(frame, side)
+	local fill = frame:CreateTexture(nil, "ARTWORK")
+	fill:SetAllPoints()
+	fill:SetColorTexture(1, 1, 1, 1)
+	local glint = frame:CreateTexture(nil, "ARTWORK", nil, 1)
+	glint:SetPoint("TOP" .. side)
+	glint:SetPoint("BOTTOM" .. side)
+	glint:SetWidth(math.max(1, frame:GetWidth() * EDGE.reach))
+	glint:SetColorTexture(1, 1, 1, 1)
+	return fill, glint
+end
+
+function UI.PaintEdge(fill, glint, side, r, g, b)
+	local solid, clear = CreateColor(r, g, b, EDGE.face), CreateColor(r, g, b, 0)
+	local ar, ag, ab = Theme.AccentSolid()
+	local ir, ig, ib = Theme.Legible(ar, ag, ab, r, g, b, EDGE.ratio)
+	local lit, unlit = CreateColor(ir, ig, ib, EDGE.glint), CreateColor(ir, ig, ib, 0)
+	if side == "LEFT" then
+		fill:SetGradient("HORIZONTAL", solid, clear)
+		glint:SetGradient("HORIZONTAL", lit, unlit)
+	else
+		fill:SetGradient("HORIZONTAL", clear, solid)
+		glint:SetGradient("HORIZONTAL", unlit, lit)
+	end
+end
 
 -- GLOW the height of the open tab's glow in a title strip; FADE how much of the room tabs that run past it fade
 -- out over; WHEEL how far a notch of the wheel scrolls them; WASH how much of the accent the open tab's glow lays
@@ -6656,6 +6913,7 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 	f.tabs = {}
 	f.scroll = 0
 	local sides = opts.sides or (size and size < 17 and 20 or 28)
+	local gap = opts.gap or 4   -- between one tab and the next
 	local face = PanelFace
 	if strip then
 		face = strip.shyStripFace or function() return Color(strip.shyStripColor or C.panel) end
@@ -6696,17 +6954,17 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 	local function Line()
 		local total = 0
 		for _, t in ipairs(f.tabs) do
-			if t:IsShown() then total = total + t:GetWidth() + 4 end
+			if t:IsShown() then total = total + t:GetWidth() + gap end
 		end
 		local room = f.room
-		f.overflow = room ~= nil and total - 4 > room + 0.5
-		f.scroll = f.overflow and math.max(0, math.min(f.scroll, total - 4 - room)) or 0
+		f.overflow = room ~= nil and total - gap > room + 0.5
+		f.scroll = f.overflow and math.max(0, math.min(f.scroll, total - gap - room)) or 0
 		local at = -f.scroll
 		for _, t in ipairs(f.tabs) do
 			if t:IsShown() then
 				t:ClearAllPoints()
 				t:SetPoint("LEFT", at, 0)
-				at = at + t:GetWidth() + 4
+				at = at + t:GetWidth() + gap
 			end
 		end
 		if not room then
@@ -6716,7 +6974,7 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 		end
 		f:SetWidth(math.max(1, math.min(total, room)))
 		f:EnableMouseWheel(f.overflow)
-		Shade(f.scroll > 0.5, f.overflow and total - 4 - f.scroll > room + 0.5)
+		Shade(f.scroll > 0.5, f.overflow and total - gap - f.scroll > room + 0.5)
 	end
 	-- The edges the tabs run past: the strip's own face thickening over them, a click scrolling that way.
 	function Shade(left, right)
@@ -6729,9 +6987,7 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 				s:SetPoint("BOTTOM" .. side)
 				s:SetWidth(TAB.FADE)
 				s:SetFrameLevel(f:GetFrameLevel() + 6)
-				s.fill = s:CreateTexture(nil, "ARTWORK")
-				s.fill:SetAllPoints()
-				s.fill:SetColorTexture(1, 1, 1, 1)
+				s.fill, s.glint = UI.EdgeArt(s, side)
 				s.way = i == 1 and -1 or 1
 				s:SetScript("OnClick", function(self) f:ScrollBy(self.way * TAB.WHEEL * 2) end)
 				s:Hide()
@@ -6740,13 +6996,10 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 			Shy:On("SHY_THEME", function() if f.room then Line() end end)
 		end
 		local r, g, b = face()
-		local solid, clear = CreateColor(r, g, b, 0.95), CreateColor(r, g, b, 0)
 		for i, on in ipairs({ left == true, right == true }) do
 			local s = f.shades[i]
 			s:SetShown(on)
-			if on then
-				if i == 1 then s.fill:SetGradient("HORIZONTAL", solid, clear) else s.fill:SetGradient("HORIZONTAL", clear, solid) end
-			end
+			if on then UI.PaintEdge(s.fill, s.glint, i == 1 and "LEFT" or "RIGHT", r, g, b) end
 		end
 	end
 	function f:ScrollBy(dx)
@@ -6778,7 +7031,7 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 		if not (t and t:IsShown() and self.overflow) then return end
 		local x = 0
 		for j = 1, i - 1 do
-			if self.tabs[j]:IsShown() then x = x + self.tabs[j]:GetWidth() + 4 end
+			if self.tabs[j]:IsShown() then x = x + self.tabs[j]:GetWidth() + gap end
 		end
 		-- Clear of the fade on either side, unless it is the first or last.
 		local w = t:GetWidth()
@@ -6795,6 +7048,19 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 		self:SetClipsChildren(room ~= nil)
 		Line()
 		if self.selected then self:Reveal(self.selected) end
+	end
+	-- Tab i's words in a color of their own (a whisper's): `open` while it is the open one or under the mouse, `rest`
+	-- otherwise. nil: the strip's inks again.
+	function f:SetInk(i, open, rest)
+		local t = self.tabs[i]
+		if not t then return end
+		if not t.made then t.made = { t.inkRest, t.inkHot, t.inkOpen } end
+		if open then
+			t.inkRest, t.inkHot, t.inkOpen = rest or open, open, open
+		else
+			t.inkRest, t.inkHot, t.inkOpen = t.made[1], t.made[2], t.made[3]
+		end
+		Theme.Ink(t.text, self.selected == i and t.inkOpen or t.inkRest)
 	end
 	function f:SetTint(i, color)
 		local t = self.tabs[i]
@@ -6860,10 +7126,8 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 		local t = self.tabs[i]
 		if not t then return end
 		if not t.count then
-			t.count = t:CreateFontString(nil, "OVERLAY")
-			t.count:SetFontObject(UI.NameFont(10))
+			t.count = UI.Words(t, UI.NameFont(10), C.dim)
 			t.count:SetPoint("LEFT", t.text, "RIGHT", 4, 0)
-			Theme.Ink(t.count, C.dim)
 		end
 		local text = n and tostring(n) or ""
 		if t.count:GetText() == text and t.count:IsShown() == (n ~= nil) then return end
@@ -7933,12 +8197,10 @@ function CopyBox:Row(i)
 	local hover = row:CreateTexture(nil, "HIGHLIGHT")
 	hover:SetAllPoints()
 	Theme.Paint(hover, C.hot, 0.1)
-	row.text = row:CreateFontString(nil, "OVERLAY", "ChatFontNormal")
+	row.text = UI.Words(row, ChatFontNormal, C.text)
 	row.text:SetPoint("TOPLEFT", COPY_PAD_X, -COPY_PAD_Y)
 	row.text:SetWidth(content:GetWidth() - 2 * COPY_PAD_X)
-	row.text:SetJustifyH("LEFT")
 	row.text:SetNonSpaceWrap(true)
-	Theme.Ink(row.text, C.text)
 	row:SetScript("OnMouseDown", function() self:Press(i) end)
 	self.rows[i] = row
 	return row
@@ -8067,15 +8329,18 @@ local function CreateCopyBox()
 	f:SetScript("OnDragStart", f.StartMoving)
 	f:SetScript("OnDragStop", f.StopMovingOrSizing)
 	local head = UI.Head(f, { size = "window", title = "", close = function() f:Hide() end })
+	-- What it holds stands on its body, clear of the look's work round the edge, the box that much bigger (UI.Body).
+	local body = UI.Body(f)
+	UI.BodyFit(f, COPY_W, COPY_H)
 	f.rows = {}
 	f.title = head.title
 	local hint = UI.Text(head, "Click or drag to select  \194\183  Ctrl+A for all  \194\183  Ctrl+C to copy", 12, false, C.dim)
 	hint:SetPoint("RIGHT", head.close, "LEFT", -10, 0)
-	f.status = UI.Text(f, "", 12, false, C.dim)
+	f.status = UI.Text(body, "", 12, false, C.dim)
 	f.status:SetPoint("BOTTOMLEFT", 14, 10)
 
 	local top = head:GetHeight() + 10
-	f.scroll = UI.ScrollArea(f, COPY_W - 28, COPY_H - top - 32)
+	f.scroll = UI.ScrollArea(body, COPY_W - 28, COPY_H - top - 32)
 	f.scroll:SetPoint("TOPLEFT", 14, -top)
 
 	-- The edit box Ctrl+C copies from. It has keyboard focus while the box is open, so it also
@@ -8336,6 +8601,107 @@ do
 	end
 end
 
+-- A question to be sure of, laid under the piece it is about: a sentence or two, the button that does it and
+-- Cancel. Enter does it; Escape, Cancel, a click elsewhere, a fight or the piece going out of sight let it go.
+-- One at a time: another lets the first go.
+--   UI.Confirm(owner, text, yes, done, opts) -> the card   yes: the button's words; done(): on yes only
+--       opts.width (ASK.wide), opts.no ("Cancel"), opts.cancel(): called when it is let go
+--   UI.ConfirmOf() -> the card while one is up, else nil;   UI.ConfirmClose() lets it go
+do
+	local ASK = { wide = 300, pad = 12, gap = 10, button = 24, least = 90, size = 12, apart = 6 }
+	local card
+
+	local function Finish(yes)
+		local f = card
+		if not (f and f.owner) then return end
+		local done, cancel = f.done, f.cancel
+		f.owner, f.done, f.cancel = nil, nil, nil
+		f:Hide()
+		if yes then
+			if done then done() end
+		elseif cancel then
+			cancel()
+		end
+	end
+	UI.ConfirmClose = function() Finish(false) end
+
+	function UI.ConfirmOf()
+		return card and card.owner and card or nil
+	end
+
+	local function Make()
+		local f = CreateFrame("Frame", nil, UIParent)
+		f:SetFrameStrata("DIALOG")
+		f:SetToplevel(true)
+		f:SetClampedToScreen(true)
+		f:EnableMouse(true)
+		f.back = f:CreateTexture(nil, "BACKGROUND", nil, -8)
+		f.back:SetAllPoints()
+		Theme.Paint(f.back, C.panel, 1)
+		UI.Skin(f, C.bg, C.hot)
+		f.text = UI.Text(f, "", ASK.size, false, C.text)
+		f.text:SetPoint("TOPLEFT", ASK.pad, -ASK.pad)
+		f.text:SetJustifyH("LEFT")
+		f.text:SetWordWrap(true)
+		f.no = UI.Button(f, "Cancel", ASK.least, function() Finish(false) end)
+		f.no:SetPoint("BOTTOMRIGHT", -ASK.pad, ASK.pad)
+		f.yes = UI.Button(f, "", ASK.least, function() Finish(true) end)
+		f.yes:SetPoint("RIGHT", f.no, "LEFT", -ASK.apart, 0)
+		-- (a modal: it has the keyboard while it is up, Enter and Escape its own)
+		f:SetScript("OnKeyDown", function(_, key)
+			if key == "ENTER" then
+				Finish(true)
+			elseif key == "ESCAPE" then
+				Finish(false)
+			end
+		end)
+		f:SetScript("OnShow", function(self)
+			self:RegisterEvent("GLOBAL_MOUSE_DOWN")
+			self:RegisterEvent("PLAYER_REGEN_DISABLED")
+		end)
+		f:SetScript("OnHide", function(self)
+			self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
+			self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+			self:EnableKeyboard(false)
+		end)
+		f:SetScript("OnEvent", function(self, event)
+			-- (the click that asked, heard the same frame, is not a click elsewhere)
+			if event == "GLOBAL_MOUSE_DOWN" and (self.at == GetTime() or self:IsMouseOver()) then return end
+			Finish(false)
+		end)
+		f:SetScript("OnUpdate", function(self)
+			if self.owner and not self.owner:IsVisible() then Finish(false) end
+		end)
+		f:Hide()
+		return f
+	end
+
+	function UI.Confirm(owner, text, yes, done, opts)
+		opts = opts or {}
+		Finish(false)
+		card = card or Make()
+		local f = card
+		f.owner, f.done, f.cancel, f.at = owner, done, opts.cancel, GetTime()
+		local wide = opts.width or ASK.wide
+		f.text:SetWidth(wide - 2 * ASK.pad)
+		f.text:SetText(text)
+		f.no:SetLabel(opts.no or "Cancel")
+		-- (the button as wide as its words, never under the least)
+		f.yes.text:SetWidth(0)
+		f.yes.text:SetText(yes)
+		f.yes:SetWidth(max(ASK.least, math.ceil(f.yes.text:GetStringWidth()) + 24))
+		f.yes:SetLabel(yes)
+		local tall = math.ceil(f.text:GetStringHeight())
+		f:SetSize(wide, ASK.pad + tall + ASK.gap + ASK.button + ASK.pad)
+		f:ClearAllPoints()
+		f:SetPoint("TOPRIGHT", owner, "BOTTOMRIGHT", 0, -ASK.apart)
+		f:Show()
+		f:Raise()
+		f:EnableKeyboard(true)
+		return f
+	end
+end
+
 -- Groups
 
 local Group = {}
@@ -8383,7 +8749,7 @@ end
 -- Page header: emblem, title, accent line and tagline. Returns the emblem.
 
 function UI.PageHeader(parent, addon, titleSize)
-	local emblem = B.CreateEmblem(parent, addon.icon, 64)
+	local emblem = B.CreateEmblem(parent, addon.mark, 64)
 	emblem:SetPoint("TOPLEFT", 24, -22)
 
 	local title = B.CreateTitle(parent, addon.internal and "" or addon.suffix, titleSize or 40)
@@ -8525,6 +8891,9 @@ end)
 --       tabs = { labels, onSelect },          -- standing on the accent line, after the title (main)
 --       drag = box,                           -- a Shy.HUD box the header drags
 --       panel = { hud, brackets, fill, cap, facets, line } or false,
+--       body = true,                          -- a piece on screen (panel.hud) whose content can step in by the
+--                                            -- look's clearance inside the size its plan gives it: it gets a body
+--                                            -- (UI.Body) too. A window always has one; false: none
 --   })
 -- Returns the header frame, the panel's width and as tall as the header down to the line's foot:
 -- .title, .icon, .close, .buttons, .tabs, .size (its UI.HEAD entry), .x (where the title starts),
@@ -8541,6 +8910,10 @@ function UI.Head(f, opts)
 		-- A window wears the theme's look as the pieces on screen do, on a solid fill.
 		if panel.window == nil and panel.looks == nil then panel.window = true end
 		UI.Panel(f, panel)
+		-- Where its content stands, clear of the look's work (UI.Body): every window's; a piece on screen's only where
+		-- it says so (opts.body), since a piece keeps the size the screen's plan gives it and its content must have
+		-- room to step in. (A piece without one wears no work inside its edge: g.cleared.)
+		if opts.body or (opts.body == nil and not panel.hud) then UI.Body(f) end
 	end
 	local head = CreateFrame("Frame", nil, f)
 	head:SetPoint("TOPLEFT")
@@ -8647,11 +9020,17 @@ function UI.Maximize(box, on, follow)
 	end
 	if box.maxButton then box.maxButton.glyph:SetTexture(Shy.MEDIA .. (on and "GlyphRestore" or "GlyphMaximize")) end
 	if box.shyFlow then
+		-- (told its body's size, as the grip tells it: UI.Body)
+		local l, t, r, b = UI.BodyIn(box)
 		local w, h = box:GetWidth(), box:GetHeight()
 		if on then w, h = UIParent:GetWidth(), UIParent:GetHeight() end
-		box.shyFlow(box, w, h)
+		box.shyFlow(box, w - l - r, h - t - b)
 	end
 end
+-- A maximized window whose look's clearance changes is laid out again for the room its body has now.
+Shy:On("SHY_BODY", function(box)
+	if type(box) == "table" and box.maxed and box.shyFlow then box.shyFlow(box, UI.BodySize(box)) end
+end)
 Shy:On("SHY_HUD_MOVING", function(box)
 	if type(box) == "table" and box.shyMaximize and box.maxed then UI.Maximize(box, false, true) end
 end)
@@ -8688,6 +9067,15 @@ function UI.Window(opts)
 			click = function() UI.Maximize(box, not box.maxed) end })
 	end
 	box.head = UI.Head(box, head)
+	-- Its content laid on its body (UI.Body), and the window as big as it was made with its look's clearance besides:
+	-- one that flows through its grip, which counts it from here on (its made size is its body's: box.shyMade).
+	if opts.grip and opts.grip.flow then
+		box.shyMade = { opts.width, opts.height }
+		local l, t, r, b = UI.BodyIn(box)
+		Shy.HUD.Resize(box, opts.width + l + r, opts.height + t + b)
+	else
+		UI.BodyFit(box, opts.width, opts.height)
+	end
 	if opts.maximize then
 		box.shyMaximize = true
 		box.maxButton = box.head.buttons[1]
@@ -8698,9 +9086,12 @@ end
 -- Tabbed windows: a family of windows whose tabs dock together and come apart as a browser's do. A tab dragged
 -- along its strip moves there, onto another window joins it (on its strip where it is let go, anywhere else at
 -- the end), anywhere off its window opens a window of its own there. A window dragged by its header (or its one
--- tab) onto another docks into it, every tab. While something is carried, the window on top under the cursor that
--- it would join lights whole, washed and outlined in your color, and a bar in its strip marks where it goes (only
--- moving along its own strip, the strip alone lights); held at a strip's shaded edge, the tabs scroll. Windows
+-- tab) onto another docks into it, every tab. While something is carried, every place that would take it lights
+-- faintly (nothing else takes it), the window on top under the cursor that it would join lights whole, washed and
+-- outlined in your color, and a bar in its strip marks where it goes (only moving along its own strip, the strip alone
+-- lights); held at a strip's shaded edge, the tabs scroll. A carried tab shows as a tab where it would go or stay,
+-- anywhere else as the window it would open there (its size, where it would stand), as the game carries its chat
+-- windows whole. Windows
 -- flow (resized, never scaled): tabs past
 -- the strip scroll, shaded at the edges they run past, and a list button by the controls shows them all.
 --   local set = UI.TabWindows({
@@ -8718,14 +9109,31 @@ end
 --       emptied = function(win) end,         -- its last tab left: the owner lets it go (hide it, quietly)
 --       menu = function(tab, win, key) end,  -- a tab right-clicked
 --       row = function(entry, key, win) end, -- a row of the list, to add a sub line or a detail
+--       placed = function(key, win) end,     -- you carried a tab (or a window's every tab) into another window
 --   })
 -- set.wins[n]; set.of[key] the window a tab is in; win = { n, box, head, tabs, keys, current, open, buttons, room }
 -- (open: it holds tabs). set:Window() a window with none (stepped from the last opened while that one shows; one
 -- the owner marks `maxed` is not stepped from), set:Make(n), set:Join(win, key, at), set:Leave(key),
 -- set:Show(key), set:Own(key, spot), set:Merge(from, to, at), set:Clear(win), set:Fits(win, label), set:Lay(win).
+-- A host: a place of the owner's that holds tabs as a window does (the chat's own strip), carried into and out of
+-- as any window. Never handed out by set:Window(); its one tab carries itself, not the host.
+--   local win = set:Host({
+--       box,      -- shows the open tab (the owner shows it); build(win) lays it out
+--       zone,     -- where a carried tab or window lets go into it, while shown
+--       strip,    -- its tabs stand on it: UI.Tabs' strip (shyLine, shyStripColor), sized by the owner
+--       tall, mid, gap,                   -- the tabs' height, their words' middle and their spacing (UI.Tabs' opts)
+--       band,                             -- optional: the row a drop lands along (its whole header), the strip's place
+--                                         -- in it by the cursor (before the first when left of them)
+--       up = function() end,              -- whether its open tab is in view: else none of its tabs reads as open
+--   })   -- win.host is the table given; set.hosts lists them
+-- set:Hint(win) lights `win` faintly as a place to go for a drag of the owner's own (a game window carried to the chat);
+-- set:Unhint() puts it out.
 do
 	local K = {
 		GHOST_H = 22,   -- a carried tab
+		GRAB = { 40, 12 },   -- where the cursor holds a window a carried tab would open: in from its left, down from its top
+		SHELL = 0.75,   -- how much of that window shows as it is carried
+		HINT = { wash = 0.05, edge = 0.4 },   -- a place that would take what is carried, lit faintly the whole time
 		NUDGE = 6,      -- a window let go of nearer than this to where it was pressed was only clicked
 		CREEP = 6,      -- a carried tab held at a strip's shaded edge scrolls it this far a frame
 		EDGE = 2,       -- the outline round a window it would join
@@ -8733,6 +9141,103 @@ do
 		sets = {}, owners = setmetatable({}, { __mode = "k" }),
 		driver = CreateFrame("Frame"),
 	}
+
+	-- What is carried: over a place that would take it (or along its own strip), the tab itself, by the bar marking
+	-- where it goes; anywhere else the window it would open, as big as it would be and where it would stand, named in
+	-- its header, as a window of the game's is carried whole off its dock. (K.Shape picks.)
+	function K.Shell()
+		if K.shell then return K.shell end
+		local w = CreateFrame("Frame", nil, UIParent)
+		w:SetFrameStrata("TOOLTIP")
+		UI.Skin(w, C.bg, C.hot)
+		w:SetAlpha(K.SHELL)
+		w.head = w:CreateTexture(nil, "BORDER")
+		w.head:SetPoint("TOPLEFT", 1, -1)
+		w.head:SetPoint("TOPRIGHT", -1, -1)
+		w.head:SetHeight(UI.HEAD_STRIP - 1)
+		Theme.Paint(w.head, C.bgHot)
+		w.line = w:CreateTexture(nil, "ARTWORK")
+		w.line:SetPoint("TOPLEFT", w.head, "BOTTOMLEFT")
+		w.line:SetPoint("TOPRIGHT", w.head, "BOTTOMRIGHT")
+		w.line:SetHeight(UI.LINE)
+		w.text = UI.TitleText(w, "", UI.TITLE_SIZE, C.text)
+		w.text:SetPoint("LEFT", w, "TOPLEFT", 12, -UI.HEAD_MID)
+		w:SetScript("OnUpdate", function(self)
+			local x, y = GetCursorPosition()
+			local s = UIParent:GetEffectiveScale()
+			self:ClearAllPoints()
+			self:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / s - K.GRAB[1], y / s + K.GRAB[2])
+		end)
+		w:Hide()
+		K.shell = w
+		return w
+	end
+
+	-- The size a window a tab is carried out into would be: its window's (a window of the set's make), else one the set
+	-- has made, else the set's own.
+	function K.Size(set, from)
+		local box = from and not from.host and from.box
+		if not box then
+			for n = 1, set.most do
+				if set.wins[n] then
+					box = set.wins[n].box
+					break
+				end
+			end
+		end
+		if box then return box:GetWidth(), box:GetHeight() end
+		return set.opts.width, set.opts.height
+	end
+
+	function K.Shape(tab)
+		local d = K.dragging
+		if not d or d.tab == tab then return end
+		d.tab = tab
+		K.Ghost():SetShown(tab)
+		K.Shell():SetShown(not tab)
+	end
+
+	-- Every place that would take what is carried, lit faintly the whole time it is carried (the one under the cursor
+	-- lit full, K.Mark): what isn't lit takes nothing. A tab's own window takes it only along its strip.
+	K.hints = {}
+	function K.Hint(set, but, home, only)
+		local n = 0
+		for i = 1, set.most + #set.hosts do
+			local win = set.wins[i] or set.hosts[i - set.most]
+			if win and win ~= but and (not only or only == win) and (win.open or win.host) and K.Zone(win):IsVisible() then
+				n = n + 1
+				local h = K.hints[n]
+				if not h then
+					h = CreateFrame("Frame", nil, UIParent)
+					h:SetFrameStrata("FULLSCREEN_DIALOG")
+					h:EnableMouse(false)
+					h.wash = h:CreateTexture(nil, "BACKGROUND")
+					h.wash:SetAllPoints()
+					h.edges = {}
+					for e, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+						local t = h:CreateTexture(nil, "BORDER")
+						local across = e <= 2
+						t:SetPoint(across and (side .. "LEFT") or ("TOP" .. side))
+						t:SetPoint(across and (side .. "RIGHT") or ("BOTTOM" .. side))
+						if across then t:SetHeight(1) else t:SetWidth(1) end
+						h.edges[e] = t
+					end
+					K.hints[n] = h
+				end
+				local over = win == home and (win.band or win.head) or K.Zone(win)
+				h:ClearAllPoints()
+				h:SetAllPoints(over)
+				Theme.Paint(h.wash, C.hot, K.HINT.wash)
+				for _, t in ipairs(h.edges) do Theme.Paint(t, C.hot, K.HINT.edge) end
+				h:Show()
+			end
+		end
+		for i = n + 1, #K.hints do K.hints[i]:Hide() end
+	end
+
+	function K.Unhint()
+		for _, h in ipairs(K.hints) do h:Hide() end
+	end
 
 	function K.Ghost()
 		if K.ghost then return K.ghost end
@@ -8803,14 +9308,20 @@ do
 	-- The window on top under the cursor (never `but`, the one carried) and where a tab would go in it: anywhere on
 	-- another window joins it (on its strip at the place, elsewhere at the end); on `home`, the window a tab comes
 	-- from, only its strip counts. Returns the window, the place, and whether it would join (not only move along).
+	-- A window takes a drop while it holds tabs and shows; a host whenever its zone shows.
+	function K.Zone(win) return win.zone or win.box end
+
 	function K.Target(set, but, home)
 		local best, over, strip
-		for n = 1, set.most do
-			local win = set.wins[n]
-			if win and win ~= but and win.open and win.box:IsVisible() then
-				local onStrip = win.head:IsMouseOver()
-				if onStrip or win.box:IsMouseOver() then
-					local rank = K.Over(win.box)
+		for n = 1, set.most + #set.hosts do
+			local win = set.wins[n] or set.hosts[n - set.most]
+			local zone = win and K.Zone(win)
+			if win and win ~= but and (win.open or win.host) and zone:IsVisible() then
+				-- (a host's whole header row, when it names one: a drop over the tabs before its own lands first)
+				local band = win.band or win.head
+				local onStrip = band:IsVisible() and band:IsMouseOver()
+				if onStrip or zone:IsMouseOver() then
+					local rank = K.Over(zone)
 					if not best or rank > over then best, over, strip = win, rank, onStrip end
 				end
 			end
@@ -8825,7 +9336,7 @@ do
 			d:Hide()
 			return
 		end
-		local over = join and win.box or win.tabs
+		local over = join and K.Zone(win) or win.tabs
 		d:ClearAllPoints()
 		d:SetPoint("TOPLEFT", over, "TOPLEFT")
 		d:SetPoint("BOTTOMRIGHT", over, "BOTTOMRIGHT")
@@ -8837,12 +9348,13 @@ do
 		Theme.Paint(d.bar, C.hot)
 		local t, side = win.tabs.tabs[at], "LEFT"
 		if at > #win.keys or not t then t, side = win.tabs.tabs[#win.keys], "RIGHT" end
+		-- No tab yet: where the first will stand, at the strip's start.
+		if #win.keys == 0 then t, side = win.tabs, "LEFT" end
 		d.bar:ClearAllPoints()
-		if t then
-			d.bar:SetPoint("TOP", t, "TOP" .. side, side == "LEFT" and -2 or 2, 0)
-			d.bar:SetPoint("BOTTOM", t, "BOTTOM" .. side, side == "LEFT" and -2 or 2, 0)
-		end
-		d.bar:SetShown(t ~= nil)
+		d.bar:SetPoint("TOP", t, "TOP" .. side, side == "LEFT" and -2 or 2, 0)
+		d.bar:SetPoint("BOTTOM", t, "BOTTOM" .. side, side == "LEFT" and -2 or 2, 0)
+		d.bar:SetHeight(t:GetHeight())
+		d.bar:Show()
 		d:Show()
 	end
 
@@ -8851,9 +9363,9 @@ do
 		local tabs = win and win.tabs
 		if not (tabs and tabs.overflow and tabs:GetLeft()) then return end
 		local x = GetCursorPosition() / tabs:GetEffectiveScale() - tabs:GetLeft()
-		if x < TAB_FADE then
+		if x < TAB.FADE then
 			tabs:ScrollBy(-K.CREEP)
-		elseif x > tabs:GetWidth() - TAB_FADE then
+		elseif x > tabs:GetWidth() - TAB.FADE then
 			tabs:ScrollBy(K.CREEP)
 		end
 	end
@@ -8861,9 +9373,12 @@ do
 	function K.Follow()
 		if K.dragging then
 			local d = K.dragging
-			local win, at, join = K.Target(d.set, nil, d.set.of[d.key])
+			local home = d.set.of[d.key]
+			local win, at, join = K.Target(d.set, nil, home)
 			K.Creep(win)
 			K.Mark(win, at, join)
+			-- A tab where it goes, or where it stays (over its own window); else the window it would open.
+			K.Shape(win ~= nil or (home ~= nil and K.Zone(home):IsMouseOver()))
 		elseif K.carrying then
 			K.Mark(K.Target(K.carrying.set, K.carrying.win))
 		end
@@ -8878,15 +9393,24 @@ do
 		K.driver:SetScript("OnUpdate", nil)
 		K.driver:UnregisterEvent("GLOBAL_MOUSE_UP")
 		K.Mark(nil)
+		K.Unhint()
+		if K.shell then K.shell:Hide() end
 	end
 
 	function K.Lift(set, win, key)
 		K.dragging = { set = set, key = key }
+		local tint = set.opts.tint and set.opts.tint(key) or C.hot
 		local g = K.Ghost()
 		g.text:SetText(set.opts.label(key, win))
-		UI.SetBorder(g, set.opts.tint and set.opts.tint(key) or C.hot)
+		UI.SetBorder(g, tint)
 		g:SetWidth(g.text:GetStringWidth() + 24)
-		g:Show()
+		local w = K.Shell()
+		w.text:SetText(set.opts.name and set.opts.name(key) or set.opts.label(key, win))
+		UI.SetBorder(w, tint)
+		Theme.Paint(w.line, tint)
+		w:SetSize(K.Size(set, win))
+		K.Shape(true)   -- it starts on its own strip
+		K.Hint(set, nil, win)
 		K.Start()
 	end
 
@@ -8905,12 +9429,20 @@ do
 			set:Join(win, key, at)
 			set:Show(key)
 			win.box:Raise()
+			if win ~= from then K.Placed(set, key, win) end
 			return
 		end
-		if from.box:IsMouseOver() then return end
+		if K.Zone(from):IsMouseOver() then return end
+		-- Where the carried window showed it would stand.
 		local x, y = GetCursorPosition()
-		local s = from.box:GetEffectiveScale()
-		set:Own(key, { x = x / s - 40, y = y / s - from.box:GetHeight() + 12 })
+		local s = UIParent:GetEffectiveScale()
+		local _, tall = K.Size(set, from)
+		local own = set:Own(key, { x = x / s - K.GRAB[1], y = y / s + K.GRAB[2] - tall })
+		if own then K.Placed(set, key, own) end
+	end
+
+	function K.Placed(set, key, win)
+		if set.opts.placed then set.opts.placed(key, win) end
 	end
 
 	K.driver:SetScript("OnEvent", function()
@@ -8921,7 +9453,9 @@ do
 	Shy:On("SHY_HUD_MOVING", function(box)
 		local win = K.owners[box]
 		if not (win and win.open) then return end
-		K.carrying = { set = win.set, win = win, x = box:GetLeft(), y = box:GetTop() }
+		local x, y = GetCursorPosition()
+		K.carrying = { set = win.set, win = win, x = x, y = y }
+		K.Hint(win.set, win)
 		K.Start()
 	end)
 	Shy:On("SHY_HUD_MOVED", function(box)
@@ -8929,10 +9463,15 @@ do
 		if not (c and c.win.box == box) then return end
 		K.carrying = nil
 		K.Stop()
-		local x, y = box:GetLeft(), box:GetTop()
-		if x and c.x and abs(x - c.x) + abs(y - c.y) < K.NUDGE then return end
+		-- Only pressed, not carried: judged by the cursor, which goes where the window can't (past the screen's edge).
+		local x, y = GetCursorPosition()
+		local s = UIParent:GetEffectiveScale()
+		if (abs(x - c.x) + abs(y - c.y)) / s < K.NUDGE then return end
 		local to, at = K.Target(c.set, c.win)
-		if to then c.set:Merge(c.win, to, at) end
+		if not to then return end
+		local keys = { unpack(c.win.keys) }
+		c.set:Merge(c.win, to, at)
+		for _, key in ipairs(keys) do K.Placed(c.set, key, to) end
 	end)
 
 	local Set = {}
@@ -8940,6 +9479,12 @@ do
 
 	-- The tabs' room: the strip up to the controls; the list button shows while they run past it.
 	function K.Room(set, win)
+		-- A host's tabs take what they need: the place it stands them in scrolls (the chat's tab row).
+		if win.host then
+			win.room = nil
+			win.head:SetWidth(max(1, win.tabs:GetWidth()))
+			return
+		end
 		local head = win.head
 		win.tabs:ClearAllPoints()
 		win.tabs:SetPoint("TOPLEFT", head, "TOPLEFT", head.x - 4, 0)
@@ -8971,11 +9516,11 @@ do
 		tab:RegisterForDrag("LeftButton")
 		tab:SetScript("OnDragStart", function(self)
 			local key = win.keys[self.shyIndex]
-			if key and #win.keys > 1 then K.Lift(set, win, key) end
+			if key and (#win.keys > 1 or win.host) then K.Lift(set, win, key) end
 		end)
 		tab:SetScript("OnDragStop", function() if K.dragging then K.Let() end end)
-		-- With one tab, the tab carries its window as the header does.
-		Shy.HUD.Manage(win.box, tab, false, function() return #win.keys < 2 end)
+		-- With one tab, the tab carries its window as the header does (a host's stays where it is).
+		if not win.host then Shy.HUD.Manage(win.box, tab, false, function() return #win.keys < 2 end) end
 		tab:HookScript("OnMouseUp", function(self, button)
 			if button ~= "RightButton" or not set.opts.menu then return end
 			local key = win.keys[self.shyIndex]
@@ -8992,7 +9537,12 @@ do
 		end
 		K.Room(self, win)
 		local i = win.current and K.Index(win, win.current)
-		if i then win.tabs:Select(i) end
+		-- A host's open tab reads as open only while it is in view.
+		if win.host and not win.host.up() then
+			if win.tabs.selected then win.tabs:Select(nil) end
+		elseif i then
+			win.tabs:Select(i)
+		end
 	end
 
 	function K.Moved(set, win)
@@ -9095,12 +9645,8 @@ do
 		end
 		win.more = box.head.buttons[#controls]
 		local head = box.head
-		win.tabs = UI.Tabs(head, {}, function(i)
-			local key = win.keys[i]
-			if not key then return end
-			win.current = key
-			if opts.picked then opts.picked(win, key) end
-		end, nil, UI.TITLE_SIZE, box, { tall = head.size.line + UI.LINE, mid = head.mid })
+		win.tabs = UI.Tabs(head, {}, function(i) K.Pick(set, win, i) end, nil, UI.TITLE_SIZE, box,
+			{ tall = head.size.line + UI.LINE, mid = head.mid })
 		win.probe = UI.TitleText(head, "", UI.TITLE_SIZE)
 		win.probe:Hide()
 		K.owners[box] = win
@@ -9110,6 +9656,36 @@ do
 		K.Room(self, win)
 		return win
 	end
+
+	-- A tab opened (none: a host's put out of view).
+	function K.Pick(set, win, i)
+		local key = i and win.keys[i]
+		if not key then return end
+		win.current = key
+		if set.opts.picked then set.opts.picked(win, key) end
+	end
+
+	function Set:Host(h)
+		local set = self
+		local strip = h.strip
+		local win = { n = "host", keys = {}, set = self, buttons = {}, open = false, host = h,
+			box = h.box, zone = h.zone, head = strip, band = h.band }
+		win.tabs = UI.Tabs(strip, {}, function(i) K.Pick(set, win, i) end, nil, UI.TITLE_SIZE, strip,
+			{ tall = h.tall, mid = h.mid, gap = h.gap })
+		win.tabs:SetPoint("BOTTOMLEFT", strip, "BOTTOMLEFT")
+		win.probe = UI.TitleText(strip, "", UI.TITLE_SIZE)
+		win.probe:Hide()
+		self.hosts[#self.hosts + 1] = win
+		if self.opts.build then self.opts.build(win) end
+		strip:HookScript("OnSizeChanged", function() K.Room(set, win) end)
+		K.Room(self, win)
+		return win
+	end
+
+	-- What lights for a drag of the owner's own (a chat window of the game's carried towards the chat): `win` alone, faintly,
+	-- as a place it can go, until Unhint.
+	function Set:Hint(win) K.Hint(self, nil, nil, win) end
+	function Set:Unhint() K.Unhint() end
 
 	function Set:Window()
 		local win
@@ -9160,11 +9736,12 @@ do
 				win.head:Place()
 				K.Room(set, win)
 			end
+			for _, win in ipairs(set.hosts) do K.Room(set, win) end
 		end
 	end)
 
 	function UI.TabWindows(opts)
-		local set = setmetatable({ opts = opts, wins = {}, of = {}, most = opts.most or 8, step = opts.step or 24 }, Set)
+		local set = setmetatable({ opts = opts, wins = {}, hosts = {}, of = {}, most = opts.most or 8, step = opts.step or 24 }, Set)
 		K.sets[set] = true
 		return set
 	end
@@ -9290,7 +9867,10 @@ local function BuildReload()
 	f:EnableMouse(true)   -- so clicks don't fall through to the world
 	f:Hide()
 	UI.Head(f, { title = "Reload to finish" })
-	f.words = UI.Text(f, "", 12)
+	-- Its words and buttons on its body: clear of the look's work round the edge, the prompt that much bigger.
+	local body = UI.Body(f)
+	UI.BodyFit(f, 360, 100)
+	f.words = UI.Text(body, "", 12)
 	f.words:SetPoint("TOPLEFT", 10, -30)
 	f.words:SetWidth(340)
 	f.words:SetWordWrap(true)
@@ -9298,7 +9878,7 @@ local function BuildReload()
 	-- A secure macro button: the click runs /reload.
 	local go = CreateFrame("Button", nil, f, "SecureActionButtonTemplate")
 	go:SetSize(110, 24)
-	go:SetPoint("BOTTOMRIGHT", -8, 8)
+	go:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -8, 8)
 	go:RegisterForClicks("AnyUp", "AnyDown")
 	go:SetAttribute("type", "macro")
 	go:SetAttribute("macrotext", SLASH_RELOAD1)

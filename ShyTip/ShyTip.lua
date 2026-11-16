@@ -8,9 +8,9 @@ local UI, Skin = Shy.UI, Shy.Skin
 
 local T = Shy:NewAddon(ADDON, {
 	suffix = "Tip",
+	category = "interface",
 	icon = MEDIA .. "ShyTip",
 	smallIcon = MEDIA .. "ShyTipSmall",
-	tagline = "Tooltips at your cursor, themed your way",
 	savedVariables = "ShyTipDB",
 	defaults = {
 		-- position
@@ -27,7 +27,7 @@ local T = Shy:NewAddon(ADDON, {
 		-- look
 		replace = true,          -- hover cards replace default tooltips (Wing.lua)
 		emotes = true,           -- thank, wave and the other emotes in a unit frame's right-click menu (Unit.lua)
-		strip = true,            -- pings and raid markers for your target, with Shift held (Strip.lua)
+		strip = false,           -- pings and raid markers for your target, with Shift held (Strip.lua): yours to find and turn on
 		shyLook = true,          -- graphite background and steel border on default tooltips
 		customBg = false,        -- custom background color
 		font = "default",
@@ -552,6 +552,12 @@ end)
 
 function T:OnLoad()
 	db = self.db
+	-- Pings and markers start off, yours to find: a profile that kept them on from before they did is turned off
+	-- once (stripFound); after that, on or off is yours.
+	if not db.stripFound then
+		db.strip = false
+		db.stripFound = true
+	end
 
 	local function Adopt(tip)
 		Look(tip)  -- capture Blizzard's colors first

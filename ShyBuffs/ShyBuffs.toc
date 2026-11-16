@@ -1,10 +1,10 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffBuffs|r
-## Notes: Buffs and debuffs where you're looking in a fight: the important ones on your frame, the rest by the minimap. |cff888888/shybuffs|r
+## Notes: Buffs and debuffs where you're looking in a fight |cff888888/shybuffs|r
 ## Author: Shyce Cream
-## Version: 5.0.6
-## X-Date: 2026-11-15
-## IconTexture: Interface\AddOns\ShyBuffs\Media\ShyBuffs
+## Version: 5.1.1
+## X-Date: 2026-11-16
+## IconTexture: Interface\AddOns\ShyBuffs\Media\ShyBuffsMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyFrames, ShySkin, ShyDock
 ## Group: ShyCore

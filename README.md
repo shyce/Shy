@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.1.3" src="https://img.shields.io/badge/version-5.1.3-29b3ff"></a>
+  <a href="CHANGELOG.md"><img alt="version 5.1.4" src="https://img.shields.io/badge/version-5.1.4-29b3ff"></a>
   <img alt="released 16 Nov 2026" src="https://img.shields.io/badge/released-16_Nov_2026-4a5568">
-  <img alt="tests 35,041 passed" src="https://img.shields.io/badge/tests-35%2C041_passed-4ade80">
+  <img alt="tests 35,048 passed" src="https://img.shields.io/badge/tests-35%2C048_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,26 +93,11 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.1.3
-
-### Added
-- **ShyCore:** A and D can keep turning you instead of strafing. Pick it on their row in your keys, and give strafing or turning a key of your own
-
-### Changed
-- **ShyAuction:** Selling a pile now goes up stack by stack, with a strip showing how far along you are. Space posts the next one, and right-clicking an item in your bags picks it on the Sell tab
-- **ShyCore:** The game-style red buttons turn their own art around when held, so they look pushed in, and no longer get a second light along the top
-- **ShyCore:** The game-style red buttons keep the same thin rim on a tall card as on a small button
-- **ShyCore:** The Maximize and Minimize buttons on windows no longer pop up a tooltip
-- **ShyDock:** The Screen page in setup is laid out new. A band says what happens to your screen, the layouts are cards, and the sizes, bars and menu sit in two columns under them. The card in use is badged
-- **ShyDock:** If you changed the console's layout yourself, setup now leaves it alone and marks it custom. Pick a layout to start fresh
-- **ShyThreat:** One threat setting for the meter, nameplates and warrior light, with one aggro sound. The meter counts mobs that got loose from you
+## What's new in 5.1.4
 
 ### Fixed
-- **ShyBags:** Stack counts in your bank slots didn't show when the bank first opened. They show from the start now
-- **ShyCore:** Clicking the choice that was already picked made its button flash as if you were pointing at it. It stays still now
-- **ShyCore:** The chosen card on the keys page flickered when you pointed at another one. It stays steady now
-- **ShyDock:** In a fight your off-hand swing bar went missing while dual wielding. It stays now
-- **ShyQuest:** Some quests were offered from level 1 when they are really for high levels, and two Praise quests sent low levels to an empty spot. Both are right now
+- **ShyAuction:** Close the auction house and open it again, and the item you had picked showed no prices. It asks for them again each time you open it
+- **ShyAuction:** Herbs in your herb bag didn't show on the sell list. They're listed now, and right-clicking one picks it
 
 [Every release](CHANGELOG.md)
 

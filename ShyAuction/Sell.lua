@@ -40,7 +40,7 @@ local STATUS = Enum.ItemCommodityStatus
 local page, scroll, list, card
 -- pick: the item picked; at: its place in the list (the next one slides into it once it's all up); count: how many
 -- still to post (nil: all you have); run: the posts made of the item picked ({ item, done = { n a press }, last = how
--- many you had }); up: the last item all posted ({ item, n }); asked: an item whose search waits for the house;
+-- many you had }); up: the last item all posted ({ item, n }); asked: the item whose listings this visit asked for;
 -- posting: when a post was sent; kept: that post, should the house ask to be sure; sure: the house asked (Post
 -- anyway); busy: since when the house has been busy; said: words under Post.
 local state = { pick = nil, price = nil, typed = false, count = nil, duration = 3 }
@@ -63,7 +63,7 @@ end
 local function Read()
 	wipe(goods)
 	local by, n = {}, 0
-	for bag = 0, NUM_BAG_SLOTS do
+	for bag = Enum.BagIndex.Backpack, Enum.BagIndex.ReagentBag do
 		for slot = 1, C_Container.GetContainerNumSlots(bag) do
 			local info = C_Container.GetContainerItemInfo(bag, slot)
 			if info and info.itemID and not info.isBound and not issecretvalue(info.itemID) then
@@ -178,15 +178,20 @@ local function Busy()
 	return true
 end
 
--- The search for the item picked, sent once the house can take it.
+-- What is listed of the item picked, sent once the house can take it: asked by the key of the very item in your bags,
+-- as the game's own sell window does. Asked again each visit, as the house forgets it when it closes.
+local function Ask()
+	local g = Picked()
+	local key = g and C_Item.DoesItemExist(g.location) and C_AuctionHouse.GetItemKeyFromItem(g.location)
+	state.asked = state.pick
+	ns.Search(key or C_AuctionHouse.MakeItemKey(state.pick))
+end
+
 local function Pick(item)
 	state.pick, state.typed, state.price, state.count, state.run = item, false, nil, nil, nil
 	ns.lastPick = item   -- (the Farm tab's For an item)
 	state.sure, state.kept, state.said = nil, nil, nil
-	-- Asked by the key of the very item in your bags, as the game's own sell window does.
-	local g = Picked()
-	local key = g and C_Item.DoesItemExist(g.location) and C_AuctionHouse.GetItemKeyFromItem(g.location)
-	ns.Search(key or C_AuctionHouse.MakeItemKey(item))
+	Ask()
 	ns.Window.Stale()
 end
 
@@ -653,6 +658,7 @@ local function Draw(frame, width, height)
 		if next then Pick(next.item) end
 	end
 	if not state.pick and goods[1] then Pick(goods[1].item) end
+	if state.pick and state.asked ~= state.pick then Ask() end
 	local up = state.up
 	page.kick:Say("In your bags", up and ("all %d %s up"):format(up.n, (P.Name(up.item))) or "worth first", up and C.good or nil)
 	scroll.content:SetWidth(L.list - 14)
@@ -722,7 +728,10 @@ events:SetScript("OnEvent", Shy.Clocked("auction: sell", function(_, event, arg)
 		end
 	elseif event == "AUCTION_MULTISELL_FAILURE" or event == "AUCTION_HOUSE_CLOSED" then
 		Settled()
-		if event == "AUCTION_HOUSE_CLOSED" then wipe(sellable) end
+		if event == "AUCTION_HOUSE_CLOSED" then
+			wipe(sellable)
+			state.asked = nil
+		end
 	end
 	if ns.Window.Page() == "sell" then ns.Window.Stale() end
 end))

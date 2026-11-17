@@ -106,12 +106,17 @@ local function Heard()
 	ns.Window.Stale()
 end
 
--- The item picked: what is listed of it, cheapest first.
+-- What is listed of the item picked, cheapest first: asked again each visit, as the house forgets it when it closes.
+local function Search()
+	state.asked = state.pick
+	ns.Search(state.key)
+end
+
 local function Pick(item, key)
 	state.pick, state.key, state.quote, state.ladder = item, key or C_AuctionHouse.MakeItemKey(item), nil, {}
 	ns.lastPick = item   -- (the Farm tab's For an item)
 	state.count = 1
-	ns.Search(state.key)
+	Search()
 	ns.Window.Stale()
 end
 
@@ -433,6 +438,7 @@ local function Draw(frame, width, height)
 		end
 		if not found then Pick(rows[1].item, rows[1].key) end
 	end
+	if state.pick and state.asked ~= state.pick then Search() end
 	local found
 	if state.wide then
 		found = #rows > 0 and ("nothing in %s: %d found elsewhere, lit at the left"):format(state.cat and state.cat.name or "it", #rows)
@@ -482,10 +488,10 @@ events:SetScript("OnEvent", Shy.Clocked("auction: buy", function(_, event, ...)
 		ns.Window.Stale()
 	elseif event == "COMMODITY_PURCHASE_SUCCEEDED" or event == "COMMODITY_PURCHASE_FAILED" then
 		state.quote, state.asking = nil, nil
-		if state.pick then ns.Search(state.key) end
+		if state.pick then Search() end
 		ns.Window.Stale()
 	elseif event == "AUCTION_HOUSE_CLOSED" then
-		state.quote, state.asking = nil, nil
+		state.quote, state.asking, state.asked = nil, nil, nil
 	else
 		ns.Window.Stale()
 	end

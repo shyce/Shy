@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.1.4 (16 Nov 2026)
+
+### Fixed
+- **ShyAuction:** Close the auction house and open it again, and the item you had picked showed no prices. It asks for them again each time you open it
+- **ShyAuction:** Herbs in your herb bag didn't show on the sell list. They're listed now, and right-clicking one picks it
+
 ## 5.1.3 (16 Nov 2026)
 
 ### Added

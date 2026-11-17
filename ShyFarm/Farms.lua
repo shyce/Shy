@@ -31,6 +31,7 @@ local K = {
 	show = 15,       -- ... and this many kept
 	near = 0.5,      -- camps at least this share as thick as the thickest are asked the way to
 	rare = 0.01,     -- for one item: creatures giving under this share of what its best dropper gives are left out
+	viable = 0.1,    -- of an item, the least its best dropper gives a kill for creatures to be a way to get it
 	budget = 3,      -- ms a frame the weighing takes
 	settle = 12,     -- seconds the list waits for the ways there before it is said
 	run = 7,         -- yards a second you run, for a way there that isn't known
@@ -67,28 +68,84 @@ function F.Pace()
 	return math.min(K.slowest, math.max(K.quickest, seconds / kills)), true
 end
 
+-- Asking which creatures drop an item reads the data's text, never every record whole: a plain search finds the few
+-- that name it, and its chance is read out of just those (Data/Loot.lua's format: Worth.lua reads the same).
+local SCALE = 10000                 -- the data's chances are in hundredths of a percent
+local DROPS = "^[^^]*%^[^^]*%^([^^]*)"
+local ROLLS = "^[^^]*%^[^^]*%^[^^]*%^([^^]*)"
+
+-- How many of `id` one go of a list gives ("id:chance[:count]" entries; whole: a count as it is, else in tenths).
+local function Rate(list, id, whole)
+	if not list or list == "" then return 0 end
+	local chance, count = ("," .. list):match("," .. id .. ":(%d+):?(%d*)")
+	if not chance then return 0 end
+	local n = tonumber(count)
+	return tonumber(chance) / SCALE * (n and (whole and n or n / 10) or 1)
+end
+
+-- Which creatures roll each shared table: { [table] = { npc, ... } }, read once.
+local rollers
+local function Rollers()
+	if rollers then return rollers end
+	rollers = {}
+	for npc, text in pairs(ns.loot.creatures) do
+		local rolls = text:match(ROLLS)
+		if rolls and rolls ~= "" then
+			for text in rolls:gmatch("(%d+):%d+") do
+				local id = tonumber(text)
+				local who = rollers[id]
+				if not who then
+					who = {}
+					rollers[id] = who
+				end
+				who[#who + 1] = npc
+			end
+		end
+	end
+	return rollers
+end
+
 -- The creatures that drop an item, and how many of it a kill gives: { [npc] = per }.
 local function Droppers(want)
 	local out = {}
 	local loot = ns.loot
-	local rolls = {}
-	for id in pairs(loot.tables) do
-		for _, drop in ipairs(W.Table(id)) do
-			if drop.item == want then rolls[id] = drop.chance * drop.count end
+	local first, after, opens = want .. ":", "," .. want .. ":", "^" .. want .. ":"
+	-- Its own drop: a creature whose drops name it.
+	for npc, text in pairs(loot.creatures) do
+		if text:find(after, 1, true) or text:find(opens, 1, true) then
+			local per = Rate(text:match(DROPS), want)
+			if per > 0 then out[npc] = per end
 		end
 	end
-	for _, npc in ipairs(Keys()) do
-		local c = W.Creature(npc)
-		local per = 0
-		for _, drop in ipairs(c.drops) do
-			if drop.item == want then per = per + drop.chance * drop.count end
+	-- Through a shared table that holds it: every creature that rolls it.
+	for id, text in pairs(loot.tables) do
+		if text:find(after, 1, true) or text:sub(1, #first) == first then
+			local each = Rate(text, want)
+			for _, npc in ipairs(each > 0 and Rollers()[id] or {}) do
+				local roll = Rate(loot.creatures[npc]:match(ROLLS), id, true)
+				if roll > 0 then out[npc] = (out[npc] or 0) + roll * each end
+			end
 		end
-		for _, roll in ipairs(c.tables) do
-			if rolls[roll.table] then per = per + roll.chance * roll.times * rolls[roll.table] end
-		end
-		if per > 0 then out[npc] = per end
 	end
 	return out
+end
+
+-- The most of an item one kill gives, of every creature that drops it (0: none does). Kept by item.
+local most = {}
+function F.Most(want)
+	local kept = most[want]
+	if kept then return kept end
+	kept = 0
+	if ns.loot then
+		for _, per in pairs(Droppers(want)) do kept = math.max(kept, per) end
+	end
+	most[want] = kept
+	return kept
+end
+
+-- Whether creatures are a way to get an item: one of them drops it at least once in ten kills.
+function F.Farmable(want)
+	return F.Most(want) >= K.viable
 end
 
 -- The camps you'd farm a creature at: those on your continent (ShyQuest's straight yards say which: nil off it),

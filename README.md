@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.1.4" src="https://img.shields.io/badge/version-5.1.4-29b3ff"></a>
-  <img alt="released 16 Nov 2026" src="https://img.shields.io/badge/released-16_Nov_2026-4a5568">
-  <img alt="tests 35,048 passed" src="https://img.shields.io/badge/tests-35%2C048_passed-4ade80">
+  <a href="CHANGELOG.md"><img alt="version 5.1.5" src="https://img.shields.io/badge/version-5.1.5-29b3ff"></a>
+  <img alt="released 17 Nov 2026" src="https://img.shields.io/badge/released-17_Nov_2026-4a5568">
+  <img alt="tests 35,069 passed" src="https://img.shields.io/badge/tests-35%2C069_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,11 +93,16 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.1.4
+## What's new in 5.1.5
+
+### Changed
+- **ShyFarm:** Looking up which creatures drop an item is much quicker. Items that creatures almost never drop are no longer treated as something to farm
 
 ### Fixed
-- **ShyAuction:** Close the auction house and open it again, and the item you had picked showed no prices. It asks for them again each time you open it
-- **ShyAuction:** Herbs in your herb bag didn't show on the sell list. They're listed now, and right-clicking one picks it
+- **ShyAuction:** Where to farm it on the Buy card showed for items no creature really drops, and the farm list didn't lead with the item you asked about. It shows only where it helps now, and lists that item first
+- **ShyBags:** Searching another character's bags, or the bank when you're away from it, could throw an error. It searches them fine now
+- **ShySkin:** Opening the professions window in a fight could break the Create button. The window leaves it alone then
+- **ShySkin:** In a fight the unit frames could throw an error while being dressed. They're left as the game had them and dress fine now
 
 [Every release](CHANGELOG.md)
 

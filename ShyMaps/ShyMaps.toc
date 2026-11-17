@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffMaps|r
 ## Notes: The world map without fog, dungeon guides, and your friends on it |cff888888/shymaps|r
 ## Author: Shyce Cream
-## Version: 5.1.4
-## X-Date: 2026-11-16
+## Version: 5.1.5
+## X-Date: 2026-11-17
 ## IconTexture: Interface\AddOns\ShyMaps\Media\ShyMapsMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyWay, ShyQuest, ShyGear, ShyGroup

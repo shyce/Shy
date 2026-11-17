@@ -10,7 +10,8 @@ local C = UI.colors
 local Shop = Shy.Shop
 local P = ns.Parts
 
-local L = { side = 160, gap = 10, card = 248, row = 34, rung = 22, ladder = 6 }
+-- head: where the card's sections start, under the item's name, market and listings.
+local L = { side = 160, gap = 10, card = 248, row = 34, rung = 22, ladder = 6, step = 8, head = 60 }
 
 local page, side, search, cats, mid, scroll, list, head, card
 local state = { find = "", cat = nil, open = nil, rows = {}, pick = nil, ladder = {}, count = 1, quote = nil }
@@ -319,7 +320,9 @@ local function DrawCard(width, height)
 	else
 		card.total:SetText("")
 	end
-	card.farm:SetShown(Shy.addons.Farm ~= nil)
+	-- (Only for what creatures are a way to get: an herb they carry once in a blue moon has no farm.)
+	local farm = Shy.addons.Farm
+	card.farm:SetShown(farm ~= nil and farm.Farmable ~= nil and farm:Farmable(item))
 end
 
 local function Build(frame)
@@ -374,18 +377,18 @@ local function Build(frame)
 	card.listed = Shop.Text(card, UI.TextFont(10), C.dim)
 	card.listed:SetPoint("TOPLEFT", card.market, "BOTTOMLEFT", 0, -2)
 	card.kick1 = Shop.Kicker(card)
-	card.kick1:SetPoint("TOPLEFT", 0, -52)
+	card.kick1:SetPoint("TOPLEFT", 0, -L.head)
 	card.kick1:SetPoint("RIGHT")
 	card.chart = P.Spark(card)
-	card.chart:SetPoint("TOPLEFT", 2, -74)
+	card.chart:SetPoint("TOPLEFT", 2, -L.head - 22)
 	card.kick2 = Shop.Kicker(card)
-	card.kick2:SetPoint("TOPLEFT", 0, -138)
+	card.kick2:SetPoint("TOPLEFT", 0, -L.head - 86)
 	card.kick2:SetPoint("RIGHT")
 	card.rungs = {}
 	for i = 1, L.ladder do
 		local r = CreateFrame("Frame", nil, card)
 		r:SetHeight(L.rung)
-		r:SetPoint("TOPLEFT", 0, -158 - (i - 1) * L.rung)
+		r:SetPoint("TOPLEFT", 0, -L.head - 106 - (i - 1) * L.rung)
 		r:SetPoint("RIGHT")
 		r.bar = r:CreateTexture(nil, "BACKGROUND")
 		r.bar:SetPoint("TOPLEFT", 0, -4)
@@ -402,23 +405,18 @@ local function Build(frame)
 		r.buy:SetPoint("RIGHT", 0, 0)
 		card.rungs[i] = r
 	end
-	card.stepper = Shop.Stepper(card, { width = 90, height = 24, max = "Max", onChange = function(n)
+	card.stepper = Shop.Stepper(card, { height = 24, max = "Max", onChange = function(n)
 		state.count, state.quote = n, nil
 		ns.Window.Stale()
 	end })
-	card.stepper:SetPoint("TOPLEFT", 0, -168 - L.ladder * L.rung)
-	card.buy = UI.Button(card, "Buy", 140, function() Buy() end)
+	card.stepper:SetPoint("TOPLEFT", 0, -L.head - 116 - L.ladder * L.rung)
+	-- (Buy takes what the card has left beside the count.)
+	card.buy = UI.Button(card, "Buy", L.card - card.stepper:GetWidth() - L.step, function() Buy() end)
 	card.buy:SetHeight(24)
-	card.buy:SetPoint("LEFT", card.stepper, "RIGHT", 8, 0)
+	card.buy:SetPoint("LEFT", card.stepper, "RIGHT", L.step, 0)
 	card.total = Shop.Text(card, UI.TextFont(10), C.dim)
 	card.total:SetPoint("TOP", card.buy, "BOTTOM", 0, -3)
-	card.farm = UI.Button(card, "Where to farm it", 140, function()
-		local farm = Shy.addons.Farm
-		if farm and farm.RankFarms and state.pick then
-			farm:RankFarms(state.pick)
-			ns.Window.Open("farm")
-		end
-	end)
+	card.farm = UI.Button(card, "Where to farm it", 140, function() ns.FarmPage.For(state.pick) end)
 	card.farm:SetHeight(22)
 	card.farm:SetPoint("BOTTOMLEFT", 0, 0)
 	card.farm:SetPoint("RIGHT")

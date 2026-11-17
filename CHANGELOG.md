@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.1.5 (17 Nov 2026)
+
+### Changed
+- **ShyFarm:** Looking up which creatures drop an item is much quicker. Items that creatures almost never drop are no longer treated as something to farm
+
+### Fixed
+- **ShyAuction:** Where to farm it on the Buy card showed for items no creature really drops, and the farm list didn't lead with the item you asked about. It shows only where it helps now, and lists that item first
+- **ShyBags:** Searching another character's bags, or the bank when you're away from it, could throw an error. It searches them fine now
+- **ShySkin:** Opening the professions window in a fight could break the Create button. The window leaves it alone then
+- **ShySkin:** In a fight the unit frames could throw an error while being dressed. They're left as the game had them and dress fine now
+
 ## 5.1.4 (16 Nov 2026)
 
 ### Fixed

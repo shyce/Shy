@@ -23,6 +23,7 @@ local WORDS = {
 	quest = "Turn on ShyQuest too. It knows where everything is.",
 	working = "Finding the best farms for you...",
 	none = "Nothing at your level drops it.",
+	rare = "Creatures almost never drop %s, so there's no farm for it.",
 	pick = "Pick an item on Buy or Sell, or find one to farm, and you'll see the best places to get it.",
 	find = "Find an item to farm",
 	noFavorites = "No favorites yet. Star an item in the finder and it'll show up here.",
@@ -40,6 +41,12 @@ local want                 -- the item For an item shows, when a favorite was cl
 local function Farm()
 	local farm = Shy.addons.Farm
 	return farm and farm.Farms and farm or nil
+end
+
+-- Back to the top of the list (another view in it).
+local function Top()
+	scroll:SetVerticalScroll(0)
+	scroll:Update()
 end
 
 -- The item For an item shows: a favorite clicked, else the one last picked on Buy or Sell.
@@ -188,8 +195,14 @@ local function DrawFarm(row, i, f, farm, item, top)
 	row.where:SetText(Where(f))
 	local _, best = farm:KillWorth(f.npc)
 	row.item = item or (best and best[1] and best[1].item)
+	-- The item asked for first (why the creature is here), then what else brings most of a kill's worth.
+	local drops = {}
+	if item and f.chance then drops[1] = { item = item, per = f.chance } end
+	for _, drop in ipairs(best or {}) do
+		if drop.item ~= item and #drops < L.drops then drops[#drops + 1] = drop end
+	end
 	for d = 1, L.drops do
-		local drop, piece = best and best[d], row.drops[d]
+		local drop, piece = drops[d], row.drops[d]
 		piece:SetShown(drop ~= nil)
 		piece.text:SetShown(drop ~= nil)
 		piece.item = drop and drop.item
@@ -197,6 +210,7 @@ local function DrawFarm(row, i, f, farm, item, top)
 			piece.icon:SetTexture(C_Item.GetItemIconByID(drop.item) or 134400)
 			piece.slot:Quality(C_Item.GetItemQualityByID(drop.item))
 			piece.text:SetText(drop.per >= 0.1 and ("%.1f a kill"):format(drop.per) or ("%d%%"):format(math.max(1, math.floor(drop.per * 100 + 0.5))))
+			UI.Ink(piece.text, drop.item == item and C.text or C.dim)
 		end
 	end
 	if item and f.items then
@@ -251,11 +265,13 @@ local function Build(frame)
 		local was = view
 		view = VIEWS[i] or "best"
 		if view ~= "item" then want = nil end
-		if was ~= view then scroll:SetScroll(0) end
+		if was ~= view then Top() end
 		ns.Window.Stale()
 	end, { height = 24 })
 	views:SetPoint("TOPLEFT", 12, -4)
-	views:Select(1)
+	for i, v in ipairs(VIEWS) do
+		if v == view then views:Select(i) end
+	end
 	context = Shop.Text(page, UI.TextFont(10), C.dim)
 	context:SetPoint("RIGHT", page, "TOPRIGHT", -12, -16)
 	context:SetJustifyH("RIGHT")
@@ -319,6 +335,9 @@ local function Draw(frame, width, height)
 		Say(WORDS.pick)
 		local quest = Shy.addons.Quest
 		finder:SetShown(quest ~= nil and quest.FindFarm ~= nil)
+	elseif item and farm.Farmable and not farm:Farmable(item) then
+		entries = 0
+		Say(WORDS.rare:format(ns.Parts.Name(item) or "it"))
 	else
 		-- Ranked for what this view shows (weighed again, over a few frames, when it isn't).
 		if state ~= "working" and state ~= "missing" and (state == nil or ranked ~= item) then
@@ -359,8 +378,20 @@ local function Draw(frame, width, height)
 end
 
 ns.AddPage({ key = "farm", label = "Farm", order = 4, Build = Build, Draw = Draw })
--- (Exposed for inspection.)
-ns.FarmPage = { Parts = function() return views, rows, context, lead, missing end }
+-- Where to farm an item (Buy's card): For an item, with it.
+local function For(item)
+	if not item then return end
+	want, view = item, "item"
+	if views then
+		views:Select(2)
+		Top()
+	end
+	ns.Window.Open("farm")
+	ns.Window.Stale()
+end
+
+-- (Parts exposed for inspection.)
+ns.FarmPage = { For = For, Parts = function() return views, rows, context, lead, missing end }
 
 Shy:On("SHY_FARM", function(why)
 	if (why == "farms" or why == "favorite") and ns.Window.Page() == "farm" then ns.Window.Stale() end

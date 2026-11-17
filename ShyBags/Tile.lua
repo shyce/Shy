@@ -142,10 +142,11 @@ function Tile.Assign(tile, bag, slot)
 end
 
 -- The bag and slot this button was given. Kept here so a fight reads a plain number, not the button's
--- own bag field (that one is for the click).
+-- own bag field (that one is for the click). Nothing for a stored slot: a plain frame has no bag.
 function Tile.At(tile)
 	local s = tiles[tile]
 	if s and s.bag ~= nil then return s.bag, s.index end
+	if s and not s.live then return nil end
 	return tile:GetBagID(), tile:GetID()
 end
 

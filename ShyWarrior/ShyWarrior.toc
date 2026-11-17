@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffWarrior|r
 ## Notes: Shows when Overpower, Execute or Revenge is up, and lays out your keys |cff888888/shywarrior|r
 ## Author: Shyce Cream
-## Version: 5.1.4
-## X-Date: 2026-11-16
+## Version: 5.1.5
+## X-Date: 2026-11-17
 ## IconTexture: Interface\AddOns\ShyWarrior\Media\ShyWarriorMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore

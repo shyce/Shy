@@ -1687,7 +1687,7 @@ end
 local function DrawRecipe()
 	local d = own.detail
 	d:SetShown(picked ~= nil)
-	own.foot:SetShown(picked ~= nil)
+	if Free(own.foot) then own.foot:SetShown(picked ~= nil) end   -- it holds Create, a secure button
 	own.bloom:SetShown(picked ~= nil)
 	if not picked then return end
 	local id = picked.recipeID

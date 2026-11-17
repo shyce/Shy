@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffHunter|r
 ## Notes: Every ability on a key near your hand, each new one as you learn it |cff888888/shyhunter|r
 ## Author: Shyce Cream
-## Version: 5.1.4
-## X-Date: 2026-11-16
+## Version: 5.1.5
+## X-Date: 2026-11-17
 ## IconTexture: Interface\AddOns\ShyHunter\Media\ShyHunterMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore

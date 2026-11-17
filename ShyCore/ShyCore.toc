@@ -3,8 +3,8 @@
 ## Notes: The look, layout and setup every Shy addon shares |cff888888/shy|r
 ## Author: Shyce Cream
 ## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r
-## Version: 5.1.4
-## X-Date: 2026-11-16
+## Version: 5.1.5
+## X-Date: 2026-11-17
 ## IconTexture: Interface\AddOns\ShyCore\Media\ShyCoreMarkColor
 ## SavedVariables: ShyCoreDB
 ## AddonCompartmentFunc: ShyCore_OnCompartmentClick

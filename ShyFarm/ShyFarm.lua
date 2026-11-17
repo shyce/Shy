@@ -25,6 +25,7 @@
 --   T:FarmMenu(root, item)  its rows in a menu of another addon's (the finder's item menu)
 --   T:ItemLines(item, add)  its lines in a hover of another addon's: add(left, right) for each
 --   T:RankFarms([item])     weighs every farm you could farm again, over a few frames (only those that drop `item`)
+--   T:Farmable(item)        whether creatures are a way to get an item: one drops it at least once in ten kills
 --   T:Farms()               the farms, best first by gold an hour, and how the weighing stands ("working" | "done" |
 --                           "missing"): Farms.lua has a farm's fields
 --   T:Pace()                seconds a kill takes you: your sessions' own, else a usual fight's; and whether it is yours
@@ -144,6 +145,7 @@ function T:Drops(item)
 end
 
 function T:RankFarms(item) ns.Farms.Rank(item) end
+function T:Farmable(item) return item ~= nil and ns.Farms.Farmable(item) end
 function T:Farms() return ns.Farms.List() end
 function T:Pace() return ns.Farms.Pace() end
 

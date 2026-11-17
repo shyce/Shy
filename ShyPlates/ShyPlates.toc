@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffPlates|r
 ## Notes: Nameplates with casts, debuffs, threat and combo points |cff888888/shyplates|r
 ## Author: Shyce Cream
-## Version: 5.1.4
-## X-Date: 2026-11-16
+## Version: 5.1.5
+## X-Date: 2026-11-17
 ## IconTexture: Interface\AddOns\ShyPlates\Media\ShyPlatesMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyQuest, ShyDots

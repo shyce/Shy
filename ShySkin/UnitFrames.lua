@@ -83,9 +83,12 @@ local function RankOf(unit)
 	return RANKS[kind]
 end
 
--- A region whose anchors are secret can't be restored, so it isn't moved.
+-- A region whose anchors are secret can't be restored, so it isn't moved. In a fight even how many
+-- anchors it has can be secret.
 local function CanPlace(region)
-	for i = 1, region:GetNumPoints() do
+	local points = region:GetNumPoints()
+	if not canaccessvalue(points) then return false end
+	for i = 1, points do
 		if not canaccessvalue(region:GetPoint(i)) then return false end
 	end
 	return canaccessvalue(region:GetSize())

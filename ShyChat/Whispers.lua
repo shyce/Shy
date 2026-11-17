@@ -1314,9 +1314,9 @@ local function Windows()
 		shown = Wanted, onClose = Closed,
 		-- Right to left after the ×: maximize, minimize.
 		controls = {
-			{ key = "max", glyph = MEDIA .. "GlyphMaximize", tip = { "Maximize", "Fill the screen. Click again to put it back." },
+			{ key = "max", glyph = MEDIA .. "GlyphMaximize",
 				click = function(w) Maximize(w, not w.maxed) end },
-			{ key = "min", glyph = MEDIA .. "GlyphMinus", tip = { "Minimize", "Tuck it into the whisper dock. Click its name there to bring it back." },
+			{ key = "min", glyph = MEDIA .. "GlyphMinus",
 				click = function(w) Minimize(w, true) end },
 		},
 		list = { "Conversations", "Every conversation in this window." },

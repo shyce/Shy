@@ -1802,10 +1802,11 @@ local function StillOurs(info, was)
 end
 
 -- Write the console into a layout. again: the layout is ours from an earlier
--- run, so what that run placed may be placed again.
+-- run, so what that run placed may be placed again. Returns where each system
+-- was placed and the settings written for it, by Key (L.Custom reads both).
 local function Write(layout, g, now, again)
 	local was = again and ns.char.placed or {}
-	local placed, taken = {}, {}
+	local placed, written, taken = {}, {}, {}
 	for _, def in ipairs(PLACES) do
 		local index = def.index
 		if type(index) == "function" then
@@ -1828,11 +1829,16 @@ local function Write(layout, g, now, again)
 				placed[key] = { point, x, y }
 			end
 			if def.settings then
-				for setting, value in pairs(def.settings(g, now)) do Set(info, setting, value) end
+				local set = {}
+				for setting, value in pairs(def.settings(g, now)) do
+					Set(info, setting, value)
+					set[setting] = value
+				end
+				written[key] = next(set) and set or nil
 			end
 		end
 	end
-	return placed
+	return placed, written
 end
 
 -- Layouts
@@ -1928,12 +1934,51 @@ function L.IsStale()
 	return ns.char.built ~= Signature(now)
 end
 
+-- Has the player made the screen their own, so a setup would undo it? "own": another Edit Mode layout of
+-- theirs is in use (not one of the game's), its name second. "changed": the console's layout is, and since
+-- the setup a piece it placed was moved or resized in Edit Mode, a piece of ours moved or sized in layout
+-- mode (a setup takes them all in, Arrange.TakeIn), or a piece taken out of the cockpit. Else false.
+function L.Custom()
+	local info = Layouts()
+	local layout = info.layouts[info.activeLayout - Presets()]
+	if not layout then return false end
+	if not IsMine(layout) then return "own", layout.layoutName end
+	if next(ns.char.loose) or ns.char.barsAt then return "changed" end
+	local placed, written = ns.char.placed or {}, ns.char.written or {}
+	for _, entry in ipairs(layout.systems) do
+		local key = Key(entry.system, entry.systemIndex)
+		if placed[key] and not StillOurs(entry, placed[key]) then return "changed" end
+		for setting, value in pairs(written[key] or {}) do
+			local now = Value(entry, setting)
+			if type(now) == "number" and type(value) == "number" and abs(now - value) > 0.5 then return "changed" end
+		end
+	end
+	if T.db.arrange then
+		local moved = false
+		Shy.HUD.Each(function(box)
+			if not moved and not box.window and Shy.HUD.IsChanged(box) then moved = true end
+		end)
+		if moved then return "changed" end
+	end
+	return false
+end
+
 -- A setup measures the screen before its reload, and the reload moves what it measures (the pieces only
--- stand where it wrote them now): the first login after a setup takes the inputs as they stand.
+-- stand where it wrote them now): the first login after a setup takes the inputs as they stand, and the
+-- settings it wrote as the game keeps them (L.Custom compares with these).
 function L.Settle()
 	if not ns.char.settle then return end
 	ns.char.settle = nil
-	if L.IsActive() then ns.char.built = Signature(Now()) end
+	if not L.IsActive() then return end
+	ns.char.built = Signature(Now())
+	local info = Layouts()
+	local layout = info.layouts[info.activeLayout - Presets()]
+	for _, entry in ipairs(layout.systems) do
+		for setting in pairs(ns.char.written and ns.char.written[Key(entry.system, entry.systemIndex)] or {}) do
+			local now = Value(entry, setting)
+			if now ~= nil then ns.char.written[Key(entry.system, entry.systemIndex)][setting] = now end
+		end
+	end
 end
 
 -- The inputs saved at setup and today's, for the position report.
@@ -2471,7 +2516,7 @@ function L.SetUp(size, style, opts)
 	end
 	if role and role.reveal then now.barsShow = Enum.ActionBarVisibleSetting.Always end
 	local g = Console.Build(now)
-	ns.char.placed = Write(layout, g, now, again)
+	ns.char.placed, ns.char.written = Write(layout, g, now, again)
 	-- The game's own unit frames stand where a layout by role put them: a classic layout gives them back (GameFrame).
 	ns.char.roleFrames = g.role ~= nil or nil
 	Visibility(layout, not again)

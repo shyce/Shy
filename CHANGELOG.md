@@ -1,5 +1,31 @@
 # Changelog
 
+## 5.1.3 (16 Nov 2026)
+
+### Added
+- **ShyCore:** A and D can keep turning you instead of strafing. Pick it on their row in your keys, and give strafing or turning a key of your own
+
+### Changed
+- **ShyAuction:** Selling a pile now goes up stack by stack, with a strip showing how far along you are. Space posts the next one, and right-clicking an item in your bags picks it on the Sell tab
+- **ShyCore:** The game-style red buttons turn their own art around when held, so they look pushed in, and no longer get a second light along the top
+- **ShyCore:** The game-style red buttons keep the same thin rim on a tall card as on a small button
+- **ShyCore:** The Maximize and Minimize buttons on windows no longer pop up a tooltip
+- **ShyDock:** The Screen page in setup is laid out new. A band says what happens to your screen, the layouts are cards, and the sizes, bars and menu sit in two columns under them. The card in use is badged
+- **ShyDock:** If you changed the console's layout yourself, setup now leaves it alone and marks it custom. Pick a layout to start fresh
+- **ShyThreat:** One threat setting for the meter, nameplates and warrior light, with one aggro sound. The meter counts mobs that got loose from you
+
+### Fixed
+- **ShyBags:** Stack counts in your bank slots didn't show when the bank first opened. They show from the start now
+- **ShyCore:** Clicking the choice that was already picked made its button flash as if you were pointing at it. It stays still now
+- **ShyCore:** The chosen card on the keys page flickered when you pointed at another one. It stays steady now
+- **ShyDock:** In a fight your off-hand swing bar went missing while dual wielding. It stays now
+- **ShyQuest:** Some quests were offered from level 1 when they are really for high levels, and two Praise quests sent low levels to an empty spot. Both are right now
+
+## 5.1.2 (16 Nov 2026)
+
+### Fixed
+- **ShyBags:** Opening your bags at a banker threw an error. They open cleanly now
+
 ## 5.1.1 (16 Nov 2026)
 
 ### Added

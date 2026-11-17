@@ -267,8 +267,19 @@ local function TargetPage(page, g)
 		{ value = "tank", text = "As a tank" },
 		{ value = "dps",  text = "As damage or healer" },
 		{ value = "off",  text = "Off" },
-	}, Get("threat"), Set("threat"), { width = COL,
-		desc = "In a group, health bars go from green through orange to red as you lose threat: for a tank, as the next player catches up; for anyone else, as you get close to pulling aggro. Your role is the one your group gave you, else your talent build's, else your tank or healer layout's. Solo, a neutral mob just turns red once it attacks you." }), page, RIGHT, -62)
+	}, function()
+		-- (How you are read is the family's one choice: the threat meter reads you the same way.)
+		if T.db.threat == "off" then return "off" end
+		return Shy.ThreatRolePick()
+	end, function(v)
+		if v == "off" then
+			T.db.threat = "off"
+		else
+			T.db.threat = "auto"
+			Shy.SetThreatRole(v)
+		end
+	end, { width = COL,
+		desc = "In a group, health bars go from green through orange to red as you lose threat: for a tank, as the next player catches up; for anyone else, as you get close to pulling aggro. Your role is the one your group gave you, else your talent build's, else your tank or healer layout's; the threat meter reads you the same way. Solo, a neutral mob just turns red once it attacks you." }), page, RIGHT, -62)
 	-- The run of colors, in steps.
 	local STEPS = 24
 	for i = 0, STEPS - 1 do

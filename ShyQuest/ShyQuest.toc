@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffQuest|r
 ## Notes: Your next quest step on screen, the way there, and leveling guides |cff888888/shyquest|r
 ## Author: Shyce Cream
-## Version: 5.1.1
+## Version: 5.1.3
 ## X-Date: 2026-11-16
 ## IconTexture: Interface\AddOns\ShyQuest\Media\ShyQuestMarkColor
 ## Dependencies: ShyCore

@@ -7,10 +7,15 @@
 --   status    the game's own state, 0 to 3, as its aggro display colors it (UnitThreatSituation)
 -- On a boss the numbers are secret (SecretWhenUnitThreatValuesRestricted): they still go straight to the bars and
 -- the words, but nothing can sort by them, so the rows stand by the game's state, then in group order. The state
--- is readable there (SecretWhenUnitThreatStateRestricted spares a group member against a boss).
+-- is readable there (SecretWhenUnitThreatStateRestricted spares a group member against a boss), and so is how far
+-- the holder leads in steps (UnitThreatLeadSituation), which colors the holder's row.
+-- In a dungeon the mob's name and GUID may be secret too: nothing compares them. Which mob it is (Rd.key) is its
+-- GUID where the game tells it, else the unit it is read through and how often that unit changed (the target, the
+-- mouseover, the target's target), which the game's events say.
 --
---   Rd.Look()     reads the game: Rd.mob, Rd.rows (shown order), Rd.sorted (false: in group order), Rd.margin
---                 (Shy.Threat's for you on the mob: what the header's light says)
+--   Rd.Look()     reads the game: Rd.mob, Rd.key, Rd.name (may be secret), Rd.rows (shown order), Rd.sorted
+--                 (false: in group order), Rd.margin (Shy.Threat's for you on the mob: what the header's light says)
+--   Rd.Key(unit)  which mob a unit is, as a plain string, or nil
 --   Rd.Sample()   a made-up fight's rows, for layout mode, the test and the options' preview
 --   Rd.Report()   what the game answers, for a copy box
 
@@ -21,7 +26,30 @@ local Rd = { rows = {}, sorted = true }
 ns.Read = Rd
 
 local function Secret(v) return issecretvalue(v) end
-local function Readable(v) return v ~= nil and not issecretvalue(v) end
+local function Readable(v) return not issecretvalue(v) and v ~= nil end
+
+-- How often each unit the mob is read through came to stand for another (Rd.Key, where the GUID is secret).
+local turns = { target = 0, targettarget = 0, mouseover = 0 }
+local watch = CreateFrame("Frame")
+watch:RegisterEvent("PLAYER_TARGET_CHANGED")
+watch:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
+watch:RegisterEvent("UNIT_TARGET")
+watch:SetScript("OnEvent", function(_, event, unit)
+	if event == "PLAYER_TARGET_CHANGED" then
+		turns.target, turns.targettarget = turns.target + 1, turns.targettarget + 1
+	elseif event == "UPDATE_MOUSEOVER_UNIT" then
+		turns.mouseover = turns.mouseover + 1
+	elseif unit == "target" then
+		turns.targettarget = turns.targettarget + 1
+	end
+end)
+
+function Rd.Key(unit)
+	if not unit then return nil end
+	local guid = UnitGUID(unit)
+	if Readable(guid) then return guid end
+	return unit .. "#" .. (turns[unit] or 0)
+end
 
 -- A unit we can fight: it exists, is no friend and is alive. False when the game won't say.
 local function Hostile(unit)
@@ -72,7 +100,7 @@ end
 local function Standing(unit, owner, mob, order)
 	if not UnitExists(unit) then return nil end
 	local status = UnitThreatSituation(unit, mob)
-	if status == nil then return nil end   -- not on the list (a secret is never nil)
+	if not Secret(status) and status == nil then return nil end   -- not on the list
 	local tanking, _, scaled, raw = UnitDetailedThreatSituation(unit, mob)
 	local _, class = UnitClass(owner or unit)
 	local row = {
@@ -82,16 +110,39 @@ local function Standing(unit, owner, mob, order)
 		me = not owner and IsMe(unit),
 	}
 	row.readable = Readable(raw) and Readable(scaled)
-	-- The holder's lead over the next player (UnitThreatPercentageOfLead: their threat as a share of the next one's).
-	if Readable(tanking) and tanking then
+	-- Whether they hold it: the game's word, else its state (2 and 3: it is on them).
+	if Readable(tanking) then
+		row.holder = tanking == true
+	else
+		row.holder = Readable(status) and status >= 2
+	end
+	-- Held by one who is no tank (their group role says so; yours is your view's): it has gone astray.
+	if row.holder and not owner then
+		local tank
+		if row.me then
+			tank = T:IsTank()
+		else
+			local role = UnitGroupRolesAssigned(unit)
+			if Readable(role) and role ~= "NONE" then tank = role == "TANK" end
+		end
+		row.astray = tank == false
+	end
+	-- The holder's lead over the next player (UnitThreatPercentageOfLead: their threat as a share of the next one's);
+	-- where that is secret, how far ahead in steps (0 well ahead .. 3 level or behind).
+	if row.holder then
 		local lead = UnitThreatPercentageOfLead(unit, mob)
-		if Readable(lead) then row.lead = lead end
+		if Readable(lead) then
+			row.lead = lead
+		else
+			local step = UnitThreatLeadSituation(unit, mob)
+			if Readable(step) then row.step = step end
+		end
 	end
 	-- Where it stands: the holder first, then by share where the game tells it, else by the game's state.
 	if row.readable then
-		row.rank = raw + ((Readable(tanking) and tanking) and 1000 or 0)
+		row.rank = raw + (row.holder and 1000 or 0)
 	elseif Readable(status) then
-		row.rank = status * 25 + (status == 3 and 1000 or 0)
+		row.rank = status * 25 + (row.holder and 1000 or 0)
 	else
 		row.rank = 0
 	end
@@ -129,7 +180,8 @@ function Rd.Look()
 	-- the meter is asked to stand always.
 	if #rows < 2 and T.db.when ~= "always" and Rd.Alone() then wipe(rows) end
 	Rd.mob, Rd.rows, Rd.sorted = #rows > 0 and mob or nil, rows, sorted
-	Rd.name = Rd.mob and UnitName(mob) or nil
+	Rd.key, Rd.name = nil, nil
+	if Rd.mob then Rd.key, Rd.name = Rd.Key(mob), UnitName(mob) end
 	Rd.margin = Rd.mob and Shy.Threat(mob, T:IsTank() and "tank" or "dps") or nil
 	return #rows > 0
 end
@@ -169,7 +221,7 @@ function Rd.Sample()
 			local name = UnitName("player")
 			if Readable(name) then row.name = name end
 		end
-		row.readable, row.order = true, i
+		row.readable, row.order, row.holder = true, i, row.tanking == true
 		rows[i] = row
 	end
 	return rows, "Defias Overseer"

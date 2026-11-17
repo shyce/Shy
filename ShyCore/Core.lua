@@ -993,8 +993,65 @@ do
 	Shy:On("SHY_LOGIN", Changed)
 end
 
+-- How threat is read for you: the family's one choice (the threat meter, the nameplates' threat colors, a class's
+-- screen light all read it) and its one warning sound.
+--   Shy.ThreatRole()           "tank" or "dps": the pick; else by your role (Shy.Role); else a class's hint (a
+--                              warrior's Defensive Stance); else anyone else's
+--   Shy.ThreatRolePick()       "auto", "tank" or "dps"            Shy.SetThreatRole(pick)   bus SHY_THREAT_ROLE
+--   Shy.TankHint(fn)           a class addon: fn() says whether how you stand now is a tank's (asked only with no
+--                              role from the group, the build or the layout)
+--   Shy.AdoptThreatRole(pick)  an addon's own pick from before there was one: taken once, while the family's is "auto"
+--   Shy.ThreatSound()          whether aggro changing hands plays the warning (Shy.Aggro)   Shy.SetThreatSound(on)
+do
+	local hints = {}
+	local function Saved() return Shy.core and Shy.core.db and Shy.core.db.threat end
+
+	function Shy.ThreatRolePick()
+		local saved = Saved()
+		local pick = saved and saved.role
+		if pick == "tank" or pick == "dps" then return pick end
+		return "auto"
+	end
+
+	function Shy.ThreatRole()
+		local pick = Shy.ThreatRolePick()
+		if pick ~= "auto" then return pick end
+		local role = Shy.Role()
+		if role then return role == "tank" and "tank" or "dps" end
+		for _, hint in ipairs(hints) do
+			if hint() then return "tank" end
+		end
+		return "dps"
+	end
+
+	function Shy.SetThreatRole(pick)
+		local saved = Saved()
+		if not saved then return end
+		if pick ~= "tank" and pick ~= "dps" then pick = "auto" end
+		if saved.role == pick then return end
+		saved.role = pick
+		Shy:Fire("SHY_THREAT_ROLE", pick)
+	end
+
+	function Shy.AdoptThreatRole(pick)
+		if (pick == "tank" or pick == "dps") and Shy.ThreatRolePick() == "auto" then Shy.SetThreatRole(pick) end
+	end
+
+	function Shy.TankHint(fn) hints[#hints + 1] = fn end
+
+	function Shy.ThreatSound()
+		local saved = Saved()
+		return not (saved and saved.sound == false)
+	end
+
+	function Shy.SetThreatSound(on)
+		local saved = Saved()
+		if saved then saved.sound = on and true or false end
+	end
+end
+
 -- Your threat on a unit, in a group only. Shy.Threat(unit, mode) returns `margin, fighting, tanking, flip`:
---   mode      "tank", "dps", "auto" (a tank by Shy.Role) or "off"
+--   mode      "tank", "dps", "auto" (as Shy.ThreatRole reads you) or "off"
 --   margin    1 as it should be with room to spare (a tank holds it with a lead no one can pull through;
 --             a damage dealer or healer is far from pulling), down through 0.5 (slipping) to 0 (a tank has
 --             lost it; it is on you and you are no tank); "theirs" when another tank holds it; nil when
@@ -1014,7 +1071,7 @@ do
 	local function IsTank(mode)
 		if mode == "tank" then return true end
 		if mode == "dps" then return false end
-		return Shy.Role() == "tank"
+		return Shy.ThreatRole() == "tank"
 	end
 
 	local function Clamp(x)
@@ -1068,6 +1125,135 @@ do
 		if share ~= nil and not issecretvalue(share) then return Clamp((PULL - share) / (PULL - PULL_FAR)), true end
 		return 1, true
 	end
+end
+
+-- Who has the mobs you fight: your target and every nameplate, in a group fight, each read by Shy.Threat as
+-- Shy.ThreatRole has you. A mob is told apart by its GUID, or where that is secret (a dungeon) by its nameplate,
+-- which stands for one mob while it shows, or as your target while it has none.
+--   Shy.Aggro.Want(id, on)   an addon asks for it (the threat meter, a class's light); nothing runs while none does
+--   Shy.Aggro.Worst()        the worst margin over them now (Shy.Threat's), or nil
+--   Shy.Aggro.Loose()        read as a tank: how many of the mobs you are fighting are on someone who is no tank
+--                            (another tank's are theirs, not loose); nil when you read as no tank or nothing runs
+-- Bus SHY_AGGRO(change) after a look that changed anything. change: "lost" (read as a tank: a mob you held went to
+-- someone who is no tank), "pulled" (read as no tank: a mob came onto you), "back" (a lost one taken back), or nil
+-- (the margin or the count moved). The family's warning sound plays here, and only here, at "lost" and "pulled",
+-- once in a few seconds, while Shy.ThreatSound() says so: two addons warning of the same thing play it once.
+do
+	local A = { wanted = {} }
+	Shy.Aggro = A
+	local EVERY = 0.2      -- seconds between looks in a fight
+	local GAP = 3          -- seconds at least between two warning sounds
+	local worst, loose     -- the last look's answers
+	local held = {}        -- mob -> true while it was on you, "lost" once a tank's turned
+	local soundAt = 0
+	local driver
+
+	local function Readable(v) return not issecretvalue(v) and v ~= nil end
+
+	-- The units to ask, each with what tells its mob apart when the GUID won't.
+	local function Units()
+		local list = {}
+		for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+			if not plate:IsForbidden() and plate.unitToken then list[#list + 1] = { plate.unitToken, plate } end
+		end
+		if UnitExists("target") and not C_NamePlate.GetNamePlateForUnit("target") then list[#list + 1] = { "target", "target" } end
+		return list
+	end
+
+	-- Of two changes in one look, the one to tell: a loss first, then a pull, then one taken back.
+	local RANK = { lost = 3, pulled = 2, back = 1 }
+
+	local function Look()
+		local tank = Shy.ThreatRole() == "tank"
+		local mode = tank and "tank" or "dps"
+		local least, count, change = nil, 0, nil
+		local seen = {}
+		local function Note(what)
+			if not change or RANK[what] > RANK[change] then change = what end
+		end
+		-- (Solo there is no one to lose a mob to: nothing is read.)
+		for _, u in ipairs(IsInGroup() and Units() or {}) do
+			local unit = u[1]
+			local guid = UnitGUID(unit)
+			local key = Readable(guid) and guid or u[2]
+			local can = UnitCanAttack("player", unit)
+			if not seen[key] and Readable(can) and can then
+				seen[key] = true
+				local m = Shy.Threat(unit, mode)
+				if type(m) == "number" then
+					if least == nil or m < least then least = m end
+					if tank and m == 0 then count = count + 1 end
+				end
+				local status = UnitThreatSituation("player", unit)
+				if Readable(status) then
+					if status >= 2 then
+						if held[key] == "lost" then Note("back")
+						elseif held[key] == nil and not tank then Note("pulled") end
+						held[key] = true
+					elseif held[key] == true then
+						if tank and m ~= "theirs" then
+							held[key] = "lost"
+							Note("lost")
+						else
+							held[key] = nil
+						end
+					end
+				end
+			end
+		end
+		-- A mob no longer seen (gone from the screen, dead) is forgotten.
+		for key in pairs(held) do
+			if not seen[key] then held[key] = nil end
+		end
+		if not tank or not IsInGroup() then count = nil end
+		local moved = change ~= nil or least ~= worst or count ~= loose
+		worst, loose = least, count
+		if (change == "lost" or change == "pulled") and Shy.ThreatSound() and GetTime() - soundAt > GAP then
+			soundAt = GetTime()
+			PlaySound(SOUNDKIT.UI_RAID_BOSS_WHISPER_WARNING, "Master")
+		end
+		if moved then Shy:Fire("SHY_AGGRO", change) end
+	end
+
+	local function Wake()
+		local on = next(A.wanted) ~= nil and UnitAffectingCombat("player") == true
+		driver:SetShown(on)
+		if on then
+			Look()
+			return
+		end
+		wipe(held)
+		if worst ~= nil or loose ~= nil then
+			worst, loose = nil, nil
+			Shy:Fire("SHY_AGGRO", nil)
+		end
+	end
+
+	function A.Want(id, on)
+		A.wanted[id] = on and true or nil
+		Wake()
+	end
+	function A.Worst() return worst end
+	function A.Loose() return loose end
+
+	driver = CreateFrame("Frame")
+	driver:Hide()
+	local wait = 0
+	driver:SetScript("OnUpdate", function(_, dt)
+		wait = wait - dt
+		if wait > 0 then return end
+		wait = EVERY
+		Look()
+	end)
+	local events = CreateFrame("Frame")
+	for _, event in ipairs({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "GROUP_ROSTER_UPDATE" }) do
+		events:RegisterEvent(event)
+	end
+	events:SetScript("OnEvent", Wake)
+	Shy:On("SHY_THREAT_ROLE", function()
+		wipe(held)
+		Wake()
+	end)
 end
 
 -- Game settings an addon holds
@@ -1257,6 +1443,8 @@ Shy.core = Shy:NewAddon(CORE, {
 	-- strength: panel opacity in percent (Theme.lua). rest: seconds the mouse rests on a thing before its
 	-- hover shows more (Hover.lua). immersion: Immersion.lua.
 	defaults = { splash = true, minimap = true, minimapAngle = 200, hud = {}, theme = { mode = "class", hue = 212 }, slot = "now",
-		strength = 55, rest = 1, immersion = { immersive = false, fade = false } },
+		strength = 55, rest = 1, immersion = { immersive = false, fade = false },
+		-- threat: how it is read for you and whether aggro changing hands sounds (Shy.ThreatRole, Shy.ThreatSound).
+		threat = { role = "auto", sound = true } },
 	keep = { profiles = true, uses = true, live = true, seen = true, held = true },
 })

@@ -725,17 +725,24 @@ function P.Card(parent, width, key, onClick, onLook, look)
 	b.stage.holder:SetPoint("TOP", 0, -CARD_PAD)
 	b.name = UI.Text(b, P.STYLES[key], 14, true)
 	b.name:SetPoint("TOP", b.stage.holder, "BOTTOM", 0, -4)
-	b.used = UI.Text(b, "in use", 10, true, C.good)
-	b.used:SetPoint("TOPRIGHT", -8, -8)
+	-- "In use" (or "Custom") on the name's line at the card's right: dimmed with the card's choice, it still reads.
+	b.used = UI.Badge(b)
+	b.used:SetPoint("BOTTOMRIGHT", -5, 6)
 	b.used:Hide()
 	b.key = key
 
-	-- lit: the layout picked. inUse: the console is set up with it. off: the choice is dimmed.
+	-- lit: the layout picked. inUse: the console is set up with it ("custom": and changed by the player since).
+	-- off: the choice is dimmed (the drawing and the name; the badge stands as it is).
 	function b:Paint(lit, inUse, off)
-		self:SetAlpha(off and 0.5 or 1)
+		self.stage.holder:SetAlpha(off and 0.45 or 1)
+		self.name:SetAlpha(off and 0.6 or 1)
+		self.off = off and true or false
 		self.lit = lit and true or false
 		self.inUse = inUse and true or false
 		self.used:SetShown(inUse and true or false)
+		if inUse then
+			self.used:Set({ text = inUse == "custom" and "Custom" or "In use", color = inUse == "custom" and C.alert or C.good })
+		end
 		UI.SetBorder(self, (lit or self.hover) and C.hot or C.border)
 		UI.SetFill(self, lit and C.row or C.bg)
 		UI.Ink(self.name, lit and C.head or C.text)
@@ -1097,12 +1104,15 @@ function P.Section(parent, width)
 			UI.Ink(status, C.text)
 			status:SetText(L.GrowStep() > L.StepNow() and "Your abilities have outgrown your bars. Set up adds what they need. Needs a reload."
 				or "Set up puts away the bars you don't need yet; their buttons are kept. Needs a reload.")
+		elseif active and L.Custom() then
+			UI.Ink(status, C.alert)
+			status:SetText("You changed this layout yourself, so setup leaves it alone. Set up lays it out fresh and you lose your changes. Needs a reload.")
 		elseif active then
 			UI.Ink(status, C.good)
 			status:SetText("The console is in use. Pick another layout or size, or press Put it back to reset every piece. Needs a reload.")
 		else
 			UI.Ink(status, C.dim)
-			status:SetText(L.Exists() and "You're using another Edit Mode layout. Set up switches back to the console. Needs a reload."
+			status:SetText(L.Exists() and "You're using your own Edit Mode layout, so setup leaves it alone. Set up switches back to the console. Needs a reload."
 				or "Not set up on this character. Set up adds an Edit Mode layout named \"Shy\"; your own layout is kept. Needs a reload.")
 		end
 	end

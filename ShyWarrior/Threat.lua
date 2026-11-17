@@ -3,8 +3,9 @@
 -- set, rising to full at the cap, and its answer, which it may keep secret in a fight, goes straight to the
 -- light's gate. In a group fight threat trouble takes it over while it lasts: gold as someone catches up on a
 -- mob you tank (or as you near pulling one you don't), crimson once one is lost. The worst mob of the target
--- and the nameplates sets it (Shy.Threat). The aggro alarm: a tank who loses a mob hears it, the light
--- flashes, and Openings lights Taunt red.
+-- and the nameplates sets it (Shy.Aggro, which reads them for the family). The aggro alarm: a tank who loses a
+-- mob sees the light flash and Openings light Taunt red; the sound is the family's (Shy.Aggro plays it once,
+-- whichever addons warn of it).
 
 local ADDON, ns = ...
 local T = ns.T
@@ -18,7 +19,6 @@ local GLIDE = 3              -- how fast the light follows (per second)
 local TROUBLE = 0.5          -- a tank's margin under this is threat trouble: it takes the light over
 local DPS_FROM = 0.6         -- anyone else's
 local LOST = { 0.95, 0.24, 0.32 }
-local ALARM_GAP = 3          -- seconds at least between two alarm sounds
 local TRY = {                -- /shywarrior light: a second each (rage as the gate would let it through)
 	{ gate = 0.45 }, { gate = 1 }, { margin = 0.4 }, { margin = 0.2 }, { margin = 0 },
 }
@@ -30,9 +30,7 @@ local mode                   -- "rage" (the gate is your rage), "threat", "try" 
 local tryGate = 1
 local gleam = 0              -- the rim's flash: a mob lost
 local margin                 -- the worst margin now (nil: nothing to say)
-local held = {}              -- mob GUID -> true while you were tanking it, "lost" once it turned
-local soundAt = 0
-local trying                 -- the preview's start time
+local trying                -- the preview's start time
 local flashed = false
 local gateOpen = false       -- the gate is set to a plain 1
 
@@ -118,66 +116,33 @@ local function Animate(_, dt)
 	end
 end
 
--- The units to ask: the target and every nameplate, once each.
-local function Units()
-	local list = { "target" }
-	for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
-		if not plate:IsForbidden() and plate.unitToken then list[#list + 1] = plate.unitToken end
-	end
-	return list
-end
-
-local function Guid(unit)
-	local guid = UnitGUID(unit)
-	if guid == nil or issecretvalue(guid) then return nil end
-	return guid
-end
-
+-- A mob you tanked went to someone who is no tank (Shy.Aggro: "lost"): the light flashes red, Taunt lights.
 local function Alarm()
 	ns.Openings.Aggro(true)
 	gleam = 1
 	want.r, want.g, want.b = LOST[1], LOST[2], LOST[3]
-	if T.db.threat.sound and GetTime() - soundAt > ALARM_GAP then
-		soundAt = GetTime()
-		PlaySound(SOUNDKIT.UI_RAID_BOSS_WHISPER_WARNING, "Master")
-	end
-end
-
--- The worst margin over the mobs in a group fight; for a tank, any mob you held that has turned.
-local function Threat(tank)
-	if not IsInGroup() then return nil end
-	local worst
-	local seen, regained, lost = {}, false, false
-	for _, unit in ipairs(Units()) do
-		local guid = Guid(unit)
-		if UnitExists(unit) and UnitCanAttack("player", unit) and not (guid and seen[guid]) then
-			if guid then seen[guid] = true end
-			local m = Shy.Threat(unit, tank and "tank" or "dps")
-			if type(m) == "number" and (worst == nil or m < worst) then worst = m end
-			if tank and guid then
-				local status = UnitThreatSituation("player", unit)
-				if status ~= nil and not issecretvalue(status) then
-					if status >= 2 then
-						if held[guid] == "lost" then regained = true end
-						held[guid] = true
-					elseif held[guid] == true and m ~= "theirs" then
-						held[guid] = "lost"
-						lost = true
-					end
-				end
-			end
-		end
-	end
-	if lost and T.db.threat.alarm then Alarm() end
-	if regained then ns.Openings.Aggro(false) end
-	return worst
 end
 
 local function Look()
 	local tank = ns.IsTank()
-	margin = Threat(tank)
+	margin = Shy.Aggro.Worst()
 	Aim(T.db.threat.glow and margin or nil, tank)
 	if want.a > 0 or gleam > 0 then ns.Light.Shown(true) end
+end
+
+local function Aggro(change)
+	if trying then return end
+	if change == "lost" and T.db.threat.alarm and ns.IsTank() then
+		Alarm()
+		ns.Light.Shown(true)
+	elseif change == "back" then
+		ns.Openings.Aggro(false)
+	end
+end
+
+-- The family's reading of the mobs runs while the light or the alarm wants it.
+local function Want()
+	Shy.Aggro.Want("ShyWarrior", T.db.threat.glow or T.db.threat.alarm)
 end
 
 local function Wake()
@@ -187,7 +152,6 @@ local function Wake()
 		Look()
 	else
 		driver:Hide()
-		wipe(held)
 		margin, mode, want.a = nil, nil, 0
 		ns.Openings.Aggro(false)
 	end
@@ -247,6 +211,10 @@ function ns.SetupThreat()
 	end
 	events:SetScript("OnEvent", Wake)
 	Shy:On("SHY_ROLE", Wake)
+	Shy:On("SHY_THREAT_ROLE", Wake)
+	Shy:On("SHY_AGGRO", Aggro)
+	table.insert(ns.refreshers, Want)
 	table.insert(ns.refreshers, Wake)
+	Want()
 	Wake()
 end

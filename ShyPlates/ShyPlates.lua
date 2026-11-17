@@ -32,7 +32,7 @@ local T = Shy:NewAddon(ADDON, {
 		health = "hurt",        -- the number on the bar: "off" | "hurt" (percent once it is hurt) | "percent" | "value"
 		execute = true,         -- a line at the health your finisher needs
 		classColors = true,     -- players in their class color
-		threat = "auto",        -- "auto" | "tank" | "dps" | "off"
+		threat = "auto",        -- "auto" (threat colors, read as the family reads you: Shy.ThreatRole) | "off"
 		target = "lift",        -- what marks your target's plate, the same in every look: "lift" (its own colors
 		                        -- richer and lighter) | "line" | "corners" (in your color) | "none"
 		dim = 0.7,              -- how much of the other plates is left while you have a target
@@ -73,6 +73,11 @@ end
 function T:OnLoad()
 	-- (The mark no longer goes by the theme's look, and the light once laid round the plate is its colors lifted.)
 	if self.db.target == "look" or self.db.target == "glow" then self.db.target = "lift" end
+	-- (How you are read was the plates' own pick before the family had one: carried over once.)
+	if self.db.threat == "tank" or self.db.threat == "dps" then
+		Shy.AdoptThreatRole(self.db.threat)
+		self.db.threat = "auto"
+	end
 	-- The names the game writes itself, over the units past its 40 nameplates (Driver.lua), in the plates' font.
 	-- The engine reads these once at login, so a change applies from the next login.
 	if self.db.on and self.db.font == "shy" then

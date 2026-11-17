@@ -131,7 +131,7 @@
 --   Shy.HUD.Act                           -- what a picked piece can be asked to do (Editor.lua's panel)
 --
 -- For an addon that arranges the whole screen:
---   Shy.HUD.Each(fn)   Shy.HUD.Find(id)   Shy.HUD.IsPlaced(box)   Shy.HUD.SetHome(box, point, scale)
+--   Shy.HUD.Each(fn)   Shy.HUD.Find(id)   Shy.HUD.IsPlaced(box)   Shy.HUD.IsChanged(box)   Shy.HUD.SetHome(box, point, scale)
 --   Shy.HUD.Forget(box)   Shy.HUD.Fit(box, width)   Shy.HUD.SetDocked(box, on)   Shy.HUD.SetStill(box, on)
 --   Shy.HUD.Attach(box, to, point, relativePoint, x, y)   Shy.HUD.IsDragging(box)
 --
@@ -1818,6 +1818,15 @@ end
 function HUD.IsPlaced(box)
 	local saved = Saved(box)
 	return saved ~= nil and saved.x ~= nil
+end
+
+-- Has the player made the box their own: placed it, sized it, scaled it or docked it elsewhere (what Tidy
+-- keeps an entry for, but a lock).
+function HUD.IsChanged(box)
+	local saved = Saved(box)
+	if not saved then return false end
+	if saved.x or saved.w or saved.dock ~= nil then return true end
+	return saved.scale ~= nil and math.abs(saved.scale - (box.foreign and (box.homeScale or 1) or 1)) > 0.001
 end
 
 -- Where the player put a box, as a copy to keep somewhere else (nil: they didn't), and given back: for a

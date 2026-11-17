@@ -19,8 +19,8 @@ local T = Shy:NewAddon(ADDON, {
 		openings = { shown = true, interrupt = true, charge = true, sound = false },
 		shout = { shown = true, battle = true, commanding = true, warnSeconds = 20 },
 		rage = { shown = true, from = 0.8 },   -- the light rises from this share of your rage
-		-- role: auto (your group role, else your tank or healer layout's, else Defensive Stance) | tank | dps
-		threat = { glow = true, strength = 0.7, role = "auto", alarm = true, sound = true },
+		-- (How you are read, and the aggro sound, are the family's: Shy.ThreatRole, Shy.ThreatSound.)
+		threat = { glow = true, strength = 0.7, alarm = true },
 	},
 })
 ns.T = T
@@ -67,15 +67,11 @@ function ns.Ready(id)
 	return start + duration - GetTime() < 0.25
 end
 
--- Whether you are the tank: the setting, else your role (your group's, else your layout's: Shy.Role), else
--- Defensive Stance.
-function ns.IsTank()
-	local mode = T.db.threat.role
-	if mode == "tank" then return true end
-	if mode == "dps" then return false end
-	local role = Shy.Role()
-	if role then return role == "tank" end
-	return GetShapeshiftFormID() == ns.forms.defensive
+-- Whether you are the tank: as the family reads you (Shy.ThreatRole: the pick, else your role), and with no role
+-- to go by, Defensive Stance says so.
+function ns.IsTank() return Shy.ThreatRole() == "tank" end
+if ns.isWarrior then
+	Shy.TankHint(function() return GetShapeshiftFormID() == ns.forms.defensive end)
 end
 
 -- Each module adds a refresh function; any option change calls them all.
@@ -86,6 +82,12 @@ function ns.Refresh()
 end
 
 function T:OnLoad()
+	-- How you were read, and the alarm's sound, were this addon's own before the family had one of each: carried
+	-- over once.
+	local threat = self.db.threat
+	Shy.AdoptThreatRole(threat.role)
+	if threat.sound == false then Shy.SetThreatSound(false) end
+	threat.role, threat.sound = nil, nil
 	self:RegisterOptions(ns.CreateOptions())
 end
 

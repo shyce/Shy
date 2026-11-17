@@ -71,13 +71,12 @@ function ns.CreateOptions()
 			{ value = "auto", text = "My role" },
 			{ value = "tank", text = "Tank" },
 			{ value = "dps",  text = "Damage or healing" },
-		}, Get("role"), Set("role"), { width = COL, enabled = On,
-			desc = "A tank's trouble is the next player catching up; anyone else's is getting close to the pull. Your role is the one your group gave you, else your tank or healer layout's." }), panel, RIGHT, y - 30)
+		}, Shy.ThreatRolePick, Shy.SetThreatRole, { width = COL, enabled = On,
+			desc = "A tank's trouble is the next player catching up; anyone else's is getting close to the pull. Your nameplates read you the same way." }), panel, RIGHT, y - 30)
 		At(group:Checkbox(panel, "Warn me near the pull", Get("warn"), Set("warn"), { enabled = On,
 			desc = "The meter's header lights gold, then red: as you near the pull, or, tanking, as the next player catches up." }), panel, RIGHT, y - 84)
-		At(group:Checkbox(panel, "With a sound", Get("sound"), Set("sound"), {
-			enabled = function() return On() and T.db.warn end,
-			desc = "A short alarm the moment the header lights." }), panel, RIGHT + 16, y - 110)
+		At(group:Checkbox(panel, "Aggro sound", Shy.ThreatSound, Shy.SetThreatSound, {
+			desc = "A short alarm when a mob you tank goes to someone who isn't a tank, or when you pull one yourself." }), panel, RIGHT, y - 110)
 		if Shy.addons.Plates then
 			local note = UI.Text(panel, "Your nameplates turn the same colors on the same mob.", 12, false, UI.colors.dim)
 			note:SetWidth(COL)

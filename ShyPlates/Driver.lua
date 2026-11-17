@@ -478,6 +478,8 @@ function D.Start()
 	end)
 	-- A tank's or healer's layout put on or taken off: threat colors read by your role (Shy.Role).
 	Shy:On("SHY_ROLE", function() Each("UpdateColor") end)
+-- How you are read, picked here or on the threat meter: the same colors at once.
+Shy:On("SHY_THREAT_ROLE", function() Each("UpdateColor") end)
 	-- A quest dialog has the screen: the plates in the world fade with the rest (Shy.Immersion).
 	Shy:On("SHY_IMMERSION_QUIET", function(level)
 		ns.quiet = level

@@ -160,10 +160,16 @@ local function Tint(kind)
 	return COAT[kind] or OTHER
 end
 
--- UnitAttackSpeed's second value is the off hand's speed, nil without a weapon there.
+-- A weapon in the off hand. UnitAttackSpeed's second value is the off hand's speed, nil without one (the
+-- game's own timer asks the same); in a fight the game keeps the speeds to itself, and then the item in the
+-- off hand's slot says it: a weapon, not a shield or a held thing.
 local function TwoHands()
 	local _, speed = UnitAttackSpeed("player")
-	return not issecretvalue(speed) and speed ~= nil and speed > 0
+	if not issecretvalue(speed) then return speed ~= nil and speed > 0 end
+	local item = GetInventoryItemID("player", INVSLOT_OFFHAND)
+	if item == nil or issecretvalue(item) then return false end
+	local _, _, _, _, _, class = C_Item.GetItemInfoInstant(item)
+	return not issecretvalue(class) and class == Enum.ItemClass.Weapon
 end
 
 -- The bars the swing has: one per hand in melee with two weapons, else one.

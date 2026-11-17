@@ -35,6 +35,7 @@ local T = Shy:NewAddon(ADDON, {
 		window = true,        -- our window in the game's auction house's place
 		page = "buy",         -- the page it opens on (the last one open)
 		autoScan = false,     -- scan the whole house as it opens, whenever the server allows (else only when you press Scan)
+		spacePosts = true,    -- Space posts while the Sell page is up
 		markets = {},         -- [market key] = { at (last whole scan), asked, items = { [item] = { u, q, n, at, p, d = "day:price:seen,..." } } }
 		share = {},           -- [market key] = your own prices, packed for the companion app to send in
 		trace = {},           -- the house's last messages and what we asked of it, for when something goes wrong

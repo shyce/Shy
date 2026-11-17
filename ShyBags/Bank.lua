@@ -2,6 +2,8 @@
 -- BankFrame must stay shown during a visit: GetActiveBankType reads IsShown to make a right-click a deposit.
 -- Reparented, it never runs OnShow/OnHide, so the visit is opened and ended (C_Bank.CloseBankFrame) here.
 -- Its UIPanel "area" is removed while hidden so it holds no place among the side-by-side panels.
+-- Without an area nothing places it, yet Blizzard's bag layout reads its right edge while it is shown:
+-- it is given a point left of the screen, so it has an edge and the bags give it no room.
 -- Every tab, the first (Bank.Fresh) and each bag slot after it, is bought through
 -- BankPanelPurchaseButtonScriptTemplate, which asks with the game's own prompt; never by our code.
 --   Bank.OnSlots(fn)   during a visit: a bag slot was bought or a bag put in or taken out, or your gold changed
@@ -31,7 +33,10 @@ local function Apply()
 		home = BankFrame:GetParent()
 		area = UIPanelWindows.BankFrame and UIPanelWindows.BankFrame.area
 		SetUIPanelAttribute(BankFrame, "area", nil)
-		BankFrame:SetParent(ns.Takeover.Attic())
+		local attic = ns.Takeover.Attic()
+		BankFrame:SetParent(attic)
+		BankFrame:ClearAllPoints()
+		BankFrame:SetPoint("TOPRIGHT", attic, "TOPLEFT")
 	else
 		FrameUtil.SetParentMaintainRenderLayering(BankFrame, home)
 		SetUIPanelAttribute(BankFrame, "area", area)

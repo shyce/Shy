@@ -7,12 +7,13 @@
 -- Layout.SetUp only ever runs from a player's click. Every pick goes on the screen as it is made, the
 -- picks standing when the page comes up too (O.Wear); closing without Finish puts back what stood.
 --
--- The page, 1000 x 480 (ShyCore's Setup.lua), with nothing to scroll:
---   the switch
---   four cards across, the one picked lit
---   the screen drawn large with the layout picked or pointed at (600 wide), its name and line on a band
---   across its top; beside it the sizes, the bars and the menu (its drawer, and the bag buttons under
---   it) as a column of chips and words
+-- The page flows to the width the window gives it (700 to 1000 across):
+--   a band naming what happens to your screen, "Set it up" or "Keep mine" at its right; gold while the
+--   layout in use is one you made your own (Layout.Custom), which Finish then leaves alone
+--   the layouts as cards, four across in two rows, the one picked lit, the one in use badged
+--   two columns under them, a section each under a caption with its small drawing at the caption's end:
+--   the size and the bars at the left, the side bars and the menu (and the bag buttons) at the right; a
+--   choice that doesn't apply to the layout picked isn't shown, and the section says why
 
 local ADDON, ns = ...
 local UI = Shy.UI
@@ -41,7 +42,9 @@ end
 function O.Lines(plan)
 	local L = ns.Layout
 	local pick = plan.screen
-	if not pick.on then
+	if not pick.on and pick.custom then
+		return { { text = "Your own layout stays as it is", sub = "pick a layout on the Screen page to start fresh" } }
+	elseif not pick.on then
 		return { { text = "Your screen stays as it is", sub = "you can set up the console later from /shy" } }
 	end
 	local name = ns.Preview.NAMES[pick.size]
@@ -51,9 +54,9 @@ function O.Lines(plan)
 		sub = L.Size() == pick.size and L.Style() == style and "its layout is rewritten so every piece fits"
 			or "its layout is rewritten at this size, chat text included"
 	elseif ns.char.furnished or Grow(pick) then
-		sub = "as an Edit Mode layout named \"Shy\"; your own layout is kept"
+		sub = "as a new Edit Mode layout; your own layout is kept"
 	else
-		sub = "as an Edit Mode layout named \"Shy\"; turns on " .. MADE_OF
+		sub = "as a new Edit Mode layout; turns on " .. MADE_OF
 	end
 	if Grow(pick) then sub = sub .. "; bars grow with you" end
 	if pick.drawer then sub = sub .. "; the menu in a drawer" end
@@ -68,11 +71,38 @@ function O.Lines(plan)
 	return { { text = named .. " is set up at " .. name, sub = sub } }
 end
 
-local GAP = 8
-local CHIP_W, CHIP_H = 86, 24   -- a size chip
-local BARS_W = 130              -- a bars chip
-local ROW_X = 70                -- a row's chips start here, after its label
-local ROW_GAP = 14              -- between two rows
+-- The band's two lines: what happens to your screen, and what that means. The third answer: the band's edge in
+-- gold (the screen is the player's own, or a reason it can't be set up).
+function O.BandWords(pick)
+	local L, P = ns.Layout, ns.Preview
+	if not pick.on then
+		if pick.custom == "own" then
+			return "You're on your own layout" .. (pick.named and (", " .. pick.named) or ""),
+				"Finish leaves it alone. Pick a layout below to switch.", true
+		elseif pick.custom then
+			return "You changed your layout yourself", "Finish leaves it alone. Pick a layout below to start fresh.", true
+		end
+		return "Your screen stays as it is", "You can set up the console later from /shy.", false
+	end
+	local title = P.STYLES[pick.style or L.Style()] .. ", " .. P.NAMES[pick.size]:lower()
+	local ok, why = L.CanSetUp()
+	if not ok then return title, L.Words(why), true end
+	if pick.custom == "own" then return title, "This takes over from your layout. Yours stays in Edit Mode's list.", true end
+	if pick.custom then return title, "You'll lose the changes you made to your layout. Keep mine to hold on to them.", true end
+	if L.IsActive() then return title, "Your bars, chat and meter are laid out again with what you pick.", false end
+	return title, "Added as a new Edit Mode layout. Your own layout is kept.", false
+end
+
+-- The page's measures. BAND: the band's height; RING, GLYPH: the dial at its left and the glyph in it; EDGE: its
+-- edge's width; CHOICE: "Set it up | Keep mine"; SEG: a choice's height; CAPTION: a section's caption; UNDER: from a
+-- caption to its choices; WORDS: from the choices to their words; SECTION: between two sections down a column;
+-- COLUMNS: between the columns; LABEL: a choice's small name (Left, Right, Menu, Bags) to the choice; PAIR: between
+-- two choices on a line; SIZE, BARS, SIDE, MENU, BAGS: the choices' widths; ONE_LINE: the column width the menu's
+-- two choices stand on one line from.
+local M = { GAP = 8, BAND = 54, RING = 38, GLYPH = 20, EDGE = 3, CHOICE = 196, SEG = 24, CAPTION = 14, UNDER = 9,
+	WORDS = 6, SECTION = 16, COLUMNS = 28, LABEL = 6, PAIR = 18, SIZE = 252, BARS = 236, SIDE = 112, MENU = 148,
+	BAGS = 196, ONE_LINE = 420, CARDS_TOP = 12, OPTIONS_TOP = 18 }
+
 local BARS = { { key = true, text = "Grow with me" }, { key = false, text = "Every bar now" } }
 local ROWS = { "One bar", "Two bars", "Three bars" }
 local BAGS = { { key = "window", text = "In my bags" }, { key = "screen", text = "With the menu" } }
@@ -83,7 +113,10 @@ local function Keeper()
 	return bags and bags.BagButtons and bags.SetBagButtons and bags or nil
 end
 
--- What a choice of the bag buttons comes to.
+-- What the menu's drawer and the bag buttons come to, in a sentence each.
+local function MenuWords(drawer)
+	return drawer and "The menu tucks under the guide until you point at it." or "The menu stays out under the minimap."
+end
 local function BagWords(keeper, where, drawer)
 	if where == "screen" then
 		return (drawer and "The bag bar tucks into the drawer with the menu." or "The bag bar stands under the menu.")
@@ -97,7 +130,6 @@ end
 -- plan.screen.sides = { left =, right = } (true: out).
 local SIDES = { { key = "left", text = "Left" }, { key = "right", text = "Right" } }
 local OUT = { { key = true, text = "Out" }, { key = false, text = "Tucked" } }
-local SIDE_W = 64   -- an out / tucked chip
 
 -- Which side bars the picks give: none in the stack, the left one only once bar 5 is on.
 local function SidesThere(pick)
@@ -114,278 +146,358 @@ local function SideWords(out, there)
 	return (there.left and there.right) and "Both side bars stay out." or "The side bar stays out."
 end
 
--- A chip: a small button lit when picked; hovered, the page shows that choice.
-local function Chip(parent, text, width, onClick, onLook)
-	local b = UI.Button(parent, text, width, onClick)
-	b:SetHeight(CHIP_H)
-	b:HookScript("OnEnter", function() onLook(true) end)
-	b:HookScript("OnLeave", function() onLook(false) end)
-	function b:Paint(lit)
-		UI.SetFill(self, lit and C.fill or C.bgHot)
+-- A choice of a few (UI.Segmented) whose choices show on the page while pointed at: look(i) as one is, look(nil)
+-- as the mouse leaves.
+local function Choice(parent, labels, width, get, set, look)
+	local seg = UI.Segmented(parent, labels, get, set, { width = width, height = M.SEG })
+	for i, b in ipairs(seg.buttons) do
+		b:HookScript("OnEnter", function() look(i) end)
+		b:HookScript("OnLeave", function() look(nil) end)
 	end
-	return b
+	return seg
+end
+
+-- The band over the cards: a dial with the screen's glyph, what happens to your screen and what that means, and
+-- the choice at its right. Its edge and dial wear the accent, or gold while the screen is the player's own.
+local function Band(f, width, plan)
+	local band = CreateFrame("Frame", nil, f)
+	band:SetSize(width, M.BAND)
+	UI.Skin(band, C.row, C.border)
+	band.edge = band:CreateTexture(nil, "ARTWORK")
+	band.edge:SetPoint("TOPLEFT", 1, -1)
+	band.edge:SetPoint("BOTTOMLEFT", 1, 1)
+	band.edge:SetWidth(M.EDGE)
+	local ring = band:CreateTexture(nil, "ARTWORK")
+	ring:SetTexture(Shy.MEDIA .. "DialMid")
+	ring:SetSize(M.RING, M.RING)
+	ring:SetPoint("CENTER", band, "LEFT", M.EDGE + 10 + M.RING / 2, 0)
+	UI.Tint(ring, Shy.Theme.skin.metal)
+	band.glyph = band:CreateTexture(nil, "ARTWORK", nil, 1)
+	band.glyph:SetSize(M.GLYPH, M.GLYPH)
+	band.glyph:SetPoint("CENTER", ring, "CENTER")
+	UI.GlyphArt(band.glyph, "window")
+	UI.Concentric(ring, band.glyph)
+	band.choice = UI.Segmented(band, { "Set it up", "Keep mine" }, function() return plan.screen.on and 1 or 2 end, function(i)
+		plan.screen.on = i == 1
+		O.Wear(plan)
+		f:Refresh()
+	end, { width = M.CHOICE, height = M.SEG + 2 })
+	band.choice:SetPoint("RIGHT", -12, 0)
+	band.title = UI.Text(band, "", 14, true, C.head)
+	band.title:SetPoint("TOPLEFT", M.EDGE + 10 + M.RING + 12, -10)
+	band.title:SetPoint("RIGHT", band.choice, "LEFT", -16, 0)
+	band.title:SetWordWrap(false)
+	band.title:SetJustifyH("LEFT")
+	band.line = UI.Text(band, "", 11, false, C.dim)
+	band.line:SetPoint("TOPLEFT", band.title, "BOTTOMLEFT", 0, -4)
+	band.line:SetPoint("RIGHT", band.choice, "LEFT", -16, 0)
+	band.line:SetWordWrap(false)
+	band.line:SetJustifyH("LEFT")
+	function band:Tell(pick)
+		local title, line, gold = O.BandWords(pick)
+		self.title:SetText(title)
+		self.line:SetText(line)
+		UI.Ink(self.line, gold and C.alert or C.dim)
+		local edge = gold and C.alert or (pick.on and Shy.Theme.Accent or C.border)
+		Shy.Theme.Paint(self.edge, edge, 1)
+		UI.Tint(self.glyph, gold and C.alert or (pick.on and Shy.Theme.Accent or C.dim))
+		-- "Keep mine" for a screen of the player's own; else what it is: leaving the screen as it is.
+		self.choice.buttons[2].text:SetText(pick.custom and "Keep mine" or "Leave it")
+		self.choice:Refresh()
+	end
+	return band
+end
+
+-- A section: its caption with a rule after it (a small drawing at its end, when it has one), its choices under it,
+-- then its words, wrapping in the column's width.
+local function Section(f, x, y, width, title, drawing)
+	local s = CreateFrame("Frame", nil, f)
+	s:SetPoint("TOPLEFT", x, y)
+	s:SetWidth(width)
+	s.caption = Shy.Hub.Caption(s, width, title)
+	s.caption:SetPoint("TOPLEFT")
+	if drawing then
+		drawing:SetParent(s)
+		drawing:ClearAllPoints()
+		drawing:SetPoint("RIGHT", s.caption, "RIGHT", 0, 0)
+		s.caption.rule:SetPoint("RIGHT", drawing, "LEFT", -8, 0)
+	end
+	s.words = UI.Text(s, "", 11, false, C.dim)
+	s.words:SetWidth(width)
+	s.words:SetWordWrap(true)
+	s.words:SetJustifyH("LEFT")
+	-- Its words under the last line of its choices, `lines` of them; its height to the words' foot.
+	function s:Under(lines)
+		local top = M.CAPTION + M.UNDER + lines * M.SEG + (lines - 1) * M.WORDS
+		self.words:ClearAllPoints()
+		self.words:SetPoint("TOPLEFT", 0, -(top + M.WORDS))
+		self.top = top
+	end
+	function s:Tall()
+		return self.top + M.WORDS + max(14, self.words:GetStringHeight() or 14)
+	end
+	-- A choice on line `line` (from 1), `at` across, a small name before it when given.
+	function s:Put(seg, line, at, label)
+		local y = -(M.CAPTION + M.UNDER + (line - 1) * (M.SEG + M.WORDS))
+		if label then
+			label:ClearAllPoints()
+			label:SetPoint("LEFT", s, "TOPLEFT", at, y - M.SEG / 2)
+			at = at + label:GetStringWidth() + M.LABEL
+		end
+		seg:ClearAllPoints()
+		seg:SetPoint("TOPLEFT", at, y)
+		return at + seg:GetWidth()
+	end
+	return s
+end
+
+local function Label(parent, text)
+	return UI.Text(parent, text, 11, false, C.text)
 end
 
 function O.Build(parent, width, plan)
 	local L, P = ns.Layout, ns.Preview
 	local f = CreateFrame("Frame", nil, parent)
 	local looking, lookingStyle, lookingBars   -- the size, the layout and the bars choice under the mouse
-	local lookingBags                          -- where the bag buttons are, under the mouse
-	local take, cards, chips, barChips, bagChips = nil, {}, {}, {}, {}
-	take = UI.Checkbox(f, "Set up my screen", function() return plan.screen.on end, function(v)
-		plan.screen.on = v
-		O.Wear(plan)
-		f:Refresh()
-	end, { desc = "Your action bars, chat and damage meter laid out together, with the cooldown manager under your character. Off, your screen stays as it is." })
-	take:SetPoint("TOPLEFT")
+	local lookingBags, lookingSide             -- where the bag buttons are, and a side bar's choice, under the mouse
+	local lookingDrawer                        -- the menu's choice under the mouse
+	local cards = {}
 	-- Every housing drawn wears the look the theme step picked, so the screen is shown as setup leaves it.
 	local function Look() return plan.theme and plan.theme.look end
+	-- A pick: the screen is set up with it (picked over a screen kept as it is, it starts fresh).
+	local function Pick(field, value)
+		plan.screen.on, plan.screen[field] = true, value
+		O.Wear(plan)
+		f:Refresh()
+	end
+	-- (The choices light their pick only while the screen is set up: kept as it is, nothing is picked.)
+	local function Lit(i) return plan.screen.on and i end
 
-	-- The cards across the top, one a layout: the classic ones in a row, those by role in a row under them.
-	local y = -26
+	local band = Band(f, width, plan)
+	band:SetPoint("TOPLEFT")
+
+	-- The cards, one a layout: the classic ones in a row, those by role in a row under them.
+	local y = -(M.BAND + M.CARDS_TOP)
 	for _, row in ipairs(P.STYLE_ROWS) do
 		local count = #row[2]
-		local cardW = (width - (count - 1) * GAP) / count
+		local cardW = (width - (count - 1) * M.GAP) / count
 		for i, key in ipairs(row[2]) do
-			local card = P.Card(f, cardW, key, function(picked)
-				plan.screen.on, plan.screen.style = true, picked
-				O.Wear(plan)
-				f:Refresh()
-			end, function(over)
+			local card = P.Card(f, cardW, key, function(picked) Pick("style", picked) end, function(over)
 				lookingStyle = over
 				f:Refresh()
 			end, Look)
-			card:SetPoint("TOPLEFT", (i - 1) * (cardW + GAP), y)
+			card:SetPoint("TOPLEFT", (i - 1) * (cardW + M.GAP), y)
 			cards[key] = card
 		end
-		y = y - P.CardHeight(cardW) - GAP
+		y = y - P.CardHeight(cardW) - M.GAP
 	end
 	local painter = P.Painter(f)
 
-	-- Under the cards, a row each: the size, the bars, the menu. The cards are the drawing: a big one over
-	-- them would be too much and take the page's height.
-	local cy = y
-	local function Label(text, at)
-		local label = UI.Text(f, text, 12, true, C.head)
-		label:SetPoint("TOPLEFT", 0, at - 6)
-		return label
-	end
-	Label("Size", cy)
-	for i, key in ipairs(ns.Console.SIZE_ORDER) do
-		local chip = Chip(f, P.NAMES[key], CHIP_W, function()
-			plan.screen.on, plan.screen.size = true, key
-			O.Wear(plan)
-			f:Refresh()
-		end, function(over)
-			looking = over and key or nil
-			f:Refresh()
-		end)
-		chip:SetPoint("TOPLEFT", ROW_X + (i - 1) * (CHIP_W + 6), cy)
-		chips[key] = chip
-	end
-	-- What the size under the mouse (or picked) is; or, in its place, why the console can't be set up.
-	local afterChips = ROW_X + 3 * (CHIP_W + 6) + 10
-	local words = UI.Text(f, "", 11, false, C.dim)
-	words:SetPoint("TOPLEFT", afterChips, cy - 6)
-	words:SetWidth(width - afterChips)
-	words:SetWordWrap(false)
-	words:SetJustifyH("LEFT")
-	cy = cy - CHIP_H - ROW_GAP
+	-- Two columns under the cards, a hairline between them.
+	local top = y - M.OPTIONS_TOP + M.GAP
+	local column = (width - M.COLUMNS) / 2
+	local right = column + M.COLUMNS
+	local hairline = f:CreateTexture(nil, "ARTWORK")
+	Shy.Theme.Paint(hairline, C.border, 0.5)
+	hairline:SetWidth(1)
+	hairline:SetPoint("TOPLEFT", column + M.COLUMNS / 2, top)
 
-	Label("Bars", cy)
-	for i, def in ipairs(BARS) do
-		local chip = Chip(f, def.text, BARS_W, function()
-			if def.key and Keyed() then return end   -- (your keys stand on every bar)
-			plan.screen.on, plan.screen.grow = true, def.key
-			O.Wear(plan)
-			f:Refresh()
-		end, function(over)
-			lookingBars = over and def or nil
-			f:Refresh()
-		end)
-		chip:SetPoint("TOPLEFT", ROW_X + (i - 1) * (BARS_W + 6), cy)
-		barChips[i] = chip
-	end
-	local afterBars = ROW_X + 2 * (BARS_W + 6) + 10
-	local drawing = P.BarsDrawing(f, 4, 1)
-	drawing:SetPoint("TOPLEFT", afterBars, cy - 2)
-	local barWords = UI.Text(f, "", 11, false, C.dim)
-	barWords:SetPoint("TOPLEFT", afterBars + drawing:GetWidth() + 10, cy - 6)
-	barWords:SetWidth(width - afterBars - drawing:GetWidth() - 10)
-	barWords:SetWordWrap(false)
-	barWords:SetJustifyH("LEFT")
-	cy = cy - CHIP_H - ROW_GAP
-
-	-- The side bars: for each side, out or tucked away (a pair of chips after its name), then the drawing of
-	-- both and what the pick comes to. A pick goes on the side bar on screen at once (O.Wear).
-	Label("Side bars", cy)
-	local sideChips, sideNames, lookingSide = {}, {}, nil
-	local sx = ROW_X + 20
-	for _, side in ipairs(SIDES) do
-		local name = UI.Text(f, side.text, 11, false, C.text)
-		name:SetPoint("TOPLEFT", sx, cy - 6)
-		sideNames[side.key] = name
-		sx = sx + 36
-		sideChips[side.key] = {}
-		for i, def in ipairs(OUT) do
-			local chip = Chip(f, def.text, SIDE_W, function()
-				plan.screen.sides = plan.screen.sides or { left = true, right = true }
-				plan.screen.on, plan.screen.sides[side.key] = true, def.key
-				O.Wear(plan)
-				f:Refresh()
-			end, function(over)
-				lookingSide = over and { side = side.key, out = def.key } or nil
-				f:Refresh()
-			end)
-			chip:SetPoint("TOPLEFT", sx + (i - 1) * (SIDE_W + 4), cy)
-			sideChips[side.key][i] = chip
+	-- The size.
+	local sizeKeys = ns.Console.SIZE_ORDER
+	local sizeLabels = {}
+	for i, key in ipairs(sizeKeys) do sizeLabels[i] = P.NAMES[key] end
+	local size = Section(f, 0, top, column, "Size")
+	local sizes = Choice(size, sizeLabels, min(M.SIZE, column), function()
+		for i, key in ipairs(sizeKeys) do
+			if key == plan.screen.size then return Lit(i) end
 		end
-		sx = sx + 2 * (SIDE_W + 4) + 18
-	end
-	local sideDrawing = P.SidesDrawing(f)
-	sideDrawing:SetPoint("TOPLEFT", sx, cy)
-	local sideWords = UI.Text(f, "", 11, false, C.dim)
-	sideWords:SetPoint("TOPLEFT", sx + sideDrawing:GetWidth() + 10, cy - 6)
-	sideWords:SetWidth(width - sx - sideDrawing:GetWidth() - 10)
-	sideWords:SetWordWrap(false)
-	sideWords:SetJustifyH("LEFT")
-	cy = cy - CHIP_H - ROW_GAP
-
-	Label("Menu", cy)
-	local drawer = UI.Checkbox(f, "In a drawer", function() return plan.screen.drawer end, function(v)
-		plan.screen.drawer = v and true or false
-		O.Wear(plan)
+		return false
+	end, function(i) Pick("size", sizeKeys[i]) end, function(i)
+		looking = i and sizeKeys[i] or nil
 		f:Refresh()
-	end, { desc = "The micro menu and bags tuck away under the guide. Point at its header to use them; click it to keep them out." })
-	drawer:SetPoint("TOPLEFT", ROW_X, cy - 2)
+	end)
+	size:Put(sizes, 1, 0)
+	size:Under(1)
 
-	-- After it, the bag buttons: with the menu, or in the bags.
-	local keeper = Keeper()
-	local bagLabel, bagDrawing, bagWords
-	if keeper and plan.screen.bags then
-		local bx = ROW_X + 150
-		bagLabel = UI.Text(f, "Bag buttons", 11, false, C.text)
-		bagLabel:SetPoint("TOPLEFT", bx, cy - 6)
-		bx = bx + 76
-		for i, def in ipairs(BAGS) do
-			local chip = Chip(f, def.text, BARS_W, function()
-				plan.screen.on, plan.screen.bags = true, def.key
-				O.Wear(plan)
-				f:Refresh()
-			end, function(over)
-				lookingBags = over and def.key or nil
-				f:Refresh()
-			end)
-			chip:SetPoint("TOPLEFT", bx + (i - 1) * (BARS_W + 6), cy)
-			bagChips[i] = chip
-		end
-		bx = bx + 2 * (BARS_W + 6) + 10
-		bagDrawing = P.BagsDrawing(f)
-		bagDrawing:SetPoint("TOPLEFT", bx, cy)
-		bagWords = UI.Text(f, "", 11, false, C.dim)
-		bagWords:SetPoint("TOPLEFT", bx + bagDrawing:GetWidth() + 10, cy - 6)
-		bagWords:SetWidth(width - bx - bagDrawing:GetWidth() - 10)
-		bagWords:SetWordWrap(false)
-		bagWords:SetJustifyH("LEFT")
+	-- The bars: grow with you, or every bar now (not while your keys are laid out: they stand on every bar).
+	local drawing = P.BarsDrawing(f, 4, 1)
+	local barsSection = Section(f, 0, 0, column, "Bars", drawing)
+	local bars = Choice(barsSection, { BARS[1].text, BARS[2].text }, min(M.BARS, column), function()
+		return Lit(Grow(plan.screen) and 1 or 2)
+	end, function(i)
+		if BARS[i].key and Keyed() then return end
+		Pick("grow", BARS[i].key)
+	end, function(i)
+		lookingBars = i and BARS[i] or nil
+		f:Refresh()
+	end)
+	barsSection:Put(bars, 1, 0)
+	barsSection:Under(1)
+
+	-- The side bars: for each side, out or tucked away; only the sides the layout picked has.
+	local sideDrawing = P.SidesDrawing(f)
+	local sideSection = Section(f, right, top, column, "Side bars", sideDrawing)
+	local sides, sideNames = {}, {}
+	for _, side in ipairs(SIDES) do
+		sideNames[side.key] = Label(sideSection, side.text)
+		sides[side.key] = Choice(sideSection, { OUT[1].text, OUT[2].text }, M.SIDE, function()
+			local out = plan.screen.sides
+			return Lit((out and out[side.key] == false) and 2 or 1)
+		end, function(i)
+			plan.screen.sides = plan.screen.sides or { left = true, right = true }
+			plan.screen.sides[side.key] = OUT[i].key
+			Pick("sides", plan.screen.sides)
+		end, function(i)
+			lookingSide = i and { side = side.key, out = OUT[i].key } or nil
+			f:Refresh()
+		end)
 	end
-	cy = cy - CHIP_H - 6
+	sideSection:Under(1)
 
-	f:SetSize(width, -cy)
-	f.cards, f.chips, f.barChips, f.take, f.words, f.barWords, f.drawing = cards, chips, barChips, take, words, barWords, drawing
-	f.drawer = drawer
-	f.bagChips, f.bagWords, f.bagDrawing = bagChips, bagWords, bagDrawing
-	f.sideChips, f.sideWords, f.sideDrawing = sideChips, sideWords, sideDrawing
+	-- The menu: out under the minimap or in a drawer; with ShyBags, the bag buttons with the menu or in the bags.
+	local keeper = Keeper()
+	local hasBags = keeper ~= nil and plan.screen.bags ~= nil
+	local bagDrawing = hasBags and P.BagsDrawing(f) or nil
+	local menuSection = Section(f, right, 0, column, hasBags and "Menu and bags" or "Menu", bagDrawing)
+	local menuName = Label(menuSection, "Menu")
+	local menu = Choice(menuSection, { "Out", "In a drawer" }, M.MENU, function()
+		return Lit(plan.screen.drawer and 2 or 1)
+	end, function(i) Pick("drawer", i == 2) end, function(i)
+		lookingDrawer = i and (i == 2) or nil
+		f:Refresh()
+	end)
+	local bagName, bagChoice
+	if hasBags then
+		bagName = Label(menuSection, "Bags")
+		bagChoice = Choice(menuSection, { BAGS[1].text, BAGS[2].text }, M.BAGS, function()
+			return Lit(plan.screen.bags == "screen" and 2 or 1)
+		end, function(i) Pick("bags", BAGS[i].key) end, function(i)
+			lookingBags = i and BAGS[i].key or nil
+			f:Refresh()
+		end)
+	end
+	local after = menuSection:Put(menu, 1, 0, menuName)
+	local lines = 1
+	if bagChoice then
+		if column >= M.ONE_LINE then
+			menuSection:Put(bagChoice, 1, after + M.PAIR, bagName)
+		else
+			lines = 2
+			menuSection:Put(bagChoice, 2, 0, bagName)
+		end
+	end
+	menuSection:Under(lines)
+
+	f.cards, f.band, f.sizes, f.bars, f.sides, f.menu, f.bags = cards, band, sizes, bars, sides, menu, bagChoice
+	f.words, f.barWords, f.sideWords, f.menuWords = size.words, barsSection.words, sideSection.words, menuSection.words
+	f.drawing, f.sideDrawing, f.bagDrawing = drawing, sideDrawing, bagDrawing
+	f.sections = { size, barsSection, sideSection, menuSection }
+
+	-- The sections down each column, each under the one before as tall as its words make it; the page as tall as
+	-- the taller column.
+	local function Stack()
+		barsSection:ClearAllPoints()
+		barsSection:SetPoint("TOPLEFT", 0, top - size:Tall() - M.SECTION)
+		menuSection:ClearAllPoints()
+		menuSection:SetPoint("TOPLEFT", right, top - sideSection:Tall() - M.SECTION)
+		local leftTall = size:Tall() + M.SECTION + barsSection:Tall()
+		local rightTall = sideSection:Tall() + M.SECTION + menuSection:Tall()
+		hairline:SetHeight(max(leftTall, rightTall))
+		for _, s in ipairs(f.sections) do s:SetHeight(s:Tall()) end
+		f:SetSize(width, -top + max(leftTall, rightTall) + 4)
+	end
 
 	function f:Refresh()
 		local pick = plan.screen
-		local active, inUse, size = L.IsActive(), L.Style(), L.Size()
+		local active, inUse, sizeNow = L.IsActive(), L.Style(), L.Size()
 		local shown = looking or pick.size
 		local style = lookingStyle or pick.style or inUse
-		-- (The bars chip under the mouse, whichever it is: "every bar now" has `false` for its key.)
+		-- (The bars choice under the mouse, whichever it is: "every bar now" has `false` for its key.)
 		local keyed = Keyed()
 		local grow = Grow(pick)
 		if lookingBars and not keyed then grow = lookingBars.key end
-		take:Refresh()
-		drawer:Refresh()
+		band:Tell(pick)
 		-- Drawn with the bars the choice gives: the step the abilities call for, or every bar.
-		local bars = grow and true or "all"
-		-- The bag buttons where the choice puts them; pointed at, the drawer out and the bags open to show them.
-		local where = bagWords and (lookingBags or pick.bags) or nil
+		local barsDrawn = grow and true or "all"
 		-- (Each card laid again only where it would show something else, one a frame: a layout pointed at changes
 		-- none of them, a size pointed at all.)
 		local from = P.From(Look())
 		painter:Forget()
 		for _, row in ipairs(P.STYLE_ROWS) do
-			for _, key in ipairs(row[2]) do painter:Ask(cards[key].stage, shown, key, bars, from) end
+			for _, key in ipairs(row[2]) do painter:Ask(cards[key].stage, shown, key, barsDrawn, from) end
 		end
+		-- The layout in use, changed by the player since it was set up, is badged as theirs.
+		local used = pick.custom == "changed" and "custom" or true
 		for key, card in pairs(cards) do
-			card:Paint(pick.on and pick.style == key, active and inUse == key, not pick.on)
+			card:Paint(pick.on and pick.style == key, active and inUse == key and used, not pick.on)
 		end
-		for key, chip in pairs(chips) do
-			chip:Paint(pick.on and pick.size == key)
-			chip:SetAlpha(pick.on and 1 or 0.5)
+		-- Kept as it is, the choices are quiet: one picked starts the screen fresh.
+		local quiet = pick.on and 1 or 0.55
+		for _, s in ipairs(f.sections) do s:SetAlpha(quiet) end
+		sizes:Refresh()
+		bars:Refresh()
+		menu:Refresh()
+		if bagChoice then bagChoice:Refresh() end
+
+		-- The size: what the one picked or pointed at is.
+		size.words:SetText(not pick.on and "Your screen keeps the size it has."
+			or (P.WORDS[shown] .. (active and sizeNow == shown and " In use." or "")))
+
+		-- The bars.
+		bars.buttons[1]:SetAlpha(keyed and 0.4 or 1)
+		local step = grow and L.GrowStep() or #L.STEPS
+		drawing:Paint(nil, L.STEPS[step])
+		if not pick.on then
+			barsSection.words:SetText("Your bars stay as they are.")
+		elseif keyed then
+			barsSection.words:SetText("Your keys stand on every bar, so they're all there from the start, the flyout with them.")
+		elseif grow and step == #L.STEPS then
+			barsSection.words:SetText(("You know %d abilities or already use every bar, so they're all there from the start."):format(L.Abilities()))
+		elseif grow then
+			local have = L.STEPS[step]
+			local sideBars = have.sides > 1 and "both side bars" or "a side bar for food and potions"
+			barsSection.words:SetText(("%s and %s to start. You're offered more as you learn abilities. You know %d."):format(
+				ROWS[have.rows], sideBars, L.Abilities()))
+		else
+			barsSection.words:SetText("Three rows and both side bars from the start, as the game has them.")
 		end
-		for i, chip in ipairs(barChips) do
-			chip:Paint(pick.on and Grow(pick) == BARS[i].key)
-			chip:SetAlpha((not pick.on and 0.5) or (keyed and BARS[i].key and 0.4) or 1)
-		end
-		drawer:SetAlpha(pick.on and 1 or 0.5)
-		-- The side bars as picked, or the choice under the mouse; a side with no bar in the layout picked is dimmed.
+
+		-- The side bars: the ones the layout has, as picked or pointed at. A layout that shows its bars as you point
+		-- at them (the minimal one) has them show with the others: no choice there.
 		local out = pick.sides or { left = true, right = true }
 		local shownOut = { left = out.left ~= false, right = out.right ~= false }
 		if lookingSide then shownOut[lookingSide.side] = lookingSide.out end
 		local there = SidesThere({ size = shown, style = style, grow = grow })
-		-- A layout that reveals its bars (the minimal one) has the side bars show with the others: no choice here.
 		local role = ns.Console.ROLE[style]
 		local revealed = role ~= nil and role.reveal == true
+		local at = 0
 		for _, side in ipairs(SIDES) do
-			local here = pick.on and there[side.key] and not revealed
-			for i, chip in ipairs(sideChips[side.key]) do
-				chip:Paint(pick.on and (out[side.key] ~= false) == OUT[i].key)
-				chip:SetAlpha(here and 1 or 0.4)
+			local here = there[side.key] and not revealed
+			sides[side.key]:SetShown(here)
+			sideNames[side.key]:SetShown(here)
+			if here then
+				at = sideSection:Put(sides[side.key], 1, at, sideNames[side.key]) + M.PAIR
+				sides[side.key]:Refresh()
 			end
-			sideNames[side.key]:SetAlpha(here and 1 or 0.4)
 		end
+		local anySide = at > 0
+		sideSection:Under(anySide and 1 or 0)
 		sideDrawing:Paint(shownOut, there)
-		sideDrawing:SetAlpha(pick.on and 1 or 0.5)
-		sideWords:SetText((not pick.on and "Your side bars stay as they are.")
+		sideDrawing:SetShown(there.left or there.right)
+		sideSection.words:SetText((not pick.on and "Your side bars stay as they are.")
 			or (revealed and "They show with your other bars while you point at them.") or SideWords(shownOut, there))
-		if bagWords then
-			for i, chip in ipairs(bagChips) do
-				chip:Paint(pick.on and pick.bags == BAGS[i].key)
-				chip:SetAlpha(pick.on and 1 or 0.5)
-			end
-			bagLabel:SetAlpha(pick.on and 1 or 0.5)
-			bagDrawing:Paint(where)
-			bagDrawing:SetAlpha(pick.on and 1 or 0.5)
-			bagWords:SetText(pick.on and BagWords(keeper, where, pick.drawer) or "Your bag buttons stay where they are.")
-		end
-		local ok, why = L.CanSetUp()
-		UI.Ink(words, (ok or not pick.on) and C.dim or C.alert)
-		if pick.on and not ok then
-			words:SetText(L.Words(why))
-		elseif not pick.on then
-			words:SetText("Your screen stays as it is. You can set up the console later from /shy.")
-		else
-			words:SetText(P.WORDS[shown] .. (active and size == shown and " In use." or ""))
-		end
-		local step = grow and L.GrowStep() or #L.STEPS
-		drawing:Paint(nil, L.STEPS[step])
-		drawing:SetAlpha(pick.on and 1 or 0.5)
+
+		-- The menu, and the bag buttons.
+		local drawer = pick.drawer
+		if lookingDrawer ~= nil then drawer = lookingDrawer end
+		local where = lookingBags or pick.bags
+		if bagDrawing then bagDrawing:Paint(where) end
 		if not pick.on then
-			barWords:SetText("Your bars stay as they are too.")
-		elseif keyed then
-			barWords:SetText("Your keys stand on every bar, so they're all there from the start, the flyout with them.")
-		elseif grow and step == #L.STEPS then
-			barWords:SetText(("You know %d abilities or already use every bar, so they're all there from the start."):format(L.Abilities()))
-		elseif grow then
-			local have = L.STEPS[step]
-			local sides = have.sides > 1 and "both side bars" or "a side bar for food and potions"
-			barWords:SetText(("%s and %s to start; you'll be offered more as you learn abilities. You know %d."):format(
-				ROWS[have.rows], sides, L.Abilities()))
+			menuSection.words:SetText(bagChoice and "Your menu and bag buttons stay where they are." or "Your menu stays where it is.")
 		else
-			barWords:SetText("Three rows and both side bars from the start, as the game has them.")
+			menuSection.words:SetText(MenuWords(drawer) .. (bagChoice and (" " .. BagWords(keeper, where, drawer)) or ""))
 		end
+		Stack()
 	end
 	return f
 end
@@ -466,16 +578,19 @@ end
 S.Step({
 	id = "screen", order = 20, title = "Screen", glyph = "window",
 	ask = "How do you want your screen laid out?",
-	lead = "Pick a layout and a size for your bars and chat. The picture shows how your screen will look.",
+	lead = "Pick a layout and a size for your bars and chat. The pictures show how your screen will look.",
 	brief = function(plan)
 		local pick = plan.screen
-		if not pick.on then return "As it is" end
+		if not pick.on then return pick.custom and "Your own" or "As it is" end
 		return ns.Preview.STYLES[pick.style or ns.Layout.Style()] .. ", " .. ns.Preview.NAMES[pick.size]:lower()
 	end,
 	last = true,   -- writing the layout ends in a reload, so every other step runs first
+	-- A screen the player made their own (Layout.Custom) is kept unless a layout is picked: the console laid out
+	-- again would undo every change.
 	Plan = function(plan)
 		local keeper = Keeper()
-		plan.screen = { on = true, size = ns.Layout.Size(), style = ns.Layout.Style(), grow = Grows(), drawer = ns.T.db.menuDrawer ~= false,
+		local custom, named = ns.Layout.Custom()
+		plan.screen = { on = not custom, custom = custom or nil, named = named, size = ns.Layout.Size(), style = ns.Layout.Style(), grow = Grows(), drawer = ns.T.db.menuDrawer ~= false,
 			bags = keeper and keeper:BagButtons() or nil,
 			sides = { left = ns.Drawers.RackOut("left"), right = ns.Drawers.RackOut("right") } }
 	end,

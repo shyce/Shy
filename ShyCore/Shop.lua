@@ -295,10 +295,11 @@ function Shop.Stepper(parent, opts)
 	opts = opts or {}
 	local tall = opts.height or 22
 	local s = UI.KeyPlate(CreateFrame("Button", nil, parent))
-	s:SetSize(opts.width or 96, tall)
 	s.n, s.least, s.most, s.step = 1, 1, 999, 1
 	local STEP = 26                      -- a step's width
 	local WORD = opts.max and 40 or 0    -- the word's
+	local ROOM = 40                      -- the number's, at the least: four digits whole
+	s:SetSize(math.max(opts.width or 96, STEP * 2 + WORD + ROOM), tall)
 	local function Within(n)
 		n = math.max(s.least, math.min(s.most, n))
 		if s.step > 1 then n = math.max(s.least, math.floor(n / s.step) * s.step) end

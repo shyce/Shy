@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.1.1" src="https://img.shields.io/badge/version-5.1.1-29b3ff"></a>
+  <a href="CHANGELOG.md"><img alt="version 5.1.3" src="https://img.shields.io/badge/version-5.1.3-29b3ff"></a>
   <img alt="released 16 Nov 2026" src="https://img.shields.io/badge/released-16_Nov_2026-4a5568">
-  <img alt="tests 34,939 passed" src="https://img.shields.io/badge/tests-34%2C939_passed-4ade80">
+  <img alt="tests 35,041 passed" src="https://img.shields.io/badge/tests-35%2C041_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,28 +93,26 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.1.1
+## What's new in 5.1.3
 
 ### Added
-- **ShyChat:** Whisper conversations can dock in the chat as tabs beside its own, and each person opens where you last put them. Dragging a tab lights every place it can go, the chat's tabs scroll with the wheel instead of being cut short, and commands like /rl work in a conversation
-- **ShyFarm:** Farm a creature for everything it drops, or just record everything you loot. The finder has a farming side with the best farms for you and a search for any item or creature you could farm, and the auction house can open it to pick an item
+- **ShyCore:** A and D can keep turning you instead of strafing. Pick it on their row in your keys, and give strafing or turning a key of your own
 
 ### Changed
-- **ShyBags:** A special bag's slots, like an herb bag's or a quiver's, stand after your other bags' whatever the sort, framed in that bag's color
-- **ShyChat:** Chat bubbles wear your look, their tail drawn in the look's own edge, and read clearly in every look. They follow your interface's size, a yell or raid warning wears its own red or orange, and a language you don't speak shows before the words
-- **ShyCore:** Setup turns on nameplates for friendly NPCs, so the one your next quest step sends you to shows its mark
-- **ShyCore:** Picking a key that already does something, or is picked for something else, asks if you're sure and says where the old use goes, instead of refusing it
-- **ShyCore:** Clicking a hover no longer pins it on the screen. It closes when you move away, as every hover does
-- **ShyCore:** Colored words on hovers, like an item's quality, stay readable in every look. A color too dark or pale for the background is brightened just enough, keeping its hue
-- **ShyCore:** All of Shy's words, down to names, numbers and list lines, wear your look's text effect, so they read on every look's background
-- **ShyDock:** The minimal layout shows your main bar alone. Your other bars and side bars fade in while you point at the bars or carry a spell to them, and their keys work all the while
-- **ShyDock:** The layout cards in setup are simple flat drawings of your whole screen's foot, all at one scale, so you can tell the layouts apart at a glance
+- **ShyAuction:** Selling a pile now goes up stack by stack, with a strip showing how far along you are. Space posts the next one, and right-clicking an item in your bags picks it on the Sell tab
+- **ShyCore:** The game-style red buttons turn their own art around when held, so they look pushed in, and no longer get a second light along the top
+- **ShyCore:** The game-style red buttons keep the same thin rim on a tall card as on a small button
+- **ShyCore:** The Maximize and Minimize buttons on windows no longer pop up a tooltip
+- **ShyDock:** The Screen page in setup is laid out new. A band says what happens to your screen, the layouts are cards, and the sizes, bars and menu sit in two columns under them. The card in use is badged
+- **ShyDock:** If you changed the console's layout yourself, setup now leaves it alone and marks it custom. Pick a layout to start fresh
+- **ShyThreat:** One threat setting for the meter, nameplates and warrior light, with one aggro sound. The meter counts mobs that got loose from you
 
 ### Fixed
-- **ShyCore:** A hover could stand over a menu you had just opened and hide half of it. The menu stands over hovers now, and the hover of what you opened it on closes
-- **ShyCore:** In the tooled leather look the carved band round the edge ran under what windows hold, and under chat lines and meter bars on screen. Windows keep their contents clear of it now, a little bigger to make room, and the band stays off pieces with no room for it
-- **ShyCore:** In a dungeon run, buttons on the quest card showed a block of the dungeon's color over their pictures. Their highlight stays hidden until you point at them now
-- **ShyTweaks:** A spell out of range on a faded bar tinted the world behind it red. The red shows only on bars you can see now
+- **ShyBags:** Stack counts in your bank slots didn't show when the bank first opened. They show from the start now
+- **ShyCore:** Clicking the choice that was already picked made its button flash as if you were pointing at it. It stays still now
+- **ShyCore:** The chosen card on the keys page flickered when you pointed at another one. It stays steady now
+- **ShyDock:** In a fight your off-hand swing bar went missing while dual wielding. It stays now
+- **ShyQuest:** Some quests were offered from level 1 when they are really for high levels, and two Praise quests sent low levels to an empty spot. Both are right now
 
 [Every release](CHANGELOG.md)
 

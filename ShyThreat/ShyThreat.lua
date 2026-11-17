@@ -4,8 +4,8 @@
 -- Public (Shy.addons.Threat):
 --   T:Mob()      the unit the meter reads now ("mouseover", "target", "targettarget"), or nil
 --   T:Rows()     what it shows: { unit, name, class, pet, tanking, status, scaled, lead, me, readable }, in order
---   T:IsTank()   whether the meter reads you as the tank (the role setting, else Shy.Role: your group role, else
---                your layout's)
+--   T:IsTank()   whether the meter reads you as the tank: the family's one choice (Shy.ThreatRole), which the
+--                nameplates' threat colors and a class's light read too
 --   T:Piece()    the meter as a piece of a planned screen ({ id, width, height, scale, head, row, rows }), nil while
 --                it is off; bus SHY_THREAT_PIECE when that changes (ShyDock plans the screen again)
 
@@ -25,9 +25,8 @@ local T = Shy:NewAddon(ADDON, {
 		pets = true,          -- pets' rows
 		hover = true,         -- a nameplate under the mouse in a fight: the meter reads that mob
 		linger = 8,           -- seconds the last fight's table stays after the fight
-		role = "auto",        -- "auto" (Shy.Role: your group role, else your layout's) | "tank" | "dps"
 		warn = true,          -- the header lights as you near the pull (or, tanking, as the next player catches up)
-		sound = false,        -- and a sound the moment it does
+		-- (How you are read and the warning sound are the family's: Shy.ThreatRole, Shy.ThreatSound.)
 	},
 })
 ns.T = T
@@ -47,17 +46,16 @@ function ns.Apply()
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
-function T:IsTank()
-	local role = self.db.role
-	if role == "tank" then return true end
-	if role == "dps" then return false end
-	return Shy.Role() == "tank"
-end
+function T:IsTank() return Shy.ThreatRole() == "tank" end
 
 function T:Mob() return ns.Read.mob end
 function T:Rows() return ns.Read.rows end
 
 function T:OnLoad()
+	-- How you were read before the family had one choice for it: carried over once. (The meter's own sound,
+	-- near the pull, gave way to the family's, when aggro changes hands.)
+	Shy.AdoptThreatRole(self.db.role)
+	self.db.role, self.db.sound = nil, nil
 	self:RegisterOptions(ns.CreateOptions())
 end
 

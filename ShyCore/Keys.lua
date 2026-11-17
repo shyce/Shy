@@ -1041,8 +1041,10 @@ Hot.StandIns = StandIns
 -- (whole: every key the board has a use for, the ones you keep with them)
 -- Your side keys (A and D for WASD) do what they do now if it moves you sideways, else strafe; and they strafe
 -- whenever the board takes every key you strafe with (Q and E as the game ships them), so you never lose it:
--- you turn with the mouse then. A key you keep whose ability you gave another key (the list's quick bind):
--- that key presses its button, after the board's own in the order.
+-- you turn with the mouse then, or on a key you pick. Kept (the list's Keep mine: keep[key] true) a side key
+-- that turns you keeps turning; told to strafe (keep[key] false) it strafes even with a strafe of yours elsewhere.
+-- A key you keep whose ability you gave another key (the list's quick bind): that key presses its button, after
+-- the board's own in the order.
 function Keys.Board(opts, scheme, whole)
 	scheme = scheme or Keys.Scheme()
 	local way = Keys.SCHEMES[scheme]
@@ -1051,15 +1053,17 @@ function Keys.Board(opts, scheme, whole)
 	for i, side in ipairs({ way.left, way.right }) do
 		local strafe = i == 1 and "STRAFELEFT" or "STRAFERIGHT"
 		local now = GetBindingAction(side)
-		sides[i] = (HOT.sides[now] and (now == strafe or Strafes(strafe, way, keeping))) and now or strafe
+		local told = keeping and keeping[side]
+		sides[i] = (HOT.sides[now] and (now == strafe or told == true or (told ~= false and Strafes(strafe, way, keeping))))
+			and now or strafe
 	end
 	local left, right = sides[1], sides[2]
 	-- (a key you keep stands out of the board; the keys you move with never do)
 	local keep, kept = not whole and keeping, ""
 	if keep then
 		local list = {}
-		for key in pairs(keep) do
-			if GRID[key] and not way.move[key] then list[#list + 1] = key end
+		for key, on in pairs(keep) do
+			if on and GRID[key] and not way.move[key] then list[#list + 1] = key end
 		end
 		table.sort(list)
 		kept = table.concat(list, " ")
@@ -1190,14 +1194,15 @@ end
 -- one key a binding, and never what moves you, turns the bar's pages or presses a bar's button (its ability goes
 -- with its key). taken: keys and bindings given a home already this time, filled in.  -> the key, or nil
 -- The key you picked for it in the list comes first (core.db.hotkeys.homeAt: binding -> key), while it is still
--- free; else Ctrl + the key.
+-- free; else Ctrl + the key. What moves you goes only to a key you picked (turning, once A strafes).
 function Hot.HomeOf(key, command, taken)
-	if command == "" or Pictured(command) or HOT.moving[command] or Hot.Paging(command) then return nil end
+	if command == "" or Pictured(command) or Hot.Paging(command) then return nil end
 	if taken and taken[command] then return nil end
 	local book = Shy.core.db and Shy.core.db.hotkeys
 	local picked = book and book.homeAt and book.homeAt[command]
+	if HOT.moving[command] and not picked then return nil end
 	local over = book and book.over
-	for _, home in ipairs({ picked or false, HOT.home .. key }) do
+	for _, home in ipairs({ picked or false, not HOT.moving[command] and HOT.home .. key }) do
 		local now = home and not (taken and taken[home]) and not Keys.Moving(home) and GetBindingAction(home)
 		-- (the key you picked may do something else, while it is still what you said it could stop doing)
 		if now == "" or now == command or (now and home == picked and over and over[home] == now) then
@@ -1410,11 +1415,12 @@ function Hot.Take(opts, quiet)
 			local now = GetBindingAction(key)
 			if command and ours and HotSet(state, key, command) then
 				result.bound = result.bound + 1
-				if HOT.steer[command] and HOT.steer[command] == now then
-					result.strafe = (result.strafe and (result.strafe .. " and ") or "") .. Keys.Key(key)
-				end
 				local home = not quiet and Hot.HomeOf(key, now, taken)
 				if home then homes[#homes + 1] = { key = key, home = home, command = now } end
+				-- (a side key that turned you strafes: said, unless turning has a key you picked, said with the homes)
+				if HOT.steer[command] and HOT.steer[command] == now and not home then
+					result.strafe = (result.strafe and (result.strafe .. " and ") or "") .. Keys.Key(key)
+				end
 			end
 		end
 	end
@@ -1454,7 +1460,7 @@ function Hot.Take(opts, quiet)
 			Shy.core:Print(("nothing of yours is lost. On new keys now: %s. /shy keys lists every key that changed."):format(Hot.Homes(made)))
 		end
 		if result.strafe then
-			Shy.core:Print(("%s strafe now, since the keys you strafed with hold abilities. To turn, hold the right mouse button and move the mouse."):format(result.strafe))
+			Shy.core:Print(("%s strafe now, since the keys you strafed with hold abilities. Hold the right mouse button to turn, or keep them turning in /shy keys."):format(result.strafe))
 		end
 	end
 	result.homes = made
@@ -1493,11 +1499,20 @@ function Hot.Keeps(key)
 end
 
 -- Keeps a key as it is, or lets the hotkeys have it. With the hotkeys set it is done now: the key back as it was
--- (only while it is still as set here) or set, and keys laid out are laid out again around it.
+-- (only while it is still as set here) or set, and keys laid out are laid out again around it. A side key let go
+-- is told to strafe (false), so a strafe of yours elsewhere doesn't leave it turning (Keys.Board).
 --   -> true, or false in a fight. defer: only noted, nothing bound (setup's page: Finish does it)
 function Hot.Keep(key, on, defer)
-	on = on and true or nil
-	if (Hot.Keeps(key) or nil) == on then return true end
+	local way = Scheme()
+	if on then
+		on = true
+	elseif key == way.left or key == way.right then
+		on = false
+	else
+		on = nil
+	end
+	local had = HotBook().keep
+	if (had and had[key]) == on then return true end
 	local state = HotState()
 	local set = not defer and state ~= nil and state.on == true and Keys.Mode() == "shy"
 	if set and InCombatLockdown() then return false end
@@ -1551,7 +1566,7 @@ end
 -- hotkeys set it moves at once: off the key it was on (while that is as set here), onto the new one.
 --   -> true, or false and why (a key that can't be picked, or a fight), and Hot.Free's question when there is one
 function Hot.SetHome(key, command, at, defer)
-	if at == HOT.home .. key then at = nil end
+	if at == HOT.home .. key and not HOT.moving[command] then at = nil end   -- (what moves you has no Ctrl + key of its own)
 	if at then
 		local free, why, ask = Hot.Free(at, command)
 		if not free then return false, why, ask end
@@ -1615,16 +1630,23 @@ end
 -- as a hand meets them. Each { key, from (what it does, or did before it was set here), to (what the board
 -- gives it), kept (it stays as it is), move (a key you move with: the board's whatever you keep), must (a hand
 -- relies on it), also (another key that does it then, or nil), home (Ctrl + the key, where it goes or went, or
--- nil), paging (it turns the bar's pages: said in one line, after the rest) }.
+-- nil), paging (it turns the bar's pages: said in one line, after the rest), steer (a side key that turned you:
+-- side is the strafe the board gives it, strafeAt the key you strafe that way with while it keeps turning, and
+-- strafeFrom the key of yours that strafed before) }.
 function Hot.Yours(opts)
 	local whole, order = Keys.Board(opts, nil, true)
-	local keep, state, move = Keeping() or EMPTY, HotState(), Scheme().move
+	local way = Scheme()
+	local keep, state, move = Keeping() or EMPTY, HotState(), way.move
 	local on = state ~= nil and state.on == true
 	local homes, taken = state and state.homes or EMPTY, {}
+	local book = Shy.core.db and Shy.core.db.hotkeys
+	-- (the strafe a side key gives you; a key you keep: off the keys you move with, or a side key kept turning)
+	local function Side(key) return (key == way.left and "STRAFELEFT") or (key == way.right and "STRAFERIGHT") or nil end
+	local function Kept(key) return keep[key] == true and (not move[key] or Side(key) ~= nil) end
 	-- (a key the board changes yet: not while the hotkeys are set, when every change is made)
 	local function Changes(key)
 		local to = whole[key]
-		return not on and to ~= nil and GetBindingAction(key) ~= to and not (keep[key] and not move[key])
+		return not on and to ~= nil and GetBindingAction(key) ~= to and not Kept(key)
 	end
 	local out = {}
 	for i, key in ipairs(order) do
@@ -1633,12 +1655,16 @@ function Hot.Yours(opts)
 		local pending              -- (noted on setup's page, not done yet: Finish does it)
 		if on and state.set[key] ~= nil and now == state.set[key] then
 			from = state.was[key] or ""
-			if keep[key] and not move[key] then kept, pending = true, true end
-		elseif (keep[key] and not move[key]) or Theirs(state, key) then
+			if Kept(key) then kept, pending = true, true end
+		elseif Kept(key) or Theirs(state, key) then
 			from, kept = now, true
 		elseif not on and now ~= to then
 			from = now
 		end
+		-- (a side key kept turning: said against the strafe it would have had)
+		local side = Side(key)
+		local steer = side ~= nil and from ~= nil and from == HOT.steer[side]
+		if steer and kept then to = side end
 		if from and from ~= to and from ~= "" and not Pictured(from) then
 			local also
 			for _, other in ipairs({ GetBindingKey(from) }) do
@@ -1650,14 +1676,13 @@ function Hot.Yours(opts)
 			end
 			-- (or a key the board gives it: A strafing once Q is the board's)
 			for _, other in ipairs(order) do
-				if not also and other ~= key and whole[other] == from and not (keep[other] and not move[other]) then also = other end
+				if not also and other ~= key and whole[other] == from and not Kept(other) then also = other end
 			end
 			local home
 			if on and not kept then
 				home = homes[key]
 				if home and GetBindingAction(home) ~= from then home = nil end
 				-- (another key picked for it since, not bound yet: the one it will have)
-				local book = Shy.core.db and Shy.core.db.hotkeys
 				local picked = book and book.homeAt and book.homeAt[from]
 				if picked and picked ~= home and (GetBindingAction(picked) == "" or GetBindingAction(picked) == from) then
 					home, pending = picked, true
@@ -1666,10 +1691,27 @@ function Hot.Yours(opts)
 				home = Hot.HomeOf(key, from, taken)
 			end
 			-- (a key you keep: the key you picked for its ability, while it stands)
-			local ins = kept and StandIns(Scheme(), keep)
+			local ins = kept and StandIns(way, keep)
+			-- (a side key kept turning: the key you strafe that way with then, the one you picked first)
+			local strafeAt
+			if steer and kept then
+				strafeAt = book and book.homeAt and book.homeAt[side]
+				for _, other in ipairs({ GetBindingKey(side) }) do
+					if not strafeAt and other ~= key and not move[other] and not Changes(other) then strafeAt = other end
+				end
+			end
 			out[#out + 1] = { key = key, from = from, to = to, kept = kept == true, move = move[key] == true,
 				must = Must(from), also = also, home = home, standIn = ins and ins[key] or nil,
-				paging = Hot.Paging(from), pending = pending, at = i }
+				paging = Hot.Paging(from), pending = pending, at = i,
+				steer = steer or nil, side = steer and side or nil, strafeAt = strafeAt }
+		end
+	end
+	-- (the key of yours that strafed before: where strafing is picked a key, as on its own row)
+	for _, entry in ipairs(out) do
+		if entry.steer then
+			for _, other in ipairs(out) do
+				if other.from == entry.side and not other.move then entry.strafeFrom = other.key end
+			end
 		end
 	end
 	table.sort(out, function(a, b)
@@ -4687,6 +4729,8 @@ function Hot.Panel(parent, width, plan, onPick, part)
 	-- A key that does something else, or is picked for something else, is asked about: sure, it is yours.
 	local function Pick(entry, key)
 		-- (in setup only noted: Finish does it, Not now forgets it)
+		-- (a side key kept turning: the key you strafe with, as the key that strafed before picks it)
+		if entry.steer and entry.kept then return Hot.SetHome(entry.strafeFrom or entry.key, entry.side, key, plan ~= nil) end
 		if entry.kept then return Hot.SetStandIn(entry.key, key, plan ~= nil) end
 		return Hot.SetHome(entry.key, entry.from, key, plan ~= nil)
 	end
@@ -4834,11 +4878,27 @@ function Hot.Panel(parent, width, plan, onPick, part)
 				does ~= "" and ("%s stays %s."):format(key, BindingCalled(does)) or ("%s stays as it is."):format(key)
 		end
 		local name = BindingCalled(entry.from)
+		-- (a side key that turned you: it strafes, and where turning goes; or it keeps turning, and where strafing goes)
+		if entry.steer then
+			local strafe = GetBindingName(entry.side)
+			if entry.kept then
+				return ("%s stays on %s"):format(name, key), entry.strafeAt
+					and ("%s %s %s."):format(strafe, on and "is on" or "goes on", Keys.Key(entry.strafeAt))
+					or ("Pick a key for %s, or it has none."):format(strafe)
+			end
+			local sub
+			if entry.home then
+				sub = ("%s %s %s."):format(name, on and "is on" or "goes on", Keys.Key(entry.home))
+			elseif entry.also then
+				sub = ("%s is still on %s."):format(name, Keys.Key(entry.also))
+			else
+				sub = ("Pick a key for %s, or hold the right mouse button to turn."):format(name)
+			end
+			return ("%s %s %s"):format(strafe, on and "is on" or "goes on", key), sub
+		end
 		if entry.move then
-			local turning = HOT.steer[entry.to] == entry.from
 			return ("%s %s %s"):format(GetBindingName(entry.to), on and "is on" or "goes on", key),
-				turning and ("%s turned you. To turn, hold the right mouse button and move the mouse."):format(key)
-				or ("%s did %s. It's one of the keys you move with."):format(key, name)
+				("%s did %s. It's one of the keys you move with."):format(key, name)
 		end
 		if entry.kept then
 			local sub
@@ -4888,13 +4948,14 @@ function Hot.Panel(parent, width, plan, onPick, part)
 			all = {}
 			for i, job in ipairs(f.says.waits) do all[i] = { key = job.key, from = "", wait = job, at = i } end
 		end
-		-- (the keys that turned the bar's pages, and the side keys that strafe now, are said in lines, not rows)
+		-- (the keys that turned the bar's pages are said in a line; the side keys that turned you come after the
+		-- list, always shown, side by side)
 		local entries, paging, sides = {}, {}, {}
 		for _, entry in ipairs(all) do
 			if entry.paging and not entry.kept then
 				paging[#paging + 1] = entry.key
-			elseif entry.move and HOT.steer[entry.to] == entry.from then
-				sides[#sides + 1] = entry.key
+			elseif entry.steer then
+				sides[#sides + 1] = entry
 			else
 				entries[#entries + 1] = entry
 			end
@@ -4912,23 +4973,19 @@ function Hot.Panel(parent, width, plan, onPick, part)
 		end)
 		f.yours = entries
 		-- The rows shown: the first few, and the rest with "Show N more" (one being picked, or that said why
-		-- not, stays out where it is). After them, the keys you move with that strafe now and the ones that turned
-		-- the bar's pages: a row each, with nothing to pick.
+		-- not, stays out where it is). After them, your side keys that turned you (strafe, or keep turning, and a
+		-- key for the other), and the keys that turned the bar's pages: a row with nothing to pick.
 		local visible = {}
 		for i, entry in ipairs(entries) do
 			local row = f.rows[i]
-			if i <= HOTVIEW.rows or f.expanded or (row and (row == listening or row.err)) then visible[#visible + 1] = entry end
+			-- (the row's own key: a row past the list's is a side key's)
+			local same = row and row.entry and row.entry.key == entry.key
+			if i <= HOTVIEW.rows or f.expanded or (same and (row == listening or row.err)) then visible[#visible + 1] = entry end
 		end
 		local hidden = #entries - #visible
 		local on = Hot.On()
 		local notes = {}
-		if #sides > 0 then
-			local said = {}
-			for i, key in ipairs(sides) do said[i] = Keys.Key(key) end
-			notes[#notes + 1] = { key = sides[1], note = { plate = table.concat(sides, " "),
-				head = ("%s %s"):format(table.concat(said, " and "), on and "strafe now" or "will strafe"),
-				sub = "To turn, hold the right mouse button and move the mouse." } }
-		end
+		for _, entry in ipairs(sides) do notes[#notes + 1] = entry end
 		if #paging > 0 then
 			notes[#notes + 1] = { key = paging[1], note = { plate = (KeysSaid(paging):gsub(" %+ ", " "):gsub(" to ", "-")),
 				head = on and "These no longer turn your bar's pages" or "These will no longer turn your bar's pages",
@@ -4940,6 +4997,7 @@ function Hot.Panel(parent, width, plan, onPick, part)
 		f.more:Set((hidden > 0 and ("Show %d more"):format(hidden)) or (f.expanded and #entries > HOTVIEW.rows and "Show fewer") or nil)
 		local rows = {}
 		for _, entry in ipairs(visible) do rows[#rows + 1] = entry end
+		local tail = #rows + 1       -- (the first row after the list: Show more stands above it)
 		for _, entry in ipairs(notes) do rows[#rows + 1] = entry end
 		for i = #rows + 1, #f.rows do f.rows[i]:Hide() end
 		if listening and not listening:IsShown() then Stop() end
@@ -4962,8 +5020,8 @@ function Hot.Panel(parent, width, plan, onPick, part)
 		local textRight = width - HOTVIEW.lead - HOTVIEW.target - HOTVIEW.choice - 2 * HOTVIEW.apart
 		local y = -8
 		for i, entry in ipairs(rows) do
-			-- (Show more stands between the list and its notes)
-			if entry.note and rows[i - 1] and not rows[i - 1].note and f.more:IsShown() then
+			-- (Show more stands between the list and the rows after it)
+			if i == tail and i > 1 and f.more:IsShown() then
 				f.more:ClearAllPoints()
 				f.more:SetPoint("TOPLEFT", f.caption, "BOTTOMLEFT", -indent, y + 2)
 				y = y - HOT.moreTall - 6
@@ -4975,29 +5033,34 @@ function Hot.Panel(parent, width, plan, onPick, part)
 			row.keyText:SetText(entry.note and entry.note.plate or Hot.Plate(entry.key))
 			row.key:SetWidth(math.max(HOTVIEW.plate + 8, math.ceil(row.keyText:GetStringWidth()) + 14))
 			row.head:SetText(head)
-			-- (a key you move with, or a note, has no choice: its words run the row's width)
-			local wide = (entry.move or entry.note) and (width - HOTVIEW.lead) or textRight
+			-- (a key you move with, or a note, has no choice: its words run the row's width; a side key that
+			-- turned you has)
+			local fixed = (entry.move and not entry.steer) or entry.note
+			local wide = fixed and (width - HOTVIEW.lead) or textRight
 			row.head:SetWidth(wide)
 			Theme.Ink(row.head, entry.must and C.alert or C.text)
 			row.sub:SetWidth(wide)
 			-- (the key being picked, or what went wrong last, takes the second line)
 			local picking = listening == row
 			if picking then
-				sub = entry.kept and ("Press the key for %s. Esc cancels."):format(job and job.name or "it")
-					or ("Press the key for %s. Esc cancels."):format(BindingCalled(entry.from))
+				local what = entry.steer and (entry.kept and GetBindingName(entry.side) or BindingCalled(entry.from))
+					or entry.kept and (job and job.name or "it") or BindingCalled(entry.from)
+				sub = ("Press the key for %s. Esc cancels."):format(what)
 			end
 			row.sub:SetText(row.err or sub)
 			Theme.Ink(row.sub, row.err and C.alert or picking and C.head or C.dim)
-			-- The choice: none for a key you move with, one that waits or a note; the key that moves: none for a
-			-- key you keep with no ability.
-			row.choice:SetShown(not entry.move and not entry.wait and not entry.note)
+			-- The choice: none for a key you move with (but a side key that turned you), one that waits or a
+			-- note; the key that moves: none for a key you keep with no ability.
+			row.choice:SetShown(not fixed and not entry.wait)
 			row.choice:Refresh()
-			-- (the key that moves: what the key did, unless another key still does it; or a kept key's ability)
-			local target = not entry.move and not entry.wait and not entry.note
-				and (entry.kept and job ~= nil or (not entry.kept and (entry.home ~= nil or not entry.also))) or false
+			-- (the key that moves: what the key did, unless another key still does it; or a kept key's ability;
+			-- a side key that turned you: turning's key, or strafing's while it keeps turning)
+			local target = entry.steer == true or (not fixed and not entry.wait
+				and (entry.kept and job ~= nil or (not entry.kept and (entry.home ~= nil or not entry.also)))) or false
 			row.target:SetShown(target)
 			if target then
-				local at = entry.kept and entry.standIn or (not entry.kept and entry.home)
+				local at = entry.steer and (entry.kept and entry.strafeAt or entry.home)
+					or entry.kept and entry.standIn or (not entry.kept and entry.home)
 				row.targetText:SetText(picking and "Press a key" or (at and Hot.Plate(at)) or "Pick a key")
 				Theme.Ink(row.targetText, (picking or not at) and C.good or C.head)
 				row.target:SetOn(picking)
@@ -5007,8 +5070,8 @@ function Hot.Panel(parent, width, plan, onPick, part)
 			row:Show()
 			y = y - HOTVIEW.row
 		end
-		-- (no notes: Show more under the list)
-		if f.more:IsShown() and not (rows[#rows] and rows[#rows].note) then
+		-- (nothing after the list: Show more under it)
+		if f.more:IsShown() and tail > #rows then
 			f.more:ClearAllPoints()
 			f.more:SetPoint("TOPLEFT", f.caption, "BOTTOMLEFT", -indent, y + 2)
 			y = y - HOT.moreTall - 6
@@ -5030,7 +5093,8 @@ function Hot.Panel(parent, width, plan, onPick, part)
 		Theme.Ink(tiles.off.tag, changed and C.good or C.dim)
 		for name, tile in pairs(tiles) do
 			local used = name == state
-			tile:SetOn(name == lit)
+			-- (painted again only when it changes: the lit card stays as it is while another is pointed at)
+			if tile.shyButton.on ~= (name == lit) then tile:SetOn(name == lit) end
 			tile.tick:SetShown(used)
 			tile.use:SetShown(used)
 		end
@@ -5437,7 +5501,7 @@ local function Settle(was)
 	local seen = {}
 	for _, list in ipairs({ now.keep, was.keep }) do
 		for key in pairs(list) do
-			if not seen[key] and (now.keep[key] or nil) ~= (was.keep[key] or nil) then Hot.Keep(key, now.keep[key]) end
+			if not seen[key] and now.keep[key] ~= was.keep[key] then Hot.Keep(key, now.keep[key]) end
 			seen[key] = true
 		end
 	end
@@ -5651,7 +5715,7 @@ Keys.STEP = {
 			for _, entry in ipairs(Hot.Yours(mine.opts)) do
 				if not entry.kept and entry.must and entry.home then
 					moves[#moves + 1] = ("%s to %s"):format(BindingCalled(entry.from), Keys.Key(entry.home))
-				elseif entry.move and HOT.steer[entry.to] == entry.from then
+				elseif entry.steer and not entry.kept then
 					sides[#sides + 1] = Keys.Key(entry.key)
 				end
 			end

@@ -3506,54 +3506,100 @@ function UI.KeyMake(look)
 	return UI.KEY_MAKES[look] or UI.KEY_MAKES.forged
 end
 
--- Heritage: the game's own red button, as its shared button wears it (the three slices of 128-RedButton: its ends at
--- the button's height, its middle tiled between), without its color and tinted in yours unless the look wears the
--- game's own colors, its light laid again, added, as the heritage frame's is (its Shine); held and out of use the
--- game's own pressed and disabled art, under the mouse its highlight in your color.
+-- Heritage: the game's own red button (128-RedButton) cut in nine: its corners and rim from the ends' outer EDGE
+-- texels, the face from its middle, so the rim stands RIM units wide on a piece of any size (a tall card wears the
+-- same thin rim as a button), less on one too small for it. Without its color and tinted in yours unless the look
+-- wears the game's own colors, its light laid again, added, as the heritage frame's is (its Shine); held, its own art
+-- turned half round (lit from the other side: pushed in); out of use the game's disabled art; under the mouse its
+-- highlight in your color.
 do
 local RED = "128-RedButton"
 local WHITE_EDGE = { 1, 1, 1 }   -- the game's own colors
+local HERITAGE_KEY = { EDGE = 32, RIM = 5 }
+-- A slice of an atlas, as the game's NineSlice crops one: its file, and the part of it from u0 to u1 across and v0 to
+-- v1 down (0 to 1 of the atlas's own picture).
+local function Cut(t, name, u0, u1, v0, v1)
+	local info = C_Texture.GetAtlasInfo(name)
+	if not info then return false end
+	local l, r, top, bottom = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
+	local uv = t.shyUV or {}
+	uv[1], uv[2], uv[3], uv[4] = l + (r - l) * u0, l + (r - l) * u1, top + (bottom - top) * v0, top + (bottom - top) * v1
+	t.shyUV = uv
+	t:SetTexture(info.file or info.filename)
+	t:SetTexCoord(uv[1], uv[2], uv[3], uv[4])
+	t.shyAtlas = name
+	return true
+end
 local function HeritageMark(f, lit, down, primary)
 	local parts = f.heritageButton
 	local w, h = f:GetSize()
 	if issecretvalue(w) or issecretvalue(h) or not (w and h) or w <= 0 or h <= 0 then return end
 	local left, right = C_Texture.GetAtlasInfo(RED .. "-Left"), C_Texture.GetAtlasInfo(RED .. "-Right")
-	if not (left and right and left.height > 0) then return end
+	if not (left and right and left.height > 0 and left.width > 0 and right.width > 0) then return end
 	local game = Theme.LookOption("heritage", "color") == "game"
 	local shine = game and 0 or (Theme.LookOption("heritage", "shine") or 55) / 100
 	local off = f.IsEnabled and not f:IsEnabled()
-	local state = (off and "-Disabled") or (down and "-Pressed") or ""
-	-- Its ends at its height; on a piece too narrow for both, each takes half of it.
-	local lw, rw = left.width * h / left.height, right.width * h / right.height
-	if lw + rw > w then lw, rw = w / 2, w / 2 end
-	local accent = UI.LookAccent(f)
-	local names = { RED .. "-Left" .. state, "_" .. RED .. "-Center" .. state, RED .. "-Right" .. state }
-	for i = 1, 6 do
-		local t, slice = parts[i], (i - 1) % 3 + 1
-		t:SetAtlas(names[slice])
-		t:SetHorizTile(slice == 2)
-		t:ClearAllPoints()
-		if slice == 1 then
-			t:SetPoint("TOPLEFT")
-			t:SetPoint("BOTTOMLEFT")
-			t:SetWidth(lw)
-		elseif slice == 3 then
-			t:SetPoint("TOPRIGHT")
-			t:SetPoint("BOTTOMRIGHT")
-			t:SetWidth(rw)
-		else
-			t:SetPoint("TOPLEFT", lw, 0)
-			t:SetPoint("BOTTOMRIGHT", -rw, 0)
+	-- Held, its own art turned about: the light from the other side, so the face reads as pushed in (the game's
+	-- pressed art moves its face down and right, which no slicing keeps whole on a tall piece).
+	local state = off and "-Disabled" or ""
+	local turned = down and not off
+	-- The rim: RIM units, no more than the art at the piece's height gives it, nor half the piece.
+	local K = HERITAGE_KEY
+	local rim = min(K.RIM, h * K.EDGE / left.height, w / 2, h / 2)
+	-- Placed, cut and greyed again only when what they go by changed: a slice placed anew has no place on screen
+	-- until the next frame, and a ramp tinted then shows its key color for that frame (the lit card flashing as
+	-- another is pointed at).
+	if parts.rim ~= rim then
+		parts.rim = rim
+		-- Each line between slices held to the edge it is nearest (so a piece sized again keeps its rim).
+		local xs = { { "LEFT", 0 }, { "LEFT", rim }, { "RIGHT", -rim }, { "RIGHT", 0 } }
+		local ys = { { "TOP", 0 }, { "TOP", -rim }, { "BOTTOM", rim }, { "BOTTOM", 0 } }
+		for i = 1, 18 do
+			local at = (i - 1) % 9
+			local row, col = floor(at / 3) + 1, at % 3 + 1
+			local x0, x1, y0, y1 = xs[col], xs[col + 1], ys[row], ys[row + 1]
+			local t = parts[i]
+			t:ClearAllPoints()
+			t:SetPoint("TOPLEFT", f, y0[1] .. x0[1], x0[2], y0[2])
+			t:SetPoint("BOTTOMRIGHT", f, y1[1] .. x1[1], x1[2], y1[2])
 		end
-		t:SetDesaturated(not game)
-		local added = i > 3
-		Theme.Tint(t, game and WHITE_EDGE or accent, added and shine * (primary and 1.3 or 1) or 1)
-		t:SetShown(not added or shine > 0)
 	end
-	local glow = parts[7]
-	glow:SetAtlas(RED .. "-Highlight")
-	glow:SetAllPoints()
-	glow:SetDesaturated(not game)
+	if parts.state ~= state or parts.turned ~= turned then
+		parts.state, parts.turned = state, turned
+		local ev = K.EDGE / left.height
+		local cols = {   -- each column's atlas and the part of it across
+			{ RED .. "-Left" .. state, 0, K.EDGE / left.width },
+			{ "_" .. RED .. "-Center" .. state, 0, 1 },
+			{ RED .. "-Right" .. state, 1 - K.EDGE / right.width, 1 },
+		}
+		local rows = { { 0, ev }, { ev, 1 - ev }, { 1 - ev, 1 } }
+		for i = 1, 18 do
+			local at = (i - 1) % 9
+			local col, row = at % 3 + 1, floor(at / 3) + 1
+			if turned then
+				-- (each slice the opposite one's, its coordinates run backward: the art half a turn round)
+				local c, v = cols[4 - col], rows[4 - row]
+				parts[i].shyCut = Cut(parts[i], c[1], c[3], c[2], v[2], v[1])
+			else
+				local c, v = cols[col], rows[row]
+				parts[i].shyCut = Cut(parts[i], c[1], c[2], c[3], v[1], v[2])
+			end
+		end
+	end
+	local glow = parts[19]
+	if parts.game ~= game then
+		parts.game = game
+		for i = 1, 19 do parts[i]:SetDesaturated(not game) end
+	end
+	local accent = UI.LookAccent(f)
+	for i = 1, 18 do
+		local t, added = parts[i], i > 9
+		Theme.Tint(t, game and WHITE_EDGE or accent, added and shine * (primary and 1.3 or 1) or 1)
+		-- (a tint leaving a ramp gives the texture its file back, which takes its cut with it: the cut again)
+		local uv = t.shyUV
+		if uv then t:SetTexCoord(uv[1], uv[2], uv[3], uv[4]) end
+		t:SetShown(t.shyCut and (not added or shine > 0))
+	end
 	-- Its highlight under the mouse, eased in and out as every hover is.
 	Theme.Tint(glow, game and WHITE_EDGE or accent, 1)
 	glow:Show()
@@ -3562,13 +3608,17 @@ end
 UI.KEY_MAKES.heritage = { edge = { UI.KEY_EDGE, UI.KEY_SLICE }, own = true,
 	build = function(f)
 		local parts = {}
-		for i = 1, 6 do
-			parts[i] = f:CreateTexture(nil, "BACKGROUND", nil, i <= 3 and 1 or 2)
-			if i > 3 then parts[i]:SetBlendMode("ADD") end
+		for i = 1, 18 do
+			parts[i] = f:CreateTexture(nil, "BACKGROUND", nil, i <= 9 and 1 or 2)
+			if i > 9 then parts[i]:SetBlendMode("ADD") end
 		end
-		parts[7] = f:CreateTexture(nil, "ARTWORK", nil, 0)
-		parts[7]:SetBlendMode("ADD")
-		parts[7]:SetAlpha(0)   -- (unlit until a hover eases it up: never a frame at full)
+		for i = 1, 18 do parts[i]:SetHorizTile(false) end
+		local glow = f:CreateTexture(nil, "ARTWORK", nil, 0)
+		glow:SetAtlas(RED .. "-Highlight")
+		glow:SetAllPoints()
+		glow:SetBlendMode("ADD")
+		glow:SetAlpha(0)   -- (unlit until a hover eases it up: never a frame at full)
+		parts[19] = glow
 		f.heritageButton = parts
 		return parts
 	end,
@@ -4887,6 +4937,8 @@ function KeyLook(b, now)
 	local rest = plate and not down and not tone and make.rest or 0
 	local top = prime == "halo" and 0 or 0.9
 	local function lightAt(o, d)
+		-- (a make of the game's own art lights itself, its highlight: ours would lie on its bevel as a second rim)
+		if make.own then return 0 end
 		if primary and not tone then
 			if prime == "halo" then
 				if d then return 0.45 end
@@ -4967,8 +5019,12 @@ function UI.KeyPress(b, opts)
 		s.on = on == true
 		KeyLook(self)
 	end
+	-- (Each of these sets only what changes: a button asked again for what it has, as a piece refreshing itself
+	-- asks, isn't painted again; painted again it flashes.)
 	function b:SetPrimary(on)
-		UI.SetFill(self, on and C.fill or C.bgHot)
+		local fill = on and C.fill or C.bgHot
+		if s.fill == fill then return end
+		UI.SetFill(self, fill)
 	end
 	function b:SetTone(c)
 		s.tone = c
@@ -5018,15 +5074,24 @@ function UI.Button(parent, text, width, onClick)
 	UI.ButtonFace(b, text)
 	-- In use or not, and when not, why: a hover on the dimmed button says so.
 	function b:SetUsable(on, why)
+		on = on and true or false
 		self.why = (not on and why) or nil
-		self:SetEnabled(on)
-		self:SetAlpha(on and 1 or 0.4)
-		self:SetMotionScriptsWhileDisabled(true)
+		if self:IsEnabled() ~= on then self:SetEnabled(on) end
+		local alpha = on and 1 or 0.4
+		if self:GetAlpha() ~= alpha then self:SetAlpha(alpha) end
+		if not self.shyMotion then
+			self.shyMotion = true
+			self:SetMotionScriptsWhileDisabled(true)
+		end
 	end
 	-- The words fit the button: cut with an ellipsis past its edges, never spilling.
 	function b:SetLabel(text)
-		self.text:SetText(text or "")
-		self.text:SetWidth(self:GetWidth() - 12)
+		text = text or ""
+		local wide = self:GetWidth() - 12
+		if self.shyLabel == text and self.shyLabelWide == wide and self.text:GetText() == text then return end
+		self.shyLabel, self.shyLabelWide = text, wide
+		self.text:SetText(text)
+		self.text:SetWidth(wide)
 		self.text:SetWordWrap(false)
 		self.text:SetJustifyH("CENTER")
 	end
@@ -7658,7 +7723,8 @@ end
 -- picked. Rests on a dark groove with a steel rim; the lit choice's words take the ink that reads on the accent,
 -- the others are quiet until the mouse is over them.
 --   UI.Segmented(parent, labels, get, set, opts) -> frame
---   get() -> the lit choice's index; set(index) when another is clicked; f:Refresh() reads get again
+--   get() -> the lit choice's index (false: none lit, the pill put away); set(index) when another is clicked;
+--   f:Refresh() reads get again
 --   opts.width (120), opts.height (22), opts.tips = { [index] = "hover text" }
 function UI.Segmented(parent, labels, get, set, opts)
 	opts = opts or {}
@@ -7684,8 +7750,14 @@ function UI.Segmented(parent, labels, get, set, opts)
 		f.pill:ClearAllPoints()
 		f.pill:SetPoint("LEFT", f, "LEFT", inset + at * seg, 0)
 	end
+	-- The lit choice; nil when none is (get() said false).
+	local function Lit()
+		local at = get()
+		if at == false then return nil end
+		return at or 1
+	end
 	local function Glide(self, elapsed)
-		local goal = (get() or 1) - 1
+		local goal = (Lit() or 1) - 1
 		local gap = goal - self.at
 		if math.abs(gap) < 0.01 then
 			Place(goal)
@@ -7696,7 +7768,7 @@ function UI.Segmented(parent, labels, get, set, opts)
 	end
 	local buttons = {}
 	local function Inks()
-		local lit = get() or 1
+		local lit = Lit()
 		for i, b in ipairs(buttons) do
 			Theme.Ink(b.text, i == lit and C.onAccent or (over == i and C.text) or C.dim)
 		end
@@ -7719,7 +7791,7 @@ function UI.Segmented(parent, labels, get, set, opts)
 			UI.TipHide(b)
 		end)
 		b:SetScript("OnClick", function()
-			if (get() or 1) == i then return end
+			if Lit() == i then return end
 			set(i)
 			f:Refresh()
 		end)
@@ -7728,7 +7800,11 @@ function UI.Segmented(parent, labels, get, set, opts)
 	f.buttons = buttons
 
 	function f:Refresh()
-		local goal = (get() or 1) - 1
+		local lit = Lit()
+		local goal = (lit or 1) - 1
+		-- (None lit: the pill goes, and comes back at the one picked next without gliding from where it stood.)
+		self.pill:SetShown(lit ~= nil)
+		if not lit then self.at = nil end
 		if not self.at or not self:IsVisible() then
 			Place(goal)
 			self:SetScript("OnUpdate", nil)
@@ -9063,7 +9139,6 @@ function UI.Window(opts)
 		-- (the first of the header's controls after the ×)
 		head.buttons = head.buttons or {}
 		table.insert(head.buttons, 1, { glyph = Shy.MEDIA .. "GlyphMaximize",
-			tip = { "Maximize", "Fill the screen. Click again to put it back." },
 			click = function() UI.Maximize(box, not box.maxed) end })
 	end
 	box.head = UI.Head(box, head)

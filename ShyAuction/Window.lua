@@ -160,6 +160,10 @@ local function Hook()
 	AuctionHouseFrame:HookScript("OnShow", function()
 		Shop.Try(W, Take, function(text) T:Print(text) end)
 	end)
+	-- An item right-clicked in your bags goes to the game's sell frame, hidden under ours: Sell takes it too.
+	hooksecurefunc(AuctionHouseFrame, "SetPostItem", function(_, location)
+		if W.IsUp() and ns.SellItem then Safely(ns.SellItem, location) end
+	end)
 	if AuctionHouseFrame:IsShown() then Shop.Try(W, Take, function(text) T:Print(text) end) end
 end
 

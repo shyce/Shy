@@ -36,9 +36,27 @@ local function Dress(s)
 		fill = s.well or (s.gold and GOLD.well or nil) })
 end
 
+-- A count given its text in the frame its slot is made in is laid out before the slot has a place, and the game
+-- draws it only once that text changes (the same text again lays nothing out). The bank's slots are made as it
+-- opens and filled at once, so a slot made now has its count set again on the next frame, once it stands.
+local unlaid = {}   -- the slots made this frame
+local function LayCounts()
+	local list = unlaid
+	unlaid = {}
+	for _, s in ipairs(list) do
+		local text = s.count:GetText()
+		if text and text ~= "" then
+			s.count:SetText("")
+			s.count:SetText(text)
+		end
+	end
+end
+
 local function Make(tile, grid, live, icon, count)
 	local s = { grid = grid, live = live, icon = icon, count = count, marks = {}, gold = grid.gold == true }
 	tiles[tile] = s
+	if #unlaid == 0 then C_Timer.After(0, LayCounts) end
+	unlaid[#unlaid + 1] = s
 	s.slot = Slot.New(tile, { icon = icon, flat = not live and not s.gold, hover = live, glazed = true })
 	Dress(s)
 	s.slot:Count(count)

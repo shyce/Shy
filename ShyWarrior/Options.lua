@@ -67,16 +67,16 @@ function ns.CreateOptions()
 			{ value = "auto", text = "By role or stance" },
 			{ value = "tank", text = "Always the tank" },
 			{ value = "dps", text = "Never the tank" },
-		}, Get("threat", "role"), Set("threat", "role"), { width = COL,
-			desc = "By role or stance: your group role, else your tank or healer layout's, else Defensive Stance." }), panel, RIGHT, -254)
+		}, Shy.ThreatRolePick, Shy.SetThreatRole, { width = COL,
+			desc = "By role or stance: your group role, else your tank or healer layout's, else Defensive Stance. Your nameplates and threat meter read you the same way." }), panel, RIGHT, -254)
 		At(group:Slider(panel, "Brightness", 0.2, 1, 0.1, Get("threat", "strength"), Set("threat", "strength"),
 			{ width = COL, format = function(v) return math.floor(v * 100 + 0.5) .. "%" end }), panel, RIGHT, -308)
 		At(UI.Button(panel, "Try the light", COL, function() ns.Threat.Try() end), panel, RIGHT, -354)
 
 		At(group:Checkbox(panel, "Aggro alarm", Get("threat", "alarm"), Set("threat", "alarm"),
 			{ desc = "When you're tanking and a mob turns to someone else, the light flashes and Taunt lights up red." }), panel, RIGHT, -396)
-		At(group:Checkbox(panel, "Alarm sound", Get("threat", "sound"), Set("threat", "sound"),
-			{ enabled = function() return T.db.threat.alarm end }), panel, RIGHT, -424)
+		At(group:Checkbox(panel, "Aggro sound", Shy.ThreatSound, Shy.SetThreatSound,
+			{ desc = "A short alarm when a mob you tank goes to someone who isn't a tank, or when you pull one yourself." }), panel, RIGHT, -424)
 
 		local note = UI.Text(panel, "Sunder Armor, Thunder Clap, Demoralizing Shout and your shout's time are bars in your cooldown manager.", 12, false, UI.colors.dim)
 		note:SetWidth(COL)

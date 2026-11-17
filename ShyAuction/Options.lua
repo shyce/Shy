@@ -47,7 +47,7 @@ function ns.CreateOptions()
 		window:SetPoint("TOPLEFT", LEFT, -176)
 		local tip = group:Checkbox(panel, "Prices on items", Get("tooltip"), Set("tooltip"),
 			{ desc = "An item's market price, how old it is, and a stack's worth on its tooltip." })
-		tip:SetPoint("TOPLEFT", RIGHT, -148)
+		tip:SetPoint("TOPLEFT", LEFT, -204)
 		scan = UI.Button(panel, "Scan now", COL, function()
 			local ok, why = ns.Scan.Full()
 			if not ok then T:Print(why) end
@@ -55,8 +55,15 @@ function ns.CreateOptions()
 		end)
 		scan:SetPoint("TOPLEFT", RIGHT, -146)
 		line = UI.Text(panel, "", 12)
-		line:SetPoint("TOPLEFT", LEFT, -214)
-		line:SetWidth(RIGHT + COL - LEFT)
+		line:SetPoint("TOPLEFT", RIGHT, -182)
+		line:SetWidth(COL)
+		local selling = UI.Header(panel, "Selling")
+		selling:SetPoint("TOPLEFT", LEFT, -252)
+		local space = group:Checkbox(panel, "Space posts", Get("spacePosts"), function(v)
+			T.db.spacePosts = v
+			if ns.SellKeys then ns.SellKeys() end
+		end, { desc = "Space posts the next stack while the Sell tab is open, so a pile goes up a press at a time." })
+		space:SetPoint("TOPLEFT", LEFT, -288)
 		Refresh()
 	end
 

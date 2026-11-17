@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffThreat|r
 ## Notes: Who has aggro and who is about to pull it |cff888888/shythreat|r
 ## Author: Shyce Cream
-## Version: 5.1.1
+## Version: 5.1.3
 ## X-Date: 2026-11-16
 ## IconTexture: Interface\AddOns\ShyThreat\Media\ShyThreatMarkColor
 ## Dependencies: ShyCore

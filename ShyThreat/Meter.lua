@@ -21,8 +21,10 @@
 -- A bar is how close that player is to pulling the mob (the holder's is full); its color is the class's, as the damage
 -- meter's are. The number says the same in the family's threat colors (Theme.Threat, as ShyPlates' bars): a damage
 -- dealer's share of the pull, green while far from it, red once they have it; the holder's lead over the next player
--- ("+28%"), green from 130, red at level. On a boss the game keeps the numbers secret: they go to the bar and the words
--- unread, the rows stand by the game's own state, and the header says "in group order".
+-- ("+28%"), green from 130, red at level; red whatever the lead when the group's roles say the holder is no tank (a
+-- damage dealer who pulled it). On a boss the game keeps the numbers secret: they go to the bar and the words unread,
+-- the rows stand by the game's own state (the holder colored by its lead in steps), and the header says "unsorted"
+-- (the card's hover says why). In a dungeon the mob's name may be secret too: it is shown, never compared.
 -- Your row has your color's edge at its left, and stays in the last place when it would fall out (unscrolled).
 -- The header lights in the threat colors as you near the pull (tanking: as the next player catches up on you), the
 -- same margin ShyPlates colors that mob's bar by (Shy.Threat).
@@ -52,7 +54,6 @@ local EDGE_X = 8                    -- the header's words and controls this far 
 local EVERY = 0.2                   -- seconds between looks
 local TRY = 10                      -- seconds of the made-up fight
 local WARN = 0.5                    -- a margin under this lights the header
-local SOUND_GAP = 3                 -- seconds at least between two warning sounds
 local FADED = 0.55                  -- a fight gone by, while it lingers
 local LEAST = 2                     -- rows at the least: planned, and sized to
 local CLASSES = "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes"
@@ -61,6 +62,8 @@ local PET_SHADE = 0.7               -- a pet's bar: its owner's class color, dar
 local NONE = { 0.55, 0.57, 0.62 }   -- a bar whose class the game won't tell
 local HINTS = { { "left", "Move" }, { "right", "Menu" } }
 local SEP = "  \194\183  "
+local UNSORTED = "unsorted"         -- the header's note while the game keeps the numbers secret
+local LOOSE = "%d loose"            -- read as a tank: mobs you fight that are on someone who is no tank
 
 ns.cards = {}
 
@@ -69,12 +72,17 @@ local function Clamp(x)
 	return x
 end
 
-local function Readable(v) return v ~= nil and not issecretvalue(v) end
+-- (Nothing that may be secret is compared or truth-tested: Readable and Given ask first.)
+local function Readable(v) return not issecretvalue(v) and v ~= nil end
+local function Given(v) return issecretvalue(v) or v ~= nil end
+local LEAD_STEPS = { [0] = 1, 0.66, 0.33, 0.1 }   -- the holder's lead in the game's steps, as Shy.Threat reads them
 
 -- A row's margin, for its number's color: 1 held .. 0 lost (Shy.Threat's measure, for that player), or nil.
 local function Margin(row)
-	if Readable(row.tanking) and row.tanking then
+	if row.astray then return 0 end   -- one who is no tank has it: however far ahead, that is trouble
+	if row.holder then
 		if row.lead then return Clamp((row.lead - 100) / 30) end
+		if row.step and LEAD_STEPS[row.step] then return LEAD_STEPS[row.step] end
 		if Readable(row.status) then return row.status == 3 and 1 or 0.4 end
 		return nil
 	end
@@ -163,12 +171,12 @@ local function PaintRow(row, data)
 	if not r then r, g, b = NONE[1], NONE[2], NONE[3] end
 	if data.pet then r, g, b = r * PET_SHADE, g * PET_SHADE, b * PET_SHADE end
 	row.bar:SetStatusBarColor(r, g, b)
-	row.bar:SetValue(data.scaled or 0)
-	row.name:SetText(data.name or "")
+	if Given(data.scaled) then row.bar:SetValue(data.scaled) else row.bar:SetValue(0) end
+	if Given(data.name) then row.name:SetText(data.name) else row.name:SetText("") end
 	UI.Ink(row.name, data.pet and C.dim or C.text)
-	if Readable(data.tanking) and data.tanking and data.lead then
+	if data.holder and data.lead then
 		row.value:SetFormattedText("%+.0f%%", data.lead - 100)
-	elseif data.scaled ~= nil then
+	elseif Given(data.scaled) then
 		row.value:SetFormattedText("%.0f%%", data.scaled)
 	else
 		row.value:SetText("")
@@ -184,22 +192,20 @@ end
 
 -- How the numbers read (the chooser's menu): by your role (Shy.Role), as a tank's or as anyone else's.
 local function ViewMenu(root)
-	local db = T.db
 	root:CreateTitle("Read the numbers as")
 	-- (which role that is now, and why: "Tank, from your Protection build")
 	local says = Shy.RoleSays()
-	root:CreateRadio(says and ("My role: " .. says) or "My role", function() return db.role == "auto" end, function()
-		db.role = "auto"
-		ns.Apply()
-	end)
-	root:CreateRadio("Tank: my lead over the next player", function() return db.role == "tank" end, function()
-		db.role = "tank"
-		ns.Apply()
-	end)
-	root:CreateRadio("Damage or healing: how close to the pull", function() return db.role == "dps" end, function()
-		db.role = "dps"
-		ns.Apply()
-	end)
+	-- (The family's one choice: the nameplates read you the same way.)
+	for _, choice in ipairs({
+		{ "auto", says and ("My role: " .. says) or "My role" },
+		{ "tank", "Tank: my lead over the next player" },
+		{ "dps", "Damage or healing: how close to the pull" },
+	}) do
+		root:CreateRadio(choice[2], function() return Shy.ThreatRolePick() == choice[1] end, function()
+			Shy.SetThreatRole(choice[1])
+			ns.Apply()
+		end)
+	end
 end
 
 -- The rows' height and spacing as the damage meter has its own (Edit Mode's sliders), read when asked. Returns
@@ -240,6 +246,10 @@ function ns.CreateCard(parent, box)
 	card.mob = UI.Text(card, "", 11, true, C.dim)
 	card.mob:SetJustifyH("RIGHT")
 	card.mob:SetWordWrap(false)
+	-- How the table stands ("unsorted", "last fight"): its own words, so a long name is cut, never these.
+	card.note = UI.Text(card, "", 11, false, C.dim)
+	card.note:SetJustifyH("RIGHT")
+	card.note:SetWordWrap(false)
 
 	-- The light along the header: your threat trouble on this mob.
 	card.light = card:CreateTexture(nil, "ARTWORK", nil, 1)
@@ -273,10 +283,20 @@ function ns.CreateCard(parent, box)
 	function card:Lay()
 		self.view:ClearAllPoints()
 		self.cog:ClearAllPoints()
-		self.mob:ClearAllPoints()
+		self.note:ClearAllPoints()
 		UI.OnHead(self.view, "LEFT", self, "LEFT", EDGE_X)
 		UI.OnHead(self.cog, "RIGHT", self, "RIGHT", -EDGE_X)
-		self.mob:SetPoint("RIGHT", self.cog, "LEFT", -4, 0)
+		self.note:SetPoint("RIGHT", self.cog, "LEFT", -4, 0)
+		self:LayMob()
+	end
+	-- The mob's name between the chooser and the note (or the cog, with no note).
+	function card:LayMob()
+		self.mob:ClearAllPoints()
+		if self.note:IsShown() then
+			self.mob:SetPoint("RIGHT", self.note, "LEFT", 0, 0)
+		else
+			self.mob:SetPoint("RIGHT", self.cog, "LEFT", -4, 0)
+		end
 		self.mob:SetPoint("LEFT", self.view, "RIGHT", 6, 0)
 	end
 
@@ -297,12 +317,14 @@ function ns.CreateCard(parent, box)
 		self:Draw()
 	end
 
-	-- Fills it with `rows` (Read's form) under the mob's `name`; `note`: a word on how it stands ("in group order",
-	-- "last fight"); `faded`: a fight gone by, lingering; `quiet`: { words, line } for a card with nothing to show.
-	function card:Fill(rows, name, note, faded, quiet)
+	-- Fills it with `rows` (Read's form) under the mob's `name` (may be secret); `note`: a word on how it stands
+	-- (UNSORTED, "last fight"); `faded`: a fight gone by, lingering; `quiet`: { words, line } for a card with
+	-- nothing to show; `key`: which mob it is (Rd.Key), never the name, which may be secret; `loose`: read as a tank,
+	-- how many mobs you fight are on someone who is no tank (Shy.Aggro.Loose): said in the note's place, in red.
+	function card:Fill(rows, name, note, faded, quiet, key, loose)
 		local was = self.filled
-		if not was or was[2] ~= name then self.offset = 0 end   -- another mob: from the top
-		self.filled = { rows, name, note, faded, quiet }
+		if not was or was[6] ~= key then self.offset = 0 end   -- another mob: from the top
+		self.filled = { rows, name, note, faded, quiet, key, loose }
 		self:Draw()
 	end
 
@@ -311,7 +333,7 @@ function ns.CreateCard(parent, box)
 	function card:Draw()
 		local f = self.filled
 		if not f then return end
-		local rows, name, note, faded, quiet = f[1], f[2], f[3], f[4], f[5]
+		local rows, name, note, faded, quiet, loose = f[1], f[2], f[3], f[4], f[5], f[7]
 		local places = self.places
 		self.offset = math.max(0, math.min(self.offset, #rows - places))
 		local shown
@@ -383,13 +405,13 @@ function ns.CreateCard(parent, box)
 			self.quietLine:SetPoint("TOP", self, "TOP", 0, -(mid + 2))
 			self.quietLine:SetWidth(math.max(60, self:GetWidth() - 2 * (PAD + 8)))
 		end
-		if name == nil then
-			self.mob:SetText("")
-		elseif note then
-			self.mob:SetText(name .. SEP .. note)
-		else
-			self.mob:SetText(name)
-		end
+		if Given(name) then self.mob:SetText(name) else self.mob:SetText("") end
+		-- Mobs gone astray say more than how the table stands: they take the note's place, in red.
+		if loose and loose > 0 then note = (LOOSE):format(loose) end
+		self:InkNote()
+		self.note:SetText(note and (Given(name) and SEP .. note or note) or "")
+		self.note:SetShown(note ~= nil)
+		self:LayMob()
 		self:SetAlpha(faded and FADED or 1)
 	end
 
@@ -404,10 +426,24 @@ function ns.CreateCard(parent, box)
 		self:Draw()
 	end
 
+	-- The note's color: dim; loose mobs red, or bright on a header already lit (red on its red would sink).
+	function card:InkNote()
+		local f = self.filled
+		local loose = f and f[7]
+		if not (loose and loose > 0) then
+			UI.Ink(self.note, C.dim)
+		elseif self.trouble then
+			UI.Ink(self.note, C.text)
+		else
+			UI.Ink(self.note, Theme.THREAT.lost)
+		end
+	end
+
 	-- The light at your margin (nil: none).
 	function card:Trouble(margin)
 		if type(margin) ~= "number" or margin >= WARN or not T.db.warn then margin = nil end
 		self.trouble = margin
+		self:InkNote()
 		if margin then
 			-- (A gradient is its corners' colors: set whole, never tinted over.)
 			local r, g, b = Theme.Threat(margin)
@@ -438,6 +474,13 @@ function ns.CreateCard(parent, box)
 			else
 				text = "Each bar is how close that player is to pulling it. Melee pulls at 110% of the holder's threat, range at 130%."
 			end
+			-- (What can't be seen: why the rows stand out of order.)
+			local f = self.filled
+			if f and f[7] and f[7] > 0 then
+				text = text .. "\n\nLoose: mobs you're fighting that are on someone who isn't a tank."
+			elseif f and f[3] == UNSORTED then
+				text = text .. "\n\nThe game keeps these numbers to itself, so whoever has it comes first, then those close to pulling it, then the rest in group order."
+			end
 			UI.Tip(self, "Threat", text, { hints = HINTS })
 		end)
 		card:SetScript("OnLeave", function(self) UI.TipHide(self) end)
@@ -459,11 +502,9 @@ end)
 local box, card, driver
 local live = false          -- the game has a table to show
 local lastLive = 0          -- when it last had
-local kept                  -- the last table shown: { rows, name, sorted, guid }, for while it is kept on
+local kept                  -- the last table shown: { rows, name, sorted, key (Rd.Key) }, for while it is kept on
 local gone = false          -- the mob that table was of died, or you let go of it: nothing lingers
 local trying                -- the made-up fight's start
-local warned = false        -- the header was lit at the last look
-local soundAt = 0
 local fitted                -- the width its home gives it (ShyDock), or nil
 
 local function On() return T.db.on == true end
@@ -502,33 +543,24 @@ local function Paint()
 	if not card then return end
 	if Sampling() then
 		local rows, name = Rd.Sample()
-		card:Fill(rows, name, nil, false)
+		card:Fill(rows, name, nil, false, nil, "sample")
 		card:Trouble(trying and 0.3 or nil)
 	elseif live then
-		card:Fill(Rd.rows, Rd.name, not Rd.sorted and "in group order" or nil, false)
+		card:Fill(Rd.rows, Rd.name, not Rd.sorted and UNSORTED or nil, false, nil, Rd.key, Shy.Aggro.Loose())
 		card:Trouble(Rd.margin)
 	elseif Lingering() then
-		card:Fill(kept[1], kept[2], not kept[3] and "in group order" or nil, true)
+		card:Fill(kept[1], kept[2], not kept[3] and UNSORTED or nil, true, nil, kept[4])
 		card:Trouble(nil)
 	elseif Fighting() then
 		card:Fill({}, nil, nil, false, QUIET.fight)
 		card:Trouble(nil)
 	elseif kept then
-		card:Fill(kept[1], kept[2], "last fight", false)
+		card:Fill(kept[1], kept[2], "last fight", false, nil, kept[4])
 		card:Trouble(nil)
 	else
 		card:Fill({}, nil, nil, false, QUIET.rest)
 		card:Trouble(nil)
 	end
-end
-
-local function Warn()
-	local now = card and card.trouble ~= nil and live
-	if now and not warned and T.db.sound and GetTime() - soundAt > SOUND_GAP then
-		soundAt = GetTime()
-		PlaySound(SOUNDKIT.UI_RAID_BOSS_WHISPER_WARNING, "Master")
-	end
-	warned = now and true or false
 end
 
 local function Look()
@@ -539,19 +571,16 @@ local function Look()
 		live = Rd.Look() or false
 		if live then
 			lastLive, gone = GetTime(), false
-			local guid = UnitGUID(Rd.mob)
-			kept = { Rd.rows, Rd.name, Rd.sorted, not issecretvalue(guid) and guid or nil }
+			kept = { Rd.rows, Rd.name, Rd.sorted, Rd.key }
 		else
 			-- No living enemy to read (it died, or you dropped your target), or another one than the table's: the
 			-- meter lets it go at once. Shown always, it keeps the last fight's table, said so.
 			local mob = Rd.Mob()
-			local guid = mob and UnitGUID(mob)
-			if not mob or (kept and kept[4] and guid and not issecretvalue(guid) and guid ~= kept[4]) then gone = true end
+			if not mob or (kept and Rd.Key(mob) ~= kept[4]) then gone = true end
 			if kept and T.db.when ~= "always" and (gone or GetTime() - lastLive >= T.db.linger) then kept = nil end
 		end
 	end
 	Paint()
-	Warn()
 	if box then HUD.Update(box) end
 	-- At rest it costs nothing a frame: the driver runs only while there is something to follow.
 	if driver then
@@ -686,6 +715,9 @@ function M.Start()
 	end)
 	Shy:On("SHY_HUD_LAYOUT", Look)
 	Shy:On("SHY_ROLE", Look)   -- a tank's or healer's layout put on or taken off
+	Shy:On("SHY_THREAT_ROLE", Look)   -- how you are read, picked here or on the nameplates' page
+	Shy:On("SHY_AGGRO", Paint)   -- the mobs on someone who is no tank: the header counts them
+	table.insert(ns.appliers, function() Shy.Aggro.Want("ShyThreat", On()) end)
 	table.insert(ns.appliers, function()
 		Measure()
 		Plan()

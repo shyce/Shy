@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.1.6 (17 Nov 2026)
+
+### Changed
+- **ShyMaps:** Dungeon bosses and their loot are brought up to the game's latest patch
+- **ShyQuest:** Quests, creatures and guides are brought up to the game's latest patch. Some guides are renamed and re-planned, and a Horde character is offered the Hall of Thanes
+- **ShyTip:** Spell schools and talents are brought up to the game's latest patch
+
+### Fixed
+- **ShyChat:** Speech bubbles could be too narrow, so the last word of a line dropped to the next one. They fit their words at the size they are drawn now
+- **ShyQuest:** A quest item that only another quest hands out, like the keg for Dry Times, sent you nowhere. The guide now sends you to whoever gives it for that quest
+
 ## 5.1.5 (17 Nov 2026)
 
 ### Changed

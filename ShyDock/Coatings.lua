@@ -24,6 +24,7 @@ ns.coatings = {
 	[1023] = "feedback", [1863] = "feedback", [1864] = "feedback", [1865] = "feedback", [1866] = "feedback",
 	[1803] = "firestone", [1823] = "firestone", [1824] = "firestone", [1825] = "firestone",
 	[263] = "fishinglure", [264] = "fishinglure", [265] = "fishinglure", [266] = "fishinglure",
+	[8773] = "fishinglurek",
 	[8700] = "flame", [8713] = "flame", [8716] = "flame",
 	[3] = "flametongue", [4] = "flametongue", [5] = "flametongue", [523] = "flametongue", [1665] = "flametongue", [1666] = "flametongue", [7567] = "flametongue",
 	[124] = "flametonguetotem", [285] = "flametonguetotem", [543] = "flametonguetotem", [1683] = "flametonguetotem",

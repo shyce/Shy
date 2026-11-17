@@ -2830,11 +2830,19 @@ end
 --   (accent: a color or a function giving one, the card's own: a preset shown in its color while another is worn;
 --   options: its look's options, the card's own, read through UI.LookOption)
 --   card:Paint(on, inUse)   lit when picked; "in use" at its corner for the look the theme wears
-local SCENE_SKY, SCENE_HAZE, SCENE_GROUND, SCENE_DEEP = { 0.20, 0.26, 0.36 }, { 0.44, 0.40, 0.36 }, { 0.17, 0.17, 0.13 }, { 0.07, 0.07, 0.065 }
-local SCENE_HEALTH = { 0.17, 0.76, 0.31 }
+-- The theme cards' scene: its world's colors, and the pieces standing in it.
+local STAGE = {
+	sky = { 0.20, 0.26, 0.36 },
+	haze = { 0.44, 0.40, 0.36 },
+	ground = { 0.17, 0.17, 0.13 },
+	deep = { 0.07, 0.07, 0.065 },
+	health = { 0.17, 0.76, 0.31 },
+	pieceH = 38,
+	tile = 16,
+	tiles = 4,
+}
 -- The scene's colors, for whoever draws a housing standing in the same world (the theme chooser's preview).
-UI.SCENE = { sky = SCENE_SKY, haze = SCENE_HAZE, ground = SCENE_GROUND, deep = SCENE_DEEP, health = SCENE_HEALTH }
-local CARD_PIECE_H, CARD_TILE, CARD_TILES = 38, 16, 4
+UI.SCENE = { sky = STAGE.sky, haze = STAGE.haze, ground = STAGE.ground, deep = STAGE.deep, health = STAGE.health }
 
 function UI.LookCard(parent, width, look, opts)
 	opts = opts or {}
@@ -2860,13 +2868,13 @@ function UI.LookCard(parent, width, look, opts)
 	scene:SetClipsChildren(true)
 	local sky = scene:CreateTexture(nil, "BACKGROUND")
 	sky:SetColorTexture(1, 1, 1, 1)
-	sky:SetGradient("VERTICAL", CreateColor(SCENE_HAZE[1], SCENE_HAZE[2], SCENE_HAZE[3], 1), CreateColor(SCENE_SKY[1], SCENE_SKY[2], SCENE_SKY[3], 1))
+	sky:SetGradient("VERTICAL", CreateColor(STAGE.haze[1], STAGE.haze[2], STAGE.haze[3], 1), CreateColor(STAGE.sky[1], STAGE.sky[2], STAGE.sky[3], 1))
 	sky:SetPoint("TOPLEFT")
 	sky:SetPoint("TOPRIGHT")
 	sky:SetHeight(sceneH * 0.56)
 	local ground = scene:CreateTexture(nil, "BACKGROUND")
 	ground:SetColorTexture(1, 1, 1, 1)
-	ground:SetGradient("VERTICAL", CreateColor(SCENE_DEEP[1], SCENE_DEEP[2], SCENE_DEEP[3], 1), CreateColor(SCENE_GROUND[1], SCENE_GROUND[2], SCENE_GROUND[3], 1))
+	ground:SetGradient("VERTICAL", CreateColor(STAGE.deep[1], STAGE.deep[2], STAGE.deep[3], 1), CreateColor(STAGE.ground[1], STAGE.ground[2], STAGE.ground[3], 1))
 	ground:SetPoint("TOPLEFT", sky, "BOTTOMLEFT")
 	ground:SetPoint("BOTTOMRIGHT")
 	card.scene = scene
@@ -2880,24 +2888,24 @@ function UI.LookCard(parent, width, look, opts)
 	-- The housing, a little under the scene's middle, with the row of cooldowns riding its top edge.
 	local piece = CreateFrame("Frame", nil, scene)
 	local pieceW = max(60, width - 2 - 2 * 24)
-	piece:SetSize(pieceW, CARD_PIECE_H)
-	piece:SetPoint("CENTER", 0, -(CARD_TILE / 2) + 2)
+	piece:SetSize(pieceW, STAGE.pieceH)
+	piece:SetPoint("CENTER", 0, -(STAGE.tile / 2) + 2)
 	UI.Panel(piece, { cap = true, facets = false, line = false, brackets = 10, hud = true, look = look, accent = opts.accent, options = opts.options })
 	card.piece = piece
 	local tiles = CreateFrame("Frame", nil, piece)
 	tiles:SetFrameLevel(piece:GetFrameLevel() + 2)
-	tiles:SetSize(CARD_TILES * (CARD_TILE + 2) - 2, CARD_TILE)
-	tiles:SetPoint("TOP", piece, "TOP", 0, CARD_TILE / 2)
+	tiles:SetSize(STAGE.tiles * (STAGE.tile + 2) - 2, STAGE.tile)
+	tiles:SetPoint("TOP", piece, "TOP", 0, STAGE.tile / 2)
 	-- Real slots, in the card's look: they wear the finish the look gives (card:SetSlots(key) another: the one picked).
 	card.tiles = {}
-	for i = 1, CARD_TILES do
+	for i = 1, STAGE.tiles do
 		local tile = CreateFrame("Frame", nil, tiles)
-		tile:SetSize(CARD_TILE, CARD_TILE)
-		tile:SetPoint("LEFT", (i - 1) * (CARD_TILE + 2), 0)
-		card.tiles[i] = Shy.Slot.New(tile, { look = look, size = CARD_TILE, hover = false })
+		tile:SetSize(STAGE.tile, STAGE.tile)
+		tile:SetPoint("LEFT", (i - 1) * (STAGE.tile + 2), 0)
+		card.tiles[i] = Shy.Slot.New(tile, { look = look, size = STAGE.tile, hover = false })
 	end
 	function card:SetSlots(key)
-		for _, slot in ipairs(self.tiles) do slot:Set({ look = self.look, style = key, size = CARD_TILE, hover = false }) end
+		for _, slot in ipairs(self.tiles) do slot:Set({ look = self.look, style = key, size = STAGE.tile, hover = false }) end
 	end
 	-- Two bars in the housing, in its block: health, then power in your color, filled as the look's bars are
 	-- (card:SetBar(file) fills them with another design: the one picked).
@@ -2915,8 +2923,8 @@ function UI.LookCard(parent, width, look, opts)
 		Theme.Tint(fill, color)
 		card.fills[#card.fills + 1] = fill
 	end
-	Bar(CARD_TILE / 2 + 5, 9, SCENE_HEALTH)
-	Bar(CARD_TILE / 2 + 16, 6, opts.accent or Theme.Accent)
+	Bar(STAGE.tile / 2 + 5, 9, STAGE.health)
+	Bar(STAGE.tile / 2 + 16, 6, opts.accent or Theme.Accent)
 	function card:SetBar(file)
 		for _, fill in ipairs(self.fills) do
 			fill:SetTexture(file, "REPEAT", "CLAMP")
@@ -5236,8 +5244,15 @@ end
 -- the knob is held): a piece laid out again at every step jumps about under the knob, and takes the slider
 -- with it where the slider stands by the piece. A slider that only paints (a color, an opacity) stays live.
 
-local TRACK_H, FILL_H, KNOB = 8, 6, 18               -- the groove, the fill in it, the knob's diameter
-local KNOB_ART, DOT, HALO, FILL_MASK = 26, 8, 44, 512  -- the pictures' sizes (the knob's holds its shadow)
+local SLIDER = {
+	trackH = 8,
+	fillH = 6,
+	knob = 18,  -- the groove, the fill in it, the knob's diameter
+	knobArt = 26,
+	dot = 8,
+	halo = 44,
+	fillMask = 512,  -- the pictures' sizes (the knob's holds its shadow)
+}
 
 function UI.Slider(parent, label, minV, maxV, step, get, set, opts)
 	opts = opts or {}
@@ -5253,7 +5268,7 @@ function UI.Slider(parent, label, minV, maxV, step, get, set, opts)
 
 	local s = CreateFrame("Slider", nil, f)
 	s:SetPoint("BOTTOMLEFT", 0, 1)
-	s:SetSize(width, KNOB)
+	s:SetSize(width, SLIDER.knob)
 	s:SetOrientation("HORIZONTAL")
 	s:SetMinMaxValues(minV, maxV)
 	s:SetValueStep(step)
@@ -5265,8 +5280,8 @@ function UI.Slider(parent, label, minV, maxV, step, get, set, opts)
 	local track = CreateFrame("Frame", nil, s)
 	track:SetPoint("LEFT")
 	track:SetPoint("RIGHT")
-	track:SetHeight(TRACK_H)
-	local cap = TRACK_H / 2
+	track:SetHeight(SLIDER.trackH)
+	local cap = SLIDER.trackH / 2
 	local function Groove(l, r)
 		local t = track:CreateTexture(nil, "BACKGROUND")
 		t:SetTexture(Shy.MEDIA .. "SliderTrack")
@@ -5286,7 +5301,7 @@ function UI.Slider(parent, label, minV, maxV, step, get, set, opts)
 
 	-- The fill: the bars' fill in the accent, a unit in from the groove's edge, round at its left end and
 	-- cut at the knob's middle (the knob covers the cut).
-	local inset = (TRACK_H - FILL_H) / 2
+	local inset = (SLIDER.trackH - SLIDER.fillH) / 2
 	local clip = CreateFrame("Frame", nil, track)
 	clip:SetPoint("TOPLEFT", inset, -inset)
 	clip:SetPoint("BOTTOMLEFT", inset, inset)
@@ -5299,13 +5314,13 @@ function UI.Slider(parent, label, minV, maxV, step, get, set, opts)
 	Theme.Tint(fill, Theme.Accent, 1)
 	local round = clip:CreateMaskTexture()
 	round:SetTexture(Shy.MEDIA .. "SliderMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-	round:SetSize(FILL_MASK, FILL_H)
+	round:SetSize(SLIDER.fillMask, SLIDER.fillH)
 	round:SetPoint("LEFT", fill, "LEFT")
 	fill:AddMaskTexture(round)
 
 	-- The knob: the slider moves an unseen thumb; the knob, its glow and its dot stand on it, above the groove.
 	local thumb = s:CreateTexture(nil, "OVERLAY")
-	thumb:SetSize(KNOB, KNOB)
+	thumb:SetSize(SLIDER.knob, SLIDER.knob)
 	thumb:SetColorTexture(1, 1, 1, 0)
 	s:SetThumbTexture(thumb)
 	local over = CreateFrame("Frame", nil, s)
@@ -5318,12 +5333,12 @@ function UI.Slider(parent, label, minV, maxV, step, get, set, opts)
 		t:SetPoint("CENTER", thumb, "CENTER")
 		return t
 	end
-	local halo = Piece("Glow", HALO, "BACKGROUND")
+	local halo = Piece("Glow", SLIDER.halo, "BACKGROUND")
 	Theme.Tint(halo, Theme.Accent, 1)
 	halo:SetAlpha(0)
-	local knob = Piece("SliderKnob", KNOB_ART, "ARTWORK")
+	local knob = Piece("SliderKnob", SLIDER.knobArt, "ARTWORK")
 	Theme.Tint(knob, Theme.skin.metal, 1)
-	local dot = Piece("SliderDot", DOT, "OVERLAY")
+	local dot = Piece("SliderDot", SLIDER.dot, "OVERLAY")
 	Theme.Tint(dot, Theme.Accent, 1)
 	f.knob, f.dot, f.halo = knob, dot, halo
 
@@ -5331,7 +5346,7 @@ function UI.Slider(parent, label, minV, maxV, step, get, set, opts)
 	local function Show(v)
 		f.value:SetText(fmt(v))
 		local share = maxV > minV and (v - minV) / (maxV - minV) or 0
-		clip:SetWidth(max(1, KNOB / 2 - inset + share * (width - KNOB)))
+		clip:SetWidth(max(1, SLIDER.knob / 2 - inset + share * (width - SLIDER.knob)))
 	end
 	local hovered, held = false, false
 	local function Look()
@@ -6496,11 +6511,15 @@ end
 --   b:SetGlyph(file)                -- a glyph and its caret, no words (a settings cog), evenly spaced
 --   b:Open()                        -- opens its menu (or closes it, when it is up)
 
-local ICON_GLYPH = 12   -- a menu button's icon, and the room it takes before the words
-local MENU_GLYPH_PAD, MENU_GLYPH_GAP = 5, 3   -- a glyph-only menu button (SetGlyph): room at each end; glyph to caret
+local MENU_ROOM = {
+	icon = 12,  -- a menu button's icon, and the room it takes before the words
+	pad = 5,
+	gap = 3,  -- a glyph-only menu button (SetGlyph): room at each end; glyph to caret
+	split = 8,  -- words to caret on a split button: the hairline stands halfway, room either side
+}
 -- A menu button's measures, for a dropdown of the game's dressed as one (ShySkin's ns.Dropdown, "chooser"): room at
 -- each end, the glyph, glyph (or words) to caret, the caret, and the caret's place against the words' middle.
-UI.MENU_BUTTON = { pad = MENU_GLYPH_PAD, glyph = ICON_GLYPH, gap = MENU_GLYPH_GAP, caret = 10, caretY = -1 }
+UI.MENU_BUTTON = { pad = MENU_ROOM.pad, glyph = MENU_ROOM.icon, gap = MENU_ROOM.gap, caret = 10, caretY = -1 }
 
 function UI.MenuButton(parent, opts)
 	opts = opts or {}
@@ -6605,7 +6624,7 @@ function UI.MenuButton(parent, opts)
 		local step = self.shyPress.step   -- pressed: the sunk regions are a unit down and right
 		if file and not self.icon then
 			self.icon = self:CreateTexture(nil, "OVERLAY")
-			self.icon:SetSize(ICON_GLYPH, ICON_GLYPH)
+			self.icon:SetSize(MENU_ROOM.icon, MENU_ROOM.icon)
 			self.icon:SetPoint("CENTER", self, "LEFT", inset + 1 + step, -step)
 			Theme.Tint(self.icon, C.text)
 			table.insert(self.shyPress.sink, self.icon)
@@ -6614,7 +6633,7 @@ function UI.MenuButton(parent, opts)
 			self.icon:SetShown(file ~= nil)
 			if file then self.icon:SetTexture(file) end
 		end
-		lead = file and inset + ICON_GLYPH or inset
+		lead = file and inset + MENU_ROOM.icon or inset
 		self.text:SetPoint("LEFT", lead + step, -step)
 		if not opts.width then self:SetLabel(self.text:GetText(), nil, most) end
 	end
@@ -6627,13 +6646,13 @@ function UI.MenuButton(parent, opts)
 	function b:SetGlyph(file)
 		self:SetIcon(file)
 		self.text:SetText("")
-		local pad, gap = MENU_GLYPH_PAD, MENU_GLYPH_GAP
+		local pad, gap = MENU_ROOM.pad, MENU_ROOM.gap
 		local step = self.shyPress.step
 		self.icon:ClearAllPoints()
 		self.icon:SetPoint("LEFT", pad + step, -step)
 		self.caret:ClearAllPoints()
-		self.caret:SetPoint("LEFT", pad + ICON_GLYPH + gap, caretY)
-		self:SetWidth(pad + ICON_GLYPH + gap + self.caret:GetWidth() + pad)
+		self.caret:SetPoint("LEFT", pad + MENU_ROOM.icon + gap, caretY)
+		self:SetWidth(pad + MENU_ROOM.icon + gap + self.caret:GetWidth() + pad)
 	end
 	return b
 end
@@ -6651,11 +6670,10 @@ end
 --   b.drop                 -- the caret's own button
 --   b:OnLook(state)        -- as UI.Press's, with state.tail: the mouse is on the caret's part
 
-local SPLIT_GAP = 8   -- words to caret on a split button: the hairline stands halfway, room either side
 
 function UI.SplitButton(parent, opts)
 	opts = opts or {}
-	local b = UI.MenuButton(parent, setmetatable({ caretGap = SPLIT_GAP }, { __index = opts }))
+	local b = UI.MenuButton(parent, setmetatable({ caretGap = MENU_ROOM.split }, { __index = opts }))
 	local state = b.shyPress
 	b.act = opts.click
 
@@ -6663,7 +6681,7 @@ function UI.SplitButton(parent, opts)
 	local drop = CreateFrame("Button", nil, b)
 	b.drop = drop
 	drop:SetPoint("TOPRIGHT")
-	drop:SetPoint("BOTTOMLEFT", b, "BOTTOMRIGHT", -(opts.width and 22 or 16 + SPLIT_GAP / 2), 0)
+	drop:SetPoint("BOTTOMLEFT", b, "BOTTOMRIGHT", -(opts.width and 22 or 16 + MENU_ROOM.split / 2), 0)
 	b.split = b:CreateTexture(nil, "OVERLAY")
 	b.split:SetWidth(1)
 	b.split:SetPoint("TOPLEFT", drop, "TOPLEFT", 0, -3)
@@ -7868,13 +7886,13 @@ function UI.Switch(parent, label, get, set, opts)
 	local function Piece(file, size, layer)
 		local t = b:CreateTexture(nil, layer)
 		t:SetTexture(Shy.MEDIA .. file)
-		local s = floor(size * SWITCH.KNOB / KNOB + 0.5)
+		local s = floor(size * SWITCH.KNOB / SLIDER.knob + 0.5)
 		t:SetSize(s, s)
 		return t
 	end
-	local halo = Piece("Glow", HALO, "BORDER")
-	local knob = Piece("SliderKnob", KNOB_ART, "ARTWORK")
-	local dot = Piece("SliderDot", DOT, "OVERLAY")
+	local halo = Piece("Glow", SLIDER.halo, "BORDER")
+	local knob = Piece("SliderKnob", SLIDER.knobArt, "ARTWORK")
+	local dot = Piece("SliderDot", SLIDER.dot, "OVERLAY")
 	Theme.Tint(dot, Theme.Accent, 1)
 	halo:SetPoint("CENTER", knob, "CENTER")
 	dot:SetPoint("CENTER", knob, "CENTER")
@@ -7947,20 +7965,23 @@ end
 -- and while held the thumb (and opts.track) widen. Show the bar only while there is something to scroll.
 --   opts.drag(share)   called as it moves: 0 at the top, 1 at the foot
 --   opts.width         the bar's width (10); opts.out: how far it reaches past the edge (0)
-local GRIP_W, THUMB_HOT = 10, 5
+local GRIP = {
+	w = 10,
+	hot = 5,
+}
 
 function UI.ThumbGrip(parent, thumb, opts)
 	local bar = CreateFrame("Button", nil, parent)
 	local out = opts.out or 0
 	bar:SetPoint("TOPRIGHT", out, 0)
 	bar:SetPoint("BOTTOMRIGHT", out, 0)
-	bar:SetWidth(opts.width or GRIP_W)
+	bar:SetWidth(opts.width or GRIP.w)
 	bar:SetFrameLevel(parent:GetFrameLevel() + 10)   -- over the rows beside it
 	local thin = thumb:GetWidth()
 	local grab, over   -- where the thumb is held, down from its top; the mouse on the bar
 
 	local function Wide()
-		local w = (grab or over) and THUMB_HOT or thin
+		local w = (grab or over) and GRIP.hot or thin
 		thumb:SetWidth(w)
 		if opts.track then opts.track:SetWidth(w) end
 	end
@@ -8257,8 +8278,12 @@ function UI.PlainText(text)
 	return text
 end
 
-local COPY_W, COPY_H = 640, 420
-local COPY_PAD_X, COPY_PAD_Y = 6, 2   -- padding around each row's text
+local COPY_BOX = {
+	w = 640,
+	h = 420,
+	padX = 6,
+	padY = 2,  -- padding around each row's text
+}
 
 local CopyBox = {}
 
@@ -8274,8 +8299,8 @@ function CopyBox:Row(i)
 	hover:SetAllPoints()
 	Theme.Paint(hover, C.hot, 0.1)
 	row.text = UI.Words(row, ChatFontNormal, C.text)
-	row.text:SetPoint("TOPLEFT", COPY_PAD_X, -COPY_PAD_Y)
-	row.text:SetWidth(content:GetWidth() - 2 * COPY_PAD_X)
+	row.text:SetPoint("TOPLEFT", COPY_BOX.padX, -COPY_BOX.padY)
+	row.text:SetWidth(content:GetWidth() - 2 * COPY_BOX.padX)
 	row.text:SetNonSpaceWrap(true)
 	row:SetScript("OnMouseDown", function() self:Press(i) end)
 	self.rows[i] = row
@@ -8290,7 +8315,7 @@ function CopyBox:Fill(text)
 	for i, line in ipairs(self.lines) do
 		local row = self:Row(i)
 		row.text:SetText(line)
-		local height = max(row.text:GetStringHeight(), 12) + 2 * COPY_PAD_Y
+		local height = max(row.text:GetStringHeight(), 12) + 2 * COPY_BOX.padY
 		row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -top)
 		row:SetSize(content:GetWidth(), height)
 		row:Show()
@@ -8358,26 +8383,28 @@ end
 -- UI.Spinner(parent, size) -> frame: something is on its way. A comet of the accent turning round a
 -- faint ring of it, a spark of light at its head; it turns while shown (the game turns it, so it costs
 -- nothing a frame). Follows the theme. size: units square (24 if nil).
-local SPINNER = Shy.MEDIA .. "Spinner"
-local SPIN_SECONDS = 0.9      -- a turn
-local SPIN_TRACK = 0.18       -- the ring under the comet
+local SPIN = {
+	art = Shy.MEDIA .. "Spinner",
+	seconds = 0.9,  -- a turn
+	track = 0.18,  -- the ring under the comet
+}
 function UI.Spinner(parent, size)
 	local f = CreateFrame("Frame", nil, parent)
 	f:SetSize(size or 24, size or 24)
 	local track = f:CreateTexture(nil, "ARTWORK")
 	track:SetAllPoints()
-	track:SetTexture(SPINNER .. "Track", nil, nil, "TRILINEAR")
-	UI.Tint(track, Theme.skin.on, SPIN_TRACK)
+	track:SetTexture(SPIN.art .. "Track", nil, nil, "TRILINEAR")
+	UI.Tint(track, Theme.skin.on, SPIN.track)
 	local turning = {}
 	for i, part in ipairs({ { "Arc", Theme.skin.on, 1 }, { "Head", Theme.light, 0.9 } }) do
 		local t = f:CreateTexture(nil, "ARTWORK", nil, i)
 		t:SetAllPoints()
-		t:SetTexture(SPINNER .. part[1], nil, nil, "TRILINEAR")
+		t:SetTexture(SPIN.art .. part[1], nil, nil, "TRILINEAR")
 		UI.Tint(t, part[2], part[3])
 		local group = t:CreateAnimationGroup()
 		local turn = group:CreateAnimation("Rotation")
 		turn:SetDegrees(-360)
-		turn:SetDuration(SPIN_SECONDS)
+		turn:SetDuration(SPIN.seconds)
 		group:SetLooping("REPEAT")
 		turning[i] = group
 	end
@@ -8395,7 +8422,7 @@ end
 
 local function CreateCopyBox()
 	local f = Mixin(CreateFrame("Frame", nil, UIParent), CopyBox)
-	f:SetSize(COPY_W, COPY_H)
+	f:SetSize(COPY_BOX.w, COPY_BOX.h)
 	f:SetPoint("CENTER")
 	f:SetFrameStrata("DIALOG")
 	f:SetToplevel(true)
@@ -8407,7 +8434,7 @@ local function CreateCopyBox()
 	local head = UI.Head(f, { size = "window", title = "", close = function() f:Hide() end })
 	-- What it holds stands on its body, clear of the look's work round the edge, the box that much bigger (UI.Body).
 	local body = UI.Body(f)
-	UI.BodyFit(f, COPY_W, COPY_H)
+	UI.BodyFit(f, COPY_BOX.w, COPY_BOX.h)
 	f.rows = {}
 	f.title = head.title
 	local hint = UI.Text(head, "Click or drag to select  \194\183  Ctrl+A for all  \194\183  Ctrl+C to copy", 12, false, C.dim)
@@ -8416,7 +8443,7 @@ local function CreateCopyBox()
 	f.status:SetPoint("BOTTOMLEFT", 14, 10)
 
 	local top = head:GetHeight() + 10
-	f.scroll = UI.ScrollArea(body, COPY_W - 28, COPY_H - top - 32)
+	f.scroll = UI.ScrollArea(body, COPY_BOX.w - 28, COPY_BOX.h - top - 32)
 	f.scroll:SetPoint("TOPLEFT", 14, -top)
 
 	-- The edit box Ctrl+C copies from. It has keyboard focus while the box is open, so it also
@@ -8429,7 +8456,7 @@ local function CreateCopyBox()
 	edit:SetMultiLine(true)
 	edit:SetAutoFocus(false)
 	edit:SetFontObject(ChatFontNormal)
-	edit:SetWidth(COPY_W)
+	edit:SetWidth(COPY_BOX.w)
 	holder:SetScrollChild(edit)
 	edit:SetScript("OnEscapePressed", function() f:Hide() end)
 	edit:SetScript("OnKeyDown", function(_, key)

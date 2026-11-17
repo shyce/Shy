@@ -42,6 +42,7 @@ local PIECES = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomR
 -- and the gap under its line).
 local PAD = { side = 10, foot = 9, top = 9, headed = 24 }
 local WRAP = 250                 -- the words' widest line; longer words wrap
+local SLACK = 1                  -- room past the words' measure, so the last word stays on its line
 local TIP = 3                    -- the tail's tip this far under the game's bubble's foot (in the game's units)
 local REACH, DROP = 18, 3        -- the shadow's reach past the housing, and how far down it falls (the hover's)
 local LIGHT = 12                 -- height of the top light
@@ -328,41 +329,53 @@ local function Build(child)
 	return p
 end
 
+-- A string's measure, or `none` where the game won't give it.
+local function Measured(value, none)
+	if issecretvalue(value) or type(value) ~= "number" then return none end
+	return value
+end
+
 -- What stands at the head's right: the kind's word at the side, a language before it.
 local function Right(p)
-	local word, language = p.word:GetText(), p.language:IsShown() and p.language:GetText()
-	local wide = (word and word ~= "") and p.word:GetStringWidth() or 0
+	local word = p.word:GetText()
 	p.language:ClearAllPoints()
-	if wide > 0 then
+	if word and word ~= "" then
 		p.language:SetPoint("RIGHT", p.word, "LEFT", -GAP, 0)
 	else
 		p.language:SetPoint("RIGHT", p.box, "TOPRIGHT", -SIDE, -NAME_Y - 0.5)
 	end
-	if language and language ~= "" then wide = wide + (wide > 0 and GAP or 0) + p.language:GetStringWidth() end
-	return wide
+end
+
+-- How wide a string's words are, or 0 when it is hidden or empty.
+local function Wide(fs)
+	local words = fs:IsShown() and fs:GetText()
+	if not words or words == "" then return 0 end
+	return Measured(fs:GetStringWidth(), 0)
+end
+
+-- How wide the head is: the name, its level, the language and the kind's word, with the gaps between them.
+local function Head(p)
+	local level, language, word = Wide(p.level), Wide(p.language), Wide(p.word)
+	local right = word + language + ((word > 0 and language > 0) and GAP or 0)
+	return SIDE + Wide(p.name) + (level > 0 and (GAP - 2 + level) or 0) + (right > 0 and (GAP + right) or 0) + SIDE
 end
 
 -- The box round the words: as wide as they are (up to WRAP) or as the head needs, its top higher by the
--- head's room when there is one; the band inside the look's border.
-local function Fit(p)
+-- head's room when there is one; the band inside the look's border. Measured at the size it is drawn at, and
+-- fitted again whenever the words or the head measure otherwise (the interface's size changed, or their font
+-- did since); `again` lays it out whatever they measure.
+local function Fit(p, again)
 	local text = p.text
-	local wide = text:GetUnboundedStringWidth()
-	if issecretvalue(wide) or type(wide) ~= "number" then wide = WRAP end
-	wide = math.min(math.ceil(wide), WRAP)
-	text:SetWidth(wide)
-	local high = text:GetStringHeight()
-	if issecretvalue(high) or type(high) ~= "number" then high = 0 end
+	local wide = math.min(math.ceil(Measured(text:GetUnboundedStringWidth(), WRAP)) + SLACK, WRAP)
+	if text:GetWidth() ~= wide then text:SetWidth(wide) end
+	local high = Measured(text:GetStringHeight(), 0)
+	local need = p.headed and Head(p) or 0
+	local fit = p.fit
+	if not again and fit and fit.wide == wide and fit.high == high and fit.need == need then return end
+	p.fit = { wide = wide, high = high, need = need }
 	local top = p.headed and PAD.headed or PAD.top
-	local width = wide + 2 * PAD.side
-	if p.headed then
-		local level = p.level:IsShown() and p.level:GetText()
-		local right = Right(p)
-		local need = SIDE + p.name:GetStringWidth() + ((level and level ~= "") and (GAP - 2 + p.level:GetStringWidth()) or 0)
-			+ (right > 0 and (GAP + right) or 0) + SIDE
-		width = math.max(width, need)
-	end
 	local box = p.box
-	box:SetSize(width, top + high + PAD.foot)
+	box:SetSize(math.max(wide + 2 * PAD.side, need), top + high + PAD.foot)
 	text:ClearAllPoints()
 	text:SetPoint("TOP", box, "TOP", 0, -top)
 	-- The band inside the look's border.
@@ -529,9 +542,12 @@ local function Dress(child, words, message)
 		p.fall:SetGradient("HORIZONTAL", bright, faint)
 	end
 	p.headed = named ~= nil
-	Fit(p)
+	Right(p)
+	-- Scaled to the interface before the words are measured: the game lays them out wider or narrower at
+	-- another size.
 	Tail(p)
 	Place(p, child)
+	Fit(p, true)
 	-- Newest on top; dressed again for a setting, it keeps its place.
 	if not p.order or p.words ~= words then
 		stack = stack + 1
@@ -609,8 +625,12 @@ function B.Pass()
 					if p then
 						-- Seen before its message was heard: dressed for it once it is.
 						local message = p.unheard and Match(text)
-						if message then Dress(child, text, message) end
-						Place(p, child)
+						if message then
+							Dress(child, text, message)
+						else
+							Place(p, child)
+							Fit(p)
+						end
 					end
 				end
 				local p = made[child]

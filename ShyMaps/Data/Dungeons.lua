@@ -4,7 +4,7 @@ ns.data = ns.data or {}
 -- Each instance's bosses in order: encounter ^ name ^ creature ^ display.
 ns.data.dungeons = {
 [389]={"2732^Oggleflint^11517^11611","2733^Taragaman the Hungerer^11520^7970","2734^Jergosh the Invoker^11518^11429","2735^Bazzalan^11519^2007"},
-[3065]={"3493^Faldrim Anvilmar^261306^142826","3495^Infurnus^0^0","3494^Plunder^0^0","3496^Durgen Dirgehammer^0^0"},
+[3065]={"3493^Faldrim Anvilmar^261306^142826","3495^Infurnus^0^0","3494^Plunder^261311^142840","3496^Durgen Dirgehammer^261319^142837"},
 [2999]={"3353^Witherfang^0^0","3357^The Abandoned^0^0","3355^The Butcher^0^0","3408^Lordaeron Captain^0^0","3411^Viktor the Vile^0^0","3412^Bjork^0^0","3354^Rath'mael^0^0"},
 [43]={"585^Lady Anacondra^3671^4313","586^Lord Cobrahn^3669^4213","587^Kresh^3653^5126","588^Lord Pythas^3670^4214","589^Skum^3674^4203","590^Lord Serpentis^3673^4215","591^Verdan the Everliving^5775^4256","592^Mutanus the Devourer^3654^4088"},
 [36]={"2741^Rhahk'Zor^644^14403","2742^Sneed^643^7125","3676^Miner Johnson^3586^556","2743^Gilnid^1763^7124","2744^Captain Greenskin^647^7113","2745^Mr. Smite^646^2026","2746^Cookie^645^1305","2747^Edwin VanCleef^639^2029"},

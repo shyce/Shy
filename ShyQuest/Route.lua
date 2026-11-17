@@ -23,19 +23,22 @@ ns.CATCH_WHY = {
 	dungeon = "For a dungeon you can run now.",
 }
 local UNITS = 10000
-local AT_HAND = 4            -- with fewer steps than this in reach, suggest zones
-local HAND_IN_REACH = 1500   -- yards: a turn-in this near goes before a guide's grind
-local HAND_IN_NEAR = 600     -- ... and this near before a guide step with no position
-local WORK_REACH = 200       -- an objective this near goes before the guide's step
-local OWN_REACH = 150        -- a class quest this near is picked up before the guide's step
-local ON_THE_WAY = 300       -- yards a stop may add to the walk to the guide's step and still be on the way
-local IN_PASSING = 60        -- ... and an objective the guide has a step for among its next few: only in passing
-local STAY = 1.3             -- a stop that led stays first until it is this much farther than the nearest
-local AT_WORK = 90           -- yards: within this of the objective being worked on, it keeps the lead (stops flip-flopping between mixed mobs)
-local BUY_NEAR = 1000        -- yards: a vendor this near is where a quest item is bought
-local GRIND_REACH = 3000     -- instead of a grind: a quest to pick up, work on or turn in this near
-local UNTANGLE = 14          -- stops from the head of the route whose order is straightened out
-local ABOVE = 2              -- ... when it is no more than this many levels above the player
+-- What goes before the guide's own step, and when the order holds (yards, unless said).
+local RULES = {
+	atHand = 4,  -- with fewer steps than this in reach, suggest zones
+	handInReach = 1500,  -- yards: a turn-in this near goes before a guide's grind
+	handInNear = 600,  -- ... and this near before a guide step with no position
+	workReach = 200,  -- an objective this near goes before the guide's step
+	ownReach = 150,  -- a class quest this near is picked up before the guide's step
+	onTheWay = 300,  -- yards a stop may add to the walk to the guide's step and still be on the way
+	inPassing = 60,  -- ... and an objective the guide has a step for among its next few: only in passing
+	stay = 1.3,  -- a stop that led stays first until it is this much farther than the nearest
+	atWork = 90,  -- yards: within this of the objective being worked on, it keeps the lead (stops flip-flopping between mixed mobs)
+	buyNear = 1000,  -- yards: a vendor this near is where a quest item is bought
+	grindReach = 3000,  -- instead of a grind: a quest to pick up, work on or turn in this near
+	untangle = 14,  -- stops from the head of the route whose order is straightened out
+	above = 2,  -- ... when it is no more than this many levels above the player
+}
 
 -- The singled-out quest
 
@@ -165,9 +168,11 @@ R.NearestSource = NearestSource
 -- An available quest is a stop only if it isn't far above the player and its XP beats grinding
 -- for the time its trip (giver, each objective, ender) takes. Others keep their map pin.
 
-local HARD = 3               -- a quest more than this many levels above the player is left for later
-local WALK = 420             -- yards a minute, on foot
-local LONG = 5000            -- yards: too far for a quest of unknown XP
+local TRIP = {
+	hard = 3,  -- a quest more than this many levels above the player is left for later
+	walk = 420,  -- yards a minute, on foot
+	long = 5000,  -- yards: too far for a quest of unknown XP
+}
 local trips = {}             -- quest .. giver -> yards, or false for one that leaves the continent
 
 -- Nearest of `lists` of places to a world point: yards, north, west.
@@ -224,17 +229,17 @@ end
 
 -- Returns true, or false, reason, and "level" when the reason is the quest's level.
 function R.Worth(quest, giver)
-	if quest.level > L.Level() + HARD then return false, "Level " .. quest.level .. ": too high for now", "level" end
+	if quest.level > L.Level() + TRIP.hard then return false, "Level " .. quest.level .. ": too high for now", "level" end
 	if not giver then return true end
 	local trip = Trip(quest, giver)
 	if not trip then return false, "Part of it is on another continent" end
 	local pays = L.Pays(quest)
 	if not pays then
-		if trip > LONG then return false, ("About %s of travel"):format(W.Yards(trip)) end
+		if trip > TRIP.long then return false, ("About %s of travel"):format(W.Yards(trip)) end
 		return true
 	end
 	-- A quest that unlocks others is worth it regardless.
-	if pays < trip / WALK * Fighting() and not L.Opens(quest) then
+	if pays < trip / TRIP.walk * Fighting() and not L.Opens(quest) then
 		return false, ("About %s of travel for %d XP"):format(W.Yards(trip), pays)
 	end
 	return true
@@ -254,7 +259,7 @@ local catching = { key = nil }
 local function Takes(quest)
 	local giver = NearestGiver(quest.starts)
 	local trip = giver and Trip(quest, giver) or 0
-	return L.Pays(quest), trip / WALK + CATCH_MINUTES
+	return L.Pays(quest), trip / TRIP.walk + CATCH_MINUTES
 end
 
 function R.Catching(quest)
@@ -290,16 +295,30 @@ end
 
 -- Appends to `out` each list of places a goal can be worked on. `ground`: actual spawn points
 -- (D.Ground) instead, for shading the map. `from`: filled with from[n] = { name, id,
--- how = "kill" | "use" | "sells" | "holds" | "drops" | "gives" } for out[n].
+-- how = "kill" | "use" | "sells" | "holds" | "drops" | "gives", quest } for out[n].
 -- A creature listed with no drop chance that gives or takes quests hands the item over (a quest's
--- reward, or a word with them): "gives", never something to kill.
+-- reward, or a word with them): "gives", never something to kill. Where the item is had only as the
+-- reward of a quest they take (item.given), `quest` is that quest.
 -- `needs`: the list is of an item the quest needs and doesn't count, by its name.
+local function RewardOf(item, npc)
+	if not item.given then return nil end
+	for _, quest in ipairs(item.given) do
+		local data = D.Quest(quest)
+		if data then
+			for _, ender in ipairs(data.ends) do
+				if ender.kind == "n" and ender.id == npc then return quest end
+			end
+		end
+	end
+	return nil
+end
+
 function GoalPlaces(token, out, ground, from)
 	local needs
 	-- chance: the percent of kills an item drops from, where the data says.
-	local function Add(thing, how, chance)
+	local function Add(thing, how, chance, quest)
 		out[#out + 1] = ground and D.Ground(thing) or thing.places
-		if from then from[#out] = { name = thing.name, how = how, id = thing.id, chance = chance, needs = needs } end
+		if from then from[#out] = { name = thing.name, how = how, id = thing.id, chance = chance, needs = needs, quest = quest } end
 	end
 	if token.kind == "c" or token.kind == "o" then
 		local thing = D.Thing(token.kind, token.id)
@@ -325,7 +344,7 @@ function GoalPlaces(token, out, ground, from)
 				if thing and (source.kind ~= "v" or L.Friendly(thing)) and not (source.kind == "n" and D.Dropless(source.id, item.id)) then
 					local gives = source.kind == "n" and not source.chance and (thing.gives or thing.takes) ~= nil
 					local how = source.kind == "v" and "sells" or source.kind == "o" and "holds" or gives and "gives" or "drops"
-					Add(thing, how, source.chance or (how == "drops" and least) or nil)
+					Add(thing, how, source.chance or (how == "drops" and least) or nil, gives and RewardOf(item, source.id) or nil)
 				end
 			end
 			for _, id in ipairs(item.more or {}) do
@@ -372,15 +391,30 @@ local AREA = { link = 300,   -- yards: spawns this near one another are one area
 	walked = 3 }             -- the cheapest camps whose way over the ground is asked for (W.Walked)
 -- (Seconds a kill takes, and a thing used, picked up or bought; kills an item is reckoned at, at most.
 -- What work takes, below, reckons with the same.)
-local FIGHT, HANDLE = 45, 20
-local MOST = 40
+-- What a goal costs: seconds, and how many of a thing.
+local EFFORT = {
+	fight = 45,
+	handle = 20,
+	most = 40,
+	-- What work takes
+	-- Seconds to do what an objective asks, for whoever weighs time ahead (Hearth.lua): how many are
+	-- still needed; a kill at EFFORT.fight seconds, a thing used or picked up at EFFORT.handle; the way from one
+	-- to the next, which is how far apart the spawns stand, EFFORT.crowd times as long because others are
+	-- after the same ones; and for an item that drops, as many kills as its chance asks for, EFFORT.most
+	-- at most (EFFORT.fight, EFFORT.handle and EFFORT.most stand with the areas, above). The quickest of an objective's
+	-- sources is the one reckoned with.
+	crowd = 1.5,  -- times as long to find the next one, with other players about
+	asked = 8,  -- how many a quest not in the log is taken to ask of each (one of a creature that stands alone)
+	stride = 7,  -- yards a second on foot
+	apart = 300,  -- yards from one spawn to the next, at most: farther is another place
+}
 
 -- What getting `left` of what a list's spawns give asks for: { need = how many of them, each = seconds
 -- a one }. As many as are left; for an item that drops, as many kills as its chance asks for.
 local function Asks(how, chance, left)
 	local need = math.max(1, left or 1)
-	if how == "drops" then need = math.min(MOST, need / (math.max(1, chance or 100) / 100)) end
-	return { need = need, each = (how == "kill" or how == "drops" or how == "loot") and FIGHT or HANDLE }
+	if how == "drops" then need = math.min(EFFORT.most, need / (math.max(1, chance or 100) / 100)) end
+	return { need = need, each = (how == "kill" or how == "drops" or how == "loot") and EFFORT.fight or EFFORT.handle }
 end
 
 -- Seconds to get `need` from a camp of `supply` spawns at `each` seconds a one: the camp once over,
@@ -970,12 +1004,12 @@ local function NearestGoal(id, quest)
 	for _, each in ipairs(found) do
 		-- With a vendor near, other sources of that objective are ignored.
 		local near = each.objective and sold[each.objective]
-		if not (near and near <= BUY_NEAR and each.source and each.source.how ~= "sells") then
+		if not (near and near <= RULES.buyNear and each.source and each.source.how ~= "sells") then
 			if not best or (each.yards or math.huge) < (best.yards or math.huge) then best = each end
 			if hold and hold.map == each.map and hold.x == each.x and hold.y == each.y then was = was or each end
 		end
 	end
-	best = W.Steady(key, best, was, nil, AT_WORK)
+	best = W.Steady(key, best, was, nil, RULES.atWork)
 	-- Out in the world: the nearest area of the same things. The game's own area for the quest stands
 	-- in for everything of the quest's that isn't someone who sells it; not while an objective waits
 	-- for an item (the game's area is where that objective is done, not where the item is had).
@@ -1000,7 +1034,7 @@ local function NearestGoal(id, quest)
 		local exact = not sells and whose[i] ~= nil and pinned[whose[i]] == true
 		local goal = whose[i] and goals[whose[i]]
 		local ask = sources[i] and Asks(sources[i].how, sources[i].chance, goal and (goal.need or 1) - (goal.have or 0))
-		if (sells or exact or not game or (whose[i] and spawned[whose[i]])) and not (near and near <= BUY_NEAR and not sells) then
+		if (sells or exact or not game or (whose[i] and spawned[whose[i]])) and not (near and near <= RULES.buyNear and not sells) then
 			open[#open + 1] = ground
 			which[#open], solid[#open], asks[#open] = i, sources[i] ~= nil and not exact and Solid(ns.HOW[sources[i].how]), ask
 		elseif game and not sells and not exact and sources[i] and Solid(ns.HOW[sources[i].how]) then
@@ -1833,9 +1867,11 @@ function R.Clock(stop)
 end
 
 -- led: quests of the guide's live steps; singling one of those out changes nothing.
-local working                -- quest whose objective led last time (AT_WORK)
-local LEAD_TURNED = 150      -- yards the player may drift from the stop that leads before it is let go
-local LEAD_HAND_IN = 0.5     -- a hand-in this share of the way to the lead (or less) goes first
+local working                -- quest whose objective led last time (RULES.atWork)
+local LEAD = {
+	turned = 150,  -- yards the player may drift from the stop that leads before it is let go
+	handIn = 0.5,  -- a hand-in this share of the way to the lead (or less) goes first
+}
 local holding = {}           -- the stop that led last time: .key, and .least (the nearest the player came)
 
 local function LeadKey(stop)
@@ -1906,18 +1942,18 @@ local function Order(stops, led)
 				local yards = Entered(own).yards
 				if yards then
 					if not holding.least or yards < holding.least then holding.least = yards end
-					local turned = yards > holding.least + LEAD_TURNED
+					local turned = yards > holding.least + LEAD.turned
 					local handIn = near[pick].kind == "turnin" and own.kind ~= "turnin" and near[pick].yards
-						and near[pick].yards < yards * LEAD_HAND_IN
+						and near[pick].yards < yards * LEAD.handIn
 					-- Standing at another stop's work is reason enough: it is where the player is.
-					local here = yards > AT_WORK and (near[pick].among or (Entered(near[pick]).yards or math.huge) <= AT_WORK)
+					local here = yards > RULES.atWork and (near[pick].among or (Entered(near[pick]).yards or math.huge) <= RULES.atWork)
 					turned = turned or (here and near[pick].kind == "goal") == true
-					-- Once there (AT_WORK), the nearest goes first as before: the hold is for the way.
-					turned = turned or yards <= AT_WORK
+					-- Once there (RULES.atWork), the nearest goes first as before: the hold is for the way.
+					turned = turned or yards <= RULES.atWork
 					if at ~= pick and not turned and not handIn then
 						pick = at
 					elseif at ~= pick then
-						if yards > AT_WORK then near[pick].switched = handIn and "handin" or "turned" end
+						if yards > RULES.atWork then near[pick].switched = handIn and "handin" or "turned" end
 						holding.least = nil
 					end
 				end
@@ -1935,11 +1971,11 @@ local function Order(stops, led)
 			end
 			if keep then pick = keep end
 		end
-		-- The objective that led keeps the lead while within AT_WORK; a turn-in or pickup can still go first.
+		-- The objective that led keeps the lead while within RULES.atWork; a turn-in or pickup can still go first.
 		if #route == 0 and near[pick].kind == "goal" then
 			for i, stop in ipairs(near) do
 				local at = Entered(stop)
-				if stop.kind == "goal" and stop.actions[1].id == working and (stop.among or (at.yards and at.yards <= AT_WORK)) then pick = i end
+				if stop.kind == "goal" and stop.actions[1].id == working and (stop.among or (at.yards and at.yards <= RULES.atWork)) then pick = i end
 			end
 			working = near[pick].actions[1].id
 		end
@@ -1949,7 +1985,7 @@ local function Order(stops, led)
 	end
 
 	-- 2-opt pass over the head of the route; the first stop stays first.
-	local last = math.min(#route, head + UNTANGLE)
+	local last = math.min(#route, head + RULES.untangle)
 	local function Apart(a, b) return W.Between(a.north, a.west, b.north, b.west) end
 	local turned, passes = true, 0
 	while turned and passes < 4 do
@@ -2003,7 +2039,7 @@ local function AddZones(route)
 		want = 0
 	elseif T.db.zones == "always" then
 		want = 2
-	elseif T.db.zones == "short" and reach < AT_HAND then
+	elseif T.db.zones == "short" and reach < RULES.atHand then
 		want = reach == 0 and 3 or 2
 	end
 	-- The last guide is finished.
@@ -2033,10 +2069,12 @@ end
 -- When all a guide step still needs is kills, loot or gathering, its stop stands on the best camp
 -- of what it asks for (Stand) instead of the guide's own spot: while the player is on that camp's
 -- ground, or once it is the better of the two, the guide's spot weighed as the ground it is (the
--- walk to it, and the waiting where few stand round it). The choice is held (AIM_KEEP) so the pin
+-- walk to it, and the waiting where few stand round it). The choice is held (AIM.keep) so the pin
 -- doesn't jump back and forth.
-local AIM_REACH = 1500       -- yards: an area farther off than this is left to the guide's spot
-local AIM_KEEP = 1.4         -- slack for a step already redirected
+local AIM = {
+	reach = 1500,  -- yards: an area farther off than this is left to the guide's spot
+	keep = 1.4,  -- slack for a step already redirected
+}
 local aimedNear = {}         -- steps redirected last time, by step index
 
 -- An accept that waits for the item starting the quest, none in the bags: nothing to do for it yet.
@@ -2169,17 +2207,17 @@ local function NearerPlace(view, yards, only)
 	-- three valves round a console have one spot in the guide, and each has its own here.
 	if exact[spot.list] and view.north and view.continent == W.continent then
 		local _, north, west = W.ToWorld(spot.map, spot.x, spot.y)
-		if north and W.Between(view.north, view.west, north, west) <= AT_WORK then
+		if north and W.Between(view.north, view.west, north, west) <= RULES.atWork then
 			spot.beside = true
 			return spot
 		end
 	end
-	local ease = aimedNear[view.step.index] and AIM_KEEP or 1
+	local ease = aimedNear[view.step.index] and AIM.keep or 1
 	-- The guide's own spot is weighed as the ground it is (Price): a spot by one spawn, where ten
 	-- kills are a long wait for it to stand again, loses to a camp down the road.
 	local own = yards
 	if yards and spot.solid and view.north and view.continent == W.continent then own = spot.Price(view.north, view.west, yards) end
-	if spot.found or (spot.yards <= AIM_REACH * ease and (not own or spot.cost < own * AREA.better * ease)) then return spot end
+	if spot.found or (spot.yards <= AIM.reach * ease and (not own or spot.cost < own * AREA.better * ease)) then return spot end
 	-- Left at the guide's spot: the area is still watched for the player stepping onto it (R.Wandered).
 	return nil, spot
 end
@@ -2294,7 +2332,7 @@ end
 --   * a turn-in nearer than the step or hardly off the way, and an objective the player is standing in;
 --   * not a turn-in the guide itself makes later, unless the extra walk is small (nearer isn't on the way);
 --   * with guide.nearby off, only a turn-in before a grind;
---   * when the step is only a grind, any turn-in, objective or worthwhile pickup within GRIND_REACH.
+--   * when the step is only a grind, any turn-in, objective or worthwhile pickup within RULES.grindReach.
 local detoured = {}          -- stops that detoured last time: kind .. quest
 
 -- A pickup worth doing instead of a grind: not a dungeon quest, and doable at this level.
@@ -2302,7 +2340,7 @@ local function WorthTaking(stop)
 	for _, action in ipairs(stop.actions) do
 		local quest = action.kind == "pickup" and D.Quest(action.id)
 		if quest and not quest.flags:find("d", 1, true)
-			and (quest.level == 0 or (quest.level <= L.Level() + ABOVE and not L.Outgrown(quest))) then
+			and (quest.level == 0 or (quest.level <= L.Level() + RULES.above and not L.Outgrown(quest))) then
 			return true
 		end
 	end
@@ -2321,14 +2359,17 @@ end
 
 -- Looking ahead
 -- The guide's order is planned from where its steps stand, but kills and loot end wherever the
--- player found them. An objective the guide gets to within its next AHEAD steps goes first when
+-- player found them. An objective the guide gets to within its next FORWARD.steps steps goes first when
 -- the walk through those steps is shorter that way from where the player is.
-local AHEAD = 6              -- guide steps looked at
-local AHEAD_REACH = 800      -- yards: an objective farther off is never brought forward
-local AHEAD_GAIN = 120       -- yards the walk has to get shorter by
-local AHEAD_ASIDE = 0.5      -- ... for no more than this share of the way to the guide's step added to it
-local AHEAD_BACK = 20        -- guide steps searched for one that comes back to the place (G.ComesBack)
-local AHEAD_CAMP = 300       -- yards within which the rest of the quest has to be doable (Camped)
+-- Bringing a later step's objective forward.
+local FORWARD = {
+	steps = 6,  -- guide steps looked at
+	reach = 800,  -- yards: an objective farther off is never brought forward
+	gain = 120,  -- yards the walk has to get shorter by
+	aside = 0.5,  -- ... for no more than this share of the way to the guide's step added to it
+	back = 20,  -- guide steps searched for one that comes back to the place (G.ComesBack)
+	camp = 300,  -- yards within which the rest of the quest has to be doable (Camped)
+}
 local spots = setmetatable({}, { __mode = "k" })   -- a record's places -> { north, west, ... } on spotsOn
 local spotsOn                -- the continent those are on
 
@@ -2354,17 +2395,6 @@ local function Spots(places)
 	return list
 end
 
--- What work takes
--- Seconds to do what an objective asks, for whoever weighs time ahead (Hearth.lua): how many are
--- still needed; a kill at FIGHT seconds, a thing used or picked up at HANDLE; the way from one
--- to the next, which is how far apart the spawns stand, CROWD times as long because others are
--- after the same ones; and for an item that drops, as many kills as its chance asks for, MOST
--- at most (FIGHT, HANDLE and MOST stand with the areas, above). The quickest of an objective's
--- sources is the one reckoned with.
-local CROWD = 1.5            -- times as long to find the next one, with other players about
-local ASKED = 8              -- how many a quest not in the log is taken to ask of each (one of a creature that stands alone)
-local STRIDE = 7             -- yards a second on foot
-local APART = 300            -- yards from one spawn to the next, at most: farther is another place
 local hops = setmetatable({}, { __mode = "k" })   -- a record's spawns -> yards from one to its nearest neighbour, on average
 
 local function Hop(places)
@@ -2381,7 +2411,7 @@ local function Hop(places)
 					if not least or yards < least then least = yards end
 				end
 			end
-			total = total + math.min(least or 0, APART)
+			total = total + math.min(least or 0, EFFORT.apart)
 		end
 		hop = count > 0 and total / count or 0
 		hops[places] = hop
@@ -2389,46 +2419,55 @@ local function Hop(places)
 	return hop
 end
 
+local Owed   -- below
+
 -- Seconds for `count` of what a goal token asks, whether its creature stands alone, and the
--- fights that takes.
-local function Effort(token, count)
+-- fights that takes. A thing had as another quest's reward costs that quest, where it isn't done yet
+-- (`inner`: this is that quest's own cost, and a reward it needs in turn is not followed).
+local function Effort(token, count, inner)
 	local lists, from = {}, {}
 	GoalPlaces(token, lists, true, from)
 	local best, alone, fights
 	for i, places in ipairs(lists) do
-		local how, chance = from[i].how, from[i].chance
-		local seconds, units = HANDLE, 0
+		local how, chance, quest = from[i].how, from[i].chance, from[i].quest
+		local seconds, units = EFFORT.handle, 0
 		if how ~= "sells" and how ~= "gives" then
 			units = count
-			if how == "drops" then units = math.min(MOST, count / (math.max(1, chance or 100) / 100)) end
-			seconds = units * (((how == "kill" or how == "drops") and FIGHT or HANDLE) + Hop(places) / STRIDE * CROWD)
+			if how == "drops" then units = math.min(EFFORT.most, count / (math.max(1, chance or 100) / 100)) end
+			seconds = units * (((how == "kill" or how == "drops") and EFFORT.fight or EFFORT.handle) + Hop(places) / EFFORT.stride * EFFORT.crowd)
 			if how ~= "kill" and how ~= "drops" then units = 0 end
+		elseif quest and not inner and not L.Done(quest) then
+			local data = D.Quest(quest)
+			for index = 1, data and #data.goals or 0 do
+				local more, few = Owed(quest, index, true)
+				seconds, units = seconds + more, units + few
+			end
 		end
 		if not best or seconds < best then best, alone, fights = seconds, #Spots(places) <= 2, units end
 	end
-	return best or count * HANDLE, alone == true, fights or 0
+	return best or count * EFFORT.handle, alone == true, fights or 0
 end
 
 -- Seconds and fights for objective `index` of a quest: what is left of it for one in the log, all of
--- it for one not taken (ASKED of each, one of a creature that stands alone).
-local function Owed(id, index)
+-- it for one not taken (EFFORT.asked of each, one of a creature that stands alone). `inner`: as Effort's.
+function Owed(id, index, inner)
 	if L.Has(id) then
 		local goal = L.Goals(id)[index]
 		if not goal or goal.finished then return 0, 0 end
 		local left = math.max(1, (goal.need or 1) - (goal.have or 0))
 		local least, fights
 		for _, token in ipairs(goal.tokens) do
-			local seconds, _, units = Effort(token, left)
+			local seconds, _, units = Effort(token, left, inner)
 			if not least or seconds < least then least, fights = seconds, units end
 		end
-		return least or left * HANDLE, fights or 0
+		return least or left * EFFORT.handle, fights or 0
 	end
 	local quest = D.Quest(id)
 	local token = quest and quest.goals[index]
 	if not token or token.kind == "s" then return 0, 0 end
-	local seconds, alone, fights = Effort(token, ASKED)
+	local seconds, alone, fights = Effort(token, EFFORT.asked, inner)
 	if alone then
-		local one, _, few = Effort(token, 1)
+		local one, _, few = Effort(token, 1, inner)
 		seconds, fights = one, few
 	end
 	return seconds, fights
@@ -2460,7 +2499,7 @@ local ahead
 local function Ahead()
 	if not ahead then
 		ahead = { of = {}, all = {} }
-		for _, view in ipairs(G.Upcoming(AHEAD)) do
+		for _, view in ipairs(G.Upcoming(FORWARD.steps)) do
 			local step = { index = view.step.index }
 			if view.continent == W.continent then step.north, step.west = view.north, view.west end
 			local lists, whose, tied = Work(view)
@@ -2532,11 +2571,11 @@ end
 -- shortens the walk through the guide's next steps.
 local function Shorter(stop, lead, at, hold)
 	if at < 2 or Ahead()[1].index ~= lead.view.step.index then return false end
-	return Through(lead) - Through(lead, stop, at) >= AHEAD_GAIN / hold
+	return Through(lead) - Through(lead, stop, at) >= FORWARD.gain / hold
 end
 
 -- The guide's step among its next few that a stop for a quest's objective stands in for: the
--- first with that quest's work whose every task can be done within AHEAD_CAMP yards of the stop,
+-- first with that quest's work whose every task can be done within FORWARD.camp yards of the stop,
 -- so that one visit there sees the step through. nil when there is none. (A step for creatures
 -- spread over a zone is not done where the first of them stands, nor is one for another of the
 -- quest's objectives somewhere else.)
@@ -2545,7 +2584,7 @@ local function Camped(stop)
 	for _, at in ipairs(steps.all["goal" .. stop.actions[1].id] or {}) do
 		local step, fits = steps[at], true
 		if not step.lists then
-			fits = step.north ~= nil and W.Between(stop.north, stop.west, step.north, step.west) <= AHEAD_CAMP
+			fits = step.north ~= nil and W.Between(stop.north, stop.west, step.north, step.west) <= FORWARD.camp
 		else
 			local near = {}              -- by task: one of its places is this near
 			for i, places in ipairs(step.lists) do
@@ -2553,7 +2592,7 @@ local function Camped(stop)
 				near[task] = near[task] or false
 				local list = Spots(places)
 				for p = 1, near[task] and 0 or #list, 2 do
-					if W.Between(stop.north, stop.west, list[p], list[p + 1]) <= AHEAD_CAMP then near[task] = true end
+					if W.Between(stop.north, stop.west, list[p], list[p + 1]) <= FORWARD.camp then near[task] = true end
 				end
 			end
 			for _, found in pairs(near) do fits = fits and found end
@@ -2585,7 +2624,7 @@ local function Detour(stop, lead, grind)
 	if strict and not (grind and stop.kind == "turnin") then return false end
 	-- Quests to take a short walk off go before work on one already taken, its creatures maybe the very ones
 	-- a quest there wants too; something done in a moment (a well to fill) still goes in passing.
-	if stop.kind == "goal" and not grind and lead.yards and lead.yards <= ON_THE_WAY then
+	if stop.kind == "goal" and not grind and lead.yards and lead.yards <= RULES.onTheWay then
 		local takes, works = false, false
 		for _, line in ipairs(lead.view.lines) do
 			if line.can and not line.done then
@@ -2597,27 +2636,27 @@ local function Detour(stop, lead, grind)
 			-- (Once begun a quest is seen through: what all of it still asks.)
 			local id, seconds = stop.actions[1].id, 0
 			for index in ipairs(L.Goals(id)) do seconds = seconds + R.Effort(id, index) end
-			if seconds > 2 * HANDLE then return false end
+			if seconds > 2 * EFFORT.handle then return false end
 		end
 	end
-	-- Hysteresis (AT_WORK): a detoured objective keeps the lead while the player is at it, and
+	-- Hysteresis (RULES.atWork): a detoured objective keeps the lead while the player is at it, and
 	-- none takes it while the player is working on the guide's own step.
 	if stop.kind == "goal" and not grind then
 		if detoured["goal" .. stop.actions[1].id] then
-			if stop.among or stop.yards <= AT_WORK then return true end
-		elseif ledStep == lead.view.step.index and (lead.among or (lead.yards and lead.yards <= AT_WORK)) and AtWork(lead) then
+			if stop.among or stop.yards <= RULES.atWork then return true end
+		elseif ledStep == lead.view.step.index and (lead.among or (lead.yards and lead.yards <= RULES.atWork)) and AtWork(lead) then
 			return false
 		end
 	end
-	local hold = detoured[stop.kind .. stop.actions[1].id] and STAY or 1
+	local hold = detoured[stop.kind .. stop.actions[1].id] and RULES.stay or 1
 	-- A class quest right here or hardly off the way is picked up in passing.
 	if stop.kind == "pickup" and not strict then
 		local own = false
 		for _, action in ipairs(stop.actions) do own = own or action.own == true end
 		if own then
-			if stop.yards <= OWN_REACH * hold then return true, "class" end
+			if stop.yards <= RULES.ownReach * hold then return true, "class" end
 			if lead.yards and lead.north and stop.yards <= lead.yards * hold
-				and stop.yards + W.Between(stop.north, stop.west, lead.north, lead.west) - lead.yards <= ON_THE_WAY * hold then
+				and stop.yards + W.Between(stop.north, stop.west, lead.north, lead.west) - lead.yards <= RULES.onTheWay * hold then
 				return true, "class"
 			end
 		end
@@ -2628,7 +2667,7 @@ local function Detour(stop, lead, grind)
 		elseif stop.kind ~= "turnin" and stop.kind ~= "goal" then
 			return false
 		end
-		return stop.yards <= GRIND_REACH * hold
+		return stop.yards <= RULES.grindReach * hold
 	end
 	local placed = lead.yards ~= nil and lead.north ~= nil
 	local apart = placed and W.Between(stop.north, stop.west, lead.north, lead.west) or nil
@@ -2640,18 +2679,18 @@ local function Detour(stop, lead, grind)
 	-- the guide comes again for a quest still to take; once begun the quest is seen through.
 	local soon, sooner
 	if stop.kind == "turnin" then
-		reach = (grind or placed) and HAND_IN_REACH or HAND_IN_NEAR
+		reach = (grind or placed) and RULES.handInReach or RULES.handInNear
 	elseif stop.kind == "goal" then
-		reach = WORK_REACH
+		reach = RULES.workReach
 		if placed and not grind then
 			local begun = detoured["goal" .. stop.actions[1].id]
-			local fair = stop.yards <= AHEAD_REACH * hold and (begun or (stop.yards <= lead.yards and extra <= lead.yards * AHEAD_ASIDE))
+			local fair = stop.yards <= FORWARD.reach * hold and (begun or (stop.yards <= lead.yards and extra <= lead.yards * FORWARD.aside))
 			-- (The guide's next steps are read only where they can matter.)
 			if fair or stop.yards <= reach * hold then soon = Ahead().of["goal" .. stop.actions[1].id] end
 			-- The step the stop stands in for; once begun, the quest's first step ahead will do.
 			local at = soon ~= nil and fair and not TooHigh(stop) and (Camped(stop) or (begun and soon)) or nil
 			sooner = at ~= nil and Shorter(stop, lead, at, hold)
-				and (begun or not G.ComesBack(stop.north, stop.west, ON_THE_WAY, AHEAD_BACK, Reckoned()))
+				and (begun or not G.ComesBack(stop.north, stop.west, RULES.onTheWay, FORWARD.back, Reckoned()))
 		end
 	else
 		return false
@@ -2662,9 +2701,9 @@ local function Detour(stop, lead, grind)
 		-- The guide's step goes first when it is nearer and the objective is in reach from it.
 		-- An objective the guide has a step for soon only detours in passing, or as the shorter walk.
 		local behind = lead.yards * hold < stop.yards and apart <= reach
-		if soon then return sooner or (not behind and extra <= IN_PASSING * hold) end
+		if soon then return sooner or (not behind and extra <= RULES.inPassing * hold) end
 		if behind then return false end
-	elseif stop.kind == "turnin" and lead.yards <= AT_WORK and lead.yards * hold < stop.yards then
+	elseif stop.kind == "turnin" and lead.yards <= RULES.atWork and lead.yards * hold < stop.yards then
 		-- With the guide's step right here, a turn-in the guide makes later waits.
 		local guides = true
 		for _, action in ipairs(stop.actions) do
@@ -2672,7 +2711,7 @@ local function Detour(stop, lead, grind)
 		end
 		if guides then return false end
 	end
-	if extra <= ON_THE_WAY * hold then return true end
+	if extra <= RULES.onTheWay * hold then return true end
 	if stop.yards > lead.yards * hold then return false end
 	-- Nearer but off the way: a turn-in the guide makes later detours only if it no more than
 	-- doubles the walk to the guide's step.
@@ -2691,12 +2730,12 @@ local wasHere = {}           -- step indexes that led this way last time
 
 local function Here(stop, lead)
 	if not stop.side or not stop.yards or not stop.north or T.db.guide.nearby == false then return false end
-	local hold = wasHere[stop.view.step.index] and STAY or 1
-	if not lead or not lead.yards or not lead.north then return stop.yards <= WORK_REACH * hold end
+	local hold = wasHere[stop.view.step.index] and RULES.stay or 1
+	if not lead or not lead.yards or not lead.north then return stop.yards <= RULES.workReach * hold end
 	if stop.yards > lead.yards * hold then return false end
-	if stop.yards <= WORK_REACH * hold then return true end
+	if stop.yards <= RULES.workReach * hold then return true end
 	local extra = stop.yards + W.Between(stop.north, stop.west, lead.north, lead.west) - lead.yards
-	return extra <= ON_THE_WAY * hold
+	return extra <= RULES.onTheWay * hold
 end
 
 -- Orders the live steps: side steps that are here (nearest first), then the rest.
@@ -2780,8 +2819,10 @@ end
 -- and the maps show. Only from the player to the lead stop or the guide's step, and on from where its rides
 -- land; rides between guide steps are the guide's. The journey to a stop is kept while it is about as quick
 -- as any other (Journey's lead), so the card doesn't turn from one way to another and back.
-local WALK_SPEED = 7         -- yards a second, where no way over the ground is known
-local MASTER_REACH = 150     -- yards from a flight point within which its flight master is looked for
+local FLIGHT = {
+	walkSpeed = 7,  -- yards a second, where no way over the ground is known
+	masterReach = 150,  -- yards from a flight point within which its flight master is looked for
+}
 local Way = Shy.Way
 
 local points, pointsFor, pointsFrom   -- flight points of the player's faction, which faction, and of what stops
@@ -2812,7 +2853,7 @@ local function Master(point)
 				for i = 1, #place.points, 2 do
 					local continent, north, west = W.ToWorld(place.map, place.points[i], place.points[i + 1])
 					local yards = continent == point.continent and W.Between(point.north, point.west, north, west)
-					if yards and yards <= MASTER_REACH and (not least or yards < least) then
+					if yards and yards <= FLIGHT.masterReach and (not least or yards < least) then
 						least = yards
 						point.master = { npc = npc, map = place.map, x = place.points[i], y = place.points[i + 1] }
 					end
@@ -2833,7 +2874,7 @@ R.FlightPoints, R.FlightMaster = Points, Master
 function R.Travel(continent, north, west, toNorth, toWest)
 	local journey, state = Way.Journey(Way.Place(continent, north, west), Way.Place(continent, toNorth, toWest))
 	if journey then return journey.seconds, state == nil, state ~= "working" end
-	return W.Walked(continent, north, west, toNorth, toWest) / WALK_SPEED, false, state ~= "working"
+	return W.Walked(continent, north, west, toNorth, toWest) / FLIGHT.walkSpeed, false, state ~= "working"
 end
 
 -- How a ride's stop reads on the card: where it is boarded, its heading and its strip. What each is called
@@ -3132,20 +3173,22 @@ end)
 
 -- The way soon
 -- An errand off the way is weighed against the guide's way ahead: the walk it adds now, against
--- the least it adds between two of the guide's next places. Looked at as far as SOON yards on,
+-- the least it adds between two of the guide's next places. Looked at as far as WAIT.soon yards on,
 -- and no farther than a step that flies or hearths (the way after it is not walked). Kept while
--- the guide's place stays where it is, for AGAIN seconds at most, as Hearth.lua keeps its own.
-local SOON = 1500            -- yards of the guide's way that count as soon
-local SOON_STEPS = 12        -- its places looked at, at most
-local NEARER = 2 / 3         -- a place ahead is waited for when it adds no more than this share of the walk added now
-local AGAIN = 30
+-- the guide's place stays where it is, for WAIT.again seconds at most, as Hearth.lua keeps its own.
+local WAIT = {
+	soon = 1500,  -- yards of the guide's way that count as soon
+	steps = 12,  -- its places looked at, at most
+	nearer = 2 / 3,  -- a place ahead is waited for when it adds no more than this share of the walk added now
+	again = 30,
+}
 local soon = {}
 
 local function Soon()
 	local main = G.active and G.active[1]
 	local key = main and (tostring(G.current) .. ":" .. main.step.index) or nil
 	if not key then return nil end
-	if soon.key ~= key or GetTime() - soon.at > AGAIN then soon = { key = key, at = GetTime(), places = G.Places(SOON_STEPS) } end
+	if soon.key ~= key or GetTime() - soon.at > WAIT.again then soon = { key = key, at = GetTime(), places = G.Places(WAIT.steps) } end
 	return soon.places
 end
 
@@ -3159,7 +3202,7 @@ local function Least(continent, north, west, strong)
 		local from, to = places[i], places[i + 1]
 		if (strong and #from.tasks > 0) or from.carried or from.continent ~= continent or to.continent ~= continent then break end
 		local leg = W.Between(from.north, from.west, to.north, to.west)
-		if walked > SOON or leg > SOON then break end
+		if walked > WAIT.soon or leg > WAIT.soon then break end
 		local extra = W.Between(from.north, from.west, north, west) + W.Between(north, west, to.north, to.west) - leg
 		if not least or extra < least then least = extra end
 		walked = walked + leg
@@ -3167,12 +3210,12 @@ local function Least(continent, north, west, strong)
 	return least
 end
 
--- True when a place is to be gone to now, with STAY hysteresis; also returns the distance.
---   Within `reach` yards (default ERRAND_NEAR), or nearer than the lead and within ON_THE_WAY of
+-- True when a place is to be gone to now, with RULES.stay hysteresis; also returns the distance.
+--   Within `reach` yards (default ERRAND_NEAR), or nearer than the lead and within RULES.onTheWay of
 --   the path to it: in passing.
 --   `worth`: yards of walk the errand may add when it is not in passing. It goes when the walk it
 --   adds now is within that and the guide's way soon (Least) does not come a good deal nearer
---   (NEARER); `strong` as there. Without `worth` an errand only ever goes in passing, so one that
+--   (WAIT.nearer); `strong` as there. Without `worth` an errand only ever goes in passing, so one that
 --   matters has to say what it is worth: a trainer 400 yards off every way was never led to.
 -- An errand that was asked for is always on the way.
 function R.Passing(id, map, x, y, lead, reach, worth, strong)
@@ -3180,21 +3223,21 @@ function R.Passing(id, map, x, y, lead, reach, worth, strong)
 	local yards = W.Walk(map, x, y)
 	if not yards then return false end
 	if R.Asked(id) then return true, yards end
-	local hold = ranFirst[id] and STAY or 1
+	local hold = ranFirst[id] and RULES.stay or 1
 	if yards <= (reach or ERRAND_NEAR) * hold then return true, yards end
 	local continent, north, west = W.ToWorld(map, x, y)
 	if not north or continent ~= W.continent then return false, yards end
 	local placed = lead and lead.north and lead.yards and lead.continent == continent
 	-- The walk it adds: there and on to what leads, less the way to that. With nowhere to go on to, the walk there.
 	local extra = placed and yards + W.Walked(continent, north, west, lead.north, lead.west) - lead.yards or yards
-	if placed and yards <= lead.yards * hold and extra <= ON_THE_WAY * hold then return true, yards end
+	if placed and yards <= lead.yards * hold and extra <= RULES.onTheWay * hold then return true, yards end
 	if worth and extra <= worth * hold then
 		local least = Least(continent, north, west, strong)
 		if not least then return true, yards end
 		-- (Straight lines against a straight line: the way ahead is not asked of the ground.)
 		local flat = W.Between(W.north, W.west, north, west)
 		if placed then flat = flat + W.Between(north, west, lead.north, lead.west) - W.Between(W.north, W.west, lead.north, lead.west) end
-		if least * hold > flat * NEARER then return true, yards end
+		if least * hold > flat * WAIT.nearer then return true, yards end
 	end
 	return false, yards
 end
@@ -3709,7 +3752,15 @@ end
 
 local VERBS = { turnin = "Turn in", pickup = "Pick up" }
 -- Where an objective's item comes from, when the objective text doesn't name it.
-local FROM = { sells = "Sold by %s", holds = "Found in %s", drops = "Dropped by %s", gives = "From %s" }
+local FROM = { sells = "Sold by %s", holds = "Found in %s", drops = "Dropped by %s", gives = "From %s",
+	reward = "%s gives it for %s" }
+-- A source as text ("Sold by Narret Shadowgrove"; "Grimbooze Thunderbrew gives it for Thunderbrew"), or nil.
+function FROM.Text(source)
+	if not source or source.name == "" or not FROM[source.how] then return nil end
+	local quest = source.quest and D.Quest(source.quest)
+	if quest then return FROM.reward:format(source.name, quest.name) end
+	return FROM[source.how]:format(source.name)
+end
 
 -- The nearest source of an objective as text ("Sold by Narret Shadowgrove"), or nil. A vendor in reach wins.
 function R.From(id, index)
@@ -3723,11 +3774,11 @@ function R.From(id, index)
 		local map, _, _, yards = W.Nearest(places)
 		if map and source and source.name ~= "" and FROM[source.how] then
 			yards = yards or math.huge
-			local seller = source.how == "sells" and yards <= BUY_NEAR
+			local seller = source.how == "sells" and yards <= RULES.buyNear
 			if not best or (seller and not sells) or (seller == sells and yards < least) then best, least, sells = source, yards, seller end
 		end
 	end
-	return best and FROM[best.how]:format(best.name) or nil
+	return FROM.Text(best)
 end
 
 -- What a stop is sent for before its own task, and where that is had ("Needs Flawed Power Stone",
@@ -3736,8 +3787,7 @@ end
 function R.Needs(stop)
 	local source = stop.needs or (stop.source and stop.source.needs and stop.source) or nil
 	if not source then return nil end
-	local from = source.name ~= "" and FROM[source.how]
-	return "Needs " .. source.needs, from and from:format(source.name) or nil
+	return "Needs " .. source.needs, FROM.Text(source)
 end
 
 -- Text of the first unfinished objective, preferring `index`.
@@ -3796,10 +3846,10 @@ function R.Describe(stop)
 	for _, action in ipairs(stop.actions) do
 		if action.kind == "goal" then
 			lines[#lines + 1] = NextObjective(action.id, stop.objective) or "Continue this quest"
-			local from = stop.source and stop.source.name ~= "" and FROM[stop.source.how]
+			local from = FROM.Text(stop.source)
 			if from and #stop.actions == 1 then
 				if stop.source.needs then lines[#lines + 1] = "Needs " .. stop.source.needs end
-				lines[#lines + 1] = from:format(stop.source.name)
+				lines[#lines + 1] = from
 			end
 		elseif action.failed then
 			lines[#lines + 1] = "Failed: abandon and retake " .. action.title

@@ -309,7 +309,7 @@ function D.Item(id)
 		end
 		local f = Fields(text)
 		item = { id = id, name = f[1], sources = Tokens(f[2]), more = Numbers(f[3]), begins = Numbers(f[4]), trade = f[5] == "t",
-			asks = Numbers(f[6]) }
+			asks = Numbers(f[6]), given = Numbers(f[7]) }
 		cache.items[id] = item
 	end
 	return item or nil

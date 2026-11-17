@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffFarm|r
 ## Notes: What your grinding and fishing are worth, in gold an hour |cff888888/shyfarm|r
 ## Author: Shyce Cream
-## Version: 5.1.5
+## Version: 5.1.6
 ## X-Date: 2026-11-17
 ## IconTexture: Interface\AddOns\ShyFarm\Media\ShyFarmMarkColor
 ## Dependencies: ShyCore

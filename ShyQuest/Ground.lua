@@ -45,46 +45,61 @@ local Ground = {}
 ns.Ground = Ground
 
 local UNITS = 10000
-local RADIUS = 40            -- yards: how far from a spawn its ground reaches (its wander, and room to pull it)
-local FLOOR = 13             -- and on the world map at least this much on screen
-local STEP = 1.3             -- the reach grows from RADIUS in steps of this, so a zoom seldom redraws
-local REACH = 1.5            -- the grid is told how near a spawn is out to this many radii
-local LEVEL = 1 - 1 / REACH  -- its value one radius from the nearest spawn: where the outline runs
-local FINE = 3               -- grid cells to a radius
-local HOLE = 14              -- a gap inside a region smaller than this many square radii is closed
-local SLACK = 0.03           -- an outline's kept points are within this of it, in radii
-local MOST = 1500            -- spawns taken for the world map
-local FEW = 12               -- a thing with no more spawns than this, nearly every one a place of its own, is
-                             -- found by its exact places
-local MINI_MOST = 70         -- pointers on the minimap
-local MINI_DOTS = 160        -- spawns shown as dots on the minimap while the player stands on their ground
-local MINI_DOT = 16          -- a spawn's picture cell on the minimap (Spawns: 32 texel cells, its picture ten units of it)
-local DOT_LIGHT, DOT_DEEP = 0.45, 0.32   -- a spawn's face: this far toward white; its case: this much of the color
+-- A ground's shape: how far it reaches from its spawns, and how finely it is drawn.
+local SHAPE = {
+	radius = 40,  -- yards: how far from a spawn its ground reaches (its wander, and room to pull it)
+	floor = 13,  -- and on the world map at least this much on screen
+	step = 1.3,  -- the reach grows from SHAPE.radius in steps of this, so a zoom seldom redraws
+	reach = 1.5,  -- the grid is told how near a spawn is out to this many radii
+	fine = 3,  -- grid cells to a radius
+	hole = 14,  -- a gap inside a region smaller than this many square radii is closed
+	slack = 0.03,  -- an outline's kept points are within this of it, in radii
+	most = 1500,  -- spawns taken for the world map
+	few = 12,  -- a thing with no more spawns than this, nearly every one a place of its own, is
+	-- found by its exact places
+}
+SHAPE.level = 1 - 1 / SHAPE.reach  -- its value one radius from the nearest spawn: where the outline runs
+-- How grounds, pointers and dots are drawn on the world map and the minimap.
+local DRAW = {
+	miniMost = 70,  -- pointers on the minimap
+	miniDots = 160,  -- spawns shown as dots on the minimap while the player stands on their ground
+	miniDot = 16,  -- a spawn's picture cell on the minimap (Spawns: 32 texel cells, its picture ten units of it)
+	dotLight = 0.45,
+	dotDeep = 0.32,  -- a spawn's face: this far toward white; its case: this much of the color
+	miniFar = 80,  -- yards past the minimap's corner still chosen, for the steps until the next choice
+	miniNear = 25,  -- yards: a pointer this near the player fades, so the arrow stays clear
+	miniNearAlpha = 0,
+	-- A pointer's picture: the pin in it is half as high, with its point on the picture's middle.
+	spot = 22,
+	miniSpot = 22,
+	mapDot = 14,
+	mapDots = 400,  -- a spawn's picture cell on the world map, and the most shown
+	-- The edge line's thickness in screen pixels (the hairline runs along its middle, the shadow on the
+	-- outward half) and the glow line's (centred on the edge too, its outward half empty); the media builder
+	-- draws the strips for these. The minimap's are the same strips thinner.
+	edge = 8,
+	glow = 28,
+	miniEdge = 6,
+	miniGlow = 16,
+	widthSlack = 0.03,  -- a zoom tells the outlines their width again once it is this share off (under a pixel)
+	-- The fill: rows about DRAW.fillRow screen pixels high, each from the outline to the outline, so its steps
+	-- are hidden under the edge. Its lines are plain and whole; the frame they are on is faint.
+	fillAlpha = 0.16,
+	miniFillAlpha = 0.14,
+	fillRow = 3,
+	miniFillRow = 6,  -- (the minimap's rows: a third fewer to lay than at 4, and as smooth at its size)
+	fillMost = 600,  -- rows at most down one ground, however far the map is zoomed in
+	breath = 2.4,
+	breathLow = 0.78,  -- the glow's slow pulse: seconds, lowest alpha
+	gleamLength = 90,
+	gleamSpeed = 190,  -- a clicked ground's gleam: screen pixels long, screen pixels a second
+	gleamWide = 2.6,  -- its line's thickness in screen pixels
+	apart = 100,  -- map units: an object's spawns spanning this much count as spread out
+	names = 2,  -- names in a row of the key
+}
 -- Spawns.tga: a cell a kind across (the case on its top row, the face under it), 8 by 2.
 local SPAWN_CELL = { kill = 0, loot = 1, gather = 2, talk = 3, go = 4, find = 5, escort = 6, body = 7, farm = 1 }
-local MINI_FAR = 80          -- yards past the minimap's corner still chosen, for the steps until the next choice
-local MINI_NEAR = 25         -- yards: a pointer this near the player fades, so the arrow stays clear
-local MINI_NEAR_ALPHA = 0
--- A pointer's picture: the pin in it is half as high, with its point on the picture's middle.
-local SPOT, MINI_SPOT = 22, 22
-local MAP_DOT, MAP_DOTS = 14, 400   -- a spawn's picture cell on the world map, and the most shown
--- The edge line's thickness in screen pixels (the hairline runs along its middle, the shadow on the
--- outward half) and the glow line's (centred on the edge too, its outward half empty); the media builder
--- draws the strips for these. The minimap's are the same strips thinner.
-local EDGE, GLOW = 8, 28
-local MINI_EDGE, MINI_GLOW = 6, 16
-local WIDTH_SLACK = 0.03     -- a zoom tells the outlines their width again once it is this share off (under a pixel)
--- The fill: rows about FILL_ROW screen pixels high, each from the outline to the outline, so its steps
--- are hidden under the edge. Its lines are plain and whole; the frame they are on is faint.
-local FILL_ALPHA, MINI_FILL_ALPHA = 0.16, 0.14
-local FILL_ROW, MINI_FILL_ROW = 3, 6   -- (the minimap's rows: a third fewer to lay than at 4, and as smooth at its size)
-local FILL_MOST = 600        -- rows at most down one ground, however far the map is zoomed in
 local SOLID = "Interface\\Buttons\\WHITE8X8"
-local BREATH, BREATH_LOW = 2.4, 0.78   -- the glow's slow pulse: seconds, lowest alpha
-local GLEAM_LENGTH, GLEAM_SPEED = 90, 190   -- a clicked ground's gleam: screen pixels long, screen pixels a second
-local GLEAM_WIDE = 2.6       -- its line's thickness in screen pixels
-local APART = 100            -- map units: an object's spawns spanning this much count as spread out
-local NAMES = 2              -- names in a row of the key
 local MEDIA = ns.MEDIA
 local EDGE_ART, GLOW_ART, ART, DASH = MEDIA .. "Edge", MEDIA .. "Glow", MEDIA .. "Spots", MEDIA .. "Dash"
 local DOT_ART = ns.MEDIA .. "Spawns"
@@ -92,15 +107,20 @@ local STRIPE = { 0.25, 0.5 } -- the solid stretch of the dash's picture
 -- The game's own areas (QuestPOIFrame): the frame draws only the game's own pictures (a file of ours, TGA or
 -- BLP, is its solid green), so it is asked where its area is instead:
 -- UpdateMouseOverTooltip(x, y) says whether a point of the map lies in it, and a grid of such points
--- (SAMPLE across the map's width, as many down as its height is to its width) becomes the area's own
+-- (BLOB.sample across the map's width, as many down as its height is to its width) becomes the area's own
 -- ground, drawn with the same lines as a spawn's. Only where that gives nothing does the frame itself
 -- draw, with the game's white border and no fill.
-local SAMPLE = 160
-local BLOB_FILL, BLOB_BORDER, BLOB_SCALAR, BLOB_SPLINE = 0, 255, 1.0, 12
+local BLOB = {
+	sample = 160,
+	fill = 0,
+	border = 255,
+	scalar = 1.0,
+	spline = 12,
+	reach = 1.15,  -- a sample's ground reaches this many cells, so the outline hugs the samples
+	near = 2,  -- cells: a spawn this near a piece of the game's area is of that piece
+}
 local BLIZZARD_BORDER_WHITE = "Interface\\WorldMap\\UI-QuestBlob-Outside-white"
 local BLIZZARD_FILL = "Interface\\WorldMap\\UI-QuestBlob-Inside"
-local AREA_REACH = 1.15          -- a sample's ground reaches this many cells, so the outline hugs the samples
-local AREA_NEAR = 2              -- cells: a spawn this near a piece of the game's area is of that piece
 
 -- The game lays a line's picture along it from start to end with the picture's top on the LEFT of the
 -- way. The loops run with the ground on their left with y down, which is on their right on the screen,
@@ -342,7 +362,7 @@ function Ground.Of(stop, live)
 					end
 				end
 			end
-			if apart or (map and (right - left > APART or bottom - top > APART)) then
+			if apart or (map and (right - left > DRAW.apart or bottom - top > DRAW.apart)) then
 				Take({ ground }, { object.name }, { how = "start", name = object.name, quest = id, object = true })
 			end
 		end
@@ -443,8 +463,8 @@ end
 
 -- The ground is everything within a radius of a spawn: a circle round each, and where circles meet
 -- one outline round them all. Nothing is added up: a thick camp reaches no farther past its spawns
--- than a lone one. Each grid node holds how near its nearest spawn is (1 on it, LEVEL a radius off,
--- 0 at REACH radii and past), so the outline is traced where that is LEVEL.
+-- than a lone one. Each grid node holds how near its nearest spawn is (1 on it, SHAPE.level a radius off,
+-- 0 at SHAPE.reach radii and past), so the outline is traced where that is SHAPE.level.
 
 -- A square of the grid cut by the outline: the edges it enters and leaves by (1 top, 2 right,
 -- 3 bottom, 4 left), by which corners are inside (top left 1, top right 2, bottom right 4, bottom
@@ -458,10 +478,10 @@ local SADDLE = { [5] = { { 4, 1, 2, 3 }, { 4, 3, 2, 1 } }, [10] = { { 1, 2, 3, 4
 -- either side of it agree on it), and the point, in cells. a, b, c, d: the square's corners, as above.
 local function Crossing(edge, i, j, cols, a, b, c, d)
 	local node = j * cols + i
-	if edge == 1 then return node * 2, i + (LEVEL - a) / (b - a), j end
-	if edge == 2 then return (node + 1) * 2 + 1, i + 1, j + (LEVEL - b) / (c - b) end
-	if edge == 3 then return (node + cols) * 2, i + (LEVEL - d) / (c - d), j + 1 end
-	return node * 2 + 1, i, j + (LEVEL - a) / (d - a)
+	if edge == 1 then return node * 2, i + (SHAPE.level - a) / (b - a), j end
+	if edge == 2 then return (node + 1) * 2 + 1, i + 1, j + (SHAPE.level - b) / (c - b) end
+	if edge == 3 then return (node + cols) * 2, i + (SHAPE.level - d) / (c - d), j + 1 end
+	return node * 2 + 1, i, j + (SHAPE.level - a) / (d - a)
 end
 
 -- A closed line of `count` points (x, y, x, y, ...) without those within `slack` of the line between
@@ -556,11 +576,11 @@ local cuts = {}              -- a row's crossings, used again for each row
 -- The outlines round everything within `radius` of the n points (xs, ys), in the points' unit: a list
 -- of closed lines, each x, y, x, y, ... with .n points, the ground on the left of the way (y down),
 -- .hole for the edge of a gap inside it, .depth for how far in its middle is. The list also carries
--- what a row across the ground is cut by (Band; .cell: a FINE share of the radius).
+-- what a row across the ground is cut by (Band; .cell: a SHAPE.fine share of the radius).
 function Ground.Loops(xs, ys, n, radius)
-	local loops = { cell = radius / FINE }
+	local loops = { cell = radius / SHAPE.fine }
 	if n == 0 then return loops end
-	local cell, reach = radius / FINE, radius * REACH
+	local cell, reach = radius / SHAPE.fine, radius * SHAPE.reach
 	local left, right, top, bottom = xs[1], xs[1], ys[1], ys[1]
 	for i = 2, n do
 		local x, y = xs[i], ys[i]
@@ -602,9 +622,9 @@ function Ground.Loops(xs, ys, n, radius)
 			local row, under = j * cols, (j + 1) * cols
 			for i = from - 1, to do
 				local a, b, c, d = grid[row + i] or 0, grid[row + i + 1] or 0, grid[under + i + 1] or 0, grid[under + i] or 0
-				local cut = (a >= LEVEL and 1 or 0) + (b >= LEVEL and 2 or 0) + (c >= LEVEL and 4 or 0) + (d >= LEVEL and 8 or 0)
+				local cut = (a >= SHAPE.level and 1 or 0) + (b >= SHAPE.level and 2 or 0) + (c >= SHAPE.level and 4 or 0) + (d >= SHAPE.level and 8 or 0)
 				if cut ~= 0 and cut ~= 15 then
-					local pieces = SEGMENTS[cut] or SADDLE[cut][(a + b + c + d) / 4 >= LEVEL and 2 or 1]
+					local pieces = SEGMENTS[cut] or SADDLE[cut][(a + b + c + d) / 4 >= SHAPE.level and 2 or 1]
 					for piece = 1, #pieces, 2 do
 						local key, x, y = Crossing(pieces[piece], i, j, cols, a, b, c, d)
 						onward[key], px[key], py[key] = Crossing(pieces[piece + 1], i, j, cols, a, b, c, d), x, y
@@ -633,8 +653,8 @@ function Ground.Loops(xs, ys, n, radius)
 			end
 			-- With the ground on the left and y down, an outer line turns one way and a gap's the other.
 			local hole = area > 0
-			if count >= 3 and edge > 0 and (not hole or area / 2 > HOLE * radius * radius) then
-				local kept = Thin(loop, count, SLACK * radius)
+			if count >= 3 and edge > 0 and (not hole or area / 2 > SHAPE.hole * radius * radius) then
+				local kept = Thin(loop, count, SHAPE.slack * radius)
 				if kept.n >= 3 then
 					kept.hole, kept.depth = hole, math.abs(area) / 2 / edge
 					loops[#loops + 1] = kept
@@ -710,10 +730,10 @@ local function Gather(set, lists, whats, map, room, away)
 				if here then
 					-- A few spawns nearly every one a place of its own at the yard radius: pointers.
 					local places_ = 0
-					if mine.n <= FEW and mine.north[1] then
-						places_ = mine.n <= 2 and mine.n or #Ground.Loops(mine.north, mine.west, mine.n, RADIUS)
+					if mine.n <= SHAPE.few and mine.north[1] then
+						places_ = mine.n <= 2 and mine.n or #Ground.Loops(mine.north, mine.west, mine.n, SHAPE.radius)
 					end
-					local spread = what.pinned or mine.n <= 2 or (mine.n <= FEW and places_ >= mine.n - 1)
+					local spread = what.pinned or mine.n <= 2 or (mine.n <= SHAPE.few and places_ >= mine.n - 1)
 					-- A row of the key for this list's objective (or, where the list came without one, its
 					-- quest and kind), naming what is there.
 					local key = (what.quest or "") .. ":" .. (what.objective or kind)
@@ -790,20 +810,24 @@ end
 -- The game's area for a quest on a map, as the points of a grid that lie in it (fractions of the map;
 -- .n of them), sampled once out of a QuestPOIFrame of ours; false when the frame gives nothing.
 -- Asking is a job (thousands of questions of the game): the area is known a few frames after it is
--- first wanted. A miss is asked again after MISS_FOR seconds, then after twice as long each time, up
--- to MISS_MOST: the server may send an area late, and one for another map never comes. On a cold login
+-- first wanted. A miss is asked again after MISS.wait seconds, then after twice as long each time, up
+-- to MISS.most: the server may send an area late, and one for another map never comes. On a cold login
 -- it comes late: the log has the quest at once, the area's shape follows with QUEST_POI_UPDATE (a
 -- /reload finds it already there). So that event forgets every miss, and the maps asking again at the
--- rebuild it brings find it; and the first MISS_TIMED misses are asked again when their wait is out,
+-- rebuild it brings find it; and the first MISS.timed misses are asked again when their wait is out,
 -- by a timer of their own, for an area the game could not draw yet when the event was heard.
 -- An area found is asked again too: on a cold login the server sends a quest's areas a piece at a time,
 -- and what was found after the first piece is only part of it. The event makes every area found due
--- again (kept and drawn meanwhile), and an answer the same as before is asked again MISS_TIMED times
--- more, after MISS_FOR seconds and then twice as long each time, for pieces the game draws late.
+-- again (kept and drawn meanwhile), and an answer the same as before is asked again MISS.timed times
+-- more, after MISS.wait seconds and then twice as long each time, for pieces the game draws late.
 local sampled = {}           -- by map, by quest: the points (.due, .again: being asked again, .checks), { miss, wait, misses },
                              -- or { asking = true, ... } meanwhile
 local sampler
-local MISS_FOR, MISS_MOST, MISS_TIMED = 2, 60, 3
+local MISS = {
+	wait = 2,
+	most = 60,
+	timed = 3,
+}
 local heard = 0              -- QUEST_POI_UPDATEs heard: an answer asked for before the latest is no miss
 local function Sampler()
 	if sampler == nil then
@@ -838,12 +862,12 @@ local function Ask(id, map)
 	end)
 	if not ok then return points end
 	coroutine.yield("frame")
-	local rows = math.floor(SAMPLE * 2 / 3 + 0.5)
-	local step, drop = 1 / SAMPLE, 1 / rows
+	local rows = math.floor(BLOB.sample * 2 / 3 + 0.5)
+	local step, drop = 1 / BLOB.sample, 1 / rows
 	local test = frame.UpdateMouseOverTooltip
 	for j = 0, rows - 1 do
 		local y = (j + 0.5) * drop
-		for i = 0, SAMPLE - 1 do
+		for i = 0, BLOB.sample - 1 do
 			local x = (i + 0.5) * step
 			local inside, hit = pcall(test, frame, x, y)
 			if inside and hit then
@@ -867,13 +891,13 @@ local function Same(a, b)
 end
 
 -- An area found and asked again that came out as before (or as nothing, which leaves it as it was):
--- asked once more after a while, MISS_TIMED times at most since the game last said it had new areas.
+-- asked once more after a while, MISS.timed times at most since the game last said it had new areas.
 local function Settled(onMap, id, found, since)
 	found.again = nil
 	found.due = heard ~= since or nil
-	if found.due or (found.checks or 0) >= MISS_TIMED then return end
+	if found.due or (found.checks or 0) >= MISS.timed then return end
 	found.checks = (found.checks or 0) + 1
-	C_Timer.After(MISS_FOR * 2 ^ (found.checks - 1) + 0.05, function()
+	C_Timer.After(MISS.wait * 2 ^ (found.checks - 1) + 0.05, function()
 		if onMap[id] == found and not found.again then
 			found.due = true
 			if ns.ApplyPins then ns.ApplyPins() end
@@ -920,13 +944,13 @@ function Ground.Sampled(id, map)
 			-- The route stands its stop on this ground (Ground.Known): it is worked out again.
 			ns.Refresh()
 		else
-			local miss = { miss = GetTime(), wait = was and math.min(MISS_MOST, was.wait * 2) or MISS_FOR,
+			local miss = { miss = GetTime(), wait = was and math.min(MISS.most, was.wait * 2) or MISS.wait,
 				misses = (was and was.misses or 0) + 1 }
 			-- The game said it had new areas while this was asked: what it said wasn't in the answer.
 			miss.due = heard ~= since
 			onMap[id] = miss
 			-- (The maps are drawn again as the job ends, which asks again at once if it is due.)
-			if not miss.due and miss.misses <= MISS_TIMED then
+			if not miss.due and miss.misses <= MISS.timed then
 				C_Timer.After(miss.wait + 0.05, function()
 					if onMap[id] == miss and ns.ApplyPins then ns.ApplyPins() end
 				end)
@@ -936,7 +960,7 @@ function Ground.Sampled(id, map)
 		if hit then
 			hit.again, hit.due = nil, nil
 		else
-			onMap[id] = { miss = GetTime(), wait = MISS_MOST, misses = (was and was.misses or 0) + 1 }
+			onMap[id] = { miss = GetTime(), wait = MISS.most, misses = (was and was.misses or 0) + 1 }
 		end
 	end)
 	return hit, was == nil
@@ -975,9 +999,9 @@ local function Live(id, map, found)
 	local kept = found.live[key]
 	if kept then return kept end
 	kept = found
-	local rows = math.floor(SAMPLE * 2 / 3 + 0.5)
+	local rows = math.floor(BLOB.sample * 2 / 3 + 0.5)
 	local cell = {}
-	for k = 1, found.n do cell[math.floor(found.y[k] * rows) * SAMPLE + math.floor(found.x[k] * SAMPLE)] = k end
+	for k = 1, found.n do cell[math.floor(found.y[k] * rows) * BLOB.sample + math.floor(found.x[k] * BLOB.sample)] = k end
 	local piece, pieces = {}, 0
 	for k = 1, found.n do
 		if not piece[k] then
@@ -986,10 +1010,10 @@ local function Live(id, map, found)
 			local stack = { k }
 			while #stack > 0 do
 				local at = table.remove(stack)
-				local i, j = math.floor(found.x[at] * SAMPLE), math.floor(found.y[at] * rows)
+				local i, j = math.floor(found.x[at] * BLOB.sample), math.floor(found.y[at] * rows)
 				for dj = -1, 1 do
 					for di = -1, 1 do
-						local other = i + di >= 0 and i + di < SAMPLE and cell[(j + dj) * SAMPLE + i + di]
+						local other = i + di >= 0 and i + di < BLOB.sample and cell[(j + dj) * BLOB.sample + i + di]
 						if other and not piece[other] then
 							piece[other] = pieces
 							stack[#stack + 1] = other
@@ -1008,10 +1032,10 @@ local function Live(id, map, found)
 				for _, place in ipairs(places) do
 					local points = not place.dungeon and place.map == map and place.points or {}
 					for p = 1, #points, 2 do
-						local i, j = math.floor(points[p] / UNITS * SAMPLE), math.floor(points[p + 1] / UNITS * rows)
-						for dj = -AREA_NEAR, AREA_NEAR do
-							for di = -AREA_NEAR, AREA_NEAR do
-								local k = i + di >= 0 and i + di < SAMPLE and cell[(j + dj) * SAMPLE + i + di]
+						local i, j = math.floor(points[p] / UNITS * BLOB.sample), math.floor(points[p + 1] / UNITS * rows)
+						for dj = -BLOB.near, BLOB.near do
+							for di = -BLOB.near, BLOB.near do
+								local k = i + di >= 0 and i + di < BLOB.sample and cell[(j + dj) * BLOB.sample + i + di]
 								if k then lit[piece[k]], any = true, true end
 							end
 						end
@@ -1049,16 +1073,16 @@ function Ground.Known(id, map)
 	if not found.places then
 		local frame = Frame(map)
 		if not frame then return nil end
-		local rows = math.floor(SAMPLE * 2 / 3 + 0.5)
+		local rows = math.floor(BLOB.sample * 2 / 3 + 0.5)
 		local every = math.ceil(math.sqrt(found.n / KNOWN_MOST))
 		local points = {}
 		for i = 1, found.n do
-			if math.floor(found.x[i] * SAMPLE) % every == 0 and math.floor(found.y[i] * rows) % every == 0 then
+			if math.floor(found.x[i] * BLOB.sample) % every == 0 and math.floor(found.y[i] * rows) % every == 0 then
 				points[#points + 1] = math.floor(found.x[i] * UNITS + 0.5)
 				points[#points + 1] = math.floor(found.y[i] * UNITS + 0.5)
 			end
 		end
-		found.places = { { map = map, points = points }, radius = frame.yards / SAMPLE * AREA_REACH * every }
+		found.places = { { map = map, points = points }, radius = frame.yards / BLOB.sample * BLOB.reach * every }
 	end
 	return found.places
 end
@@ -1174,7 +1198,7 @@ function made.Make(stop, live, map, own, lists, names, whats, states)
 				-- Its spawns still gather for the key, the pointers and the dots, into groups that are thrown away.
 				local shadow = { groups = {}, spots = set.spots, dots = set.dots, rows = set.rows, rowsBy = set.rowsBy }
 				local before = set.spots.n
-				local took = Gather(shadow, { places }, { what }, map, MOST, away)
+				local took = Gather(shadow, { places }, { what }, map, SHAPE.most, away)
 				set.own = set.own + took
 				set.hidden = set.hidden + took - (set.spots.n - before)
 			else
@@ -1182,7 +1206,7 @@ function made.Make(stop, live, map, own, lists, names, whats, states)
 				keptWhats[#kept] = what
 			end
 		end
-		set.own = set.own + Gather(set, kept, keptWhats, map, MOST - set.own, away)
+		set.own = set.own + Gather(set, kept, keptWhats, map, SHAPE.most - set.own, away)
 	end
 	local sig = {}
 	for _, kind in ipairs(ORDER) do
@@ -1221,8 +1245,8 @@ function made.Make(stop, live, map, own, lists, names, whats, states)
 	set.sig = table.concat(sig, "|")
 	for _, row in ipairs(set.rows) do
 		local names = row.names
-		local text = table.concat(names, ", ", 1, math.min(NAMES, #names))
-		if #names > NAMES then text = ("%s +%d"):format(text, #names - NAMES) end
+		local text = table.concat(names, ", ", 1, math.min(DRAW.names, #names))
+		if #names > DRAW.names then text = ("%s +%d"):format(text, #names - DRAW.names) end
 		row.text, row.word = text, WORD[row.how] or KIND[row.kind].word
 	end
 	return set
@@ -1259,7 +1283,7 @@ local function Shapes(set, width, height, radius, wait)
 		end
 		for kind, area in pairs(set.areas) do
 			for i = 1, area.n do xs[i], ys[i] = area.x[i] * width, area.y[i] * height end
-			Add(kind, Traced(("%s|%s|%s"):format(area.sig or kind, width, height), xs, ys, area.n, width / SAMPLE * AREA_REACH, wait))
+			Add(kind, Traced(("%s|%s|%s"):format(area.sig or kind, width, height), xs, ys, area.n, width / BLOB.sample * BLOB.reach, wait))
 		end
 		if not whole then return made, false end
 		if shapes >= 24 then
@@ -1354,7 +1378,7 @@ end
 -- hairline on a deep case). A light tint of the kind's color in a case of its deep shade, a little larger.
 -- shade: the color of the objective it is for, in a quest of several (Marks.lua), in place of the kind's.
 local function Dot(dots, x, y, kind, alpha, parent, anchor, size, shade)
-	size = size or MINI_DOT
+	size = size or DRAW.miniDot
 	dots.used = dots.used + 1
 	local dot = dots[dots.used]
 	if not dot then
@@ -1370,8 +1394,8 @@ local function Dot(dots, x, y, kind, alpha, parent, anchor, size, shade)
 		dot.rim:SetTexCoord(cell / 8, (cell + 1) / 8, 0, 0.5)
 		dot.face:SetTexCoord(cell / 8, (cell + 1) / 8, 0.5, 1)
 		local r, g, b = unpack(shade or KIND[kind].color)
-		dot.face:SetVertexColor(r + (1 - r) * DOT_LIGHT, g + (1 - g) * DOT_LIGHT, b + (1 - b) * DOT_LIGHT)
-		dot.rim:SetVertexColor(r * DOT_DEEP, g * DOT_DEEP, b * DOT_DEEP)
+		dot.face:SetVertexColor(r + (1 - r) * DRAW.dotLight, g + (1 - g) * DRAW.dotLight, b + (1 - b) * DRAW.dotLight)
+		dot.rim:SetVertexColor(r * DRAW.dotDeep, g * DRAW.dotDeep, b * DRAW.dotDeep)
 	end
 	-- (Laid every frame the player moves on the minimap: only what changed is set.)
 	if dot.alpha ~= alpha then
@@ -1619,7 +1643,7 @@ local function Region(sheet, anchor, point, down, loop, color, edge, glow, unit,
 		Stroke(sheet.glow, anchor, point, down, ax, ay, bx, by, glow * unit, color, 1)
 		Stroke(sheet.edge, anchor, point, down, ax, ay, bx, by, edge * unit, color, 1)
 		if gleam then
-			local line = Stroke(sheet.gleam, anchor, point, down, ax, ay, bx, by, GLEAM_WIDE * unit, WHITE, 0)
+			local line = Stroke(sheet.gleam, anchor, point, down, ax, ay, bx, by, DRAW.gleamWide * unit, WHITE, 0)
 			line:SetAlpha(0)   -- dark until the gleam reaches it (Gleam)
 			line.gleamed = 0
 			line.run, line.total = run + math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2) / 2, false
@@ -1635,7 +1659,7 @@ end
 -- from where the outline is crossed to where it is crossed again. The frame they are on makes them faint.
 local function Fill(sheet, anchor, point, down, loops, color, pitch)
 	if not loops.bands then return end
-	pitch = math.max(pitch, (loops.bottom - loops.top) / FILL_MOST)
+	pitch = math.max(pitch, (loops.bottom - loops.top) / DRAW.fillMost)
 	for row = math.floor(loops.top / pitch), math.floor(loops.bottom / pitch) do
 		local y = (row + 0.5) * pitch
 		local n = Cross(loops, y, cuts)
@@ -1651,12 +1675,12 @@ end
 local function Gleam(sheet, now, unit)
 	local pool = sheet.gleam
 	if not pool then return end
-	local half = GLEAM_LENGTH * unit / 2
+	local half = DRAW.gleamLength * unit / 2
 	for i = 1, pool.used do
 		local line = pool[i]
 		local total = line.total
 		if total and total > 0 then
-			local at = (now * GLEAM_SPEED * unit) % total
+			local at = (now * DRAW.gleamSpeed * unit) % total
 			local along = (line.run - at + total / 2) % total - total / 2
 			local strength = math.max(0, 1 - math.abs(along) / half)
 			local alpha = math.floor(strength * strength * 0.9 * 255 + 0.5) / 255
@@ -1678,10 +1702,10 @@ local mapShown = Shown()     -- its pointers, in the layer's units from its top 
 local mapDots = Shown()      -- and its dots
 local blobs = {}             -- QuestPOIFrames of ours on the map layer, one per lit quest the game has an area for
 
--- How high a row of the fill is at a zoom, in the layer's units: FILL_ROW on screen or a little less,
+-- How high a row of the fill is at a zoom, in the layer's units: DRAW.fillRow on screen or a little less,
 -- taken in steps so the fill is laid again only now and then as the map zooms.
 local function Grain(canvas)
-	return STEP ^ math.floor(math.log(FILL_ROW / canvas) / math.log(STEP))
+	return SHAPE.step ^ math.floor(math.log(DRAW.fillRow / canvas) / math.log(SHAPE.step))
 end
 
 -- Draw the regions. unit: one screen pixel, in the layer's units. grain: Grain's for the zoom.
@@ -1693,7 +1717,7 @@ local function Regions(made, unit, kept, grain, shade)
 			Fill(mapSheet, mapLayer, "TOPLEFT", true, loops, shade or KIND[kind].color, grain)
 		end
 		for _, loop in ipairs(made[kind] or {}) do
-			Region(mapSheet, mapLayer, "TOPLEFT", true, loop, shade or KIND[kind].color, EDGE, GLOW, unit, kept)
+			Region(mapSheet, mapLayer, "TOPLEFT", true, loop, shade or KIND[kind].color, DRAW.edge, DRAW.glow, unit, kept)
 		end
 	end
 	Finish(mapSheet.fill, mapSheet.edge, mapSheet.glow, mapSheet.gleam)
@@ -1703,7 +1727,7 @@ end
 -- map's own units and zoom with it, until the zoom wants another grain).
 local function Rescale(unit)
 	for _, pool in ipairs({ mapSheet.edge, mapSheet.glow, mapSheet.gleam }) do
-		local thick = (pool == mapSheet.edge and EDGE or pool == mapSheet.glow and GLOW or GLEAM_WIDE) * unit
+		local thick = (pool == mapSheet.edge and DRAW.edge or pool == mapSheet.glow and DRAW.glow or DRAW.gleamWide) * unit
 		for i = 1, pool.used do
 			pool[i].thick = thick
 			pool[i]:SetThickness(thick)
@@ -1731,11 +1755,11 @@ local function Blobs(set, map)
 		pcall(frame.SetMapID, frame, map)
 		pcall(frame.SetFillTexture, frame, BLIZZARD_FILL)
 		pcall(frame.SetBorderTexture, frame, BLIZZARD_BORDER_WHITE)
-		pcall(frame.SetFillAlpha, frame, BLOB_FILL)
-		pcall(frame.SetBorderAlpha, frame, BLOB_BORDER)
-		pcall(frame.SetBorderScalar, frame, BLOB_SCALAR)
+		pcall(frame.SetFillAlpha, frame, BLOB.fill)
+		pcall(frame.SetBorderAlpha, frame, BLOB.border)
+		pcall(frame.SetBorderScalar, frame, BLOB.scalar)
 		pcall(frame.EnableSmoothing, frame, true)
-		pcall(frame.SetNumSplinePoints, frame, BLOB_SPLINE)
+		pcall(frame.SetNumSplinePoints, frame, BLOB.spline)
 		pcall(frame.EnableMerging, frame, true)
 		pcall(frame.DrawNone, frame)
 		pcall(frame.DrawBlob, frame, id, true)
@@ -1748,13 +1772,13 @@ local function Blobs(set, map)
 	end
 end
 
--- How far a spawn's ground reaches on the shown map, in the layer's units: RADIUS yards, or FLOOR on
+-- How far a spawn's ground reaches on the shown map, in the layer's units: SHAPE.radius yards, or SHAPE.floor on
 -- screen where that is more, taken in steps so the outlines are worked out again only now and then.
 local function Reach(map, width, canvas)
 	local frame = Frame(map)
-	local base = frame and RADIUS / frame.yards * width or width / 250
-	local steps = math.max(0, math.ceil(math.log(FLOOR / canvas / base) / math.log(STEP) - 0.001))
-	return base * STEP ^ steps
+	local base = frame and SHAPE.radius / frame.yards * width or width / 250
+	local steps = math.max(0, math.ceil(math.log(SHAPE.floor / canvas / base) / math.log(SHAPE.step) - 0.001))
+	return base * SHAPE.step ^ steps
 end
 
 -- Show the ground on the world map for `stop` (may be nil). live: as Ground.Of. map, width, height,
@@ -1782,7 +1806,7 @@ function Ground.Map(stop, live, rest, map, width, height, canvas, kept, shade)
 		drawn.shade = shade
 		Regions(made, unit, kept, grain, shade or nil)
 		drawn.unit = unit
-	elseif drawn.canvas ~= canvas and math.abs(unit / drawn.unit - 1) > WIDTH_SLACK then
+	elseif drawn.canvas ~= canvas and math.abs(unit / drawn.unit - 1) > DRAW.widthSlack then
 		-- (A zoom moves every frame: the outlines are told their width again only once it is off by more
 		-- than a hair on screen.)
 		Rescale(unit)
@@ -1790,15 +1814,15 @@ function Ground.Map(stop, live, rest, map, width, height, canvas, kept, shade)
 	end
 	-- (A zoom only sizes the pointers and dots, which stand where they stood on the canvas: they are laid
 	-- again only once their size on screen is off by more than a hair, as the outlines' widths are.)
-	if drawn.set ~= set or drawn.width ~= width or not drawn.dotUnit or math.abs(unit / drawn.dotUnit - 1) > WIDTH_SLACK then
+	if drawn.set ~= set or drawn.width ~= width or not drawn.dotUnit or math.abs(unit / drawn.dotUnit - 1) > DRAW.widthSlack then
 		drawn.dotUnit = unit
 		-- A pointer for each of a few far apart; the other spawns are lit as their ground, and counted.
 		local spots = set.spots
 		mapSheet.used = 0
-		mapShown.n, mapShown.size = 0, SPOT * unit
+		mapShown.n, mapShown.size = 0, DRAW.spot * unit
 		for i = 1, spots.n do
 			local x, y = spots.x[i] * width, spots.y[i] * height
-			Spot(Light(mapSheet), mapLayer, "TOPLEFT", x, -y, spots.kind[i], SPOT * unit, 1, spots.row[i] and spots.row[i].shade)
+			Spot(Light(mapSheet), mapLayer, "TOPLEFT", x, -y, spots.kind[i], DRAW.spot * unit, 1, spots.row[i] and spots.row[i].shade)
 			Put(mapShown, x, y, spots, i)
 		end
 		local quiet = set.hidden
@@ -1809,15 +1833,15 @@ function Ground.Map(stop, live, rest, map, width, height, canvas, kept, shade)
 		mapSheet.quiet = quiet
 		Douse(mapSheet)
 		-- Every spawn of what is lit, as the minimap's picture of its kind at one size on screen at any
-		-- zoom; a crowd of more than MAP_DOTS is thinned evenly.
+		-- zoom; a crowd of more than DRAW.mapDots is thinned evenly.
 		local dots, sheet = set.dots, mapSheet.dots
 		sheet.used = 0
-		mapDots.n, mapDots.size = 0, MAP_DOT * unit
-		local every = math.max(1, math.ceil(dots.n / MAP_DOTS))
+		mapDots.n, mapDots.size = 0, DRAW.mapDot * unit
+		local every = math.max(1, math.ceil(dots.n / DRAW.mapDots))
 		for i = 1, dots.n, every do
 			if dots.x[i] then
 				local x, y = dots.x[i] * width, dots.y[i] * height
-				Dot(sheet, x, -y, dots.kind[i], 1, mapLayer, "TOPLEFT", MAP_DOT * unit, dots.shade[i])
+				Dot(sheet, x, -y, dots.kind[i], 1, mapLayer, "TOPLEFT", DRAW.mapDot * unit, dots.shade[i])
 				Put(mapDots, x, y, dots, i)
 			end
 		end
@@ -1934,7 +1958,7 @@ function Ground.SetupMap(layer)
 	local tint = CreateFrame("Frame", nil, layer)
 	tint:SetAllPoints()
 	tint:SetFrameLevel(math.max(0, level - 2))
-	tint:SetAlpha(FILL_ALPHA)
+	tint:SetAlpha(DRAW.fillAlpha)
 	mapSheet.fill = Lines(tint, "BACKGROUND", -1, SOLID)
 	local wash = CreateFrame("Frame", nil, layer)
 	wash:SetAllPoints()
@@ -1944,8 +1968,8 @@ function Ground.SetupMap(layer)
 	breath:SetLooping("BOUNCE")
 	local fade = breath:CreateAnimation("Alpha")
 	fade:SetFromAlpha(1)
-	fade:SetToAlpha(BREATH_LOW)
-	fade:SetDuration(BREATH)
+	fade:SetToAlpha(DRAW.breathLow)
+	fade:SetDuration(DRAW.breath)
 	fade:SetSmoothing("IN_OUT")
 	breath:Play()
 	-- The ground is hundreds of lines for the game to show as the map opens: its three frames go out of
@@ -2102,8 +2126,8 @@ function Ground.Warm(stop)
 	if not (stop and miniSheet and frame and frame.continent == W.continent) then return end
 	local set = Prepare(stop, true, W.map, true)
 	for _, kind in ipairs(ORDER) do
-		if set.groups[kind] then laid.Loops(W.map, frame, kind, set.groups[kind], RADIUS) end
-		if set.areas[kind] then laid.Loops(W.map, frame, kind, set.areas[kind], frame.yards / SAMPLE * AREA_REACH) end
+		if set.groups[kind] then laid.Loops(W.map, frame, kind, set.groups[kind], SHAPE.radius) end
+		if set.areas[kind] then laid.Loops(W.map, frame, kind, set.areas[kind], frame.yards / BLOB.sample * BLOB.reach) end
 	end
 end
 
@@ -2140,11 +2164,11 @@ function laid.Choose(stop, rest, reach, asked, kept, here)
 		mini.fills[#mini.fills + 1] = { loops = loops, kind = kind }
 	end
 	for _, kind in ipairs(ORDER) do
-		if set.groups[kind] then Take(kind, set.groups[kind], RADIUS) end
-		if set.areas[kind] then Take(kind, set.areas[kind], frame.yards / SAMPLE * AREA_REACH) end
+		if set.groups[kind] then Take(kind, set.groups[kind], SHAPE.radius) end
+		if set.areas[kind] then Take(kind, set.areas[kind], frame.yards / BLOB.sample * BLOB.reach) end
 	end
 	-- The pointers: the nearest of a few.
-	local near = (reach * 1.45 + MINI_FAR) ^ 2
+	local near = (reach * 1.45 + DRAW.miniFar) ^ 2
 	local found = {}
 	local spots = set.spots
 	for i = 1, spots.n do
@@ -2154,8 +2178,8 @@ function laid.Choose(stop, rest, reach, asked, kept, here)
 			if far < near then found[#found + 1] = { far, north, west, spots.kind[i], spots.row[i], spots.what[i] } end
 		end
 	end
-	if #found > MINI_MOST then table.sort(found, function(a, b) return a[1] < b[1] end) end
-	local n = math.min(#found, MINI_MOST)
+	if #found > DRAW.miniMost then table.sort(found, function(a, b) return a[1] < b[1] end) end
+	local n = math.min(#found, DRAW.miniMost)
 	for i = 1, n do
 		mini.north[i], mini.west[i], mini.kind[i], mini.row[i] = found[i][2], found[i][3], found[i][4], found[i][5]
 		mini.what[i] = found[i][6]
@@ -2186,9 +2210,9 @@ function laid.Choose(stop, rest, reach, asked, kept, here)
 			end
 		end
 	end
-	if #found > MINI_DOTS then table.sort(found, function(a, b) return a[1] < b[1] end) end
+	if #found > DRAW.miniDots then table.sort(found, function(a, b) return a[1] < b[1] end) end
 	local into = mini.dots
-	into.n = math.min(#found, MINI_DOTS)
+	into.n = math.min(#found, DRAW.miniDots)
 	for i = 1, into.n do
 		into.north[i], into.west[i], into.kind[i], into.shade[i] = found[i][2], found[i][3], found[i][4], found[i][5]
 		into.what[i] = found[i][6]
@@ -2229,13 +2253,15 @@ end
 -- so what shows of it is closed. Each arc runs along the very edge the outline is cut at, from one
 -- crossing of the outline to the next, in the outline's own strokes. Where two grounds both run past
 -- one stretch, the smaller one's arc keeps the edge (it meets its own outline) and the larger one's
--- steps out RIM_STEP to stand beside it, easing out over RIM_RAMP around the smaller one's crossings;
+-- steps out RIM.step to stand beside it, easing out over RIM.ramp around the smaller one's crossings;
 -- at its own crossings it is on the edge again.
-local RIM_STEP = 3.5         -- units: a ground's arc stands this far outside the arc of a smaller one
-local RIM_RAMP = 10          -- units along the edge: the step out is eased over this
-local RIM_JOIN = 0.6         -- units: an arc reaches this far past each crossing, under the outline's line end
-local RIM_ARC = 1 / 60       -- a round edge is laid in pieces of this share of it
-local RIM_MOST = 3           -- grounds with an arc at most
+local RIM = {
+	step = 3.5,  -- units: a ground's arc stands this far outside the arc of a smaller one
+	ramp = 10,  -- units along the edge: the step out is eased over this
+	join = 0.6,  -- units: an arc reaches this far past each crossing, under the outline's line end
+	arc = 1 / 60,  -- a round edge is laid in pieces of this share of it
+	most = 3,  -- grounds with an arc at most
+}
 local rimLines = {}          -- the arcs as last laid, for the report and tests: { kind, level, ax, ay, bx, by }
 
 -- The net size of a traced ground (its outer lines less its gaps), kept on it.
@@ -2366,11 +2392,11 @@ function Ground.Rims(fills, north, west, reach, sin, cos, square)
 		if #arcs > 0 then bands[#bands + 1] = { kind = kind.kind, color = KIND[kind.kind].color, arcs = arcs, size = kind.size } end
 	end
 	table.sort(bands, function(a, b) return a.size < b.size end)
-	for i = #bands, RIM_MOST + 1, -1 do bands[i] = nil end
+	for i = #bands, RIM.most + 1, -1 do bands[i] = nil end
 	return bands
 end
 
--- How far into the arcs of `band` share s lies, 0 outside to 1 inside, eased over RIM_RAMP (in shares)
+-- How far into the arcs of `band` share s lies, 0 outside to 1 inside, eased over RIM.ramp (in shares)
 -- about each end.
 local function Into(band, s, ramp)
 	local arcs, most = band.arcs, 0
@@ -2393,7 +2419,7 @@ function Ground.LayRims(bands, radius, square)
 	local edge = miniSheet and miniSheet.rimEdge or nil
 	local glow = miniSheet and miniSheet.rimGlow or nil
 	local length = (square and 8 or 2 * math.pi) * MINI_EDGE_AT * radius
-	local ramp, join, step = RIM_RAMP / length, RIM_JOIN / length, RIM_STEP / radius
+	local ramp, join, step = RIM.ramp / length, RIM.join / length, RIM.step / radius
 	local points = {}
 	for level, band in ipairs(bands) do
 		local color = band.color
@@ -2409,14 +2435,14 @@ function Ground.LayRims(bands, radius, square)
 			if b - a < 1 then a, b = a - join, b + join end
 			wipe(points)
 			points[1], points[2] = a, b
-			-- Pieces: the round edge every RIM_ARC, the square's corners, and finely where a step eases out.
+			-- Pieces: the round edge every RIM.arc, the square's corners, and finely where a step eases out.
 			if square then
 				for c = math.floor(a * 4 - 0.5), math.ceil(b * 4) do
 					local corner = (c + 0.5) / 4
 					if corner > a and corner < b then points[#points + 1] = corner end
 				end
 			else
-				for s = math.ceil(a / RIM_ARC) * RIM_ARC, b, RIM_ARC do points[#points + 1] = s end
+				for s = math.ceil(a / RIM.arc) * RIM.arc, b, RIM.arc do points[#points + 1] = s end
 			end
 			for j = 1, level - 1 do
 				local inner = bands[j].arcs
@@ -2439,8 +2465,8 @@ function Ground.LayRims(bands, radius, square)
 					x, y = x * radius, y * radius
 					if px then
 						-- Clockwise, so a strip's outward side lies outside the edge, as the outline's does.
-						if glow then Stroke(glow, Minimap, "CENTER", false, px, py, x, y, MINI_GLOW, color, 1) end
-						if edge then Stroke(edge, Minimap, "CENTER", false, px, py, x, y, MINI_EDGE, color, 1) end
+						if glow then Stroke(glow, Minimap, "CENTER", false, px, py, x, y, DRAW.miniGlow, color, 1) end
+						if edge then Stroke(edge, Minimap, "CENTER", false, px, py, x, y, DRAW.miniEdge, color, 1) end
 						rimLines[#rimLines + 1] = { kind = band.kind, level = level, ax = px, ay = py, bx = x, by = y }
 					end
 					px, py = x, y
@@ -2719,7 +2745,7 @@ function placed.RunJob()
 						if b > n1 then b = n1 end
 						local ax, ay = At(a, y)
 						local bx, by = At(b, y)
-						Stroke(pool, hold, "CENTER", false, ax * radius, ay * radius, bx * radius, by * radius, MINI_FILL_ROW, color, 1)
+						Stroke(pool, hold, "CENTER", false, ax * radius, ay * radius, bx * radius, by * radius, DRAW.miniFillRow, color, 1)
 						drawn = drawn + 1
 					end
 				end
@@ -2765,8 +2791,8 @@ function Ground.PlaceMini(continent, north, west, reach, radius, sin, cos, squar
 	if placed.plate then placed.plate:SetPoint("CENTER", placed.clip, "CENTER", 0, 0) end
 	wipe(rimLines)
 	miniSheet.used, miniSheet.dots.used = 0, 0
-	miniShown.n, miniShown.size = 0, on and radius > 0 and MINI_SPOT / radius or 0
-	miniDots.n, miniDots.size = 0, on and radius > 0 and MINI_DOT / radius or 0
+	miniShown.n, miniShown.size = 0, on and radius > 0 and DRAW.miniSpot / radius or 0
+	miniDots.n, miniDots.size = 0, on and radius > 0 and DRAW.miniDot / radius or 0
 	-- (The fill: what it was is put away now; the new one is laid over the next frames, below.)
 	Begin(miniSheet.fill)
 	Finish(miniSheet.fill)
@@ -2779,11 +2805,11 @@ function Ground.PlaceMini(continent, north, west, reach, radius, sin, cos, squar
 			local east, up = -(west_ - west) / reach, (north_ - north) / reach
 			return east * cos + up * sin, -east * sin + up * cos
 		end
-		-- The fill: the rows of the ground (a row runs north to south at one `west`, MINI_FILL_ROW high
+		-- The fill: the rows of the ground (a row runs north to south at one `west`, DRAW.miniFillRow high
 		-- on screen), each from outline to outline. Drawn for the view plus a short walk past it: the
 		-- plate carries that, and it is drawn again once the walk is used up. A whole zone's worth of
 		-- rows is what made a turn hitch.
-		local pitch = MINI_FILL_ROW / per
+		local pitch = DRAW.miniFillRow / per
 		local cover = reach + placed.cover
 		local hold = placed.plate
 		local n0, n1 = north - cover, north + cover
@@ -2812,10 +2838,10 @@ function Ground.PlaceMini(continent, north, west, reach, radius, sin, cos, squar
 					local ax, ay, bx, by_ = mx[i], my[i], mx[k], my[k]
 					local length = math.sqrt((bx - ax) ^ 2 + (by_ - ay) ^ 2)
 					-- (No glow under the edge on the minimap: a stroke fewer for each piece of every outline.)
-					Stroke(miniSheet.edge, placed.plate, "CENTER", false, ax * radius, ay * radius, bx * radius, by_ * radius, MINI_EDGE, color, 1)
+					Stroke(miniSheet.edge, placed.plate, "CENTER", false, ax * radius, ay * radius, bx * radius, by_ * radius, DRAW.miniEdge, color, 1)
 					if miniKept then
 						local line = Stroke(miniSheet.gleam, placed.plate, "CENTER", false, ax * radius, ay * radius, bx * radius, by_ * radius,
-							GLEAM_WIDE * 0.8, WHITE, 0)
+							DRAW.gleamWide * 0.8, WHITE, 0)
 						line.run = (run + length / 2) * radius
 					end
 					run = run + length
@@ -2862,8 +2888,8 @@ function Ground.PlaceMini(continent, north, west, reach, radius, sin, cos, squar
 			local show = math.max(0, math.min(1, (0.96 - out) / 0.08))
 			if show > 0 then
 				local yards = math.sqrt(x * x + y * y) * reach
-				local fade = yards < MINI_NEAR and (MINI_NEAR_ALPHA + (1 - MINI_NEAR_ALPHA) * yards / MINI_NEAR) or 1
-				Spot(Light(miniSheet), placed.plate, "CENTER", x * radius, y * radius, mini.kind[i], MINI_SPOT, show * fade, mini.row[i] and mini.row[i].shade)
+				local fade = yards < DRAW.miniNear and (DRAW.miniNearAlpha + (1 - DRAW.miniNearAlpha) * yards / DRAW.miniNear) or 1
+				Spot(Light(miniSheet), placed.plate, "CENTER", x * radius, y * radius, mini.kind[i], DRAW.miniSpot, show * fade, mini.row[i] and mini.row[i].shade)
 				Put(miniShown, x, y, mini, i)
 			end
 		end
@@ -2933,7 +2959,7 @@ function Ground.SetupMini()
 	local tint = CreateFrame("Frame", nil, clip)
 	tint:SetAllPoints()
 	tint:SetFrameLevel(level)
-	tint:SetAlpha(MINI_FILL_ALPHA)
+	tint:SetAlpha(DRAW.miniFillAlpha)
 	miniSheet = Sheet(clip, level)
 	miniSheet.fill = Lines(tint, "BACKGROUND", -1, SOLID, true)
 	miniSheet.glow = Lines(miniSheet, "BACKGROUND", 0, GLOW_ART, true)
@@ -2967,8 +2993,8 @@ function Ground.Report()
 	local map = W.map
 	Say("Quest areas the game knows of  (map %s, %s)", tostring(map), date("%Y-%m-%d %H:%M"))
 	Say("questPOI: %s   super-tracked quest: %s   quest POI map: %s   blob border %s", tostring(C_CVar.GetCVarBool("questPOI")),
-		tostring(C_SuperTrack.GetSuperTrackedQuestID()), tostring(C_QuestLog.GetMapForQuestPOIs()), tostring(BLOB_SCALAR))
-	Say("areas sampled %d across; the frame itself only where sampling fails", SAMPLE)
+		tostring(C_SuperTrack.GetSuperTrackedQuestID()), tostring(C_QuestLog.GetMapForQuestPOIs()), tostring(BLOB.scalar))
+	Say("areas sampled %d across; the frame itself only where sampling fails", BLOB.sample)
 	local counted = rawget(_G, "GetQuestPOIBlobCount")
 	Say("GetQuestPOIBlobCount: %s", counted and "exists" or "missing")
 	local onMap = {}

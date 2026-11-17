@@ -29,54 +29,64 @@ local UI = Shy.UI
 local C = UI.colors
 
 local UNITS = 10000
-local MAP_SIZE, MINI_SIZE = 27, 20
-local GROW, MINI_GROW = 0.4, 0.3   -- extra pin size at the closest zoom, linear from the widest
--- zoomed: 0 at a map's widest zoom to 1 at its closest. most: its GROW.
+-- Pins and marks: their sizes, room and how many.
+local PIN = {
+	mapSize = 27,
+	miniSize = 20,
+	grow = 0.4,
+	miniGrow = 0.3,  -- extra pin size at the closest zoom, linear from the widest
+	edge = 0.86,  -- how far toward the minimap's rim a pin may sit
+	waiting = 0.7,  -- alpha of the leading pin while it waits at the rim
+	zones = 5,  -- zones numbered on the world map
+	guide = 8,  -- guide steps looked ahead on the minimap and the card
+	guideFar = 40,  -- and on the world map, at every zoom (a zone shows what its continent does)
+	room = 0.92,  -- clearance a pin keeps, in pin sizes
+	merge = 1.15,  -- route places nearer than this many pin sizes are one pin
+	place = 60,  -- yards: guide steps nearer than this are one route place, on every map
+	levels = 20,  -- pins with a frame level of their own, most important on top
+	names = 3,  -- names listed in the note at the top of the map
+	together = 0.8,  -- marks of one kind nearer than this many pin sizes merge
+	same = 12,  -- yards: objectives nearer than this are one mark on a zone map
+	goalNear = 600,  -- map units (of 10000): objectives of one quest nearer than this share a mark
+	goalArrive = 60,  -- yards: a mark moves to another of its places once the player is this near it
+}
+-- zoomed: 0 at a map's widest zoom to 1 at its closest. most: its PIN.grow.
 local function Grown(zoomed, most)
 	-- A map with a single zoom level can give nil or NaN.
 	if not zoomed or zoomed ~= zoomed then zoomed = 0 end
 	return 1 + most * math.max(0, math.min(1, zoomed))
 end
-local EDGE = 0.86            -- how far toward the minimap's rim a pin may sit
-local WAITING = 0.7          -- alpha of the leading pin while it waits at the rim
-local ZONE_PINS = 5          -- zones numbered on the world map
-local GUIDE_PINS = 8         -- guide steps looked ahead on the minimap and the card
-local GUIDE_FAR = 40         -- and on the world map, at every zoom (a zone shows what its continent does)
-local ROOM = 0.92            -- clearance a pin keeps, in pin sizes
-local MERGE = 1.15           -- route places nearer than this many pin sizes are one pin
-local PLACE = 60             -- yards: guide steps nearer than this are one route place, on every map
-local LEVELS = 20            -- pins with a frame level of their own, most important on top
-local NAMES = 3              -- names listed in the note at the top of the map
-local TOGETHER = 0.8         -- marks of one kind nearer than this many pin sizes merge
-local SAME = 12              -- yards: objectives nearer than this are one mark on a zone map
-local GOAL_NEAR = 600        -- map units (of 10000): objectives of one quest nearer than this share a mark
-local GOAL_ARRIVE = 60       -- yards: a mark moves to another of its places once the player is this near it
 -- Size of a mark relative to a lit one, a turn-in or a zone. guide: a catch-up step off the route.
 local WEIGHT = { pickup = 0.85, goal = 0.85, step = 0.9, guide = 0.85, sell = 0.85, train = 0.85, buy = 0.85,
 	weapon = 0.85, aid = 0.85, flight = 0.85, home = 0.85, potion = 0.85, herb = 0.85, sail = 0.85,
 	zeppelin = 0.85, bank = 0.85, mail = 0.85 }
-local RIM = 0.56            -- a line ends this far from a pin's middle, in pin sizes
-local WAY = 0.5              -- alpha of the live step's own path
-local WALK_LINE = 3          -- thickness of a walker's way on the minimap, in screen pixels at the world map's size
-local YOU_ROOM = 0.45        -- the trail starts this far from the player, in pin sizes
-local YOU_EVERY = 0.2        -- seconds between position checks while the map is open
--- Route lines, in screen pixels at the world map's size
-local BOW = 0.16             -- a leg's bow to the right of its direction, as a share of its length
-local FLOW_WIDE, FLOW_FINE = 9.4, 2.4   -- a leg's thickness at its start and end
-local FLOW_LATER = 2.8       -- start thickness of the last leg shown
-local FLOW_END = 0.7         -- a leg's alpha at its end, relative to its start
-local ASK_END = 0.8          -- the same for a leg of a hovered route
-local FLOW_FADE = 0.25       -- each leg moves this far toward the last leg's look
-local FLOW_ROOM = 0.8        -- a leg needs pins at least this many pin sizes apart
+-- The trail and the route's legs between pins.
+local LEG = {
+	rim = 0.56,  -- a line ends this far from a pin's middle, in pin sizes
+	way = 0.5,  -- alpha of the live step's own path
+	walkLine = 3,  -- thickness of a walker's way on the minimap, in screen pixels at the world map's size
+	youRoom = 0.45,  -- the trail starts this far from the player, in pin sizes
+	youEvery = 0.2,  -- seconds between position checks while the map is open
+	-- Route lines, in screen pixels at the world map's size
+	bow = 0.16,  -- a leg's bow to the right of its direction, as a share of its length
+	flowWide = 9.4,
+	flowFine = 2.4,  -- a leg's thickness at its start and end
+	flowLater = 2.8,  -- start thickness of the last leg shown
+	flowEnd = 0.7,  -- a leg's alpha at its end, relative to its start
+	askEnd = 0.8,  -- the same for a leg of a hovered route
+	flowFade = 0.25,  -- each leg moves this far toward the last leg's look
+	flowRoom = 0.8,  -- a leg needs pins at least this many pin sizes apart
+	reveal = 0.16,  -- seconds a hovered route takes to draw in and out
+	miniLine = 0.65,  -- scale of lines on the minimap
+	miniClear = 0.16,
+	miniClearLow = 0,  -- a pin within this share of the minimap's range fades, to this much at its middle
+	miniYou = 10,  -- the minimap trail starts this far from its middle, clear of the player arrow
+	glide = 0.3,  -- seconds the leading pin takes to slide along the rim to where the trail now leaves
+}
 -- How a way over the ground is made smooth (Smoothed), for the whole way and (close) its beginning found up
 -- close: wiggle: yards a way may stray from its points and leave them out (the ground's ways step along a
 -- grid); round: yards either side of a turn that are rounded; steps: pieces a rounded turn is drawn in.
 local TURN = { wiggle = 9, round = 45, closeWiggle = 1.5, closeRound = 8, steps = 8 }
-local REVEAL = 0.16          -- seconds a hovered route takes to draw in and out
-local MINI_LINE = 0.65       -- scale of lines on the minimap
-local MINI_CLEAR, MINI_CLEAR_LOW = 0.16, 0  -- a pin within this share of the minimap's range fades, to this much at its middle
-local MINI_YOU = 10         -- the minimap trail starts this far from its middle, clear of the player arrow
-local GLIDE = 0.3            -- seconds the leading pin takes to slide along the rim to where the trail now leaves
 
 -- Room for every pin
 
@@ -218,7 +228,7 @@ end
 -- Objective marks for log quests the game doesn't mark on `map` but the data places there: one per
 -- open objective, where its stop would stand (R.Best: at the heart of the best camp of what is killed,
 -- looted or gathered, not on a lone spawn that happens to be near), or at its nearest place on a map
--- the player isn't on. Objectives of one quest within GOAL_NEAR share a mark.
+-- the player isn't on. Objectives of one quest within PIN.goalNear share a mark.
 --   marked: quests the game marks on this map. covered: as for StopsOn.
 --   pass: what has been chosen for the map shown (MapPass): each objective's best camp is chosen once for
 --   all the maps a gather draws (a continent asks it of every zone on it), and each map's spot kept until
@@ -255,7 +265,7 @@ local function GoalsOn(map, marked, covered, pass)
 			if hold and yards and hold.x == point.x and hold.y == point.y then was = { map = map, x = point.x, y = point.y, yards = yards } end
 		end
 		if not best then return nil end
-		return W.Steady(key, { map = map, x = best.x, y = best.y, yards = least }, was, GOAL_ARRIVE)
+		return W.Steady(key, { map = map, x = best.x, y = best.y, yards = least }, was, PIN.goalArrive)
 	end
 	-- The pin for objective `index` of a quest, or for the quest as a whole. own: the quest's pins so far.
 	local function Pin(action, index, own)
@@ -273,7 +283,7 @@ local function GoalsOn(map, marked, covered, pass)
 		if not best then return false end
 		local least = best.yards
 		for _, stop in ipairs(own) do
-			if (stop.x - best.x) ^ 2 + (stop.y - best.y) ^ 2 < GOAL_NEAR ^ 2 then
+			if (stop.x - best.x) ^ 2 + (stop.y - best.y) ^ 2 < PIN.goalNear ^ 2 then
 				stop.objective = nil
 				return true
 			end
@@ -385,7 +395,7 @@ local function Pool(parent, size, mini)
 		if not pin then
 			pin = NewPin(parent, size, mini)
 			ns.Unsnap(pin)
-			pin.level = parent:GetFrameLevel() + 1 + math.max(0, LEVELS - self.used)
+			pin.level = parent:GetFrameLevel() + 1 + math.max(0, PIN.levels - self.used)
 			pin:SetFrameLevel(pin.level)
 			self[self.used] = pin
 		end
@@ -425,8 +435,10 @@ local SERVICES = {
 }
 ns.SERVICES = { "inn", "flight", "repair", "mail", "bank", "auction", "stable", "trainer", "profession", "spirit", "stone",
 	"food", "reagents", "poisons", "ammo", "trade" }
-local SERVICE_SIZE = 16
-local SERVICE_MOST = 80      -- marks on one map at most
+local SERVICE = {
+	size = 16,
+	most = 80,  -- marks on one map at most
+}
 
 local servicePins = { used = 0 }
 local services = {}          -- on the shown map: { kind, thing, x, y }
@@ -468,7 +480,7 @@ local function ServicesOn(map)
 					for _, place in ipairs(thing.places) do
 						if place.map == map and not place.dungeon then
 							for i = 1, #place.points, 2 do
-								if #list < SERVICE_MOST then
+								if #list < SERVICE.most then
 									list[#list + 1] = { kind = kind, thing = thing, x = place.points[i], y = place.points[i + 1] }
 								end
 							end
@@ -486,7 +498,7 @@ local function ServicePin(parent)
 	local pin = servicePins[servicePins.used]
 	if not pin then
 		pin = CreateFrame("Frame", nil, parent)
-		pin:SetSize(SERVICE_SIZE, SERVICE_SIZE)
+		pin:SetSize(SERVICE.size, SERVICE.size)
 		pin:SetFrameLevel(parent:GetFrameLevel())
 		pin.picture = pin:CreateTexture(nil, "ARTWORK")
 		pin.picture:SetAllPoints()
@@ -565,16 +577,18 @@ local function HideRest(pool)
 end
 
 -- A dashed line between two points in canvas units: Media\Dash (soft edges and ends) tiled by the
--- line's on-screen length, in the trail's light (or `color`) over a dark shadow. strength: 1 down to WAY,
+-- line's on-screen length, in the trail's light (or `color`) over a dark shadow. strength: 1 down to LEG.way,
 -- thinner and fainter as it falls.
-local DASH = ns.MEDIA .. "Dash"
-local PERIOD = 14            -- screen pixels per dash and gap
+local DASHES = {
+	art = ns.MEDIA .. "Dash",
+	period = 14,  -- screen pixels per dash and gap
+}
 local function Draw(shadow, light, ax, ay, bx, by, canvas, strength, color)
-	local tiles = math.max(1, math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2) * canvas / PERIOD)
+	local tiles = math.max(1, math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2) * canvas / DASHES.period)
 	for _, line in ipairs({ shadow, light }) do
 		line:SetStartPoint("TOPLEFT", layer, ax, -ay)
 		line:SetEndPoint("TOPLEFT", layer, bx, -by)
-		line:SetTexture(DASH, "REPEAT", "CLAMP")
+		line:SetTexture(DASHES.art, "REPEAT", "CLAMP")
 		line:SetTexCoord(0, tiles, 0, 1)
 	end
 	shadow:SetVertexColor(0, 0, 0, 0.30 + 0.35 * strength)
@@ -645,7 +659,7 @@ end
 local function Flow(pen, ax, ay, bx, by, strength, wide, fine, upto, fade, color)
 	local dx, dy = bx - ax, by - ay
 	local turn = pen.down and 1 or -1
-	local cx, cy = (ax + bx) / 2 - dy * BOW * turn, (ay + by) / 2 + dx * BOW * turn
+	local cx, cy = (ax + bx) / 2 - dy * LEG.bow * turn, (ay + by) / 2 + dx * LEG.bow * turn
 	local pieces = math.max(4, math.min(16, math.ceil(math.sqrt(dx * dx + dy * dy) * upto / (9 * pen.unit))))
 	local function At(i)
 		local t = i / pieces * upto
@@ -1255,7 +1269,7 @@ function ns.VOYAGE.Arc(pen, ax, ay, bx, by, strength, color)
 	local look = ns.VOYAGE
 	local dx, dy = bx - ax, by - ay
 	local length = math.sqrt(dx * dx + dy * dy)
-	if length < MAP_SIZE * look.least * pen.unit then return end
+	if length < PIN.mapSize * look.least * pen.unit then return end
 	-- Its normal that points up the screen, so every crossing rises (y grows downward on a pen that is `down`).
 	local nx, ny = -dy / length, dx / length
 	if (ny > 0) == (pen.down == true) then nx, ny = -nx, -ny end
@@ -1316,7 +1330,7 @@ local function DrawWay(view, width, height, canvas)
 		local x, y = PlaceOnMap(at)
 		if x then
 			local px, py = x * width, y * height
-			if last then Stroke(last[1], last[2], px, py, canvas, WAY) end
+			if last then Stroke(last[1], last[2], px, py, canvas, LEG.way) end
 			last = { px, py }
 		else
 			last = nil
@@ -1327,7 +1341,7 @@ local function DrawWay(view, width, height, canvas)
 		local lx, ly
 		for i = 1, #points, 2 do
 			local px, py = points[i] and points[i] * width, points[i + 1] and points[i + 1] * height
-			if lx and px then Stroke(lx, ly, px, py, canvas, WAY) end
+			if lx and px then Stroke(lx, ly, px, py, canvas, LEG.way) end
 			lx, ly = px, py
 		end
 	end
@@ -1405,7 +1419,7 @@ local function LayWalks(walkers, width, height, canvas)
 			for i = 3, #points, 2 do
 				if points[i - 2] and points[i] then
 					Stroke(points[i - 2] * width, points[i - 1] * height, points[i] * width, points[i + 1] * height,
-						canvas, walkers[npc] and 1 or WAY, walkLines, color)
+						canvas, walkers[npc] and 1 or LEG.way, walkLines, color)
 				end
 			end
 		end
@@ -1518,9 +1532,9 @@ local function NoteFor(stop, drawn, names)
 		return ("Nothing to look for at %s"):format(who)
 	end
 	local listed = {}
-	for i = 1, math.min(NAMES, #names) do listed[i] = names[i] end
+	for i = 1, math.min(PIN.names, #names) do listed[i] = names[i] end
 	local text = table.concat(listed, ", ")
-	if #names > NAMES then text = ("%s and %d more"):format(text, #names - NAMES) end
+	if #names > PIN.names then text = ("%s and %d more"):format(text, #names - PIN.names) end
 	return "Where to look: " .. UI.Wrap(C.hot, text)
 end
 
@@ -1576,7 +1590,7 @@ local function Covers(way)
 	return covered
 end
 
--- The route's places. Guide steps within PLACE yards of each other are one place, whatever the map or
+-- The route's places. Guide steps within PIN.place yards of each other are one place, whatever the map or
 -- zoom, so a place's number (its first turn on the route) is the same everywhere; 1 is where the card
 -- is heading. A place the guide returns to keeps its pin and number and lists all its steps. A stop
 -- from before the guide's step is always a place of its own. `walk` is the order the places are visited.
@@ -1587,7 +1601,7 @@ local function Places(way)
 		for i = #places, 1, -1 do
 			local place = places[i]
 			if step.view and not place.stop and place.continent == at.continent
-				and W.Between(place.north, place.west, at.north, at.west) < PLACE then
+				and W.Between(place.north, place.west, at.north, at.west) < PIN.place then
 				home = i
 				break
 			end
@@ -1762,7 +1776,7 @@ local railFor, rail
 function ns.RoutePlaces()
 	if railFor ~= R.stops then
 		railFor, rail = R.stops, {}
-		for order, place in ipairs((TheWay(GUIDE_PINS))) do
+		for order, place in ipairs((TheWay(PIN.guide))) do
 			rail[order] = { number = place.number, lit = place.lit, stop = Stands(place), own = place.stop, views = place.views }
 		end
 	end
@@ -1928,14 +1942,14 @@ local function LayAsk()
 		local a, b = laid.spots[from], laid.spots[to]
 		if a then
 			local later, scale = first == last and 0 or (turn - 2) / (last - 1), laid.scale
-			local room = MAP_SIZE * FLOW_ROOM * scale
+			local room = PIN.mapSize * LEG.flowRoom * scale
 			local start, goal = laid.shown[from], laid.shown[to]
 			ns.VOYAGE.Leg(askPen, start, goal, { a[1] * scale, a[2] * scale }, b and { b[1] * scale, b[2] * scale }, 1,
 				function(ax, ay, bx, by)
 					if (bx - ax) ^ 2 + (by - ay) ^ 2 >= room ^ 2 then
 						local LEGS = ns.LEGS
 						LEGS.Draw(askPen, LEGS.Setout(start), goal, ax, ay, bx, by, 1, LEGS.wide + LEGS.lit - LEGS.later * later, LEGS.fine + LEGS.lit,
-							ASK_END, LEGS.Color(goal.stands or Stands(goal)), LEGS.glow)
+							LEG.askEnd, LEGS.Color(goal.stands or Stands(goal)), LEGS.glow)
 					end
 				end)
 		end
@@ -2063,7 +2077,7 @@ end
 
 -- The route's legs on the world map: one per distinct pair of pins in walk order, over the ground,
 -- each quiet in the color of what it leads to, later ones finer and fainter. Only pins that almost
--- touch (FLOW_ROOM) get none. Only the first LEGS.ahead of them with a line on this map stand; the
+-- touch (LEG.flowRoom) get none. Only the first LEGS.ahead of them with a line on this map stand; the
 -- rest of the route is lit by its pin (LayAsk).
 --   shown, walk: from Shown. spots: each pin's position in pin units. scale, unit: LayMap's.
 -- Each leg has a pen of its own (LEGS.pens, by its turn) and is laid again only when what it is drawn from
@@ -2166,8 +2180,8 @@ local function LayLegs(shown, walk, spots, scale, unit, began)
 				coming = coming + 1
 			else
 				pen.map = shownMap
-				local later = math.min(1, (turn - 2) * FLOW_FADE)
-				local strength, room = LEGS.near + (LEGS.far - LEGS.near) * later, MAP_SIZE * FLOW_ROOM * scale
+				local later = math.min(1, (turn - 2) * LEG.flowFade)
+				local strength, room = LEGS.near + (LEGS.far - LEGS.near) * later, PIN.mapSize * LEG.flowRoom * scale
 				Begin(pen, unit)
 				-- (Its strokes are its turn's, found under the mouse: ns.LEGS.Hit.)
 				Maps.Tag(pen, turn)
@@ -2177,7 +2191,7 @@ local function LayLegs(shown, walk, spots, scale, unit, began)
 						-- (No line between two pins too near each other for one.)
 						if (bx - ax) ^ 2 + (by - ay) ^ 2 >= room ^ 2 then
 							local thick = LEGS.wide - LEGS.later * later
-							LEGS.Draw(pen, LEGS.Setout(start), goal, ax, ay, bx, by, strength, thick, thick, FLOW_END,
+							LEGS.Draw(pen, LEGS.Setout(start), goal, ax, ay, bx, by, strength, thick, thick, LEG.flowEnd,
 								LEGS.Color(goal.stands or Stands(goal)))
 						end
 					end)
@@ -2212,7 +2226,7 @@ end
 -- Town service marks (ServicesOn), each kept clear of everything in `taken`.
 local function LayServices(taken, width, height, scale)
 	servicePins.used = 0
-	local small = SERVICE_SIZE * ROOM
+	local small = SERVICE.size * PIN.room
 	for _, service in ipairs(services) do
 		local picture = Picture(service.kind)
 		local pin = ServicePin(layer)
@@ -2354,9 +2368,9 @@ local function LayMap(zooming)
 	-- The map is shown before it has a size (and Lua 5.1 errors on a division by zero); LayMap runs
 	-- again when the size is set.
 	if width <= 0 or height <= 0 or canvas <= 0 then return end
-	-- Undo the canvas scale so pins keep their on-screen size, plus GROW as the map zooms in.
+	-- Undo the canvas scale so pins keep their on-screen size, plus PIN.grow as the map zooms in.
 	-- Positions below are in pin units.
-	local grow = Grown(Maps.Canvas():GetCanvasZoomPercent(), GROW)
+	local grow = Grown(Maps.Canvas():GetCanvasZoomPercent(), PIN.grow)
 	local scale = T.db.pinSize * grow / canvas
 	local unit = grow / canvas   -- one line pixel in canvas units; lines grow with the pins
 	local LEGS = ns.LEGS
@@ -2369,7 +2383,7 @@ local function LayMap(zooming)
 	end
 	laid.width, laid.height, laid.followed = width, height, nil
 	local start = lap
-	local taken, room = {}, MAP_SIZE * ROOM
+	local taken, room = {}, PIN.mapSize * PIN.room
 	for i, spot in ipairs(theirs) do
 		taken[i] = { spot[1] * width / scale, spot[2] * height / scale }
 	end
@@ -2413,7 +2427,7 @@ local function LayMap(zooming)
 		pin.cx, pin.cy, pin.weight = px * scale, py * scale, weight
 		pin:Show()
 		local pointed = kind == "step" or kind == "zone"
-		return { px, py, weight, pointed and 0 or MAP_SIZE * RIM * weight, pin = pin }
+		return { px, py, weight, pointed and 0 or PIN.mapSize * LEG.rim * weight, pin = pin }
 	end
 
 	-- The route's places as this map shows them (Shown). A zone map never merges them; a continent
@@ -2421,13 +2435,13 @@ local function LayMap(zooming)
 	local reach
 	local c1, n1, w1 = W.ToWorld(shownMap, 0, 5000)
 	local c2, n2, w2 = W.ToWorld(shownMap, UNITS, 5000)
-	if c1 and c2 then reach = MAP_SIZE * MERGE * scale / width * W.Between(n1, w1, n2, w2) end
+	if c1 and c2 then reach = PIN.mapSize * PIN.merge * scale / width * W.Between(n1, w1, n2, w2) end
 	local shown, walk = Shown(wayPlaces, wayWalk, function(pin, place)
 		if not wide then return false end
 		if reach then return W.Between(pin.north, pin.west, place.north, place.west) < reach end
 		-- A map with no world size (the world map): by map position.
 		return pin.x ~= nil and place.x ~= nil
-			and ((place.x - pin.x) * width / scale) ^ 2 + ((place.y - pin.y) * height / scale) ^ 2 < (MAP_SIZE * MERGE) ^ 2
+			and ((place.x - pin.x) * width / scale) ^ 2 + ((place.y - pin.y) * height / scale) ^ 2 < (PIN.mapSize * PIN.merge) ^ 2
 	end)
 	local live = Live()
 	local leading = Leading(steps)
@@ -2472,12 +2486,12 @@ local function LayMap(zooming)
 	lap = Lap("world map laid: the legs", lap)
 
 	-- Everything else, overlapping marks of one kind merged (Grouped). On a zone map objectives merge
-	-- only within SAME yards, so marks don't come and go with the zoom.
+	-- only within PIN.same yards, so marks don't come and go with the zoom.
 	local groups = Grouped(others, leading, function(a, b)
 		if a.kind == "goal" and not wide and a.stop.north and b.stop.north then
-			return a.stop.continent == b.stop.continent and W.Between(a.stop.north, a.stop.west, b.stop.north, b.stop.west) < SAME
+			return a.stop.continent == b.stop.continent and W.Between(a.stop.north, a.stop.west, b.stop.north, b.stop.west) < PIN.same
 		end
-		return ((a.x - b.x) * width / scale) ^ 2 + ((a.y - b.y) * height / scale) ^ 2 < (MAP_SIZE * TOGETHER) ^ 2
+		return ((a.x - b.x) * width / scale) ^ 2 + ((a.y - b.y) * height / scale) ^ 2 < (PIN.mapSize * PIN.together) ^ 2
 	end)
 	for _, group in ipairs(groups) do
 		if Inside(group.stop) then
@@ -2497,7 +2511,7 @@ local function LayMap(zooming)
 		if lead and lead.kind ~= "zone" and lead.north and not Inside(lead) then x, y = PlaceOnMap(lead) end
 		led = x and lead or nil
 		if x and lead.kind == "goal" and theirMarks[lead.actions[1].id] and not lead.stands then
-			heading = { x * width / scale, y * height / scale, 1, MAP_SIZE * RIM }
+			heading = { x * width / scale, y * height / scale, 1, PIN.mapSize * LEG.rim }
 		elseif x then
 			lead.key = lead.key or ("lead" .. lead.kind .. (lead.actions[1] and lead.actions[1].id or ""))
 			heading = Place(lead, x, y, ns.StopMark(lead), true)
@@ -2512,7 +2526,7 @@ local function LayMap(zooming)
 	lap = Lap("world map laid: who walks", lap)
 
 	you.to = heading and { x = heading[1] * scale, y = heading[2] * scale, rim = heading[4] * scale,
-		from = MAP_SIZE * YOU_ROOM * scale, unit = unit, stop = led, pin = heading.pin } or nil
+		from = PIN.mapSize * LEG.youRoom * scale, unit = unit, stop = led, pin = heading.pin } or nil
 	-- Nothing on this map leads: the place that does is somewhere else (the player in a city, the next
 	-- step outside its gate). The trail runs to where the way there leaves the map.
 	if not you.to then
@@ -2522,7 +2536,7 @@ local function LayMap(zooming)
 			away = lead
 		end
 		if away and away.north and away.continent == W.continent then
-			you.to = { off = true, from = MAP_SIZE * YOU_ROOM * scale, unit = unit, stop = away }
+			you.to = { off = true, from = PIN.mapSize * LEG.youRoom * scale, unit = unit, stop = away }
 		end
 	end
 	LayYou()
@@ -2634,7 +2648,7 @@ local function DrawMap()
 		theirMarks = marked
 		lap = Lap("world map gathered: the game's marks", lap)
 		-- Every place ahead is kept, on this map or not: numbers count the whole route.
-		local places, walk, way = TheWay(GUIDE_FAR)
+		local places, walk, way = TheWay(PIN.guideFar)
 		lap = Lap("world map gathered: the way ahead", lap)
 		local covered, guided = Covers(way), false
 		for _, step in ipairs(way) do
@@ -2670,7 +2684,7 @@ local function DrawMap()
 		end
 		-- No zone suggestions while a guide leads: its numbers would compete with them.
 		if T.db.zones ~= "never" and not guided then
-			local best = Z.Best(ZONE_PINS)
+			local best = Z.Best(PIN.zones)
 			-- The player's own zone too, when seen from another map.
 			local here = W.map and Z.Get(W.map)
 			if here then table.insert(best, 1, here) end
@@ -2862,7 +2876,7 @@ local function SetupMap()
 	-- At the level of the active-quest pins: over quest areas and quest givers, under the player. On the
 	-- game's canvas or ShyMaps' view, whichever draws the map (Shy.Maps moves it between them).
 	layer = Maps.MapLayer(0)
-	mapPins = Pool(layer, MAP_SIZE, false)
+	mapPins = Pool(layer, PIN.mapSize, false)
 	laid.pools = { mapPins, servicePins }
 	if Ground then Ground.SetupMap(layer) end
 	-- The hovered route has a frame of its own, so it fades as one.
@@ -2914,14 +2928,14 @@ local function SetupMap()
 			LayLegs(laid.shown, laid.walk, laid.spots, laid.scale, laid.unit)
 		end
 		since = since + elapsed
-		if since >= YOU_EVERY then
+		if since >= LEG.youEvery then
 			since = 0
 			if (you.to or you.aloft or ns.Carried()) and not you.Still() then LayYou() end
 		end
 		Shine(youPen, GetTime())
 		if you.roadPen then Shine(you.roadPen, GetTime()) end
 		if ask.alpha ~= ask.want then
-			local step = elapsed / REVEAL
+			local step = elapsed / LEG.reveal
 			ask.alpha = ask.want > ask.alpha and math.min(1, ask.alpha + step) or math.max(0, ask.alpha - step)
 			askLayer:SetAlpha(ask.alpha)
 			if ask.alpha == 0 then
@@ -2946,7 +2960,7 @@ local miniHeading                -- the leading pin
 local walkPen                    -- draws the walkers' ways on the minimap
 local miniWalks = {}             -- their stretches on this continent: { north = {}, west = {}, lit, color }
 local miniView                   -- the minimap's range in yards when its pins were last chosen
-local miniScale, miniGrow = 1, 1 -- pin scale (the setting times miniGrow), and growth with zoom (MINI_GROW)
+local miniScale, miniGrow = 1, 1 -- pin scale (the setting times miniGrow), and growth with zoom (PIN.miniGrow)
 local miniAt = { stale = true }  -- what the minimap was last laid for; .stale: chosen again since
 local ChooseMini
 -- AHEAD: the trail is laid this many times the minimap's reach (its middle to its furthest corner) along the
@@ -3073,13 +3087,13 @@ function miniAt.Trail(to, shot, north, west)
 	depth[1] = depth[2] or 0
 	miniAt.short = short
 	-- (Shy.Maps.Start keeps it clear of the arrow as the player walks on.)
-	return Trim(count, MINI_YOU, short and 0 or to.rim)
+	return Trim(count, LEG.miniYou, short and 0 or to.rim)
 end
 
--- (A minimap line's unit: MINI_LINE of the world map's, growing as the minimap is zoomed and with a minimap
+-- (A minimap line's unit: LEG.miniLine of the world map's, growing as the minimap is zoomed and with a minimap
 -- made larger, never finer on screen for one made smaller: a line a pixel or two across is a jagged one.)
 function ns.MiniUnit()
-	return MINI_LINE * miniGrow * math.max(1, UIParent:GetEffectiveScale() / Minimap:GetEffectiveScale())
+	return LEG.miniLine * miniGrow * math.max(1, UIParent:GetEffectiveScale() / Minimap:GetEffectiveScale())
 end
 -- The trail to the leading pin `to`, laid on the plate (shot, plate) for the player at (north, west).
 -- (Carried: no way to walk. The flight's or the crossing's own line is drawn.)
@@ -3095,7 +3109,7 @@ local function LayMiniLines(to, shot, plate, north, west)
 end
 
 -- Where the leading pin waits at the rim, as shares of the minimap's range: where the trail leaves the
--- minimap (at its rim, brought in to EDGE), or out along where it ends; with no trail, out along (fx, fy).
+-- minimap (at its rim, brought in to PIN.edge), or out along where it ends; with no trail, out along (fx, fy).
 -- (px, py): the player on the plate. The way to walk is the one the ribbon shows.
 function miniAt.Rim(fx, fy, px, py, radius, square)
 	local path = miniYou.trail
@@ -3115,7 +3129,7 @@ function miniAt.Rim(fx, fy, px, py, radius, square)
 		end
 	end
 	local out = square and math.max(math.abs(x), math.abs(y)) or math.sqrt(x * x + y * y)
-	if out > 0 then x, y = x * EDGE / out, y * EDGE / out end
+	if out > 0 then x, y = x * PIN.edge / out, y * PIN.edge / out end
 	return x, y
 end
 
@@ -3126,7 +3140,7 @@ function miniAt.Wait(pin, px, py, radius, square, scale)
 	local x, y = miniAt.Rim(pin.fx, pin.fy, px, py, radius, square)
 	local now = GetTime()
 	if pin.glided == stop and pin.glidedFor == R.built and pin.gx then
-		local share = math.min(1, (now - pin.glidedAt) / GLIDE)
+		local share = math.min(1, (now - pin.glidedAt) / LEG.glide)
 		local tx, ty = x, y
 		x, y = pin.gx + (tx - pin.gx) * share, pin.gy + (ty - pin.gy) * share
 		-- (Not there yet: placed again next frame, though nothing else has moved.)
@@ -3190,7 +3204,7 @@ local function LayMiniWalks(shot, plate)
 	for _, walk in ipairs(shot and miniWalks or {}) do
 		local lx, ly
 		miniAt.dotAt = 0
-		local alpha = walk.lit and 1 or WAY
+		local alpha = walk.lit and 1 or LEG.way
 		for i = 1, #walk.north do
 			local x, y = miniAt.On(shot, walk.north[i], walk.west[i])
 			if lx then miniAt.Dots(lx, ly, x, y, alpha, walk.color) end
@@ -3219,7 +3233,7 @@ local function PlaceMiniPins()
 			pin.shownAs = false
 			pin:Hide()
 		end
-		Begin(miniYou, MINI_LINE)
+		Begin(miniYou, LEG.miniLine)
 		Finish(miniYou)
 		LayMiniWalks()
 		miniAt.stale = true
@@ -3284,7 +3298,7 @@ local function PlaceMiniPins()
 				out = square and math.max(math.abs(lx), math.abs(ly)) or math.sqrt(lx * lx + ly * ly)
 				pin.fx, pin.fy = lx, ly
 			end
-			local waiting = out >= EDGE
+			local waiting = out >= PIN.edge
 			local shown = here and (not waiting or pin.next)
 			pin.on, pin.near = shown, here and not waiting
 			if shown ~= pin.shownAs then
@@ -3293,8 +3307,8 @@ local function PlaceMiniPins()
 			end
 			if shown then
 				-- (A pin over the player's arrow fades with its nearness, so the arrow shows through.)
-				local clear = out < MINI_CLEAR and (MINI_CLEAR_LOW + (1 - MINI_CLEAR_LOW) * out / MINI_CLEAR) or 1
-				local alpha = math.floor((waiting and WAITING or (stop.party and 0.75 or 1) * clear) * 255 + 0.5) / 255
+				local clear = out < LEG.miniClear and (LEG.miniClearLow + (1 - LEG.miniClearLow) * out / LEG.miniClear) or 1
+				local alpha = math.floor((waiting and PIN.waiting or (stop.party and 0.75 or 1) * clear) * 255 + 0.5) / 255
 				if alpha ~= pin.alphaAs then
 					pin.alphaAs = alpha
 					pin:SetAlpha(alpha)
@@ -3314,7 +3328,7 @@ local function PlaceMiniPins()
 	local to = miniHeading
 	local relay = drawn or miniAt.stale or (to and to.on or false) ~= miniAt.trailOn
 	if not relay then
-		local stray = Maps.Start(miniYou, px, py, MINI_YOU)
+		local stray = Maps.Start(miniYou, px, py, LEG.miniYou)
 		relay = stray ~= nil and stray > miniAt.STRAY
 		-- Laid short of the place (AHEAD of the reach along the way): laid again from here, back to AHEAD,
 		-- once less than AGAIN of the reach is left ahead of the player, before its end comes into sight.
@@ -3326,7 +3340,7 @@ local function PlaceMiniPins()
 	if relay then
 		miniAt.trailOn = to and to.on or false
 		LayMiniLines(to, shot, plate, north, west)
-		Maps.Start(miniYou, px, py, MINI_YOU)
+		Maps.Start(miniYou, px, py, LEG.miniYou)
 	end
 	-- The walks: laid again for a new drawing of the plate, or walks chosen anew (DrawMini).
 	if drawn or not miniAt.walksLaid then
@@ -3361,7 +3375,7 @@ local function DrawMini()
 	miniAt.own.ok = false
 	miniView = C_Minimap.GetViewRadius()
 	local levels = Minimap:GetZoomLevels() or 0
-	miniGrow = Grown(levels > 1 and Minimap:GetZoom() / (levels - 1), MINI_GROW)
+	miniGrow = Grown(levels > 1 and Minimap:GetZoom() / (levels - 1), PIN.miniGrow)
 	miniScale = T.db.pinSize * miniGrow
 	local pickedStop           -- the clicked pin's stop, if the minimap has it
 	if T.db.minimapPins then
@@ -3370,7 +3384,7 @@ local function DrawMini()
 		local function Pin(stop, kind, lit, count)
 			Walkers(stop, lit, walkers)
 			local pin = miniPins:Next()
-			pin.stop, pin.next, pin.rim = stop, false, count and 0 or MINI_SIZE * RIM * miniScale
+			pin.stop, pin.next, pin.rim = stop, false, count and 0 or PIN.miniSize * LEG.rim * miniScale
 			pin.inside = Inside(stop)
 			-- (Shown, faded and placed afresh at the next placement: PlaceMiniPins sets only what changed.)
 			pin.shownAs, pin.alphaAs, pin.hold = nil, nil, nil
@@ -3383,7 +3397,7 @@ local function DrawMini()
 			return pin
 		end
 		local lap = ns.LapStart()
-		local places, _, way, leading = TheWay(GUIDE_PINS)
+		local places, _, way, leading = TheWay(PIN.guide)
 		lap = Lap("minimap chosen: the way ahead", lap)
 		local pins = {}
 		for order, place in ipairs(places) do
@@ -3391,9 +3405,9 @@ local function DrawMini()
 			if place.lit and not miniHeading then miniHeading = pins[order] end
 		end
 		-- Everything else on the current zone's map, merged within a pin's reach in yards at this zoom
-		-- (objectives within SAME, as on the zone map).
+		-- (objectives within PIN.same, as on the zone map).
 		local radius = Minimap:GetWidth() / 2
-		local reach = (miniView and miniView > 0 and radius > 0) and MINI_SIZE * TOGETHER * miniScale / radius * miniView or 0
+		local reach = (miniView and miniView > 0 and radius > 0) and PIN.miniSize * PIN.together * miniScale / radius * miniView or 0
 		local list = {}
 		-- (What the zone's map chose is the minimap's too, until the route is built again: MapPass.)
 		for _, other in ipairs(W.map and Others(W.map, Covers(way), (Theirs(W.map)), true, nil, MapPass(W.map)) or {}) do
@@ -3402,7 +3416,7 @@ local function DrawMini()
 		lap = Lap("minimap chosen: givers and objectives", lap)
 		local groups = Grouped(list, leading, function(a, b)
 			return a.stop.continent == b.stop.continent
-				and W.Between(a.stop.north, a.stop.west, b.stop.north, b.stop.west) < (a.kind == "goal" and SAME or reach)
+				and W.Between(a.stop.north, a.stop.west, b.stop.north, b.stop.west) < (a.kind == "goal" and PIN.same or reach)
 		end)
 		for _, group in ipairs(groups) do
 			local pin = Pin(group.stop, group.kind, group.lit)
@@ -3476,7 +3490,7 @@ end
 
 local function SetupMini()
 	if Ground then Ground.SetupMini() end
-	miniPins = Pool(Minimap, MINI_SIZE, true)
+	miniPins = Pool(Minimap, PIN.miniSize, true)
 	-- Holds the lines and drives the per-frame placement.
 	miniDriver = CreateFrame("Frame", nil, Minimap)
 	miniDriver:SetAllPoints()

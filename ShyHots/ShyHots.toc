@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffHots|r
 ## Notes: Shows on health bars the healing your HoTs still have to give |cff888888/shyhots|r
 ## Author: Shyce Cream
-## Version: 5.1.5
+## Version: 5.1.6
 ## X-Date: 2026-11-17
 ## IconTexture: Interface\AddOns\ShyHots\Media\ShyHotsMarkColor
 ## Dependencies: ShyCore

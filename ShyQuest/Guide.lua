@@ -706,9 +706,11 @@ local function IsTask(element)
 end
 
 -- Elements that attach to the task before them.
-local FOLLOWS = { ["goto"] = true, waypoint = true, line = true, timer = true, disablecheckbox = true }
--- ...and these only when written with a "+" ("mob +Redridge Mongrel").
-local FOLLOWS_PLUS = { target = true, mob = true, unitscan = true, skipgossipid = true }
+local FOLLOW = {
+	plain = { ["goto"] = true, waypoint = true, line = true, timer = true, disablecheckbox = true },
+	-- ...and these only when written with a "+" ("mob +Redridge Mongrel").
+	plus = { target = true, mob = true, unitscan = true, skipgossipid = true },
+}
 
 -- Derived from element order, cached per `generation` (conditions decide which elements count):
 --   parent[n]    the task element n belongs to
@@ -724,8 +726,8 @@ local function Shape(step)
 		if not element.cond or Applies(element.cond) then
 			local command = element.command
 			if command == "bindlocation" then shape.binds = true end
-			local follows = FOLLOWS[command] and not (command == "goto" and IsTask(element))
-			if FOLLOWS_PLUS[command] and element.args:sub(1, 1) == "+" then follows = true end
+			local follows = FOLLOW.plain[command] and not (command == "goto" and IsTask(element))
+			if FOLLOW.plus[command] and element.args:sub(1, 1) == "+" then follows = true end
 			if follows and last then
 				shape.parent[number] = last
 				if command == "disablecheckbox" then
@@ -1278,12 +1280,14 @@ local function Collect(element)
 end
 
 -- One-off events that can't be queried afterwards (latched).
-local ONCE = { fly = true, fp = true, hs = true, home = true }
--- The same, but only a task when the line has text.
-local ONCE_IF_SAID = { vendor = true, trainer = true }
--- Commands whose state the client can always answer. A step with none of them is "soft" and is
--- passed over once the player is clearly beyond it (see Scan).
-local HARD = { accept = true, turnin = true, complete = true, xp = true, collect = true, abandon = true, train = true, skill = true }
+local LATCH = {
+	once = { fly = true, fp = true, hs = true, home = true },
+	-- The same, but only a task when the line has text.
+	onceIfSaid = { vendor = true, trainer = true },
+	-- Commands whose state the client can always answer. A step with none of them is "soft" and is
+	-- passed over once the player is clearly beyond it (see Scan).
+	hard = { accept = true, turnin = true, complete = true, xp = true, collect = true, abandon = true, train = true, skill = true },
+}
 
 -- Passed to the checks in GuideChecks.lua; one table, refilled per call.
 local env = {}
@@ -1414,14 +1418,14 @@ local function Judge(guide, step, number, element, latched)
 		-- A flight the character can't take (a point they don't have yet) is never a step to wait on: the
 		-- way on is the route's, by the ways they have, and the flight point Flights.lua's to send for.
 		return true, true, "grounded"
-	elseif ONCE[command] then
+	elseif LATCH.once[command] then
 		-- A .bindlocation in the step answers for .home.
 		if command == "home" and Shape(step).binds then return false end
 		-- When to use the stone, and where to set it, is the route's to say (Hearth.lua): with it,
 		-- never a step to wait on.
 		if (command == "hs" or command == "home") and ns.Hearth ~= nil and T.db.hearth and T.db.hearth.on then return true, true end
 		return true, latched[number] == true
-	elseif ONCE_IF_SAID[command] and element.text then
+	elseif LATCH.onceIfSaid[command] and element.text then
 		return true, latched[number] == true
 	else
 		local check = G.checks[command]
@@ -1462,7 +1466,7 @@ local function Evaluate(guide, step, bare)
 				if can and not soft then
 					total = total + 1
 					if done then finished = finished + 1 end
-					if HARD[element.command] then hard = true end
+					if LATCH.hard[element.command] then hard = true end
 				end
 				if can or element.text then said = true end
 				part = { element = element, number = number, can = can and not soft, done = done and true or false,
@@ -1824,9 +1828,14 @@ end
 -- (an objective of a quest never accepted, or a quest locked behind another's turn-in), the
 -- earliest such step is shown first. Nothing before saved.left ("Carry on from here") is fetched.
 
-local LOOK_AHEAD = 12        -- todo steps from the place on whose needs are checked
-local LOOK_REACH = 80        -- ... within this many steps
-local PRIOR_GUIDES = 4      -- earlier guides in the chain WorkOnQuest searches
+local LOOK = {
+	ahead = 12,  -- todo steps from the place on whose needs are checked
+	reach = 80,  -- ... within this many steps
+	guides = 4,  -- earlier guides in the chain WorkOnQuest searches
+	-- A needed step that doesn't apply yet (it waits on a skill, say) is unlocked by the step just
+	-- before it: returns the nearest earlier step that live state says is still todo, clearing its tick.
+	gate = 3,  -- applicable steps looked back over
+}
 
 -- True when the quest is in the log and still needs objectives before turn-in.
 local function QuestOpen(id)
@@ -1892,13 +1901,10 @@ local function Roots(guide, quest, limit, found, want, depth)
 	end
 end
 
--- A needed step that doesn't apply yet (it waits on a skill, say) is unlocked by the step just
--- before it: returns the nearest earlier step that live state says is still todo, clearing its tick.
-local GATE_REACH = 3         -- applicable steps looked back over
 local function Gate(guide, index)
 	local saved = Saved(guide)
 	local seen, behind = 0, index - 1
-	while behind >= (saved.left or 1) and seen < GATE_REACH do
+	while behind >= (saved.left or 1) and seen < LOOK.gate do
 		local step = Step(guide, behind)
 		if Wanted(step) and not Side(step) then
 			seen = seen + 1
@@ -1953,7 +1959,7 @@ local function WorkOnQuest(home, quest)
 	end
 	Try(home)
 	local back = home
-	for _ = 1, PRIOR_GUIDES do
+	for _ = 1, LOOK.guides do
 		back = Prior(back)
 		Try(back)
 	end
@@ -2049,7 +2055,7 @@ local function CarriedWork(guide, at)
 	end
 	-- Hand-in may live only in an earlier guide in the chain (objectives there, turn-in here).
 	local back = guide
-	for _ = 1, PRIOR_GUIDES do
+	for _ = 1, LOOK.guides do
 		back = Prior(back)
 		if not back then break end
 		for _, each in ipairs(HandIns(back)) do
@@ -2075,7 +2081,7 @@ end
 local function First(guide, at)
 	local found = {}
 	local seen, index = 0, at
-	while index <= #guide.raw and index < at + LOOK_REACH and seen < LOOK_AHEAD do
+	while index <= #guide.raw and index < at + LOOK.reach and seen < LOOK.ahead do
 		local step = Step(guide, index)
 		if Wanted(step) and not Side(step) then
 			local state, parts = Evaluate(guide, step)
@@ -2162,15 +2168,17 @@ end
 --   ahead     something a later step, in this guide or the next few, can't do without
 --   easy      a quest wholly before the place that is still available and worth the walk
 -- One that is near and on the way goes before the place (the card leads with it); any other
--- within CATCH_FAR is only offered on the map. Skipped steps, quests with a skipped step,
+-- within CATCH.far is only offered on the map. Skipped steps, quests with a skipped step,
 -- steps before saved.left and other continents are excluded.
-local CATCH_REACH = 1000     -- yards: a step this near can be on the way...
-local CATCH_EXTRA = 400      -- ...if nearer than the guide's step, or adding no more than this to the walk
-local CATCH_NEAR = 500       -- ...or this near, when the guide's step has no position
-local CATCH_FAR = 5000       -- yards within which an off-the-way step is offered on the map
-local CATCH_MOST = 12        -- most steps offered
-local CATCH_STAY = 1.3       -- hysteresis for a step that was on the way
-local CATCH_RANK = { carried = 1, ahead = 2, easy = 3 }
+local CATCH = {
+	reach = 1000,  -- yards: a step this near can be on the way...
+	extra = 400,  -- ...if nearer than the guide's step, or adding no more than this to the walk
+	near = 500,  -- ...or this near, when the guide's step has no position
+	far = 5000,  -- yards within which an off-the-way step is offered on the map
+	most = 12,  -- most steps offered
+	stay = 1.3,  -- hysteresis for a step that was on the way
+	rank = { carried = 1, ahead = 2, easy = 3 },
+}
 local LOOSE = { "complete", "collect", "turnin" }   -- commands that act on a carried quest
 local caught = {}            -- step indexes that were on the way last time
 
@@ -2204,7 +2212,7 @@ local function Behind(guide, at)
 			quests = {}
 			wanted[index] = quests
 		end
-		if not quests[quest] or CATCH_RANK[why] < CATCH_RANK[quests[quest]] then quests[quest] = why end
+		if not quests[quest] or CATCH.rank[why] < CATCH.rank[quests[quest]] then quests[quest] = why end
 	end
 	-- Carried, less the quests of skipped steps.
 	local gone = {}
@@ -2302,7 +2310,7 @@ local function Catchup(guide, main, needed)
 			for _, part in ipairs(state == "todo" and parts or NOTHING) do
 				local quest, open = About(part)
 				local reason = quest and open and part.can and not part.done and not part.dropped and wanted[index][quest]
-				if reason and (not why or CATCH_RANK[reason] < CATCH_RANK[why]) then why = reason end
+				if reason and (not why or CATCH.rank[reason] < CATCH.rank[why]) then why = reason end
 			end
 			if why then
 				-- Only the caught-up quest's parts stay; the step's other quest parts are dropped.
@@ -2315,13 +2323,13 @@ local function Catchup(guide, main, needed)
 				local view = G.Describe(guide, step, parts)
 				if view.north and view.continent == W.continent then
 					local yards = W.Between(W.north, W.west, view.north, view.west)
-					local hold = caught[index] and CATCH_STAY or 1
+					local hold = caught[index] and CATCH.stay or 1
 					local near
 					if leadYards then
-						near = yards <= CATCH_REACH * hold and (yards <= leadYards * hold
-							or yards + W.Between(view.north, view.west, lead.north, lead.west) - leadYards <= CATCH_EXTRA * hold)
+						near = yards <= CATCH.reach * hold and (yards <= leadYards * hold
+							or yards + W.Between(view.north, view.west, lead.north, lead.west) - leadYards <= CATCH.extra * hold)
 					else
-						near = yards <= CATCH_NEAR * hold
+						near = yards <= CATCH.near * hold
 					end
 					local entry = InsertBefore(step, parts, why)
 					entry.yards = yards
@@ -2332,7 +2340,7 @@ local function Catchup(guide, main, needed)
 					if retake or near then
 						now[index] = true
 						onWay[#onWay + 1] = entry
-					elseif yards <= CATCH_FAR then
+					elseif yards <= CATCH.far then
 						entry.first = nil
 						offered[#offered + 1] = entry
 					end
@@ -2342,13 +2350,13 @@ local function Catchup(guide, main, needed)
 	end
 	caught = now
 	table.sort(onWay, function(a, b) return a.step.index < b.step.index end)
-	-- "easy" ones last: only CATCH_MOST are offered.
+	-- "easy" ones last: only CATCH.most are offered.
 	table.sort(offered, function(a, b)
 		if (a.catch == "easy") ~= (b.catch == "easy") then return b.catch == "easy" end
 		if (a.yards or math.huge) ~= (b.yards or math.huge) then return (a.yards or math.huge) < (b.yards or math.huge) end
 		return a.step.index < b.step.index
 	end)
-	for i = #offered, CATCH_MOST + 1, -1 do offered[i] = nil end
+	for i = #offered, CATCH.most + 1, -1 do offered[i] = nil end
 	return onWay, offered
 end
 
@@ -3056,7 +3064,10 @@ local function Named(element)
 	return names
 end
 
-local HEARTHSTONE, ASTRAL_RECALL = 6948, 556    -- buttons for .hs
+local RECALL = {
+	hearthstone = 6948,
+	astral = 556,  -- buttons for .hs
+}
 
 -- ".line Elwynn Forest,53.68,47.29,52.82,48.78,...": a path to draw on a map.
 local function Trail(element)
@@ -3295,8 +3306,8 @@ function G.Describe(guide, step, parts, whole, ghosts)
 			end
 		elseif command == "hs" then
 			if part.can and not part.done then
-				Use("item", HEARTHSTONE)
-				Use("spell", ASTRAL_RECALL)
+				Use("item", RECALL.hearthstone)
+				Use("spell", RECALL.astral)
 			end
 		elseif command == "skipgossipid" then
 			if open then
@@ -3589,7 +3600,7 @@ local function Says(step)
 		if not element.cond or Applies(element.cond) then
 			local command = element.command
 			-- ".xp <12,1" is a check, ".xp 12" a task.
-			if (element.text and not UNSAID[command]) or TASK[command] or ONCE[command]
+			if (element.text and not UNSAID[command]) or TASK[command] or LATCH.once[command]
 				or (command == "xp" and not element.args:find(",", 1, true)) then
 				return true
 			end

@@ -1,13 +1,13 @@
 -- Generated file. Do not edit by hand.
 -- Leveling talent builds per class: what each is for, a one-line reason, a caution where it is a hard
 -- way to level, and a node for every talent point it plans; with each node's tab, row and rank count
--- from the client's trait tables for 1.60.1.70938. A class's first build is the one for questing alone.
+-- from the client's trait tables for 1.60.1.70959. A class's first build is the one for questing alone.
 -- An order is numbered by point: the first comes at level 10, or as early as level 5 with the account's
 -- legacy talent Talented. Read by Spec.lua.
 local _, ns = ...
 ns.data = ns.data or {}
 ns.data.specs = {
-build = "1.60.1.70938",
+build = "1.60.1.70959",
 DRUID = {
 	tree = 1089, tabs = { 11328, 11347, 11340 },   -- Druid: Balance, Feral Combat, Restoration
 	nodes = {   -- [node] = { tab, row, ranks }

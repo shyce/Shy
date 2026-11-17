@@ -75,7 +75,7 @@
 -- answer a page itself, or decline to open its window) and nobody has answered it meanwhile: picking,
 -- accepting, handing in and closing are post-hooked, so another addon acting on the page (ShyQuest's
 -- instant turn-in, a gossip skipper) is noticed and the dialog never flashes. Whatever is left unanswered
--- for WAIT seconds is shown after all. Choosing another kind of quest text ends a talk in progress and
+-- for PACE.wait seconds is shown after all. Choosing another kind of quest text ends a talk in progress and
 -- gives the windows back the moment they are closed.
 --
 -- The head: a character model takes its unit only while it is shown and drops it when hidden unless told
@@ -158,20 +158,27 @@ local WIDTH = TEXT_X + TEXT_W
 local ZOOM = 0.55            -- the model's portrait zoom: head and chest
 local TURN = 0.3             -- radians the head is turned toward the words
 
-local PAGE = 220             -- most characters on a page of speech
-local CPS, SPREAD = 60, 36   -- characters read out a second, and the width of the fading front
-local WHOLE = 4096           -- a fading front past the end of any page
-local WAIT = 3               -- seconds an answer asked for by someone else may take
-local LOOK = 0.25            -- seconds between looks while ShyQuest waits for the game
-local LINGER = 0.2           -- seconds a closed page waits for the next before the dialog goes
-local ANSWER = 1             -- seconds clicks wait after one of ours, for the game's answer
-local ENTER = 0.6            -- the entrance
-local LEAVE = 0.2            -- the exit
-local CASCADE, STAGGER = 0.2, 0.06     -- an answer arriving, and the gap to the next
-local LIFT = 10              -- units an answer rises as it arrives
-local BREATH = 2.4           -- seconds a breath of the seal's light takes while words are said
-local LIGHT, LIGHT_LOW, LIGHT_SPEAK = 0.85, 0.75, 0.25   -- the glow behind the head at rest, and its breath
-local FLASH = 0.4            -- seconds the light brightens as a page opens
+-- The pace of the words and of the window: characters, seconds, units.
+local PACE = {
+	page = 220,  -- most characters on a page of speech
+	cps = 60,
+	spread = 36,  -- characters read out a second, and the width of the fading front
+	whole = 4096,  -- a fading front past the end of any page
+	wait = 3,  -- seconds an answer asked for by someone else may take
+	look = 0.25,  -- seconds between looks while ShyQuest waits for the game
+	linger = 0.2,  -- seconds a closed page waits for the next before the dialog goes
+	answer = 1,  -- seconds clicks wait after one of ours, for the game's answer
+	enter = 0.6,  -- the entrance
+	leave = 0.2,  -- the exit
+	cascade = 0.2,
+	stagger = 0.06,  -- an answer arriving, and the gap to the next
+	lift = 10,  -- units an answer rises as it arrives
+	breath = 2.4,  -- seconds a breath of the seal's light takes while words are said
+	light = 0.85,
+	lightLow = 0.75,
+	lightSpeak = 0.25,  -- the glow behind the head at rest, and its breath
+	flash = 0.4,  -- seconds the light brightens as a page opens
+}
 
 local DIGITS = {}
 for i = 1, 9 do
@@ -351,7 +358,7 @@ local function Pages(text)
 	local function Put(piece, joint)
 		piece = piece:gsub("^%s+", ""):gsub("%s+$", "")
 		if piece == "" then return end
-		if page ~= "" and #page + #joint + #piece > PAGE then
+		if page ~= "" and #page + #joint + #piece > PACE.page then
 			out[#out + 1] = page
 			page = ""
 		end
@@ -359,7 +366,7 @@ local function Pages(text)
 	end
 	for para in (text:gsub("\r", "") .. "\n"):gmatch("(.-)\n") do
 		if para:find("%S") then
-			if #para <= PAGE then
+			if #para <= PACE.page then
 				Put(para, "\n\n")
 			else
 				for i, sentence in ipairs(Sentences(para)) do Put(sentence, i == 1 and "\n\n" or " ") end
@@ -381,7 +388,7 @@ local function Mine(fn, ...)
 end
 
 local function Busy()
-	return s.busy ~= nil and GetTime() - s.busy < ANSWER
+	return s.busy ~= nil and GetTime() - s.busy < PACE.answer
 end
 
 -- Motion: tweens run on one frame's OnUpdate, which is cleared the moment none is left.
@@ -1005,7 +1012,7 @@ local function Row(def)
 			self.on = true
 			State(self)
 			local gen = s.gen
-			C_Timer.After(ANSWER, function()
+			C_Timer.After(PACE.answer, function()
 				if s.gen ~= gen or not self.on then return end
 				self.on = false
 				State(self)
@@ -1786,7 +1793,7 @@ end
 -- The glow behind the head, settled after the words.
 local function Hush()
 	local from = ui.sealLight:GetAlpha()
-	Tween("hush", 0.5, function(k) ui.sealLight:SetAlpha(from + (LIGHT - from) * Ease(k)) end)
+	Tween("hush", 0.5, function(k) ui.sealLight:SetAlpha(from + (PACE.light - from) * Ease(k)) end)
 end
 
 local function Done()
@@ -1798,12 +1805,12 @@ local function Done()
 end
 
 local function Reveal(_, dt)
-	s.progress = s.progress + dt * CPS
+	s.progress = s.progress + dt * PACE.cps
 	s.breath = s.breath + dt
-	ui.text:SetAlphaGradient(s.progress, SPREAD)
-	local breath = LIGHT_LOW + LIGHT_SPEAK * (0.5 - 0.5 * math.cos(2 * math.pi * s.breath / BREATH))
-	ui.sealLight:SetAlpha(min(1, breath + 0.3 * max(0, 1 - s.breath / FLASH)))
-	if s.progress >= s.length + SPREAD then Done() end
+	ui.text:SetAlphaGradient(s.progress, PACE.spread)
+	local breath = PACE.lightLow + PACE.lightSpeak * (0.5 - 0.5 * math.cos(2 * math.pi * s.breath / PACE.breath))
+	ui.sealLight:SetAlpha(min(1, breath + 0.3 * max(0, 1 - s.breath / PACE.flash)))
+	if s.progress >= s.length + PACE.spread then Done() end
 end
 
 local function ShowPage(n)
@@ -1814,12 +1821,12 @@ local function ShowPage(n)
 	Settle("hush")
 	if Readable(text) and not (s.make == "window" and I.QuestText() == "instant") then
 		s.length, s.progress, s.revealing, s.breath = strlenutf8(text), 0, true, 0
-		ui.text:SetAlphaGradient(0, SPREAD)
+		ui.text:SetAlphaGradient(0, PACE.spread)
 		ui.reader:SetScript("OnUpdate", Reveal)
 	else
 		-- Withheld words can't be counted: shown whole.
 		s.revealing = false
-		ui.text:SetAlphaGradient(WHOLE, SPREAD)
+		ui.text:SetAlphaGradient(PACE.whole, PACE.spread)
 		ui.reader:SetScript("OnUpdate", nil)
 		Arrive()
 	end
@@ -1828,8 +1835,8 @@ local function ShowPage(n)
 end
 
 local function Finish()
-	s.progress = s.length + SPREAD
-	ui.text:SetAlphaGradient(s.progress, SPREAD)
+	s.progress = s.length + PACE.spread
+	ui.text:SetAlphaGradient(s.progress, PACE.spread)
 	Done()
 end
 
@@ -1920,13 +1927,13 @@ function Arrive(now)
 	for _, frame in ipairs(list) do
 		if frame.mouse then Touchable(frame, true) end
 	end
-	local total = CASCADE + STAGGER * max(0, #list - 1)
+	local total = PACE.cascade + PACE.stagger * max(0, #list - 1)
 	Tween("cascade", total, function(k)
 		local t = k * total
 		for i, frame in ipairs(list) do
-			local e = Ease((t - (i - 1) * STAGGER) / CASCADE)
+			local e = Ease((t - (i - 1) * PACE.stagger) / PACE.cascade)
 			frame:SetAlpha((frame.dim or 1) * e)
-			if frame.ax then Place(frame, LIFT * (1 - e)) end
+			if frame.ax then Place(frame, PACE.lift * (1 - e)) end
 		end
 	end)
 	if now then Settle("cascade") end
@@ -2107,7 +2114,7 @@ end
 -- The entrance: the stage comes up with a gleam running once along its line, the seal out of the dark,
 -- the plaque after it, the words with their reveal.
 local function Unfurl(k)
-	local t = k * ENTER
+	local t = k * PACE.enter
 	ui.stage:SetAlpha(Ease(t / 0.3))
 	ui.seal:SetAlpha(Ease(t / 0.35))
 	ui.under:SetAlpha(Ease(t / 0.35))
@@ -2139,7 +2146,7 @@ local function Open()
 	-- Still: nothing behind the dialog comes back under the cursor; windows and tooltips stay solid.
 	I.Quiet("talk", true, ui.box, true)
 	Face()
-	Tween("enter", ENTER, Unfurl)
+	Tween("enter", PACE.enter, Unfurl)
 	PlaySound(SOUNDKIT.IG_QUEST_LIST_OPEN)
 end
 
@@ -2164,14 +2171,14 @@ local function Shut(soft, quiet)
 	if soft then
 		local token = {}
 		s.leaving = token
-		Tween("leave", LEAVE, function(k)
+		Tween("leave", PACE.leave, function(k)
 			shell:SetAlpha(1 - Ease(k))
 			if shell == ui.box then
 				ui.stage:SetAlpha(1 - Ease(k))
 				ui.under:SetAlpha(1 - Ease(k))
 			end
 		end)
-		C_Timer.After(LEAVE, function()
+		C_Timer.After(PACE.leave, function()
 			if s.leaving ~= token then return end
 			s.leaving = nil
 			Shy.HUD.Update(shell)
@@ -2320,7 +2327,7 @@ local function BuildSeal(box)
 	ui.sealLight = Light(glow, "Glow", "BACKGROUND", -6)
 	ui.sealLight:SetSize(STAGE.halo, STAGE.halo)
 	ui.sealLight:SetPoint("CENTER", seal, "CENTER", 0, FIGURE.headY)
-	ui.sealLight:SetAlpha(LIGHT)
+	ui.sealLight:SetAlpha(PACE.light)
 	ui.model = CreateFrame("PlayerModel", nil, under)
 	ui.model:SetAllPoints()
 	ui.model:SetFrameLevel(box:GetFrameLevel() + 5)
@@ -3302,7 +3309,7 @@ function W.Open()
 	ui.keys:SetShown(not InCombatLockdown())
 	Face()
 	ui.reader:SetAlpha(0)
-	Tween("enter", ENTER / 2, function(k) ui.reader:SetAlpha(Ease(k)) end)
+	Tween("enter", PACE.enter / 2, function(k) ui.reader:SetAlpha(Ease(k)) end)
 	PlaySound(SOUNDKIT.IG_QUEST_LIST_OPEN)
 end
 
@@ -3351,7 +3358,7 @@ function Decide()
 	if kind == "gossip" then Ask.Pick() end
 	-- Answered by someone else as it came (or picked for you): wait for what comes of it, but not for ever.
 	if s.heardAt and s.heardAt >= s.pageAt then
-		local left = WAIT - (GetTime() - s.pageAt)
+		local left = PACE.wait - (GetTime() - s.pageAt)
 		if left > 0 then
 			Soon(left)
 			return
@@ -3359,7 +3366,7 @@ function Decide()
 	end
 	local quest = Shy.addons.Quest
 	if quest and quest.TalkWaiting and quest:TalkWaiting() then
-		Soon(LOOK)
+		Soon(PACE.look)
 		return
 	end
 	if s.open and s.shownGen == s.gen then return end
@@ -3475,7 +3482,7 @@ events:SetScript("OnEvent", function(_, event, arg)
 		end
 		return
 	end
-	local linger = LINGER
+	local linger = PACE.linger
 	if event == "GOSSIP_SHOW" then
 		s.kind = "gossip"
 	elseif QUEST[event] then
@@ -3485,7 +3492,7 @@ events:SetScript("OnEvent", function(_, event, arg)
 		s.kind = nil
 		-- The talk carries on after a quest picked here: its page is on its way. After an option it
 		-- carries on in the game's own window (a vendor, a trainer, a flight map), and the dialog goes.
-		if arg and s.toQuest then linger = WAIT end
+		if arg and s.toQuest then linger = PACE.wait end
 	elseif event == "QUEST_FINISHED" then
 		if s.kind == "gossip" then return end
 		s.kind = nil
@@ -3637,7 +3644,7 @@ function ui.Voice()
 		Say(ui.text, s.pages[s.page])
 	end
 	Settle("hush")
-	ui.sealLight:SetAlpha(LIGHT_LOW + LIGHT_SPEAK * (0.5 - 0.5 * math.cos(2 * math.pi * GetTime() / BREATH)))
+	ui.sealLight:SetAlpha(PACE.lightLow + PACE.lightSpeak * (0.5 - 0.5 * math.cos(2 * math.pi * GetTime() / PACE.breath)))
 end
 
 Shy.Voice.Follow(function()

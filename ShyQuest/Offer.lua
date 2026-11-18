@@ -1,27 +1,22 @@
--- A quest you could take, as a page on the world map: what it asks for and what it gives, so the trip
--- to its giver can be weighed before it is made. A click on a pin that has quests to pick up (the "!" of
--- a giver, a place of the route, a step of the guide) keeps its ground lit, as it always did, and opens
--- this page beside it; a click on such a pin on the minimap opens the map there. The pin's hover names
--- the quests; the page says the rest:
---   the head     who gives them, where, how far; then how many quests, their XP together (and how much of
---                your level that is) and whether anything in them is an upgrade
+-- The quests you could take at a giver, so the trip there can be weighed before it is made. A pin's hover names
+-- them, each on a line with what it pays; a click on the pin keeps the hover and it says the rest (CardHover.lua,
+-- with these blocks), with what to do about it at its foot:
+--   the head     who gives them, how far; then how many quests, their XP together (and how much of your level
+--                that is) and whether anything in them is an upgrade
 --   each quest   its name in the color of its difficulty and its level; what it asks for, in its own
 --                sentence (Data/Offers.lua, the server's word), else each thing the data has it ask for;
 --                what it pays: XP as you would be paid it now, money, what it costs; the items it gives and
---                the ones to choose from, each with what it is and what ShyGear makes of it for you; a spell
---                it teaches; who takes it back where that isn't its giver; the quest it leads to; and, in
---                gold, why the route leaves it or what your guide does with it
---   the foot     the pin's right click as a button: head there first
--- It stands over the map's window (Shy.Maps.Over), at the canvas's top right, and is as tall as what it
--- says up to the map's height; past that it scrolls.
+--                the ones to choose from, each with what it is and what ShyGear makes of it for you (the mouse
+--                on one shows the game's own tooltip, a held key links it); a spell it teaches; who takes it
+--                back where that isn't its giver; the quest it leads to; and, in gold, why the route leaves it
+--                or what your guide does with it
 --
 --   ns.Offer.Quests(stop) -> { { id, action, who } }   the quests picked up at a stop, in its order (who: their
 --                                                 giver, on a pin of several); empty for none
---   ns.Offer.Content(stop) -> content or nil      what the page says (the tests read it)
---   ns.Offer.Follow(stop)                         the stop the map keeps lit (Pins.lua, at every laying of the
---                                                 map): its page shows, is filled again when what it says has
---                                                 changed, and goes when the stop has no quest to take or is nil
---   ns.Offer.Shown() -> stop or nil
+--   ns.Offer.Content(stop) -> content or nil      what is said of them (the tests read it)
+--   ns.Offer.Tally(content) -> words              the line under the head's name
+--   ns.Offer.Blocks(content) -> { block, ... }    the quests as Shy.Hover card blocks
+--   ns.Offer.ItemRow({ item, count }) -> row      an item a quest gives, as a hover row (icon, name, what it is to you)
 
 local ADDON, ns = ...
 local T = ns.T
@@ -33,26 +28,15 @@ local Offer = {}
 ns.Offer = Offer
 
 local P = {
-	wide = 372, pad = 14,          -- the page, and its content's inset
-	head = 64, foot = 44,          -- the head (name, where, the tally) and the foot (the button)
-	top = 40, edge = 12,           -- from the map's top and its right edge
-	least = 120,                   -- the body is never shorter than this, however little room the map has
-	row = 40, icon = 28, gap = 2,  -- an item's row
-	mark = 18,                     -- a quest's mark before its name
-	-- Its words' sizes. The page stands over the map at Shy.Maps.OVER of its size, as everything there does:
-	-- these are a notch over the family's usual, so they read as the usual on the screen.
-	title = 15, small = 12, name = 14, body = 13, quiet = 11, caps = 10, item = 13, what = 11,
-	between = 12,                  -- from one quest to the rule before the next
-	late = 0.15,                   -- seconds from an item coming in to the page being filled again
-	most = 8,                      -- quests on one page; the rest are counted
+	late = 0.15,                   -- seconds from an item coming in to the hover being filled again
+	most = 8,                      -- quests said at one giver; the rest are counted
+	short = 2,                     -- more quests than this: each is said short (Offer.Blocks)
+	shortMost = 5,                 -- ... and no more of them than this
 }
 local VERDICT = { later = "Later", same = "About the same", worse = "Worse than yours", cant = "Can't use" }
 local DOT = "  \194\183  "
 
-local page                   -- the frame, made when first asked for
-local showing                -- the stop its page is up for
-local said                   -- what the page was last filled from (Sig)
-local asked = {}             -- items the page waits to hear of
+local asked = {}             -- items the kept hover waits to hear of
 local waiting = false
 
 local function Gear()
@@ -60,7 +44,7 @@ local function Gear()
 	return gear and gear.Judge and gear or nil
 end
 
--- What the page says ----------------------------------------------------------------------------------
+-- What is said of them ------------------------------------------------------------------------------
 
 -- The quests picked up at a stop, each once, in the stop's order: a giver's pick-ups, those of every giver
 -- of a pin that stands for several (each with who gives it), or a guide step's open accept lines.
@@ -126,7 +110,7 @@ local function Back(quest, stop)
 	return thing.name, zone or nil
 end
 
--- What the route or the guide makes of a quest, where that is worth saying: in gold on the page.
+-- What the route or the guide makes of a quest, where that is worth saying: in gold.
 local function Standing(quest, action)
 	if action and action.failed then return "Failed: abandon it and accept it again" end
 	if R.offGuide then
@@ -160,7 +144,7 @@ end
 --             quests = { { id, name, level, color = { r, g, b }, tags, giver (on a pin of several givers), from,
 --                          says | asks = { line }, xp, share,
 --                          money, cost, items, choices ({ item, count } each), spell, back, zone, opens, note } },
---             more (quests past P.most), xp (all of them together), go (the foot's words) }
+--             more (quests past P.most), xp (all of them together) }
 function Offer.Content(stop)
 	local quests = Offer.Quests(stop)
 	if #quests == 0 then return nil end
@@ -208,21 +192,7 @@ function Offer.Content(stop)
 			}
 		end
 	end
-	-- The foot's button is the pin's right click (Pins.lua): the arrow for a step of the guide, the route
-	-- for a quest's stop.
-	if stop.kind == "guide" then
-		content.go = "Point the way"
-	else
-		content.go = stop.chosen and "Let the route choose" or "Head here first"
-	end
 	return content
-end
-
--- What a page is filled from, as one text: filled again only when this changes.
-local function Sig(stop, quests)
-	local out = { stop.key or "", stop.chosen and "c" or "", L.version or "", L.Level(), R.offGuide and "g" or "" }
-	for _, one in ipairs(quests) do out[#out + 1] = one.id end
-	return table.concat(out, ":")
 end
 
 -- ShyGear's verdict on an item, or nil (none of it loaded yet, or nothing to say).
@@ -262,7 +232,7 @@ function Offer.Tally(content)
 	return table.concat(parts, DOT)
 end
 
--- The page ----------------------------------------------------------------------------------------------
+-- The kept hover's blocks ----------------------------------------------------------------------------------
 
 -- What an item is, in a line: where it is worn and its kind ("Chest  ·  Mail"), or its kind alone.
 local function What(kind, subKind, where)
@@ -273,359 +243,118 @@ local function What(kind, subKind, where)
 	return slot or what or kind or ""
 end
 
-local function PaintRow(row)
-	local data = row.data
-	row.verdict:SetText("")
-	row.arrow:Hide()
-	row:SetAlpha(1)
-	row.icon:SetDesaturated(false)
-	if data.spell then
-		local name = C_Spell.GetSpellName(data.spell)
-		row.icon:SetTexture(C_Spell.GetSpellTexture(data.spell))
-		row.name:SetText(name or "A spell")
-		UI.Ink(row.name, C.head)
-		row.slot:Quality(nil)
-		row.sub:SetText("You learn it")
-		row.link = nil
-		return
-	end
-	local item = data.item
+-- An item a quest gives, as a hover row: its icon, its name in its quality's color and how many, and on the right
+-- what it is to you (ShyGear's word: what an upgrade gains, a quiet word for the rest), else what it is. The mouse
+-- on it shows the game's own tooltip (Shy.Hover's row.item). One the game hasn't told of yet is asked for.
+local function ItemRow(each)
+	local item = each.item
 	local name, link, quality, _, _, kind, subKind, _, where, icon = C_Item.GetItemInfo(item)
-	row.link = link
-	local times = data.count > 1 and UI.Wrap(C.dim, "  x" .. data.count) or ""
+	local times = (each.count or 1) > 1 and UI.Wrap(C.dim, "  x" .. each.count) or ""
 	if not name then
-		-- (Not told of yet: asked for, and painted again as the answer comes.)
 		asked[item] = true
 		C_Item.RequestLoadItemDataByID(item)
-		row.icon:SetTexture(C_Item.GetItemIconByID(item))
-		row.name:SetText((D.Item(item) or {}).name or "")
-		UI.Ink(row.name, C.head)
-		row.slot:Quality(nil)
-		row.sub:SetText("")
-		return
+		return { icon = C_Item.GetItemIconByID(item), text = ((D.Item(item) or {}).name or "") .. times, color = C.head, item = item }
 	end
-	row.icon:SetTexture(icon)
-	row.name:SetText(name .. times)
-	local color = ITEM_QUALITY_COLORS[quality or 1]
-	row.name:SetTextColor(color.r, color.g, color.b)
-	row.slot:Quality(quality)
-	-- What it is to you: an arrow and what you gain for an upgrade, a quiet word for the rest.
+	local color = ITEM_QUALITY_COLORS[quality or 1] or ITEM_QUALITY_COLORS[1]
+	local row = { icon = icon, text = name .. times, color = { color.r, color.g, color.b }, item = item, link = link,
+		right = What(kind, subKind, where), rightColor = C.dim, wrap = false }
 	local v = Verdict(item)
-	local words, ink, arrow = "", C.dim, false
-	if v then
-		if v.kind == "upgrade" then
-			local gear = Gear()
-			words, ink, arrow = gear.Words and gear:Words(v) or "", C.good, true
-			if words == "" then words = "Upgrade" end
-		else
-			words = VERDICT[v.kind] or ""
-			if v.kind == "later" then ink = C.alert end
-		end
+	if v and v.kind == "upgrade" then
+		local gear = Gear()
+		local words = gear.Words and gear:Words(v) or ""
+		row.right, row.rightColor = words ~= "" and words or "Upgrade", C.good
+	elseif v and VERDICT[v.kind] then
+		row.right, row.rightColor = VERDICT[v.kind], v.kind == "later" and C.alert or C.dim
+		if v.kind == "cant" then row.color = C.dim end
 	end
-	local cant = v and v.kind == "cant"
-	row.verdict:SetText(words)
-	UI.Ink(row.verdict, ink)
-	row.arrow:SetShown(arrow)
-	row.icon:SetDesaturated(cant and true or false)
-	row:SetAlpha(cant and 0.5 or 1)
-	-- The verdict is said whole; what the item is has what is left of the line.
-	local room = row.room
-	local mark = arrow and 15 or 0
-	local wide = words ~= "" and math.min(row.verdict:GetUnboundedStringWidth() + 2, room - mark - 60) or 0
-	row.verdict:SetWidth(math.max(1, wide))
-	row.sub:SetWidth(math.max(48, room - wide - mark - (wide > 0 and 10 or 0)))
-	row.sub:SetText(What(kind, subKind, where))
-end
-
-local function MakeRow(parent)
-	local row = CreateFrame("Button", nil, parent)
-	row:SetHeight(P.row)
-	UI.Skin(row, C.row, C.rowEdge)
-	row.icon = row:CreateTexture(nil, "ARTWORK")
-	row.icon:SetSize(P.icon, P.icon)
-	row.icon:SetPoint("LEFT", 6, 0)
-	row.slot = Shy.Slot.New(row, { to = row.icon, icon = row.icon, hover = false })
-	row.name = UI.Text(row, "", P.item, false, C.head)
-	row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 9, 0)
-	row.name:SetWordWrap(false)
-	row.sub = UI.Text(row, "", P.what, false, C.dim)
-	row.sub:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 9, 0)
-	row.sub:SetWordWrap(false)
-	row.verdict = UI.Text(row, "", P.what, false, C.dim)
-	row.verdict:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -8, (P.row - P.icon) / 2)
-	row.verdict:SetJustifyH("RIGHT")
-	row.verdict:SetWordWrap(false)
-	row.arrow = row:CreateTexture(nil, "ARTWORK")
-	row.arrow:SetSize(10, 10)
-	row.arrow:SetPoint("RIGHT", row.verdict, "LEFT", -5, 0)
-	Shy.Hover.Glyph(row.arrow, "up", 10)
-	UI.Tint(row.arrow, C.good)
-	-- The game's own tooltip of the item or the spell, where every window's rows have it.
-	row:SetScript("OnEnter", function(self)
-		UI.SetBorder(self, C.hot)
-		local tip = UI.GameTipAt(self, self.icon)
-		if self.data.spell then tip:SetSpellByID(self.data.spell) else tip:SetItemByID(self.data.item) end
-		GameTooltip:Show()
-	end)
-	row:SetScript("OnLeave", function(self)
-		UI.SetBorder(self, C.rowEdge)
-		GameTooltip:Hide()
-	end)
-	-- A held key links it in chat or tries it on, as the game's own item buttons do.
-	row:SetScript("OnClick", function(self)
-		if self.link and IsModifiedClick() then HandleModifiedItemClick(self.link) end
-	end)
 	return row
 end
 
--- Pools of what a page is laid from: taken in order from the first at each filling (Begin), the rest put
--- away after it (Done).
-local function Pool(make)
-	local pool = { used = 0 }
-	function pool:Next()
-		self.used = self.used + 1
-		local one = self[self.used]
-		if not one then
-			one = make()
-			self[self.used] = one
-		end
-		one:ClearAllPoints()
-		one:Show()
-		return one
-	end
-	function pool:Begin()
-		self.used = 0
-	end
-	function pool:Done()
-		for i = self.used + 1, #self do self[i]:Hide() end
-	end
-	return pool
-end
+Offer.ItemRow = ItemRow   -- (the Quests window's quest page has the same rows: LogRows.lua)
 
-local function Build()
-	local container = Shy.Maps.Canvas():GetCanvasContainer()
-	page = CreateFrame("Frame", nil, container)
-	page:SetFrameStrata("HIGH")
-	page:SetWidth(P.wide)
-	Shy.Maps.Over(page, "TOPRIGHT", -P.edge, -P.top)
-	UI.Panel(page, { brackets = false })
-	-- (Its own ground under the mouse: a click meant for the page never falls through to the map.)
-	page:EnableMouse(true)
-	page:Hide()
-
-	-- The head: the stop's mark and name, where it is and how far, and the tally.
-	page.mark = ns.CreateMark(page, 26)
-	page.mark:SetPoint("TOPLEFT", P.pad, -P.pad + 1)
-	page.close = UI.Close(page, 18, nil, function() Offer.Close() end)
-	page.close:SetPoint("TOPRIGHT", -7, -7)
-	page.title = UI.Text(page, "", P.title, true, C.head)
-	page.title:SetPoint("TOPLEFT", page.mark, "TOPRIGHT", 8, 1)
-	page.title:SetPoint("RIGHT", page.close, "LEFT", -6, 0)
-	page.title:SetWordWrap(false)
-	page.where = UI.Text(page, "", P.small, false, C.dim)
-	page.where:SetPoint("TOPLEFT", page.title, "BOTTOMLEFT", 0, -2)
-	page.where:SetPoint("RIGHT", page, "RIGHT", -P.pad, 0)
-	page.where:SetWordWrap(false)
-	page.tally = UI.Text(page, "", P.small, false, C.text)
-	page.tally:SetPoint("TOPLEFT", page, "TOPLEFT", P.pad, -(P.head - 17))
-	page.tally:SetPoint("RIGHT", page, "RIGHT", -P.pad, 0)
-	page.tally:SetWordWrap(false)
-	page.rule = page:CreateTexture(nil, "ARTWORK")
-	page.rule:SetHeight(1)
-	page.rule:SetPoint("TOPLEFT", P.pad, -P.head - 3)
-	page.rule:SetPoint("TOPRIGHT", -P.pad, -P.head - 3)
-	UI.Paint(page.rule, C.border, 0.7)
-
-	-- The body: every quest, down a scrolling column.
-	page.scroll = UI.ScrollArea(page, P.wide - P.pad * 2 + 8, P.least, { smooth = true })
-	page.scroll:SetPoint("TOPLEFT", P.pad, -P.head - 10)
-	local body = page.scroll.content
-	page.body = body
-	page.wide = P.wide - P.pad * 2 - 6     -- what a line of the body has
-	body:SetWidth(page.wide)
-
-	page.texts = Pool(function()
-		local text = UI.Text(body, "", P.body, false, C.text)
-		text:SetJustifyV("TOP")
-		return text
-	end)
-	page.marks = Pool(function() return ns.CreateMark(body, P.mark) end)
-	page.rows = Pool(function() return MakeRow(body) end)
-	page.rules = Pool(function()
-		local rule = body:CreateTexture(nil, "ARTWORK")
-		rule:SetHeight(1)
-		UI.Paint(rule, C.border, 0.5)
-		return rule
-	end)
-
-	page.pools = { page.texts, page.marks, page.rows, page.rules }
-
-	-- The foot: the pin's right click, as a button.
-	page.go = UI.Button(page, "", P.wide - P.pad * 2, function()
-		local stop = showing
-		if not stop then return end
-		if stop.kind == "guide" then ns.PointTheWay(stop) else R.Go(stop) end
-	end)
-	page.go:SetPoint("BOTTOM", 0, P.pad - 2)
-	page.go:SetPrimary(true)
-end
-
--- A line of words down the body at y: sized, inked and wrapped to the body's width. Returns the y under it.
-local function Line(y, words, size, color, x, wide, brand)
-	local text = page.texts:Next()
-	if brand then Shy.Theme.Face(text, size) else text:SetFont((GameFontHighlight:GetFont()), size, "") end
-	UI.Ink(text, color or C.text)
-	text:SetWordWrap(true)
-	text:SetJustifyH("LEFT")
-	text:SetWidth(wide or (page.wide - (x or 0)))
-	text:SetText(words)
-	text:SetPoint("TOPLEFT", page.body, "TOPLEFT", x or 0, -y)
-	return y + math.ceil(text:GetStringHeight()), text
-end
-
-local function Heading(y, words)
-	return (Line(y + 9, words, P.caps, C.dim)) + 5
-end
-
-local function Rows(y, list, spell)
-	for _, each in ipairs(list) do
-		local row = page.rows:Next()
-		row.data = spell and { spell = each } or each
-		row:SetPoint("TOPLEFT", page.body, "TOPLEFT", 0, -y)
-		row:SetWidth(page.wide)
-		row.room = page.wide - 6 - P.icon - 9 - 8
-		row.name:SetWidth(row.room)
-		PaintRow(row)
-		y = y + P.row + P.gap
-	end
-	return y
-end
-
--- Where a stop is and how far, for the line under its name.
-local function Place(where, far)
-	if where and far and far ~= "" then return where .. DOT .. UI.Wrap(C.hot, far) end
-	return where or far or ""
-end
-
-local function Fill(content)
-	local body = page.body
-	for _, pool in ipairs(page.pools) do pool:Begin() end
-	wipe(asked)
-
-	page.mark:Set(content.kind, true, nil, content.tone)
-	page.title:SetText(content.title)
-	page.where:SetText(Place(content.where, content.far))
-	page.tally:SetText(Offer.Tally(content))
-	page.go:SetLabel(content.go)
-
-	local y = 2
+-- The quests of Offer.Content as Shy.Hover card blocks, for a pin's kept hover (CardHover.lua): for each quest
+-- its name (in its difficulty's color, its level after it, what it pays at the right), whose it is on a pin of
+-- several givers, where it starts from, what it asks for in its own sentence, the money it gives or costs, the
+-- items (to choose from, or given) and a spell it teaches, then who takes it back, the quest it leads to and what
+-- the route or the guide makes of it. Every block after the first stands under a hairline. More quests than
+-- P.short are each said short, so the hover stays a hover: only the items that are an upgrade for you, the rest
+-- counted on a line, nothing of where it goes after, and no more than P.shortMost quests, the rest counted.
+function Offer.Blocks(content)
+	local blocks = {}
+	local giver
+	local short = #content.quests > P.short
+	local more = content.more
 	for index, quest in ipairs(content.quests) do
-		if index > 1 then
-			local rule = page.rules:Next()
-			rule:SetPoint("TOPLEFT", body, "TOPLEFT", 0, -(y + P.between / 2))
-			rule:SetWidth(page.wide)
-			y = y + P.between + 1
-		end
-		-- Its mark and name, its level at the line's end.
-		local mark = page.marks:Next()
-		mark:SetPoint("TOPLEFT", body, "TOPLEFT", 0, -y)
-		mark:Set("pickup")
-		local level = quest.level > 0 and ("Level " .. quest.level) or ""
-		local _, right = Line(y + 2, level, P.quiet, C.dim, page.wide - 64, 64)
-		right:SetJustifyH("RIGHT")
-		y = Line(y, quest.name, P.name, quest.color, P.mark + 6, page.wide - P.mark - 6 - 68, true)
-		y = math.max(y, 0) + 2
-		if quest.giver then y = Line(y, quest.giver, P.quiet, C.dim, P.mark + 6) + 2 end
-		if quest.tags then y = Line(y, quest.tags, P.quiet, C.dim, P.mark + 6) + 2 end
-		if quest.from then y = Line(y, quest.from, P.small, C.alert) + 2 end
-		-- What it asks for.
-		y = y + 3
-		if quest.says then
-			y = Line(y, quest.says, P.body, C.text)
+		if short and index > P.shortMost then
+			more = more + 1
 		else
-			for _, words in ipairs(quest.asks or {}) do y = Line(y, words, P.body, C.text) + 1 end
+			-- (Several givers: a heading at each one's first quest; else a bare hairline between two.)
+			local title = (quest.giver and quest.giver ~= giver and quest.giver) or (index > 1 and "") or nil
+			giver = quest.giver
+			local level = quest.level > 0 and UI.Wrap(C.dim, "  " .. quest.level) or ""
+			local rows = { { seat = ns.MarkSeat("pickup"), text = quest.name .. level, color = quest.color,
+				right = quest.xp and ("+%s XP"):format(BreakUpLargeNumbers(quest.xp)) or nil, rightColor = C.alert } }
+			if quest.tags then rows[#rows + 1] = { text = quest.tags, quiet = true } end
+			if quest.from then rows[#rows + 1] = { text = quest.from, color = C.alert } end
+			if quest.says then
+				rows[#rows + 1] = { text = quest.says }
+			else
+				for _, words in ipairs(quest.asks or {}) do rows[#rows + 1] = { text = words } end
+			end
+			local pays = {}
+			if quest.money then pays[#pays + 1] = UI.Money(quest.money, false, 11) end
+			if quest.share and quest.xp then pays[#pays + 1] = UI.Wrap(C.dim, ("%d%% of its XP at your level"):format(quest.share)) end
+			if #pays > 0 then rows[#rows + 1] = { text = table.concat(pays, DOT) } end
+			if quest.cost then rows[#rows + 1] = { text = "Costs " .. UI.Money(quest.cost, false, 11), color = C.alert } end
+			blocks[#blocks + 1] = { title = title, rows = rows }
+			-- (Said short: only what is an upgrade for you, under its heading; the rest a quiet line under the quest.)
+			local function Things(heading, list, choose)
+				if #list == 0 then return end
+				local things, rest = {}, 0
+				for _, each in ipairs(list) do
+					local row = ItemRow(each)
+					if short and row.rightColor ~= C.good then rest = rest + 1 else things[#things + 1] = row end
+				end
+				if #things > 0 then
+					if rest > 0 then things[#things + 1] = { quiet = true, text = ("and %d more"):format(rest) } end
+					blocks[#blocks + 1] = { title = heading, rows = things }
+				elseif rest > 0 then
+					rows[#rows + 1] = { quiet = true, text = choose and ("A choice of %d rewards"):format(rest)
+						or (rest == 1 and "A reward" or ("%d rewards"):format(rest)) }
+				end
+			end
+			Things(#quest.choices > 1 and "Choose one" or "You get", quest.choices, #quest.choices > 1)
+			Things(#quest.choices > 1 and "And you get" or "You get", quest.items)
+			if quest.spell then
+				blocks[#blocks + 1] = { title = "Teaches", rows = { { icon = C_Spell.GetSpellTexture(quest.spell),
+					text = C_Spell.GetSpellName(quest.spell) or "A spell", spell = quest.spell, right = "You learn it", rightColor = C.dim } } }
+			end
+			-- Where it goes from here, and what your route or guide makes of it.
+			local onward = {}
+			if quest.back and not short then
+				onward[#onward + 1] = { quiet = true, text = "Hand in to " .. UI.Wrap(C.text, quest.back) .. (quest.zone and (", " .. quest.zone) or "") }
+			end
+			if quest.opens and not short then onward[#onward + 1] = { quiet = true, text = "Leads to " .. UI.Wrap(C.text, quest.opens) } end
+			if quest.note then onward[#onward + 1] = { glyph = "note", tint = C.alert, color = C.alert, text = quest.note } end
+			if #onward > 0 then blocks[#blocks + 1] = { rows = onward } end
 		end
-		-- What it pays, on one line: the XP, the money. Under it, quiet, how much of its XP that is.
-		local pays = {}
-		if quest.xp then pays[#pays + 1] = UI.Wrap(C.alert, ("+%s XP"):format(BreakUpLargeNumbers(quest.xp))) end
-		if quest.money then pays[#pays + 1] = UI.Money(quest.money, false, P.body) end
-		if #pays > 0 then
-			y = Line(y + 7, table.concat(pays, DOT), P.body, C.text)
-			if quest.share and quest.xp then y = Line(y + 1, ("%d%% of its XP at your level"):format(quest.share), P.quiet, C.dim) end
-		end
-		if quest.cost then y = Line(y + 4, "Costs " .. UI.Money(quest.cost, false, P.body), P.body, C.alert) end
-		if #quest.choices > 0 then y = Rows(Heading(y, #quest.choices > 1 and "CHOOSE ONE" or "YOU GET"), quest.choices) end
-		if #quest.items > 0 then y = Rows(Heading(y, #quest.choices > 1 and "AND YOU GET" or "YOU GET"), quest.items) end
-		if quest.spell then y = Rows(Heading(y, "TEACHES"), { quest.spell }, true) end
-		-- Where it goes from here.
-		local onward = {}
-		if quest.back then
-			onward[#onward + 1] = "Hand in to " .. UI.Wrap(C.text, quest.back) .. (quest.zone and (", " .. quest.zone) or "")
-		end
-		if quest.opens then onward[#onward + 1] = "Leads to " .. UI.Wrap(C.text, quest.opens) end
-		for i, words in ipairs(onward) do y = Line(y + (i == 1 and 8 or 2), words, P.small, C.dim) end
-		if quest.note then y = Line(y + 8, quest.note, P.small, C.alert) end
 	end
-	if content.more > 0 then
-		y = Line(y + P.between, ("and %d more quest%s here"):format(content.more, content.more == 1 and "" or "s"), P.small, C.dim)
+	if more > 0 then
+		blocks[#blocks + 1] = { rows = { { quiet = true, text = ("and %d more quest%s here"):format(more, more == 1 and "" or "s") } } }
 	end
-	y = y + 4
-	for _, pool in ipairs(page.pools) do pool:Done() end
-
-	-- As tall as what it says, up to the room the map leaves under it.
-	local container = page:GetParent()
-	local room = (container:GetHeight() or 0) / Shy.Maps.OVER - P.top - P.edge - P.head - 10 - P.foot
-	local tall = math.max(math.min(y, math.max(room, P.least)), 1)
-	body:SetHeight(y)
-	page.scroll:SetHeight(tall)
-	page:SetHeight(P.head + 10 + tall + P.foot)
-	page.scroll:Update()
+	return blocks
 end
 
--- The game told of an item the page was waiting for: filled again, once a moment.
+-- The game told of an item a kept hover was waiting for, or ShyGear's verdicts changed (gear put on, a build
+-- picked): it is filled again, once a moment.
 local function Late()
 	if waiting then return end
 	waiting = true
 	C_Timer.After(P.late, function()
 		waiting = false
-		if showing and page and page:IsShown() then
-			local content = Offer.Content(showing)
-			if content then Fill(content) end
-		end
+		wipe(asked)
+		if ns.CardHover and ns.CardHover.Again then ns.CardHover.Again() end
 	end)
-end
-
-function Offer.Shown()
-	return page and page:IsShown() and showing or nil
-end
-
--- The page's x: the pin is let go of, on both maps (Pins.lua), and the page goes with it.
-function Offer.Close()
-	if ns.LetGo then ns.LetGo() else Offer.Follow(nil) end
-end
-
-function Offer.Follow(stop)
-	local quests = stop and Offer.Quests(stop)
-	if not quests or #quests == 0 then
-		showing, said = nil, nil
-		if page then page:Hide() end
-		return
-	end
-	-- (Asked at every laying of the map and every pin the mouse crosses: the same page is left as it is,
-	-- but for how far it is.)
-	local sig = Sig(stop, quests)
-	if showing and sig == said and page and page:IsShown() then
-		showing = stop
-		page.where:SetText(Place(Where(stop), stop.yards and W.Far(stop) or nil))
-		return
-	end
-	local content = Offer.Content(stop)
-	if not content then return end
-	if not page then Build() end
-	if sig ~= said then page.scroll:SetVerticalScroll(0) end
-	showing, said = stop, sig
-	Fill(content)
-	page:Show()
 end
 
 Shy:On("SHY_LOGIN", function()
@@ -634,8 +363,5 @@ Shy:On("SHY_LOGIN", function()
 	events:SetScript("OnEvent", function(_, _, item)
 		if item and asked[item] then Late() end
 	end)
-	-- ShyGear's verdicts may have changed (gear put on, a build picked): the rows and the tally say them.
-	Shy:On("SHY_GEAR", function()
-		if Offer.Shown() then Late() end
-	end)
+	Shy:On("SHY_GEAR", Late)
 end)

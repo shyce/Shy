@@ -100,6 +100,8 @@
 --   Shy.HUD.OverWindow()                -- the mouse is on a window (ours, or a game window held by its corners)
 --   Shy.HUD.WindowOn(left, bottom, right, top)   -- a window lies over some of that rectangle (UIParent units):
 --                                       -- what stands over the game's frames gives way there (Drawer.lua)
+--   Shy.HUD.AnyWindow()                 -- one of our windows is open: on the screen, not just shown by its own
+--                                       -- flag (one hung from a game window goes with it)
 --
 --   local box = Shy.HUD.Adopt(DamageMeter, {        -- a Blizzard frame as a box
 --       id = "shyskin.meter", title = "Damage meter",
@@ -133,6 +135,7 @@
 -- For an addon that arranges the whole screen:
 --   Shy.HUD.Each(fn)   Shy.HUD.Find(id)   Shy.HUD.IsPlaced(box)   Shy.HUD.IsChanged(box)   Shy.HUD.SetHome(box, point, scale)
 --   Shy.HUD.Forget(box)   Shy.HUD.Fit(box, width)   Shy.HUD.SetDocked(box, on)   Shy.HUD.SetStill(box, on)
+--   Shy.HUD.SetScale(box, scale)   -- a window's own Scale setting: kept as its scale, and drawn so now
 --   Shy.HUD.Attach(box, to, point, relativePoint, x, y)   Shy.HUD.IsDragging(box)
 --
 --   Shy.HUD.GridStep(v)          -- a distance rounded to the grid (unchanged with Shift held)
@@ -1428,6 +1431,16 @@ function HUD.WindowOn(left, bottom, right, top)
 	return false
 end
 
+-- One of our windows is open. Open is on the screen: a window hung from a game window (the mailbox's, a vendor's)
+-- keeps its own shown flag while the game's is shut. The game's windows held by their corners are left out: chat
+-- and the meter stand there all the time.
+function HUD.AnyWindow()
+	for _, box in ipairs(windows) do
+		if not box.foreign and Visible(box) then return true end
+	end
+	return false
+end
+
 function HUD.Folded(box, on)
 	on = on and true or nil
 	if box.folded == on then return end
@@ -1885,6 +1898,14 @@ function HUD.SetStill(box, on)
 	box.still = on
 	if box.mover then box.mover:SetShown(MoverShown(box)) end
 	Shy:Fire("SHY_HUD_STILL", box)
+end
+
+-- A box's scale as its owner's setting has it (a window's Scale): kept as its own, and drawn so now.
+function HUD.SetScale(box, scale)
+	box.givenScale = scale
+	local saved = Saved(box)
+	if saved then saved.scale = scale end
+	HUD.Apply(box)
 end
 
 -- Drops the saved position (back to its home); lock is kept, and scale unless `size`.

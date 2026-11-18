@@ -3,8 +3,8 @@
 -- on and off.
 --   One key (Key Bindings, ShyMaps: "Map overlay"): with the map open, the map closes onto the overlay;
 --   else the overlay comes or goes.
---   The button on the map's bar (left of the look switch), lit while the overlay is on: off, a click closes
---   the map onto it; on, a click turns it off and the map stays.
+--   "Map overlay" in the map's menu: on, in the map's own window, that window closes onto it; in the game's
+--   window the overlay shows once it is closed. Off, the map stays.
 --   /shymaps overlay, and the options page.
 -- The map window opens over it as ever (the game's own key) and the overlay comes back as it closes.
 -- Closing the window from a click or a key of ours runs through one secure button (ShyMapsOverlayKey), which
@@ -113,6 +113,18 @@ T:BarButton("overlay", {
 		if on and WindowShown() then T:Print("the overlay shows when you close the map.") end
 	end,
 	made = function(button) button:HookScript("OnEnter", Lay) end,
+	-- (In the map's menu, off the bar. Turned on in the map's own window, that window closes onto it.)
+	menu = function(root)
+		root:CreateCheckbox("Map overlay", function() return T.db.overlay == true end, function()
+			local on = not T.db.overlay
+			Overlay.Set(on)
+			if on and ns.Window and ns.Window.Shown() then
+				ns.Window.Set(false)
+			elseif on and WindowShown() then
+				T:Print("the overlay shows when you close the map.")
+			end
+		end)
+	end,
 })
 
 local events = CreateFrame("Frame")

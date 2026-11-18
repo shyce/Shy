@@ -37,6 +37,8 @@ local RULES = {
 	buyNear = 1000,  -- yards: a vendor this near is where a quest item is bought
 	grindReach = 3000,  -- instead of a grind: a quest to pick up, work on or turn in this near
 	untangle = 14,  -- stops from the head of the route whose order is straightened out
+	ownHere = 40,  -- yards: an errand this near is done before your own route's first stop (YourWay)
+	ownWay = 60,  -- ... and one that adds no more than this to the walk to it
 	above = 2,  -- ... when it is no more than this many levels above the player
 }
 
@@ -1890,7 +1892,6 @@ local function Order(stops, led)
 	end
 
 	local first = R.Singled()
-	if first == 0 then first = R.pinned or 0 end
 	if first ~= 0 and not led[first] then
 		for _, list in ipairs({ near, far }) do
 			for i, stop in ipairs(list) do
@@ -2959,6 +2960,11 @@ local function WithJourneys(route)
 		if stop.kind == "guide" and not stop.side then guided = true end
 	end
 	local out, now = {}, {}
+	-- (The quests you picked still ahead: the way goes on through each of them, and stops after the last.)
+	local picks = 0
+	for _, stop in ipairs(route) do
+		if stop.picked then picks = picks + 1 end
+	end
 	local here = Way.Place(W.continent, W.north, W.west)
 	local on, last = true, nil   -- still before the lead; and the kind of the previous stop
 	local origin                 -- the stop the way on starts from (its ident); nil: where the character stands
@@ -3003,7 +3009,7 @@ local function WithJourneys(route)
 					if journey[i].by ~= "walk" then
 						local ride = RideStop(journey[i])
 						-- (A ride on the way to a stop of your own route says whose way it is.)
-						if stop.kind == "way" then ride.heading = "YOUR ROUTE  \194\183  " .. (ride.heading or "FLY THERE") end
+						if stop.kind == "way" or stop.picked then ride.heading = "YOUR ROUTE  \194\183  " .. (ride.heading or "FLY THERE") end
 						-- (... and wears its trail's color: a place someone suggested.)
 						ride.color = stop.color
 						-- (Whose ride it is: R.RefitErrands keeps it with that stop.)
@@ -3024,7 +3030,8 @@ local function WithJourneys(route)
 		last = stop.kind
 		-- No more after the guide's step, or without a guide after the lead stop. (Your route's stops are
 		-- each gone to in turn: the rides between them too.)
-		if stop.kind ~= "errand" and stop.kind ~= "way" and ((stop.kind == "guide" and not stop.side) or not guided or (stop.kind == "zone" and not stop.chosen)) then
+		if stop.picked then picks = picks - 1 end
+		if stop.kind ~= "errand" and stop.kind ~= "way" and not (stop.picked and picks > 0) and ((stop.kind == "guide" and not stop.side) or not guided or (stop.kind == "zone" and not stop.chosen)) then
 			on = false
 		end
 	end
@@ -3254,7 +3261,7 @@ local function Errands(lead)
 		-- pcall: one finder's error must not break the route. (Each timed on its own: /shymon names the slow one.)
 		local tick = debugprofilestop()
 		local ok, stop = true, nil
-		if not R.Hushed(id) and (levelling or ALWAYS[id]) then ok, stop = pcall(errands[id], lead) end
+		if not R.Hushed(id) and not R.errandAside[tostring(id)] and (levelling or ALWAYS[id]) then ok, stop = pcall(errands[id], lead) end
 		Shy.Clock("errand: " .. tostring(id)):Lap(debugprofilestop() - tick)
 		if not ok then
 			geterrorhandler()(stop)
@@ -3315,6 +3322,13 @@ function R.Lead()
 	end
 end
 
+-- Where the route takes you now: its first stop that isn't a ride on the way (an errand that goes first is it).
+function R.Heading()
+	for _, stop in ipairs(R.stops) do
+		if stop.kind ~= "fly" then return stop end
+	end
+end
+
 -- Positioned stops before the guide's step, for the map to number (Pins.lua). Without a guide:
 -- only when a flight or an errand comes before the lead stop.
 function R.Before()
@@ -3326,11 +3340,11 @@ function R.Before()
 		if stop.kind == "guide" or stop.kind == "zone" then break end
 		-- (An urgent stop is no numbered place: it has the lit mark.)
 		if stop.north and not stop.urgent then list[#list + 1] = stop end
-		if not guided and stop.kind ~= "fly" and stop.kind ~= "errand" and stop.kind ~= "way" then break end
+		if not guided and stop.kind ~= "fly" and stop.kind ~= "errand" and stop.kind ~= "way" and not stop.picked then break end
 	end
-	-- (Your route's stops are numbered always: the map's numbers are its order.)
+	-- (Your route's stops are numbered always, the quests you picked with them: the map's numbers are its order.)
 	local first = list[1]
-	if not guided and not (first and (first.kind == "fly" or first.kind == "errand" or first.kind == "way")) then return {} end
+	if not guided and not (first and (first.kind == "fly" or first.kind == "errand" or first.kind == "way" or first.picked)) then return {} end
 	return list
 end
 
@@ -3503,6 +3517,107 @@ function keep.Ahead()
 	if next_ and next_.north then ns.Idle(function() W.WalkTo(next_.north, next_.west) end) end
 end
 
+-- Skipped (a kept hover's Skip, CardHover.lua). A quest's stop is left out of the route: in zone mode it is set
+-- aside, its mark resting in a look of its own on the maps (Marks.lua's "aside") and its hover offering it back
+-- (R.Include); following a guide it is gone, its marks with it. Kept for the character (ns.char.aside: quest ID ->
+-- "aside" | "gone"). Picked onto your route again (R.Go), a quest comes back. An errand waits until a reload.
+R.errandAside = {}           -- errand id -> true
+local function SetAside()
+	ns.char.aside = type(ns.char.aside) == "table" and ns.char.aside or {}
+	return ns.char.aside
+end
+function R.Skip(stop)
+	if stop.kind == "errand" then
+		R.errandAside[tostring(stop.errand)] = true
+	else
+		local aside, how = SetAside(), ns.Following() and "gone" or "aside"
+		for _, action in ipairs(stop.actions or {}) do
+			if action.id then
+				aside[action.id] = how
+				if ns.Plan then ns.Plan.Unpick(action.id) end
+			end
+		end
+	end
+	ns.Refresh()
+end
+function R.Include(stop)
+	local aside = SetAside()
+	for _, action in ipairs(stop.actions or {}) do
+		if action.id then aside[action.id] = nil end
+	end
+	ns.Refresh()
+end
+-- How a quest was skipped: "aside", "gone", or nil.
+function R.Aside(id)
+	local aside = ns.char and ns.char.aside
+	return type(aside) == "table" and aside[id] or nil
+end
+
+-- A stop without its skipped quests (R.Skip): itself where none is, a copy with the rest, or nil where all are.
+-- `how`: only those skipped so ("gone"); nil: any.
+function R.Unskipped(stop, how)
+	local keep, dropped = {}, false
+	for _, action in ipairs(stop.actions or {}) do
+		local aside = R.Aside(action.id)
+		if aside and (not how or aside == how) then dropped = true else keep[#keep + 1] = action end
+	end
+	if not dropped then return stop end
+	if #keep == 0 then return nil end
+	local copy = {}
+	for k, v in pairs(stop) do copy[k] = v end
+	copy.actions = keep
+	return copy
+end
+
+-- Errands that go first (`now`, nearest first), split for your own route, whose first stop is `lead`: those
+-- you stand at (RULES.ownHere) or pass on the way to it (adding no more than RULES.ownWay to the walk), which go
+-- before your route, and the rest, which wait for it. What carries you off (the hearthstone) always waits: your
+-- route is on this side of it. Returns the rest, then those first.
+local function YourWay(now, lead)
+	local rest, first = {}, {}
+	local placed = lead.north and lead.yards and lead.continent == W.continent
+	for _, stop in ipairs(now) do
+		local yards = not stop.away and stop.north and stop.continent == W.continent and stop.yards or nil
+		local mine = false
+		if yards then
+			mine = yards <= RULES.ownHere
+			if not mine and placed and yards <= lead.yards then
+				local extra = yards + (W.Walked(W.continent, stop.north, stop.west, lead.north, lead.west) or math.huge) - lead.yards
+				mine = extra <= RULES.ownWay
+			end
+		end
+		-- (Said on the card: what it is done on the way to.)
+		if mine then
+			stop.along = ("On your way to %s"):format(lead.title or lead.who or "your next stop")
+			first[#first + 1] = stop
+		else
+			rest[#rest + 1] = stop
+		end
+	end
+	return rest, first
+end
+
+-- The stops of the quests you picked (Plan.lua), taken out of `stops`: by quest, the nearest stop for it (a
+-- stop for two picked quests stands for both).
+local function Picks(stops)
+	local out = {}
+	if not ns.Plan then return out end
+	for _, entry in ipairs(ns.Plan.List and ns.Plan.List() or {}) do
+		local id = entry.quest
+		if id and not out[id] then
+			local best, at
+			for i, stop in ipairs(stops) do
+				if Involves(stop, id) and (not best or (stop.yards or math.huge) < (best.yards or math.huge)) then best, at = stop, i end
+			end
+			if best then
+				table.remove(stops, at)
+				for _, action in ipairs(best.actions) do out[action.id] = out[action.id] or best end
+			end
+		end
+	end
+	return out
+end
+
 -- A dungeon run leads (Run.lua): the route is its steps alone.
 function R.Running()
 	local G = ns.Guide
@@ -3513,8 +3628,6 @@ function R.Build()
 	-- (Counted: what is worked out once a build, R.Objectives, knows when it is stale.)
 	R.built = (R.built or 0) + 1
 	errandsFound = false
-	-- A pinned pickup stays pinned until it is accepted.
-	if R.pinned and L.Has(R.pinned) then R.pinned = nil end
 	local tick = debugprofilestop()
 	local guided = GuideStops()
 	Shy.Clock("route: guide stops"):Lap(debugprofilestop() - tick)
@@ -3528,6 +3641,13 @@ function R.Build()
 	-- body, a flight under way, the legs of a journey). No quest nearby, errand, place of your own or zone joins it.
 	local run = R.Running()
 	local nearby = run and {} or WithoutGuided(Build(), guided)
+	-- The quests you picked (Plan.lua) go with your route, in its order: their stops leave the rest's.
+	local picks = Picks(nearby)
+	-- (What you set aside is left out until a reload: R.Skip.)
+	for i = #nearby, 1, -1 do
+		local kept = R.Unskipped(nearby[i])
+		if kept then nearby[i] = kept else table.remove(nearby, i) end
+	end
 	-- R.offGuide: guide-only mode is in force. R.skipped: available quests on this map left out by it.
 	R.offGuide, R.skipped = nil, 0
 	local leading = guided[1]
@@ -3590,11 +3710,17 @@ function R.Build()
 	end
 	keep.errandHead = route[head] and R.Ident(route[head]) or false
 	keep.errandAfter = after > 1 and route[after - 1] and R.Ident(route[after - 1]) or false
+	-- Your own route (Plan.lua) leads everything but what can't wait: the places you sent yourself to. The errands
+	-- were weighed against what the guide or the nearest stop would lead to; ahead of your route goes only one
+	-- you stand at or pass on the way to its first stop (YourWay), the rest after it.
+	tick = debugprofilestop()
+	local own = not run and ns.Plan and ns.Plan.Stops(function(entry) return picks[entry.quest] end) or {}
+	local ahead = {}
+	if own[1] then now, ahead = YourWay(now, own[1]) end
 	for i, stop in ipairs(later) do table.insert(route, after + i - 1, stop) end
 	for i, stop in ipairs(now) do table.insert(route, head + i - 1, stop) end
-	-- Your own route (Plan.lua) leads everything but what can't wait: the places you sent yourself to.
-	tick = debugprofilestop()
-	for i, stop in ipairs(not run and ns.Plan and ns.Plan.Stops() or {}) do table.insert(route, i, stop) end
+	for i, stop in ipairs(own) do table.insert(route, i, stop) end
+	for i, stop in ipairs(ahead) do table.insert(route, i, stop) end
 	Shy.Clock("route: your plan"):Lap(debugprofilestop() - tick)
 	tick = debugprofilestop()
 	local zoned = run and route or AddZones(route)
@@ -3677,16 +3803,27 @@ function R.RefitErrands()
 			at[R.Ident(stop)] = #route
 		end
 	end
+	-- (Your own route's stops, which lead: errands come after the last of them, as R.Build puts them.)
+	local ownFirst, ownLast
+	for i, stop in ipairs(route) do
+		if stop.kind == "way" or stop.picked then
+			ownFirst, ownLast = ownFirst or i, i
+		end
+	end
 	local head = keep.errandHead and at[keep.errandHead] or 1
 	if not head or head < 1 then head = 1 end
+	if ownLast and head <= ownLast then head = ownLast + 1 end
 	local after = keep.errandAfter and at[keep.errandAfter]
 	after = after and after + 1 or math.min(#route + 1, head + 1)
+	if ownLast and after <= ownLast then after = ownLast + 1 end
 	errandsFound = false
 	local now, later, urgent = Errands(route[head])
 	if R.Running() then now, later = {}, {} end
+	local ahead = {}
+	if ownFirst then now, ahead = YourWay(now, route[ownFirst]) end
 	for i, stop in ipairs(later) do table.insert(route, after + i - 1, stop) end
 	local nowAt = head + ((after <= head) and #later or 0)
-	while nowAt > 1 and route[nowAt - 1].kind == "fly" do nowAt = nowAt - 1 end
+	while nowAt > (ownLast or 0) + 1 and route[nowAt - 1].kind == "fly" do nowAt = nowAt - 1 end
 	for _, stop in ipairs(now) do
 		for _, ride in ipairs(rides[R.Ident(stop)] or {}) do
 			table.insert(route, nowAt, ride)
@@ -3694,6 +3831,19 @@ function R.RefitErrands()
 		end
 		table.insert(route, nowAt, stop)
 		nowAt = nowAt + 1
+	end
+	-- One you stand at, or pass on the way to your route's first stop: before it, and before the rides to it.
+	if #ahead > 0 then
+		local spot = ownFirst
+		while spot > 1 and route[spot - 1].kind == "fly" do spot = spot - 1 end
+		for _, stop in ipairs(ahead) do
+			for _, ride in ipairs(rides[R.Ident(stop)] or {}) do
+				table.insert(route, spot, ride)
+				spot = spot + 1
+			end
+			table.insert(route, spot, stop)
+			spot = spot + 1
+		end
 	end
 	for i, stop in ipairs(urgent) do table.insert(route, i, stop) end
 	-- The rides were worked out for what led then. Another errand at the head (or none now) where there are
@@ -3875,18 +4025,26 @@ function R.Describe(stop)
 	return title, lines, where
 end
 
--- Super-tracking a stop
+-- Pointing at a stop
 
+-- The arrow points at a stop (Arrow.lua). The game's own map pin is not set: it would stand over the stop's mark
+-- and take its clicks (a click on the game's pin clears it), and the route's numbered places, its trail and the
+-- arrow say all it would. Your own pin, set on the map, is yours (Plan.lua).
 local function Waypoint(stop)
-	if stop.map and C_Map.CanSetUserWaypointOnMap(stop.map) then
-		-- (The game's waypoint set to point somewhere is no stop of your route: Plan.lua.)
-		if ns.Plan then ns.Plan.OwnWaypoint(stop.map, stop.x, stop.y) end
-		Shy.Waypoint.Set(stop.map, stop.x / UNITS, stop.y / UNITS, true)
-	end
+	if stop.map and ns.Arrow and ns.Arrow.ToStop then ns.Arrow.ToStop(stop) end
 end
 
--- A click on a stop singles it out; a second click clears that. The lead stop, guide steps,
--- flights and errands are never singled out: a click only super-tracks or runs them.
+-- The quest a stop puts on your route (R.Go): its first that isn't one to pick up, else its first. nil: none.
+function R.PickOf(stop)
+	local actions = stop and stop.actions or {}
+	for _, action in ipairs(actions) do
+		if action.kind ~= "pickup" then return action end
+	end
+	return actions[1]
+end
+
+-- A click on a quest's stop puts it on your route, on top (Plan.lua); a second click takes it off. The lead
+-- stop, guide steps, flights and errands are never put there: a click only points the way or runs them.
 function R.Go(stop)
 	-- (Your own pick: the errand that led lets it go first; an errand picked is the one that leads now.)
 	R.errandLed = stop.kind == "errand" and stop.errand or nil
@@ -3915,9 +4073,8 @@ function R.Go(stop)
 	if stop.kind == "zone" then
 		if stop.chosen then
 			R.pinnedZone = nil
-			Shy.Waypoint.Clear()
 		else
-			R.pinned, R.pinnedZone = nil, stop.zone.map
+			R.pinnedZone = stop.zone.map
 			Shy.Waypoint.Quest(0)
 			Waypoint(stop)
 		end
@@ -3925,35 +4082,47 @@ function R.Go(stop)
 		return
 	end
 	R.pinnedZone = nil
-	local action = stop.actions[1]
-	for _, other in ipairs(stop.actions) do
-		if other.kind ~= "pickup" then
-			action = other
-			break
-		end
-	end
-	local leading = R.Lead()
-	if stop == leading and not stop.chosen then
+	local action = R.PickOf(stop)
+	if not action then return end
+	-- (The arrow shows the way there without counting as a choice.)
+	local function Point()
 		if action.kind ~= "pickup" then
 			quiet = action.id
 			Shy.Waypoint.Quest(action.id)
 		else
 			Waypoint(stop)
 		end
+	end
+	-- (Only the stop you are taken to now is pointed at alone: one behind an errand that goes first is put on
+	-- your route, and so goes before that errand.)
+	-- (On your route already, as its own stop or as the place it was picked at: a click takes it off.)
+	local picked = ns.Plan and ns.Plan.Picked(action.id)
+	if stop == R.Heading() and not stop.chosen and not picked then
+		Point()
 		return
 	end
-	if stop.chosen then
-		R.pinned = nil
+	if stop.chosen or picked then
+		-- Off your route (a quest you picked), or no longer the one the game's arrow was turned to.
+		if ns.Plan then
+			ns.Plan.Unpick(action.id)
+			if stop.picked then ns.Plan.Unpick(stop.picked.quest) end
+		end
 		ns.char.singled = nil
 		Shy.Waypoint.Quest(0)
-		if action.kind == "pickup" then Shy.Waypoint.Clear() end
-	elseif action.kind ~= "pickup" then
-		R.pinned = nil
-		Choose(action.id)
+	elseif ns.Plan and stop.map and stop.x then
+		if R.Aside(action.id) then SetAside()[action.id] = nil end
+		-- Onto your route, on top: what you picked last leads, unless it is taken in passing (Plan.lua). The
+		-- arrow points there where it goes first.
+		-- (Named for the quest, its giver or where it is under it: where the route has no stop for it, that is the
+		-- stop you see.)
+		local where = stop.who and W.MapName(stop.map) and (stop.who .. ", " .. W.MapName(stop.map)) or stop.who
+		ns.Plan.Pick(action.id, { map = stop.map, x = stop.x, y = stop.y, title = action.title or R.Describe(stop), where = where },
+			action.kind == "pickup")
+		local first = ns.Plan.List()[1]
+		if first and first.quest == action.id then Point() end
 	else
-		R.pinned = action.id
-		Shy.Waypoint.Quest(0)
-		Waypoint(stop)
+		-- (Nowhere on a map, inside a dungeon: the one quest heads the rest.)
+		Choose(action.id)
 	end
 	ns.Refresh()
 end

@@ -621,7 +621,11 @@ end
 --
 -- The offset is kept in port units, whatever the zoom, and eased. While it stands ahead of you the map shown
 -- goes by where you are, not by the middle (View.Leaning, Steps.lua).
+-- Smart following (T.db.followSmart) looks no further than LOOK yards along the way, or ahead the way you go: zoomed
+-- in, the next stretch of the way is in sight; zoomed out, you stand near the middle, not at the edge of a view the
+-- whole way to a far place would pull you to. Following you plainly, you stand in the very middle.
 local lean = {
+	LOOK = 150,         -- yards a smart following looks ahead, at the most
 	REACH = 0.25,       -- share of the port's width and height you may stand from its middle
 	TRAVEL = 0.6,       -- how far it looks ahead headed your own way, as a share of the reach
 	PACE = 7,           -- yards a second: a run, from which it looks its whole way ahead
@@ -677,6 +681,8 @@ function lean.Aim(scale)
 		lean.world = nil
 		return 0, 0
 	end
+	-- (Following you plainly: you in the very middle.)
+	if not T.db.followSmart then return 0, 0 end
 	lean.Pace(world, hereNorth, hereWest)
 	local _, n0, w0, n1, w1 = View.World(map)
 	local pw, ph = Room()
@@ -696,11 +702,20 @@ function lean.Aim(scale)
 			from, to = at, way.n
 		end
 		to = math.min(to, from + lean.POINTS)
+		-- (No further along the way than LOOK yards: the point that far along stands for the rest.)
+		local walked, lastN, lastW = 0, hereNorth, hereWest
 		for i = from, to + 1 do
 			local pn, pwest = north, west
 			if i <= to then
 				if line then pn, pwest = line.north[i], line.west[i] else pn, pwest = way[i * 3 - 2], way[i * 3 - 1] end
 			end
+			local stretch = math.sqrt((pn - lastN) ^ 2 + (pwest - lastW) ^ 2)
+			local capped = walked + stretch > lean.LOOK
+			if capped then
+				local share = stretch > 0 and (lean.LOOK - walked) / stretch or 0
+				pn, pwest = lastN + (pn - lastN) * share, lastW + (pwest - lastW) * share
+			end
+			walked, lastN, lastW = walked + stretch, pn, pwest
 			local nu, nv = (pwest - hereWest) * kx, (pn - hereNorth) * ky
 			if nu * nu + nv * nv >= 1 then
 				local du, dv = nu - u, nv - v
@@ -710,24 +725,31 @@ function lean.Aim(scale)
 				break
 			end
 			u, v = nu, nv
+			if capped then break end
 		end
 	end
 	-- Headed your own way: TRAVEL of the reach the way you go. It has the middle as far as you go fast and
 	-- the way doesn't run that way too.
 	local hu, hv = lean.vw * kx, lean.vn * ky
 	local long = math.sqrt(hu * hu + hv * hv)
-	local share = math.min(1, math.sqrt(lean.vn * lean.vn + lean.vw * lean.vw) / lean.PACE)
+	local speed = math.sqrt(lean.vn * lean.vn + lean.vw * lean.vw)
+	local share = math.min(1, speed / lean.PACE)
 	if long > 0 and share > 0 then
-		hu, hv = hu / long * lean.TRAVEL, hv / long * lean.TRAVEL
+		-- (No further than LOOK yards the way you go: that far, in the ellipse's own terms.)
+		local look = lean.LOOK * long / speed
+		local travel = math.min(lean.TRAVEL, look)
+		hu, hv = hu / long * travel, hv / long * travel
 		local led = math.sqrt(u * u + v * v)
 		if led > 0 then
-			local along = (u * hu + v * hv) / (led * lean.TRAVEL)
+			local along = (u * hu + v * hv) / (led * travel)
 			share = share * (1 - math.max(0, math.min(1, along / lean.ALONG)))
 		end
 		u, v = u + (hu - u) * share, v + (hv - v) * share
 	end
 	return u * pw * lean.REACH, v * ph * lean.REACH
 end
+
+View.LEAN = lean   -- (its numbers, for whoever measures them: LOOK)
 
 -- The offset this frame, in shares of the map: eased toward where it is going, which is looked at every
 -- EVERY seconds. Unasked for a while (the map closed, the view moved by hand), it starts there.
@@ -1020,6 +1042,25 @@ function View.Glide(x, y, zoom)
 	HoldWant()
 	settled = false
 	Stray()
+end
+
+-- Glides to take in `points` (x, y, x, y ... shares of the map shown) whole, a tenth of the port clear round them, no
+-- less than FRAME.least of the map each way and no closer than FRAME.most times its whole size.
+local FRAME = { least = 0.2, most = 4, edge = 0.1 }
+function View.Frame(points)
+	local pw, ph = port and port:GetWidth() or 0, port and port:GetHeight() or 0
+	if not (map and w and fit and pw > 0 and ph > 0 and #points >= 2) then return false end
+	local x1, x2, y1, y2 = math.huge, -math.huge, math.huge, -math.huge
+	for i = 1, #points - 1, 2 do
+		x1, x2 = math.min(x1, points[i]), math.max(x2, points[i])
+		y1, y2 = math.min(y1, points[i + 1]), math.max(y2, points[i + 1])
+	end
+	if x2 - x1 < FRAME.least then x1, x2 = (x1 + x2 - FRAME.least) / 2, (x1 + x2 + FRAME.least) / 2 end
+	if y2 - y1 < FRAME.least then y1, y2 = (y1 + y2 - FRAME.least) / 2, (y1 + y2 + FRAME.least) / 2 end
+	local k = math.min(pw * (1 - 2 * FRAME.edge) / ((x2 - x1) * w), ph * (1 - 2 * FRAME.edge) / ((y2 - y1) * h))
+	k = math.max(fit, math.min(fit * FRAME.most, deep or fit * FRAME.most, k))
+	View.Glide((x1 + x2) / 2, (y1 + y2) / 2, k / fit)
+	return true
 end
 
 -- Glides to you at `zoom`, aiming at where you are each frame until you stand in the middle (you may

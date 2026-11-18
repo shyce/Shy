@@ -22,7 +22,7 @@ local function Sampling() return HUD.IsUnlocked() and Session() == nil end
 -- Not in a raid: the raid's frames have the top left's corner then, and you aren't farming.
 local function Shown()
 	local s = Session()
-	return (T.db.on and s ~= nil and not s.hidden and not IsInRaid()) or Sampling()
+	return (T.db.on and s ~= nil and not IsInRaid()) or Sampling()
 end
 
 -- Where an item comes from, nearest first (ShyQuest's data), or nil without it.
@@ -578,7 +578,7 @@ local function Named(s)
 end
 
 -- Asking to start (or go on): the band in the window, a sound, and a notice a click on which starts it. Said once
--- until answered; ns.Changed paints it. A window you closed stays away: the notice asks.
+-- until answered; ns.Changed paints it.
 local function Ask(s)
 	if s.ask then return end
 	s.ask = true
@@ -594,8 +594,8 @@ local function Ask(s)
 	ns.Changed("ask")
 end
 
--- Farming started by itself (you got there, or looted what you farm): a chime, the head says so a moment, the window
--- shows its band and the figures lit. A window you closed stays away (/shyfarm show, or farming something, brings it).
+-- Farming started by itself (you got there, or came back): a chime, the head says so a moment, the window shows its
+-- band and the figures lit.
 function Card.Started(item, how)
 	local N = Shy.Notices
 	local s = Session()
@@ -604,8 +604,7 @@ function Card.Started(item, how)
 	name = name or "it"
 	if s then s.there = time() end
 	if T.db.sound then PlaySound(SOUNDKIT.UI_WORLDQUEST_START) end
-	local under = how == "there" and "You're there: counting now" or how == "back" and "You're back: counting again"
-		or "You looted it: counting now"
+	local under = how == "back" and "You're back: counting again" or "You're there: counting now"
 	if N and N.Voice then
 		N.Voice("shyfarm-started", { priority = 5, hold = 5, icon = icon, title = "Farming " .. name, under = under })
 	else
@@ -702,13 +701,16 @@ end
 
 -- Shows the piece where it stands now (the hub's Open, /shyfarm show): with none going on, a session waits for you.
 function Card.Reveal()
-	local s = Session() or S.Wait()
-	s.hidden = nil
+	S.Wait()
 	Paint()
 end
 
--- Its ×: away for the rest of the session, which goes on counting. One only waiting (nothing counted, nothing
--- picked) has nothing to count on for: it goes with the window.
+-- Its ×: the farm ends for good, kept with your past ones, and nothing counts until you choose to farm again. Asked
+-- first; one only waiting (nothing counted, nothing picked) just goes with the window.
+local function End()
+	S.Stop()
+	S.Drop()
+end
 function Card.Close()
 	local s = Session()
 	if not s then return end
@@ -716,9 +718,7 @@ function Card.Close()
 		S.Drop()
 		return
 	end
-	s.hidden = true
-	Paint()
-	T:Print("still counting. /shyfarm show brings the window back, and Reset in it saves the session and starts fresh.")
+	UI.Confirm(box, "End this farm? It's kept with your past ones, and nothing counts until you farm again.", "End farm", End)
 end
 
 -- A look a second while the window shows a running clock, and none at all otherwise.

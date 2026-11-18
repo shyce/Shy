@@ -11,9 +11,8 @@
 --   ns.char.session = { state = "ready" | "running" | "paused", why ("hand" | "reload"), began, banked, since, last,
 --                       map, items = { [item] = n }, coin, kills, corpses, catches, casts, escaped,
 --                       mobs = { [creature] = { name, corpses, items = { [item] = n } } }, want = { item, goal, done },
---                       mob = { npc, name }, hidden, asked }
+--                       mob = { npc, name }, asked }
 --   ns.char.history = { { began, seconds, value, coin, kills, corpses, catches, map, want, mob, items }, ... } newest first
---   ns.char.ended = { [item] = true }: what you ended farming by hand, each until you farm it again
 
 local ADDON, ns = ...
 local T = ns.T
@@ -244,8 +243,7 @@ function S.Want(item, goal)
 		ns.char.session = s
 	end
 	s.want = item and { item = item, goal = goal } or nil
-	if item then ns.char.ended[item] = nil end
-	s.hidden, s.asked = nil, nil   -- (farming something brings the window back, and asks again where it drops)
+	s.asked = nil   -- (farming something asks again where it drops)
 	if item then
 		P.Facts(item)
 		if ns.Stats then ns.Stats.Farmed(item, goal) end
@@ -262,7 +260,7 @@ function S.Target(npc, item, goal)
 		ns.char.session = s
 	end
 	s.mob = npc and { npc = npc, name = CreatureName(npc) } or nil
-	if npc then s.hidden, s.asked = nil, nil end
+	if npc then s.asked = nil end
 	-- (One only waiting, nothing counted, is set up for it as a new one is: it starts where you farm it, not with
 	-- what you loot on the way there.)
 	if (npc or item) and s.state == "running" and not S.Used(s) then
@@ -309,9 +307,6 @@ function S.Stop()
 	local kept = { began = s.began, seconds = seconds, value = value, coin = s.coin, kills = S.Kills(s), corpses = s.corpses,
 		catches = s.catches, map = s.map, want = s.want and s.want.item, mob = s.mob and s.mob.npc, kind = S.Kind(s), items = s.items }
 	ns.char.session = nil
-	-- (Ended by hand: you're done with it. Looting it starts nothing until you farm it again, however many others
-	-- you farm and end meanwhile: Looted.)
-	if s.want then ns.char.ended[s.want.item] = true end
 	ns.char.last = nil
 	local saved = next(s.items) ~= nil or s.coin > 0
 	if saved then
@@ -320,7 +315,7 @@ function S.Stop()
 	end
 	ns.Changed("stop")
 	local fresh = New("running")
-	fresh.since, fresh.hidden = nil, s.hidden
+	fresh.since = nil
 	ns.char.session = fresh
 	ns.Changed("start")
 	if saved and ns.Card and ns.Card.Summary then ns.Card.Summary(kept) end
@@ -430,22 +425,6 @@ local function Fishing()
 	return S.Current()
 end
 
--- With no session, looting a favorite starts farming it, running, so this very loot counts (T.db.loot); the head says
--- so. Never what you ended: that waits until you farm it again.
-local function Looted()
-	if not T.db.loot then return end
-	for _, slot in pairs(loot.slots) do
-		local item = slot.item
-		local fav = T.db.favorites[item]
-		if fav and not ns.char.ended[item] then
-			S.Want(item, fav and fav.goal or nil)
-			S.Go()
-			if ns.Card and ns.Card.Started then ns.Card.Started(item) end
-			return
-		end
-	end
-end
-
 -- The loot window has what it has: each item slot noted, to be counted when the game clears it (it reached your
 -- bags). LOOT_READY may come twice for one window.
 local function Ready()
@@ -472,9 +451,6 @@ local function Ready()
 	end
 	if loot.credited then return end
 	loot.credited = true
-	-- (No session, or one only waiting, nothing picked: looting a favorite farms it.)
-	local waiting = S.Current()
-	if not waiting or (not S.Used(waiting) and not waiting.want and not waiting.mob) then Looted() end
 	local s = S.Current()
 	if loot.guid then NewCorpse(s, loot.guid, loot.creature, loot.name) end
 	if not s then return end

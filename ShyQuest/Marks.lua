@@ -152,6 +152,20 @@ end
 
 -- The kind of the objective a stop is for (a merged stop: its first member's), nil for any other stop.
 -- The stop's own source says it where the route chose one: a vendor in reach is someone to talk to.
+-- A quest's stop in a mood of its own (MOOD, mark:SetMood): every quest of it skipped and set aside (Route.lua's
+-- R.Skip), else every one too low to give XP; nil for the rest, and for any other stop.
+function ns.StopMood(stop)
+	if not stop or (stop.kind ~= "pickup" and stop.kind ~= "turnin") then return nil end
+	local actions = stop.actions or {}
+	if #actions == 0 then return nil end
+	local aside, low = true, true
+	for _, action in ipairs(actions) do
+		if not (ns.Route and ns.Route.Aside and ns.Route.Aside(action.id)) then aside = false end
+		if not ((action.level or 0) > 0 and L.Trivial(action.level)) then low = false end
+	end
+	return aside and "aside" or low and "trivial" or nil
+end
+
 function ns.StopTone(stop)
 	if stop.tone then return stop.tone end
 	if stop.kind ~= "goal" then return nil end
@@ -369,6 +383,24 @@ local function Layers(kind, color, lit)
 	return nil, color == MARK.route and MARK.steel or color, nil, color
 end
 
+-- A quest's mark in a mood of its own (mark:SetMood), its shape the same: what is on offer, set apart from what is
+-- worth your while. The game grays a quest too low to give XP; a quest you set aside rests in a burnished bronze, a
+-- gold gone quiet, so the two never read alike, nor either as a quest worth taking. Both stand a little back
+-- (alpha); lit (hovered, clicked), they wear their own color as a lit mark does.
+local MOOD = {
+	trivial = { color = { 0.58, 0.58, 0.60 }, alpha = 0.8 },   -- pewter: too low to give XP
+	aside = { color = { 0.70, 0.47, 0.25 }, alpha = 0.9 },     -- bronze: you set it aside
+}
+ns.MOOD = MOOD
+local function MoodLayers(kind, mood, lit)
+	local c = mood.color
+	if kind == "turnin" then
+		return c, lit and Lighter(c, LIT_BEZEL) or { c[1] * 0.7, c[2] * 0.7, c[3] * 0.7 }, lit and Lighter(c, LIT_BLOOM) or nil, MARK.graphite
+	end
+	if lit then return c, Lighter(c, LIT_BEZEL), Lighter(c, LIT_BLOOM), MARK.graphite end
+	return nil, c, nil, c
+end
+
 local function CellCoords(cell)
 	local col, row = cell % COLS, math.floor(cell / COLS)
 	return { col / COLS, (col + 1) / COLS, row / ROWS, (row + 1) / ROWS }
@@ -575,12 +607,12 @@ function ns.CreateMark(parent, size, fixed, tipped)
 	end
 
 	-- A glyph on the picture's middle (or a pin's head), `offset` sizes to the side.
-	local function Glyph(i, cell, color, share, offset)
+	local function Glyph(i, cell, color, share, offset, fade)
 		local glyph = glyphs[i]
 		glyph:ClearAllPoints()
 		glyph:SetPoint("CENTER", mark, "CENTER", (offset or 0) * size, (lift + head) * size)
 		glyph:SetSize(size * (share or 1), size * (share or 1))
-		UI.Tint(glyph, color, 1)
+		UI.Tint(glyph, color, fade or 1)
 		Show(glyph, cell)
 	end
 
@@ -604,19 +636,20 @@ function ns.CreateMark(parent, size, fixed, tipped)
 
 	-- A round plate: the glass under everything, a lit `faceColor` over it or none, the bezel, and the
 	-- bloom round a lit plate.
-	local function Plate(faceColor, bezelColor, bloomColor)
-		UI.Tint(plate, WHITE, 1)
+	local function Plate(faceColor, bezelColor, bloomColor, fade)
+		fade = fade or 1
+		UI.Tint(plate, WHITE, fade)
 		Show(plate, CELL.badge)
 		if faceColor then
-			UI.Tint(face, faceColor, 1)
+			UI.Tint(face, faceColor, fade)
 			Show(face, CELL.lit)
 		else
 			face:Hide()
 		end
-		UI.Tint(bezel, bezelColor, 1)
+		UI.Tint(bezel, bezelColor, fade)
 		Show(bezel, CELL.ring)
 		if bloomColor then
-			UI.Tint(bloom, bloomColor, 1)
+			UI.Tint(bloom, bloomColor, fade)
 			Show(bloom, CELL.bloom)
 		else
 			bloom:Hide()
@@ -639,8 +672,12 @@ function ns.CreateMark(parent, size, fixed, tipped)
 			Number(look.count, lit and MARK.graphite or MARK.route, PIN_NUMBER)
 		else
 			local faceColor, bezelColor, bloomColor, ink = Layers(kind, color, lit)
-			Plate(faceColor, bezelColor, bloomColor)
-			Glyph(1, kind == "turnin" and CELL["?"] or look.glyph, ink)
+			-- (A quest in a mood of its own: MOOD.)
+			local mood = (kind == "pickup" or kind == "turnin") and MOOD[look.mood] or nil
+			if mood then faceColor, bezelColor, bloomColor, ink = MoodLayers(kind, mood, lit) end
+			local fade = mood and not lit and mood.alpha or 1
+			Plate(faceColor, bezelColor, bloomColor, fade)
+			Glyph(1, kind == "turnin" and CELL["?"] or look.glyph, ink, nil, nil, fade)
 		end
 	end
 
@@ -662,7 +699,9 @@ function ns.CreateMark(parent, size, fixed, tipped)
 		self.singled = chosen     -- read by callers
 		if kind == "guide" and count then kind = "step" end
 		Shape(kind == "step" or kind == "zone")
+		local mood = look.mood   -- (kept across: SetMood's)
 		wipe(look)
+		look.mood = mood
 		look.kind, look.count = kind, count
 		look.color, look.glyph = Look(kind, tone)
 		if look.color and not SIGN[kind] and not PLAIN[kind] and kind ~= "pickup" then look.tone = tone end
@@ -677,6 +716,14 @@ function ns.CreateMark(parent, size, fixed, tipped)
 		look.glyph = cell
 		-- (The next Set draws the kind's own again, even as it was.)
 		was.set = nil
+		Apply()
+	end
+
+	-- A quest's mood (MOOD): "trivial" (too low to give XP), "aside" (you set it aside), or nil.
+	function mark:SetMood(mood)
+		mood = MOOD[mood] and mood or nil
+		if mood == look.mood then return end
+		look.mood = mood
 		Apply()
 	end
 

@@ -23,7 +23,7 @@ end
 
 function T:OnLogin()
 	if not ns.isHunter then return end
-	ns.SetupKeys()
+	if ns.SetupKeys then ns.SetupKeys() end   -- (nothing to lay out without ShyKeys)
 end
 
 SLASH_SHYHUNTER1 = "/shyhunter"
@@ -31,9 +31,9 @@ SlashCmdList.SHYHUNTER = function(input)
 	local cmd = strtrim(input or ""):lower()
 	if cmd == "" then
 		T:OpenOptions()
-	elseif cmd == "keys" then
+	elseif cmd == "keys" and ns.Keys then
 		ns.Keys.Run()
-	elseif cmd == "keys list" then
+	elseif cmd == "keys list" and ns.Keys then
 		Shy.Hub.Open("keys")
 	else
 		T:Print("commands:")

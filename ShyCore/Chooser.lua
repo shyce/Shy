@@ -784,14 +784,22 @@ function Parts.options(parent, width, opts)
 	options:SetPoint("TOPLEFT")
 	local none = UI.Text(f, "", 12, false, C.dim)
 	none:SetPoint("TOPLEFT")
-	local strength, through
+	local strength, through, sheet, reads
 	if opts and opts.background then
 		strength = UI.Slider(f, "Background", 0, 100, 5, function() return floor(Theme.Strength() * 100 + 0.5) end, Theme.StrengthSoon,
 			{ width = COL, format = function(v) return v .. "%" end, desc = "How solid the console, chat, quest tracker and HUD boxes are." })
-		through = UI.Text(f, "Lower shows more of the world. Tooltips follow it but stay darker. Windows stay solid.", 12, false, C.dim)
+		through = UI.Text(f, "Lower shows more of the world. Tooltips follow it but stay darker.", 12, false, C.dim)
 		through:SetPoint("LEFT", strength, "RIGHT", COL_GAP, -9)
 		through:SetWidth(width - COL - COL_GAP)
 		through:SetWordWrap(true)
+		-- The two are set apart: the frame of a window can let the world through without the window's own
+		-- words going with it.
+		sheet = UI.Slider(f, "Window content", 0, 100, 5, function() return floor(Theme.Sheet() * 100 + 0.5) end, Theme.SheetSoon,
+			{ width = COL, format = function(v) return v .. "%" end, desc = "How solid a window is behind what you read in it." })
+		reads = UI.Text(f, "The rows and words in a window sit on this; the frame round them follows Background.", 12, false, C.dim)
+		reads:SetPoint("LEFT", sheet, "RIGHT", COL_GAP, -9)
+		reads:SetWidth(width - COL - COL_GAP)
+		reads:SetWordWrap(true)
 	end
 	function Lay()
 		local y = 0
@@ -806,6 +814,9 @@ function Parts.options(parent, width, opts)
 		if strength then
 			strength:ClearAllPoints()
 			strength:SetPoint("TOPLEFT", 0, -y)
+			y = y + 46
+			sheet:ClearAllPoints()
+			sheet:SetPoint("TOPLEFT", 0, -y)
 			y = y + 46
 		end
 		f:SetSize(width, max(1, y))

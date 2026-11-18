@@ -54,6 +54,9 @@
 --            outside = frame (placed beside that frame, never over it: what the mouse points into, a minimap),
 --            gap = 5, width = 262, keep = true (a click keeps it up; otherwise it can't be),
 --            keep = false (nor does it take the mouse: no lingering on it, no scrolling it),
+--            pin = true (kept whatever Hover.pinning says: a click on its owner keeps it, Hover.Keep, and a
+--              click on it lets it go, as does its owner being hidden; its buttons and items are pressed;
+--              any kept hover goes at a press of either button anywhere else),
 --            key = anything (a kept hover with the same key is not shown twice),
 --            onKeep = function(frame, kept) end,
 --            at = { point, frame, relativePoint, x, y } (explicit position), scale = 1 }
@@ -519,8 +522,9 @@ local function Build()
 				self:StartMoving()
 			end
 		end
-		-- An owner hidden under the mouse fires no OnLeave, so close when it stops being visible.
-		if not self.kept and self.owner and not self.owner:IsVisible() then
+		-- An owner hidden under the mouse fires no OnLeave, so close when it stops being visible. (One kept by its
+		-- owner's click, opts.pin, goes with its owner too: a map's pin, once the map is shut.)
+		if (not self.kept or (self.opts and self.opts.pin)) and self.owner and not self.owner:IsVisible() then
 			Hover.Close(self)
 			return
 		end
@@ -655,7 +659,13 @@ end
 --       { picture = { file =, caption = } }   -- a square picture the card's width (PICTURE at the least), its
 --                                       -- caption under it (one per card): a tricky spot as the map art shows it
 --       { foot = { left =, bar = 0 to 1, right = } }
+--       { actions = { { text =, click = function() end, primary = true, tone = C.bad, close = true }, ... } }
+--                                       -- buttons side by side across the card (a kept hover's: one that isn't
+--                                       -- takes no click); tone: a meaning's color (taking a thing away); close:
+--                                       -- the hover goes once it is pressed
 --       any block: more = true          -- not needed at a glance: drops down after a rest (the last blocks)
+--     A row may stand for an item or a spell (item = id, spell = id, or link = an item link): the mouse on it
+--     shows the game's own tooltip beside it, and a held key links it in chat or tries it on (a kept hover's).
 --     extras = { "words", { text =, color = }, ... },   -- lines not needed at a glance: in the sliding foot
 --     hints = { ... },                                  -- what the mouse does: taken, never shown (it is plain)
 --     light =, pulse =, wash =,
@@ -684,6 +694,9 @@ for _, list in ipairs({ UI.colors, Theme.skin }) do
 	end
 end
 local BLACK = { 0, 0, 0 }
+-- A card's buttons (block.actions): their height, the room over them under the hairline, between two, and what
+-- a button wants round its words.
+local ACTIONS = { tall = 22, above = 7, gap = 6, pad = 24, words = 13 }   -- words: a button's (UI.Button), in the title face
 
 local function Face(size, face)
 	if face == "lined" then return UI.TextFont(size, "OUTLINE") end   -- for text drawn over the world
@@ -892,6 +905,45 @@ local function Named(card, name, wide)
 	return UI.ShortName(name, UI.Letters(name) - 1)
 end
 
+-- A row that stands for an item or a spell (row.item, row.spell, row.link): the mouse on it shows the game's own
+-- tooltip beside it and lights the row, and a held key links it in chat or tries it on, as the game's item
+-- buttons do. Only a hover that takes the mouse lets it be pointed at.
+local function Thing(card, about, x, y, room, tall)
+	local hit = Pooled(card, "thing", function(c)
+		local made = CreateFrame("Button", nil, c)
+		made.light = made:CreateTexture(nil, "BACKGROUND")
+		made.light:SetAllPoints()
+		made.light:Hide()
+		made:SetScript("OnEnter", function(self)
+			UI.Paint(self.light, C.hot, 0.10)
+			self.light:Show()
+			local tip = UI.GameTipAt(self)
+			if self.spell then
+				tip:SetSpellByID(self.spell)
+			elseif self.link then
+				tip:SetHyperlink(self.link)
+			else
+				tip:SetItemByID(self.item)
+			end
+			GameTooltip:Show()
+		end)
+		made:SetScript("OnLeave", function(self)
+			self.light:Hide()
+			GameTooltip:Hide()
+		end)
+		made:SetScript("OnClick", function(self)
+			local link = self.link or (self.item and select(2, C_Item.GetItemInfo(self.item)))
+			if link and IsModifiedClick() then HandleModifiedItemClick(link) end
+		end)
+		return made
+	end)
+	hit.item, hit.spell, hit.link = about.item, about.spell, about.link
+	hit.light:Hide()
+	hit:SetPoint("TOPLEFT", card, "TOPLEFT", x - 3, -y)
+	hit:SetSize(room + 6, tall)
+	hit:SetFrameLevel(card:GetFrameLevel() + 3)
+end
+
 -- lit: the current one, on a faint wash of the accent with its edge lit; wrap = false: one line, cut short;
 -- name: one line, shortened as a name is.
 local function Line(card, about, x, y, room, inset)
@@ -938,6 +990,7 @@ local function Line(card, about, x, y, room, inset)
 		Flat(card, "BACKGROUND", C.hot, 0.10, 0, top - 2, x + room + CARD.side, tall)
 		Flat(card, "ARTWORK", C.hot, 1, 0, top - 2, 2, tall)
 	end
+	if about.item or about.spell or about.link then Thing(card, about, x, top - 1, room, tall + 2) end
 	return tall
 end
 
@@ -971,6 +1024,12 @@ local function Natural(card, block)
 	elseif block.foot then
 		local foot = block.foot
 		return Measure(card, CARD.key, nil, foot.left) + (foot.bar and 46 or 0) + Measure(card, CARD.key, nil, foot.right) + 14 + sides
+	elseif block.actions then
+		local wide = 0
+		for i, act in ipairs(block.actions) do
+			wide = wide + Measure(card, ACTIONS.words, "title", act.text) + ACTIONS.pad + (i > 1 and ACTIONS.gap or 0)
+		end
+		return wide + sides
 	end
 	return 0
 end
@@ -1289,6 +1348,43 @@ local function Blocks(card, blocks, y, wide)
 			right:SetText(foot.right or "")
 			right:SetPoint("TOPRIGHT", card, "TOPLEFT", x + room, -y)
 			y = y + 12
+		elseif block.actions then
+			-- Buttons side by side across the card, the first the one to press (primary), under a hairline.
+			y = y + 7
+			Flat(card, "BORDER", C.border, 0.7, x, y, room, 1)
+			y = y + ACTIONS.above
+			-- (Side by side while every one's words fit its share; else one under another, each the card's width:
+			-- a button's words are never cut.)
+			local n = #block.actions
+			local each = (room - ACTIONS.gap * (n - 1)) / math.max(1, n)
+			local stacked = false
+			for _, act in ipairs(block.actions) do
+				if Measure(card, ACTIONS.words, "title", act.text) + ACTIONS.pad > each then stacked = true end
+			end
+			if stacked then each = room end
+			for i, act in ipairs(block.actions) do
+				local button = Pooled(card, "action", function(c)
+					return UI.Button(c, "", 100, function(self)
+						local done = self.act
+						if done and done.click then done.click() end
+						-- (Pressed: the hover it stands on goes, where that was asked.)
+						local f = done and done.close and c:GetParent()
+						if f and f:IsShown() then Hover.Close(f) end
+					end)
+				end)
+				button.act = act
+				button:SetSize(each, ACTIONS.tall)
+				button:SetLabel(act.text or "")
+				button:SetPrimary(act.primary == true)
+				button:SetTone(act.tone)
+				button:SetFrameLevel(card:GetFrameLevel() + 3)
+				if stacked then
+					button:SetPoint("TOPLEFT", card, "TOPLEFT", x, -(y + (i - 1) * (ACTIONS.tall + ACTIONS.gap)))
+				else
+					button:SetPoint("TOPLEFT", card, "TOPLEFT", x + (i - 1) * (each + ACTIONS.gap), -y)
+				end
+			end
+			y = y + ACTIONS.tall + (stacked and (n - 1) * (ACTIONS.tall + ACTIONS.gap) or 0)
 		end
 		last = block
 	end
@@ -2287,8 +2383,8 @@ function Hover.Show(by, content, opts)
 	local width = opts.width or (content.title and WIDTH or TIP_WIDTH)
 	wing.owner, wing.dock, wing.opts, wing.key = by, opts.dock, opts, opts.key
 	wing.keeps = opts.keep ~= false and content.title ~= nil
-	-- A click keeps it up only where that was asked for, and while pinning is on.
-	wing.pins = Hover.pinning and opts.keep == true and wing.keeps
+	-- A click keeps it up only where that was asked for, and while pinning is on (or its owner keeps it: opts.pin).
+	wing.pins = (opts.pin == true or (Hover.pinning and opts.keep == true)) and wing.keeps
 	wing.kept, wing.lingering, wing.away = false, false, 0
 	wing.placed, wing.pressX, wing.dragging = nil, nil, false
 	-- A hover that can't be kept takes no mouse: it may cover the next thing to click.
@@ -2342,6 +2438,21 @@ function Hover.Hide(by, now)
 	end)
 end
 
+-- A kept hover goes at a press of either button anywhere but on it, its owner or the game's tooltip one of its
+-- rows opened. Listened for only while there is one.
+local away = CreateFrame("Frame")
+away:SetScript("OnEvent", Shy.Clocked("hover: a press away from a kept one", function(self)
+	local f = kept
+	if not (f and f:IsShown()) then
+		self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
+		return
+	end
+	if f:IsMouseOver() or (f.owner and f.owner:IsVisible() and f.owner:IsMouseOver()) then return end
+	if GameTooltip:IsShown() and GameTooltip:IsMouseOver() then return end
+	self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
+	Hover.Close(f)
+end))
+
 -- A click on the hover: keep it, or close it if it is kept.
 function Keep(f)
 	if f.kept then
@@ -2353,6 +2464,7 @@ function Keep(f)
 	kept, wing, owner = f, nil, nil
 	generation = generation + 1
 	f.kept, f.lingering = true, false
+	away:RegisterEvent("GLOBAL_MOUSE_DOWN")
 	Fill(f, f.content, f.width)
 	Stand(f)
 	-- It was anchored under the previously kept frame, which is now the spare and will be anchored under

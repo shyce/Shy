@@ -31,7 +31,8 @@
 --   Shy.Way.AskWay(world, north, west, toNorth, toWest [, reach [, level]])   -- the way itself, as asked above
 --   Shy.Way.AskWay(world, north, west, goals, nil [, reach [, level]])
 --   Shy.Way.AskWay(world, north, west, toNorth, toWest, reach, level, lead, up [, done])
---        -> way, or nil until it is known; then, while it is worked out anew from a few yards on, the
+--        -> way, or nil until it is known (nil, "far": not within the search's reach, not that there is none);
+--           then, while it is worked out anew from a few yards on, the
 --           way as it was last known and "working"; led along (lead) where the floors are known but
 --           nothing was found floor by floor from there, the way over nodes and "rough" (ask again on)
 --        lead: the way the player is being led along now (the trail): never refused a search for want
@@ -5000,7 +5001,9 @@ function Pocket.AskWay(world, north, west, a, b, reach, level, lead, split, up)
 		local kept = reach and search.near or search.whole
 		return kept and kept.way, state
 	end
-	return nil
+	-- (Not found within the search's reach, which everyone else's asking may have worn out: "far", so whoever
+	-- asks can tell it from no way at all, and ask again as the way led along, which begins it anew.)
+	return nil, state == "far" and "far" or nil
 end
 
 -- On the level asked for, into a cave under the hill the goal's node stands for; where there is no way in

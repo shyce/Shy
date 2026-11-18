@@ -145,8 +145,8 @@ local function Build()
 
 	box:EnableMouse(true)
 	box:SetScript("OnMouseUp", function(_, button)
-		if button ~= "LeftButton" or Shy.HUD.WasDragged(box) or not shown or InCombatLockdown() then return end
-		OpenWorldMap(shown.map)
+		if button ~= "LeftButton" or Shy.HUD.WasDragged(box) or not shown then return end
+		Shy.Maps.Open(shown.map)
 	end)
 	Shy.HUD.Manage(box, box, function(root)
 		root:CreateButton("Accept", function() if shown then Share.Accept(shown) end end)

@@ -2739,6 +2739,27 @@ local function FliesTo(wanted)
 	return false
 end
 
+-- Whether you stand where a "fly" step would take you already: within FLY.there yards of a flight point its words
+-- name (by its name or its zone, as FliesTo reads them). Got there another way (the stone, a boat, on foot), the
+-- flight is no step to take: the route would send you to its flight master to fly back where you are.
+local FLY = { there = 400 }
+local function FlyThere(wanted)
+	wanted = strtrim(wanted or ""):lower()
+	if wanted == "" or not (Shy.Way.Stops and W.Known()) then return false end
+	for _, stop in ipairs(Shy.Way.Stops()) do
+		if stop.by == "flight" and stop.name and stop.world == W.continent and stop.north then
+			local named = false
+			for part in stop.name:lower():gmatch("[^,]+") do
+				local piece = strtrim(part)
+				if piece ~= "" and (piece:find(wanted, 1, true) or wanted:find(piece, 1, true)) then named = true end
+			end
+			if named and W.Between(W.north, W.west, stop.north, stop.west) <= FLY.there then return true end
+		end
+	end
+	return false
+end
+G.FlyThere = FlyThere
+
 function G.Flew()
 	return Latch(function(element) return element.command == "fly" and FliesTo(element.args) end)
 end
@@ -2785,6 +2806,13 @@ function G.Watch()
 						break
 					end
 				end
+			end
+		end
+		-- A flight to where you stand already (G.FlyThere: you came another way) is done: no flying back to it.
+		for _, part in ipairs(entry.parts) do
+			if part.element.command == "fly" and part.can and not part.done and FlyThere(part.element.args) then
+				Remember(saved, index, part.number)
+				changed = true
 			end
 		end
 		-- Waypoints are passed in order.

@@ -63,8 +63,6 @@ function ns.CreateOptions()
 			desc = "Casting your line starts a session by itself." }), panel, RIGHT, -220)
 		At(group:Checkbox(panel, "Sound when you have them all", Get("sound"), Set("sound"), {
 			desc = "A chime when you hold as many as you set out to farm." }), panel, RIGHT, -246)
-		At(group:Checkbox(panel, "Start when you loot a favorite", Get("loot"), Set("loot"), {
-			desc = "Looting a favorite starts farming it and counts that loot, unless you ended farming it." }), panel, RIGHT, -272)
 
 		-- Under the preview, whatever height it stands at (a band, the farmed item and its price come and go): its
 		-- section hangs from the preview's foot, so nothing ever lies over it.

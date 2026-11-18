@@ -270,8 +270,10 @@ local function Story(actions)
 	return sections
 end
 
--- Rows of a non-guide stop: one per quest, or the open objectives of a quest in progress.
-local function ActionRows(stop)
+-- Rows of a non-guide stop: one per quest, or the open objectives of a quest in progress. A quest to pick up is
+-- one line: its name in its difficulty's color, its level after it, what it pays at the right. bare: an objective
+-- without what it is got from under it (a pin of several, which stays short).
+local function ActionRows(stop, bare)
 	local rows, handIns, seen = {}, {}, {}
 	for _, action in ipairs(stop.actions) do
 		local key = action.kind .. action.title
@@ -279,7 +281,12 @@ local function ActionRows(stop)
 			seen[key] = true
 			if action.kind == "pickup" then
 				local level = action.level or 0
-				rows[#rows + 1] = { seat = MarkSeat("pickup"), text = action.title, right = level > 0 and tostring(level) or nil, rightColor = C.dim }
+				local quest = D.Quest(action.id)
+				local xp = quest and L.Pays(quest)
+				local color = level > 0 and GetQuestDifficultyColor(level) or nil
+				rows[#rows + 1] = { seat = MarkSeat("pickup"), text = action.title .. (level > 0 and UI.Wrap(C.dim, "  " .. level) or ""),
+					color = color and { color.r, color.g, color.b } or nil, wrap = false,
+					right = xp and xp > 0 and XpText(xp) or nil, rightColor = C.alert }
 			elseif action.kind == "turnin" then
 				local xp = Experience(action.id)
 				rows[#rows + 1] = { seat = MarkSeat("turnin"), text = action.title, right = xp and XpText(xp) or nil, rightColor = C.alert }
@@ -289,7 +296,7 @@ local function ActionRows(stop)
 					local own = not stop.objective or stop.objective == index
 					if not goal.finished and goal.text and goal.text ~= "" and own and #rows < MOST_ROWS then
 						rows[#rows + 1] = GoalRow(action.id, index, goal)
-						for _, extra in ipairs(Under(goal)) do
+						for _, extra in ipairs(bare and {} or Under(goal)) do
 							if #rows < MOST_ROWS then rows[#rows + 1] = extra end
 						end
 					end
@@ -445,7 +452,7 @@ local function Whole(stop, lead, way)
 		local handIns, all = {}, {}
 		for i = 1, math.min(MOST_PEOPLE, #members) do
 			local member = members[i]
-			local rows, theirs = ActionRows(member)
+			local rows, theirs = ActionRows(member, true)
 			for _, row in ipairs(rows) do row.lit = nil end
 			for _, id in ipairs(theirs) do handIns[#handIns + 1] = id end
 			for _, action in ipairs(member.actions or {}) do all[#all + 1] = action end
@@ -546,7 +553,7 @@ local function Whole(stop, lead, way)
 		sections[#sections + 1] = Pays(handIns)
 		-- Compare by Key, not identity: a row may briefly hold the previous route's stop table.
 		local leads = lead ~= nil and Key(stop) == Key(lead)
-		content.hints = { { "left", leads and not stop.chosen and "Point the way" or stop.chosen and "Let the route choose" or "Head here first" },
+		content.hints = { { "left", leads and not stop.chosen and "Point the way" or stop.chosen and "Remove from my route" or "Go here next" },
 			{ "right", "More" } }
 	else
 		return nil
@@ -1259,12 +1266,105 @@ local function Lit(content, words)
 	return content
 end
 
+-- Where a stop stands on your route, in words: "Next", "2nd", "3rd", "4th" ... "11th", "21st".
+local function Ordinal(i)
+	if i == 1 then return "Next" end
+	local tens, ones = i % 100, i % 10
+	local suffix = (tens >= 11 and tens <= 13) and "th" or ones == 1 and "st" or ones == 2 and "nd" or ones == 3 and "rd" or "th"
+	return i .. suffix
+end
+
+-- What to do about a pin's stop, at the foot of its kept hover. Every button closes the hover once pressed.
+--   yours (a place of your route, a quest you picked)   where it stands on your route, and taking it off (in
+--                                                       the color of taking something away); a quest, skipping it
+--   a quest's stop the route chose                      go here next (on top of your route: Plan.lua's stack),
+--                                                       or skip it (R.Skip: set aside in zone mode, gone with a guide)
+--   a quest set aside                                   include it again (R.Include)
+--   a step of the guide                                 point the way, or skip the step
+--   an errand, a ride                                   point the way; an errand can wait (R.Skip)
+--   a pin standing for several                          nothing: closer in, each is a pin of its own
+local function RouteBlocks(stop)
+	-- (A pin standing for several has no one place to go to: closer in, each is a pin of its own.)
+	if stop.members then return {} end
+	local plan, kind = ns.Plan, stop.kind
+	local function Act(text, click, primary, tone)
+		return { text = text, click = click, primary = primary or nil, tone = tone, close = true }
+	end
+	local function Point() ns.PointTheWay(stop) end
+	local function Skip() R.Skip(stop) end
+	-- Yours: where it stands on your route, and off it again.
+	local entry = stop.way or stop.picked
+	if not entry and plan and (kind == "pickup" or kind == "turnin" or kind == "goal") then
+		local action = R.PickOf(stop)
+		local at = action and plan.Picked(action.id)
+		entry = at and plan.List()[at]
+	end
+	local at = entry and plan and plan.IndexOf(entry)
+	if at then
+		local rows = { { glyph = "go", tint = C.hot, color = C.hot, text = ("%s on your route"):format(Ordinal(at)) } }
+		local along = plan.Along(entry)
+		if along then rows[#rows + 1] = { quiet = true, text = along } end
+		-- ("Remove": the line over it says where it stands on your route.)
+		local remove = Act("Remove", function() plan.Remove(plan.IndexOf(entry)) end, nil, C.bad)
+		-- (A quest you picked can be skipped as well: off your route, and set aside.)
+		if entry.quest then
+			local quest = entry.quest
+			return { { rows = rows }, { actions = { remove, Act("Skip", function() R.Skip({ actions = { { id = quest } } }) end) } } }
+		end
+		return { { rows = rows }, { actions = { remove } } }
+	end
+	if kind == "guide" then
+		local view = stop.view
+		return { { actions = { Act("Point the way", Point, true),
+			Act("Skip step", function() G.Skip(view.step.index, view.guide) end) } } }
+	end
+	if kind == "errand" then return { { actions = { Act("Point the way", Point, true), Act("Not now", Skip) } } } end
+	if kind == "fly" then return { { actions = { Act("Point the way", Point, true) } } } end
+	if not (kind == "pickup" or kind == "turnin" or kind == "goal") then return {} end
+	if ns.StopMood(stop) == "aside" then
+		return { { rows = { { glyph = "note", quiet = true, text = "You set this aside" } } },
+			{ actions = { Act("Include", function() R.Include(stop) end, true) } } }
+	end
+	local function Go() R.Go(stop) end
+	if stop.chosen then return { { actions = { Act("Let the route choose", Go) } } } end
+	local heading = R.Heading and R.Heading()
+	if heading and Key(heading) == Key(stop) then
+		return { { rows = { { glyph = "go", tint = C.hot, color = C.hot, text = "Where your route takes you now" } } },
+			{ actions = { Act("Skip", Skip) } } }
+	end
+	return { { actions = { Act("Go here next", Go, true), Act("Skip", Skip) } } }
+end
+
+-- A map or minimap pin's kept hover (CardHover.KeepPin): its whole form as a card, a giver's quests said in full
+-- (Offer.lua: a step of the guide keeps its lines and has them after), and what to do about it at its foot.
+local function Full(stop)
+	local whole = Whole(stop, nil, true)
+	if not whole then return nil end
+	local card = Slim(whole, stop)
+	local offer = ns.Offer and ns.Offer.Content(stop)
+	if offer then
+		local blocks = ns.Offer.Blocks(offer)
+		if stop.kind == "guide" then
+			for _, block in ipairs(blocks) do card.body[#card.body + 1] = block end
+		else
+			card.title, card.body = offer.title, blocks
+			card.key = { { text = ns.Offer.Tally(offer), color = C.text } }
+		end
+	end
+	for _, block in ipairs(RouteBlocks(stop)) do card.body[#card.body + 1] = block end
+	return card
+end
+
+local letting = false        -- a pin's kept hover is being let go of by its pin (KeepPin): its light is the pin's to keep
+
 local function OnKeep(frame, kept)
 	keeping = kept and frame or nil
+	-- A pin's kept hover let go of (a click on it, or its map shut): the pin's light goes with it, on both maps.
+	if not kept and frame.pinned and not letting and ns.LetGo then ns.LetGo() end
 	local content = kept and frame.content
 	if not content then return end
 	-- Pinned, it may be dragged anywhere: it gets the way to its stop, the window's own included.
-	local whole = frame.about and CardHover.Content(frame.about, nil, true, nil, content.docked)
+	local whole = frame.about and (frame.pinned and Full(frame.about) or CardHover.Content(frame.about, nil, true, nil, content.docked))
 	if whole then
 		whole.hints, whole.pins = content.hints, content.pins
 		content = Lit(whole, frame.words)
@@ -1283,7 +1383,7 @@ local function RowHints(stop)
 	end
 	if stop.kind == "fly" then return { { "left", "Pin" }, { "right", "Point the way" } } end
 	if stop.kind == "way" then return { { "left", "Pin" }, { "right", "Route" } } end
-	return { { "left", "Pin" }, { "right", stop.chosen and "Let the route choose" or "Head here first" } }
+	return { { "left", "Pin" }, { "right", stop.chosen and "Remove from my route" or "Go here next" } }
 end
 
 -- Show the hover for a card row. False when the stop has no form here (a zone); true with none shown
@@ -1307,7 +1407,7 @@ function CardHover.Show(row, stop, card)
 	shown = row
 	row.hoverCard = card
 	local frame = Shy.Hover.Show(row, content, { dock = card, key = Key(stop), onKeep = OnKeep, keep = true })
-	if frame then frame.about, frame.words = stop, words end
+	if frame and not frame.kept then frame.about, frame.words, frame.pinned = stop, words, nil end
 	Shy.Clock("card: a row's hover, put up"):Lap(debugprofilestop() - from)
 	return true
 end
@@ -1342,7 +1442,31 @@ end
 -- Beside a map or minimap pin: the slim form (Slim), the map being under the mouse already. Kept by a
 -- click, it gets the whole of it. hints: the pin's mouse hints. mini: a minimap pin's, beside the minimap
 -- (Minimap).
+-- The quests a stop is about (its actions', and a place of your route picked for a quest), by ID.
+local function QuestsOf(stop, out)
+	for _, action in ipairs(stop and stop.actions or {}) do
+		if action.id then out[action.id] = true end
+	end
+	if stop and stop.way and stop.way.quest then out[stop.way.quest] = true end
+	return out
+end
+
+-- Whether a pin's stop is what the kept hover already says: its own pin, the same stop, or one about the same
+-- quest (a route built again gives a stop another key: a quest picked onto your route is numbered).
+local function Kept(owner, stop)
+	local up = Shy.Hover.Kept()
+	if not (up and up.pinned) then return false end
+	if up.owner == owner or up.key == Key(stop) then return true end
+	local mine = QuestsOf(up.about, {})
+	for id in pairs(QuestsOf(stop, {})) do
+		if mine[id] then return true end
+	end
+	return false
+end
+
 function CardHover.Beside(owner, stop, hints, side, mini)
+	-- (What the kept hover says already gets no second hover over it.)
+	if Kept(owner, stop) then return true end
 	local content = CardHover.Content(stop, R.Lead and R.Lead() or R.stops[1], true, true)
 	if not content then return false end
 	content.hints = hints or content.hints
@@ -1355,11 +1479,40 @@ function CardHover.Beside(owner, stop, hints, side, mini)
 		content.body[#content.body + 1] = { model = (ObjectiveStage(action.id, stop.objective, goal, color)) }
 		if one then content.seat, content.light = LetterSeat(one), color end
 	end
-	local opts = { side = side, key = Key(stop), onKeep = OnKeep, width = SLIM_WIDE, keep = true }
+	-- (A click on the pin keeps it: KeepPin.)
+	local opts = { side = side, key = Key(stop), onKeep = OnKeep, width = SLIM_WIDE, keep = true, pin = true }
 	if mini then CardHover.Minimap(opts) end
 	local frame = Shy.Hover.Show(owner, content, opts)
-	if frame then frame.about = stop end
+	if frame and not frame.kept then frame.about, frame.pinned = stop, true end
 	return true
+end
+
+-- A click on a map or minimap pin (Pins.lua): on, its hover is kept and says the whole of it (Full), what to do
+-- about it at its foot; off, the kept one goes. Another pin's kept hover gives way without letting go of what
+-- this click lit.
+function CardHover.KeepPin(pin, on)
+	local up = Shy.Hover.Kept()
+	letting = true
+	if up and up.pinned and (not on or up.owner ~= pin) then Shy.Hover.Close(up) end
+	if on and Shy.Hover.Owner() == pin then Shy.Hover.Keep(pin) end
+	letting = false
+end
+
+-- What a pin lit is let go of (ns.LetGo: the map's note, a search): its kept hover goes with it.
+function CardHover.LetGoPin()
+	local up = Shy.Hover.Kept()
+	if not (up and up.pinned) then return end
+	letting = true
+	Shy.Hover.Close(up)
+	letting = false
+end
+
+-- A pin's kept hover said again as it now is (an item the game has just told of, ShyGear's word changed).
+function CardHover.Again()
+	local frame = keeping
+	if not (frame and frame.pinned and frame:IsShown() and frame.about) then return end
+	local content = Full(frame.about)
+	if content then Shy.Hover.Refill(frame, content) end
 end
 
 function CardHover.Hide(row)
@@ -1402,7 +1555,8 @@ ns.OnRoute(function(rebuilt)
 	if keeping then
 		local frame = keeping
 		local now = Follow(frame.about, frame.key)
-		local content = now and CardHover.Content(now, R.Lead and R.Lead() or R.stops[1], true, nil, frame.content and frame.content.docked)
+		local content = now and (frame.pinned and Full(now)
+			or CardHover.Content(now, R.Lead and R.Lead() or R.stops[1], true, nil, frame.content and frame.content.docked))
 		if content then
 			frame.about, frame.key = now, Key(now)
 			-- Keep the hints of where it was opened (a pin's differ from a row's).

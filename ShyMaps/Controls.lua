@@ -3,21 +3,22 @@
 --   and the game's filter button, whose menu is ours while the view is in use (T:MapMenu: what shows on
 --   the map, all in one place);
 --   the corner plate in the bottom right, beside the quest log's toggle, the quests' key having the left
---   one and the same panel. Its rows, from the foot:
---     "Follow you", a checkbox: the view keeps you in the middle as you move; off, the map stays wherever
---       you put it;
---     your row, led by your arrow, which brings the map to where you are (dim when you're on another
---       map, whose name its hover gives), and your coordinates;
+--   one and the same panel. Its row at the foot: your coordinates at its left, a press on them bringing the map
+--   to where you are (dim when you're on another map, whose name their hover gives); and at its right how the
+--   map follows you, Off | Follow | Smart: the map stays wherever you put it; you in its middle as you move; or
+--   you in sight with a little of your way ahead (View.lua). Over it, only while there is something to say:
 --     "Keep it here", offered while the following view was moved by hand far enough that you're out of
 --       sight: a press turns the following off, so the map stays where you put it;
 --     the mouse's coordinates, opening at the top while the mouse is on the map.
 --   Coordinates in tenths as the game's setting asks. The game's own read its hidden map, so they are
 --   faded while the view is in use.
 -- Other addons' buttons stand on the bar too, left of the look switch, each a square plate of its own:
---   T:BarButton(key, { art = file, size = 12, order = 0, tip = "Find", text = "...", hints = {...},
+--   T:BarButton(key, { art = file, size = 12, order = 0, tip = "Find" (none: no hover, for a button plain to anyone), text = "...", hints = {...},
 --                      click = function(button) end, lit = function() return on end, made = function(button) end })
 --   Asked again with the same key, nothing changes. The button is made when the bar is, the first time the
---   view is used; it shows and hides with the bar. `hints` may be a function giving them as the hover opens;
+--   view is used; it shows and hides with the bar. With `menu = function(root) end` it is no button: the bar
+--   keeps to what is reached for most (the finder, the look), and it writes its rows into the map's menu
+--   instead (ns.MenuTools, T:MapMenu). `hints` may be a function giving them as the hover opens;
 --   `lit` wears the switch's picked fill while true (asked again as the settings change); `made` is told the
 --   button once it is made.
 
@@ -36,7 +37,11 @@ local slots = {}            -- other addons' buttons on the bar: { key, order, o
 
 -- The room kept clear at the right of the breadcrumb (Nav.lua): the look switch and the buttons before it.
 function ns.BarRoom()
-	return LOOK_W * 2 - BAR_X + 8 + #slots * (TALL + SLOT_GAP)
+	local plated = 0
+	for _, slot in ipairs(slots) do
+		if not slot.opts.menu then plated = plated + 1 end
+	end
+	return LOOK_W * 2 - BAR_X + 8 + plated * (TALL + SLOT_GAP)
 end
 
 -- The corner plate, as the quests' key's.
@@ -44,11 +49,10 @@ local PAD, ROW = 9, 18      -- padding and row height
 local HOVER = 3             -- a row's hover, in from the panel's edge
 local INSET = 10            -- from the map's corner
 local BESIDE = 4            -- gap to the quest log's toggle
-local ARROW = 16            -- your arrow
 local SPACE = 8             -- between the arrow and the numbers
 local COMMA = 5             -- between x and y
 local NUMBER = 13
-local BOX = 12              -- the follow checkbox's box
+local FOLLOW = { wide = 150 } -- the follow switch (Off | Follow | Smart)
 local GLIDE = 0.08          -- seconds for a row to open or close, near enough
 local READ = 0.05           -- seconds between readings
 
@@ -114,12 +118,14 @@ local function Slot(slot)
 		b:SetOn(opts.lit() == true)
 	end
 	b:SetScript("OnClick", function(self) opts.click(self) end)
-	-- Its hover under it, by the mouse: the bar is the map's top edge.
-	b:SetScript("OnEnter", function(self)
-		local hints = type(opts.hints) == "function" and opts.hints() or opts.hints
-		UI.Tip(self, opts.tip, opts.text, { side = "BOTTOM", hints = hints })
-	end)
-	b:SetScript("OnLeave", function(self) UI.TipHide(self) end)
+	-- Its hover under it, by the mouse: the bar is the map's top edge. (None for a button plain to anyone: no tip.)
+	if opts.tip then
+		b:SetScript("OnEnter", function(self)
+			local hints = type(opts.hints) == "function" and opts.hints() or opts.hints
+			UI.Tip(self, opts.tip, opts.text, { side = "BOTTOM", hints = hints })
+		end)
+		b:SetScript("OnLeave", function(self) UI.TipHide(self) end)
+	end
 	plate:SetShown(bar:IsShown())
 	slot.plate, slot.button = plate, b
 	if opts.made then opts.made(b) end
@@ -131,15 +137,28 @@ local function Slots()
 	local to = bar
 	local window = View.Window()
 	for _, slot in ipairs(slots) do
-		if not slot.plate then Slot(slot) end
-		-- (On the window holding the view: the game's, or ours.)
-		slot.plate:SetParent(window)
-		slot.plate:SetFrameStrata(window:GetFrameStrata())
-		slot.plate:SetFrameLevel(bar:GetFrameLevel())
-		slot.plate:ClearAllPoints()
-		slot.plate:SetPoint("RIGHT", to, "LEFT", -SLOT_GAP, 0)
-		to = slot.plate
+		-- (One in the map's menu has no plate on the bar: ns.MenuTools.)
+		if not slot.opts.menu then
+			if not slot.plate then Slot(slot) end
+			-- (On the window holding the view: the game's, or ours.)
+			slot.plate:SetParent(window)
+			slot.plate:SetFrameStrata(window:GetFrameStrata())
+			slot.plate:SetFrameLevel(bar:GetFrameLevel())
+			slot.plate:ClearAllPoints()
+			slot.plate:SetPoint("RIGHT", to, "LEFT", -SLOT_GAP, 0)
+			to = slot.plate
+		end
 	end
+end
+
+-- The tools that write their rows into the map's menu (T:BarButton's `menu`), in their order.
+function ns.MenuTools()
+	table.sort(slots, function(a, b) return a.order < b.order end)
+	local out = {}
+	for _, slot in ipairs(slots) do
+		if slot.opts.menu then out[#out + 1] = slot.opts.menu end
+	end
+	return out
 end
 
 function T:BarButton(key, opts)
@@ -189,13 +208,18 @@ local function Lift(row, y, inset)
 	row:SetPoint("BOTTOMRIGHT", -(inset or 0), y)
 end
 
--- The plate's width: the widest numbers a row shows, so it stays put as they change (your arrow alone
--- while the coordinates are off), and never less than the follow row or the offer need.
+-- The mouse's numbers stand over yours, `y` up the plate.
+local function MouseAt(y)
+	mouse:ClearAllPoints()
+	mouse:SetPoint("BOTTOMLEFT", PAD - HOVER, y)
+end
+
+-- The plate's width: your numbers at their widest, so they stay put as they change (none while the coordinates
+-- are off), then the follow switch; never less than the offer needs.
 local function Width()
 	local on = T.db.coords == true
-	you.x:SetShown(on)
-	you.y:SetShown(on)
-	local wide = PAD + ARROW + PAD
+	you:SetShown(on)
+	local wide = PAD + math.ceil(follow:GetWidth()) + PAD
 	if on then
 		local sample = you.x
 		sample:SetText(Coord(0.888) .. ",")
@@ -203,12 +227,14 @@ local function Width()
 		sample:SetText(Coord(0.888))
 		local y = sample:GetStringWidth()
 		sample:SetText("")
+		local numbers = math.ceil(x) + COMMA + math.ceil(y)
 		for _, row in ipairs({ you, mouse }) do
 			row.x:SetPoint("RIGHT", row.y, "RIGHT", -(math.ceil(y) + COMMA), 0)
+			row:SetWidth(numbers + 2 * HOVER)
 		end
-		wide = PAD + ARROW + SPACE + math.ceil(x) + COMMA + math.ceil(y) + PAD
+		wide = wide + numbers + SPACE
 	end
-	wide = math.max(wide, PAD + math.ceil(follow:GetWidth()) + PAD, PAD + math.ceil(keep.text:GetStringWidth()) + PAD)
+	wide = math.max(wide, PAD + math.ceil(keep.text:GetStringWidth()) + PAD)
 	plate:SetWidth(wide)
 	readIn = 0
 end
@@ -217,9 +243,15 @@ end
 -- the toggle 2 in from the canvas's right edge.
 local function Stand()
 	if not plate then return end
-	local toggle = WorldMapFrame.SidePanelToggle
+	-- (In ShyMaps' own window: its quests' toggle, as far in from the corner as the coordinates.)
+	local own = View.Own() and ns.Window and ns.Window.Toggle and ns.Window.Toggle()
+	local toggle = own or WorldMapFrame.SidePanelToggle
 	local right = INSET
-	if toggle and toggle:IsShown() then right = 2 + toggle:GetWidth() + BESIDE end
+	if own and own:IsShown() then
+		right = INSET + own:GetWidth() + BESIDE
+	elseif toggle and toggle:IsShown() then
+		right = 2 + toggle:GetWidth() + BESIDE
+	end
 	-- (Offsets are the plate's own, smaller, units: kept in screen terms.)
 	local k = Shy.Maps.OVER
 	plate:ClearAllPoints()
@@ -230,7 +262,7 @@ local function Paint()
 	if not bar then return end
 	for _, b in ipairs(looks) do b:SetOn(T.db.style == b.style) end
 	for _, slot in ipairs(slots) do
-		if slot.button and slot.opts.lit then slot.button:SetOn(slot.opts.lit() == true) end
+		if slot.button and slot.opts.lit and not slot.opts.menu then slot.button:SetOn(slot.opts.lit() == true) end
 	end
 	follow:Refresh()
 	Width()
@@ -316,31 +348,31 @@ local function Build()
 	plate:SetClipsChildren(true)
 	plate:SetScale(Shy.Maps.OVER)   -- (as everything laid over the map: the map gets the room)
 	UI.Panel(plate, { brackets = false })
-	plate.height = PAD * 2 + 2 * ROW
+	plate.height = PAD * 2 + ROW
 	plate:SetHeight(plate.height)
 
-	-- The follow checkbox, at the foot. Checked, the map comes to you at once.
-	follow = UI.Checkbox(plate, "Follow me", function() return T.db.follow == true end, function(on)
-		T.db.follow = on
-		ns.Apply()
-		if on then FindMe() end
-	end, { box = BOX, size = NUMBER })
-	-- (No hover on it, or on the offer: their words say it all, and a hover would stand over the map.)
-	follow:SetHeight(ROW)
+	-- How the map follows you, at the foot: not at all, you in the very middle, or smart (a little ahead along your way,
+	-- View.lua). Following, the map comes to you at once.
+	follow = UI.Segmented(plate, { "Off", "Follow", "Smart" },
+		function() return not T.db.follow and 1 or T.db.followSmart and 3 or 2 end,
+		function(index)
+			T.db.follow, T.db.followSmart = index > 1, index == 3
+			ns.Apply()
+			if index > 1 then FindMe() end
+		end,
+		{ width = FOLLOW.wide, height = ROW, tips = {
+			"The map stays where you put it.",
+			"You stay in the middle of the map.",
+			"You stay in sight with a little of your way ahead." } })
 	follow:ClearAllPoints()
-	follow:SetPoint("BOTTOMLEFT", PAD, PAD)
+	follow:SetPoint("BOTTOMRIGHT", -PAD, PAD)
 
-	-- Your row: the arrow as it stands on the map, then your numbers; all of it the button, its hover
-	-- inside the panel's edge (HOVER in).
+	-- Your numbers at the row's left: the button, its hover just round them (HOVER).
 	you = CreateFrame("Button", nil, plate)
 	you:SetHeight(ROW)
-	Lift(you, PAD + ROW, HOVER)
-	you.icon = you:CreateTexture(nil, "ARTWORK")
-	you.icon:SetAtlas("UI-WorldMapArrow")
-	you.icon:SetSize(ARROW, ARROW)
-	you.icon:SetPoint("CENTER", you, "LEFT", PAD - HOVER + ARROW / 2, 0)
-	Numbers(you, C.text, PAD - HOVER)
-	UI.Press(you, { fill = C.bgHot, bare = true, sink = { you.icon, you.x, you.y } })
+	you:SetPoint("BOTTOMLEFT", PAD - HOVER, PAD)
+	Numbers(you, C.text, HOVER)
+	UI.Press(you, { fill = C.bgHot, bare = true, sink = { you.x, you.y } })
 	you:SetScript("OnClick", FindMe)
 	you:SetScript("OnEnter", Tip)
 	you:SetScript("OnLeave", function(self) UI.TipHide(self) end)
@@ -348,7 +380,7 @@ local function Build()
 	-- The offer, over your row: a press keeps the map where you put it (the following goes off).
 	keep = CreateFrame("Button", nil, plate)
 	keep:SetHeight(ROW)
-	Lift(keep, PAD + 2 * ROW, HOVER)
+	Lift(keep, PAD + ROW, HOVER)
 	keep.text = UI.Text(keep, "Keep it here", NUMBER, true, C.head)
 	keep.text:SetPoint("CENTER")
 	UI.KeyPress(keep, { fill = C.fill, words = keep.text, sink = { keep.text } })
@@ -363,8 +395,8 @@ local function Build()
 	-- The mouse's row, at the top.
 	mouse = CreateFrame("Frame", nil, plate)
 	mouse:SetHeight(ROW)
-	Numbers(mouse, C.hot, PAD)
-	Lift(mouse, PAD + 2 * ROW)
+	Numbers(mouse, C.hot, HOVER)
+	MouseAt(PAD + ROW)
 	mouse:SetAlpha(0)
 	mouse.on, mouse.h = false, 0
 	plate.follow, plate.you, plate.keep, plate.mouse = follow, you, keep, mouse
@@ -387,7 +419,9 @@ ns.Layer({
 		if on and not bar then Build() end
 		if bar then
 			bar:SetShown(on)
-			for _, slot in ipairs(slots) do slot.plate:SetShown(on) end
+			for _, slot in ipairs(slots) do
+				if slot.plate then slot.plate:SetShown(on) end
+			end
 			plate:SetShown(on)
 			Stand()
 		end
@@ -409,11 +443,11 @@ ns.Layer({
 			keep.h = Ease(keep.h, keepH, dt, 0.5)
 			keep:SetAlpha(keep.h / ROW)
 			keep:SetShown(keep.h > 0)
-			Lift(mouse, PAD + 2 * ROW + keep.h)
+			MouseAt(PAD + ROW + keep.h)
 		end
 		local mouseH = mouse.on and ROW or 0
 		if mouse.h ~= mouseH then mouse.h = Ease(mouse.h, mouseH, dt, 0.5) end
-		local height = PAD * 2 + 2 * ROW + keep.h + mouse.h
+		local height = PAD * 2 + ROW + keep.h + mouse.h
 		if plate.height ~= height then
 			plate.height = height
 			plate:SetHeight(height)

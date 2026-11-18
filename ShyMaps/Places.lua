@@ -442,7 +442,7 @@ events:SetScript("OnEvent", function(_, event)
 			C_GossipInfo.CloseGossip()
 		else
 			toOpen = nil
-			if not InCombatLockdown() then OpenWorldMap(map) end
+			Shy.Maps.Open(map)
 		end
 		return
 	end

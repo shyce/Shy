@@ -31,6 +31,14 @@ local CORNERS = {
 	ANCHOR_BOTTOM = "TOP", ANCHOR_BOTTOMRIGHT = "TOPLEFT", ANCHOR_BOTTOMLEFT = "TOPRIGHT",
 }
 
+-- What a card costs, piece by piece, for the monitor: the frame's own work, then each step of a re-read.
+-- (A step's clock is laid by hand, so the pieces stand under the frame's work rather than beside it.)
+local READ = Shy.Clock("tip: a tooltip read again")
+local SAID = Shy.Clock("tip: what the tooltip says, gathered")
+local STOOD = Shy.Clock("tip: the card put up")
+local BESIDE = Shy.Clock("tip: the cards beside")
+local SHOWS = Shy.Clock("tip: what the tooltip shows, read")
+
 local clock                  -- OnUpdate frame (Watch)
 local hosts = {}             -- replaced tooltips, in order
 local veiled = setmetatable({}, { __mode = "k" })     -- tooltip -> hidden by alpha
@@ -694,6 +702,7 @@ local function Sides(host)
 	local Hover = Shy.Hover
 	local list = host.tip.shoppingTooltips
 	if type(list) ~= "table" then return end
+	local from = debugprofilestop()
 	local of = host.up and Mine(host) or nil
 	local worn = of and host.worn or nil
 	local count = worn and #worn or 0
@@ -752,6 +761,7 @@ local function Sides(host)
 			if ours or (beside and not host.up and beside.of == host.was) then Hover.Beside(n, nil) end
 		end
 	end
+	BESIDE:Lap(debugprofilestop() - from)
 end
 
 -- Closes the card and shows the default tooltip again.
@@ -771,7 +781,9 @@ end
 local function Stand(host)
 	local Hover = Shy.Hover
 	local tip = host.tip
+	local from = debugprofilestop()
 	local content, key = Say(tip, nil, host.stay ~= nil)
+	SAID:Lap(debugprofilestop() - from)
 	if not content then return false end
 	local corner = Corner(host)
 	local scale = tip:GetEffectiveScale() / UIParent:GetEffectiveScale()
@@ -782,7 +794,9 @@ local function Stand(host)
 	local frame = Mine(host)
 	if not frame or key ~= host.said then
 		local opts = { at = { corner, tip, corner }, scale = scale, keep = false, onClose = host.close }
+		from = debugprofilestop()
 		if host.stay then frame = Hover.Stay(host.stay, content, opts) else frame = Hover.Show(host.holder, content, opts) end
+		STOOD:Lap(debugprofilestop() - from)
 	end
 	if not frame then return false end
 	-- Cancel a fade in progress.
@@ -797,6 +811,7 @@ local Keep, Fresh
 
 local function Sync(host)
 	local tip = host.tip
+	local from = debugprofilestop()
 	host.keptAt = nil
 	if not tip:IsShown() then return end
 	if not On() or ns.Hushed(tip) then
@@ -819,6 +834,7 @@ local function Sync(host)
 	Veil(tip)
 	Sides(host)
 	if not host.stay then Keep(host) end
+	READ:Lap(debugprofilestop() - from)
 end
 
 -- What a tooltip shows, as a list of values: its lines (words, colors, wrapping), the pictures beside them,
@@ -998,7 +1014,9 @@ end
 
 -- Notes what the host's tooltip shows as its card is said.
 function Keep(host)
+	local from = debugprofilestop()
 	local ok = pcall(Shows, host)
+	SHOWS:Lap(debugprofilestop() - from)
 	if not ok then
 		host.keptAt = nil
 		return
@@ -1021,7 +1039,9 @@ function Fresh(host, placed)
 	if not host.keptAt or not host.up then return false end
 	if host.keptAt ~= GetTime() and not host.keptUnit then return false end
 	if not placed and not (host.tip:IsShown() and Mine(host)) then return false end
+	local from = debugprofilestop()
 	local ok = pcall(Shows, host)
+	SHOWS:Lap(debugprofilestop() - from)
 	local kept = host.kept
 	if not ok or count ~= kept.n then return false end
 	for i = 1, count do
@@ -1145,7 +1165,7 @@ function Wing.Start()
 	-- (a key's button: the card leads with the key, so the tooltip itself needs no lines of it)
 	if Shy.Keys then Shy.Keys.Carded = function() return true end end
 	clock = CreateFrame("Frame")
-	clock:SetScript("OnUpdate", Watch)
+	clock:SetScript("OnUpdate", Shy.Clocked("tip: a frame's work", Watch))
 	for _, name in ipairs(HOVERS) do
 		if _G[name] then Host(_G[name]) end
 	end

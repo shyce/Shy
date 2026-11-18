@@ -481,6 +481,7 @@ end
 local ui = {
 	bg = {}, bgHot = {}, panel = {}, row = {}, rowEdge = {},   -- graphite surfaces
 	hud = {}, hudStrip = {},                                    -- panel and bgHot at the opacity setting
+	sheet = {},                                                 -- a window's body: what its content is read off
 	tip = {},                                                   -- panel for tooltips and hovers: darker
 	fill = {}, border = {}, hot = {},                           -- on / selected, edges, hover / focus
 	text = {}, dim = {}, head = {},
@@ -510,13 +511,26 @@ local FILL_LUMA = 0.30   -- brightness cap for the fill
 local PICK = 0.38        -- how much of the fill a picked row takes
 
 Theme.STRENGTH = 55      -- default opacity, in percent
+Theme.SHEET = 88         -- default opacity of the sheet a window's content is read off, in percent
 local HOUSING = 0.25     -- how much more opaque a piece's strip and edge are than its fill
 local glazed = -1        -- the opacity the palette was last built at
+local sheeted = -1       -- and the sheet's, which is a setting of its own
 
 function Theme.Strength()
 	local db = core.db
 	local percent = db and db.strength
 	if type(percent) ~= "number" then percent = Theme.STRENGTH end
+	return max(0, min(100, percent)) / 100
+end
+
+-- A window is two things with two settings, not one. The housing is the theme's work: its fill, its strip, its
+-- edge and whatever its look lays round them, at Theme.Strength(). The sheet is what the content is read off --
+-- a window's body, under its rows and words -- at its own, so the world can show through the frame of a window
+-- without washing out what the window is for.
+function Theme.Sheet()
+	local db = core.db
+	local percent = db and db.sheet
+	if type(percent) ~= "number" then percent = Theme.SHEET end
 	return max(0, min(100, percent)) / 100
 end
 
@@ -528,11 +542,12 @@ function Theme.TipStrength()
 end
 
 local function Glaze()
-	glazed = Theme.Strength()
+	glazed, sheeted = Theme.Strength(), Theme.Sheet()
 	local housing = min(1, glazed + HOUSING)
 	Put(ui.tip, ui.panel[1], ui.panel[2], ui.panel[3], Theme.TipStrength())
 	Put(ui.hud, ui.panel[1], ui.panel[2], ui.panel[3], glazed)
 	Put(ui.hudStrip, ui.bgHot[1], ui.bgHot[2], ui.bgHot[3], housing)
+	Put(ui.sheet, ui.panel[1], ui.panel[2], ui.panel[3], Theme.Sheet())
 	Put(skin.hudMetal, skin.metal[1], skin.metal[2], skin.metal[3], housing)
 end
 
@@ -1792,7 +1807,8 @@ local function Refresh()
 	local look = Theme.Look()
 	local saved = Saved()
 	local plan = Grad.Sign(saved)
-	if Near(r, accent[1]) and Near(g, accent[2]) and Near(b, accent[3]) and Near(Theme.Strength(), glazed) and look == looked
+	if Near(r, accent[1]) and Near(g, accent[2]) and Near(b, accent[3]) and Near(Theme.Strength(), glazed)
+		and Near(Theme.Sheet(), sheeted) and look == looked
 		and plan == worePlan and stamp == woreStamp then return false end
 	looked, worePlan, grad, woreStamp = look, plan, saved, stamp
 	if grad then Watch() end
@@ -1890,6 +1906,22 @@ function Theme.StrengthSoon(percent)
 	local mine = strengthAsked
 	C_Timer.After(REST, function()
 		if mine == strengthAsked then Theme.SetStrength(percent) end
+	end)
+end
+
+-- The sheet a window's content is read off, the same way.
+local sheetAsked = 0
+function Theme.SetSheet(percent)
+	sheetAsked = sheetAsked + 1
+	core.db.sheet = max(0, min(100, percent))
+	Changed()
+end
+
+function Theme.SheetSoon(percent)
+	sheetAsked = sheetAsked + 1
+	local mine = sheetAsked
+	C_Timer.After(REST, function()
+		if mine == sheetAsked then Theme.SetSheet(percent) end
 	end)
 end
 

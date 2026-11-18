@@ -62,6 +62,9 @@ function Nav.PinNext(on)
 	return pinNext
 end
 
+-- Whether the next click on the map drops the pin (Nav.PinNext).
+function Nav.Pinning() return pinNext end
+
 local function DropPin(map, x, y)
 	pinNext = false
 	if C_Map.CanSetUserWaypointOnMap(map) then
@@ -468,6 +471,19 @@ local function Chain(map)
 	return chain
 end
 
+-- A crumb measured again (its face loaded after it was first laid, or another chosen) grows or shrinks: the row is
+-- laid again on the next frame, once however many did, so none stands over the next.
+local Lay
+local laying = false
+local function LaySoon()
+	if laying then return end
+	laying = true
+	C_Timer.After(0, function()
+		laying = false
+		if Lay then Lay() end
+	end)
+end
+
 local function Crumb(i)
 	local b = crumbs[i]
 	if b then return b end
@@ -486,6 +502,7 @@ local function Crumb(i)
 		UI.Ink(self.text, color)
 		if self.icon then UI.Tint(self.icon, color) end
 	end
+	b:HookScript("OnSizeChanged", LaySoon)
 	crumbs[i] = b
 	return b
 end
@@ -551,7 +568,7 @@ local function Fill(b, info, here, map)
 	b:OnLook(b.shyPress)
 end
 
-local function Lay()
+function Lay()
 	if not row then return end
 	for _, b in ipairs(crumbs) do b:Hide() end
 	for _, text in ipairs(slashes) do text:Hide() end
@@ -668,6 +685,7 @@ local function BuildRow()
 			end
 		end })
 	more:SetLabel("...", C.dim)
+	more:HookScript("OnSizeChanged", LaySoon)
 	-- The side switch (World | Dungeons) leads the row, where the journal's own stands on its bar (Sides.lua).
 	if ns.Sides and ns.Sides.Switch then
 		sides = ns.Sides.Switch(row, "world")

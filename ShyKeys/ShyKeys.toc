@@ -1,0 +1,28 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffKeys|r
+## Notes: Your class on your keys, laid out once for every level |cff888888/shykeys|r
+## Author: Shyce Cream
+## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r
+## Version: 5.1.7
+## X-Date: 2026-11-18
+## IconTexture: Interface\AddOns\ShyKeys\Media\ShyKeysMarkColor
+## Dependencies: ShyCore
+## Group: ShyCore
+## SavedVariables: ShyKeysDB
+
+ShyKeys.lua
+Jobs.lua
+Move.lua
+Hotkeys.lua
+Layout.lua
+Spots.lua
+Apply.lua
+Story.lua
+Watch.lua
+Board.lua
+Choice.lua
+Guide.lua
+Room.lua
+Pullout.lua
+Tips.lua
+Data\KeyTalents.lua

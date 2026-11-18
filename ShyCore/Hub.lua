@@ -71,7 +71,7 @@ end)
 -- there, and how near the top a head counts as the one in view.
 local W = { EDGE = 2, RAIL = 220, PAD = 28, IN = 24, PAGE = 700, SCROLL = 14, RIGHT = 22, TOP = 16, FOOT = 14, PAGE_H = 580,
 	BAR = 26, BAR_GAP = 10, FADE = 0.15, MEASURE = 0.2, SOON = 0.05, SETTLED = 0.5, REST = 4, BRIEFS = 0.5, GLIDE = 0.28, AIR = 10, MOST = 1000,
-	WALK = 46, UNDER = 12, STEP = 50 }
+	WALK = 46, UNDER = 12, STEP = 10, STICK = 12 }
 -- WALK: the foot a guest walks its pages on, up from the window's bottom to its rule; UNDER: room over that rule.
 -- MOST: the widest a room flows to (maximized), the width the setup window's pages are laid out at, so every
 -- shared section is known to stand there. STEP: the widths a room is laid out at go in steps of this (PAGE and
@@ -88,7 +88,10 @@ local ROOMS = {
 		lead = "Change how big everything is, and move things where you want them." },
 	{ key = "play", label = "Play", glyph = "book", ask = "How you play",
 		lead = "How you pick up and hand in quests, and how much of the UI you see while you play." },
-	{ key = "keys", label = "Keys", glyph = "action", paged = true },
+	-- (owned: an addon's room, not the core's. Without that addon nothing fills it, so the rail leaves it out.)
+	-- (not paged: you come here to change a key, not to walk through setting them up again)
+	{ key = "keys", label = "Keys", glyph = "action", owned = true, ask = "Keys",
+		lead = "Your class laid out on your keys. Change any of them here; nothing is bound until you save." },
 	{ key = "game", label = "Game", glyph = "log", ask = "Game settings",
 		lead = "Tick one and it changes right away. Untick it and you get back what you had. They're all in the game's own options too." },
 	{ key = "profiles", label = "Profile", glyph = "group", ask = "Profiles",
@@ -167,6 +170,34 @@ function Shy.HubPlace(page, frame, top)
 	frame:SetPoint("TOPLEFT", top, "BOTTOMLEFT", 0, top == page.origin and -6 or -24)
 end
 
+-- A bar that stays at the window's foot while a room has something waiting there (keys picked and not saved).
+-- It stands under the room rather than in it, so it is in the same place however far the room is scrolled, and
+-- the room is given that much less height while it shows. Call Shy.HubFoot(page, nil) to take it away again.
+--   frame:SetHeight() before this: the height it is given back is the one the room loses
+function Shy.HubFoot(page, frame)
+	-- (placed again when the window is made wider or narrower: the room is laid out at another width then,
+	-- and the bar stands across that width, not the window's)
+	if page.stick == frame and page.stickW == (frame and win.pageW or nil) then return end
+	if page.stick and page.stick ~= frame then
+		page.stick:ClearAllPoints()
+		page.stick:Hide()
+	end
+	page.stick, page.stickW = frame, frame and win.pageW or nil
+	if frame then
+		frame:SetParent(win.box)
+		frame:ClearAllPoints()
+		-- The bar is a surface, so it spans the whole of the room's side of the window -- from the rule beside
+		-- the rail to the far edge, the sheet's own width. What it holds stands in from that by the room's
+		-- margins (frame:Inset), so its words and its buttons line up with the rows it covers.
+		frame:SetPoint("BOTTOMLEFT", win.body, "BOTTOMLEFT", W.EDGE + W.RAIL, W.FOOT)
+		frame:SetPoint("BOTTOMRIGHT", win.body, "BOTTOMRIGHT", 0, W.FOOT)
+		if frame.Inset then frame:Inset(W.PAD, W.RIGHT + W.SCROLL) end
+		frame:SetFrameLevel(win.box:GetFrameLevel() + 20)   -- (over the room it covers the foot of)
+		frame:Show()
+	end
+	if Hub.IsOpen() then Hub.Refit() end
+end
+
 -- A page as tall as what it holds. Lowest() skips regions stretched to the page's own bottom edge (the page
 -- would grow forever), nested scroll areas, and secret measurements (they can't be compared).
 local function Seen(thing)
@@ -207,7 +238,10 @@ end
 -- The room an open page has: the window's, less the strip over an addon's. Lent: less the foot under it.
 local function Room()
 	if win.guest then return win.pageH + W.FOOT - W.UNDER - W.WALK end
-	return win.pageH - (type(win.at) == "table" and W.BAR + W.BAR_GAP or 0)
+	-- (a bar at the foot stands under the room, not in it: the room is that much shorter while it shows)
+	local page = win.pages and win.pages[win.at]
+	local stick = page and page.stick and page.stick:IsShown() and (page.stick:GetHeight() + W.STICK) or 0
+	return win.pageH - (type(win.at) == "table" and W.BAR + W.BAR_GAP or 0) - stick
 end
 
 -- Where a room's pieces stand, two deep (its sections and what they hold), as one number: how far each is
@@ -389,7 +423,10 @@ end
 local function Fit(walk)
 	local box, page = win.box, win.pages[win.at]
 	local room = Room()
-	Place(-(W.HEADER + W.TOP + win.pageH - room), room)
+	-- (the strip an addon's room leaves at the top, for its own bar; a bar at the window's foot takes its
+	-- height off the bottom instead, so the room ends above it rather than sliding down under it)
+	local strip = type(win.at) == "table" and W.BAR + W.BAR_GAP or 0
+	Place(-(W.HEADER + W.TOP + strip), room)
 	if page.Fit then page:Fit(room - (page.lead and UI.LEAD_H or 0)) end
 	if walk then return Measure(true) end
 	if page.scrollsItself or not page.held then return end
@@ -397,6 +434,11 @@ local function Fit(walk)
 	if math.abs(tall - page:GetHeight()) > 1 then page:SetHeight(tall) end
 	if math.abs(tall - box.content:GetHeight()) > 0.5 then box.content:SetHeight(tall) end
 	box.scroll:Update()
+end
+
+-- The room fitted again: a bar come to the window's foot, or gone from it, changes how much room is left.
+function Hub.Refit()
+	if win.open and win.pages and win.pages[win.at] then Fit() end
 end
 
 local function Show()
@@ -523,6 +565,8 @@ end
 -- The window flows: taller, the rail, the room and the page on show take the height; wider (a corner let go, or
 -- maximized), our rooms stand as laid out for the width there is, in steps of W.STEP up to W.MOST, the scroll
 -- area to the window's edge. Nothing is scaled. (width, height: its body's, UI.Body)
+-- The step is what a room's width is rounded down to, and so what it leaves unused at its right edge. It is
+-- small: a room built for a width is kept, and there are only as many as the widths you rest the corner at.
 local function Lay(_, width, height)
 	win.pageH = height - (W.HEADER + W.TOP + W.FOOT)
 	-- (While a corner is dragged the page keeps its width: a room is built for another, and that waits for the
@@ -557,11 +601,17 @@ function Hub.Size()
 	return win.pageW, Room()
 end
 Hub.IN = W.IN
+Hub.PAD = W.PAD   -- (what a bar at the window's foot stands its own words in by, to meet the room's)
 
--- The rooms as the rail lists them.
+-- The rooms as the rail lists them. A room an addon brings (`owned`) is listed only once that addon has filled
+-- it, so switching the addon off takes its room with it rather than leaving an empty one (Keys without ShyKeys).
 function Hub.Rooms()
 	local items = {}
-	for i, room in ipairs(ROOMS) do items[i] = { key = room.key, label = room.label, glyph = room.glyph } end
+	for _, room in ipairs(ROOMS) do
+		if not room.owned or sections[room.key] then
+			items[#items + 1] = { key = room.key, label = room.label, glyph = room.glyph }
+		end
+	end
 	return items
 end
 
@@ -584,6 +634,9 @@ local function Create()
 	-- Everything under the header stands on the body: clear of the look's work round the edge (UI.Body).
 	local body = UI.Body(box)
 	win.body = body
+	-- The sheet the rooms are read off: from the rule beside the rail to the window's other edges, under the
+	-- head. The rail, the head and the edge round them are the housing's, and follow the other setting.
+	UI.BodySheet(box, true, { W.EDGE + W.RAIL, W.HEADER, 0, 0 })
 
 	box.rail = UI.Rail(box, function(key)
 		if win.guest then win.guest.Go(key) else Hub.Open(key) end
@@ -607,6 +660,11 @@ local function Create()
 	foot:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 2, 0)
 	foot:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -2, 0)
 	foot:SetHeight(W.WALK)
+	-- It runs under the rail and the room alike, so it is a surface of its own: one opaque fill, or the rail's
+	-- darker ground and the rule beside it show through and cut the foot in two.
+	foot.fill = foot:CreateTexture(nil, "BACKGROUND")
+	foot.fill:SetAllPoints()
+	Theme.Paint(foot.fill, C.bg, 1)
 	foot.rule = foot:CreateTexture(nil, "ARTWORK")
 	UI.Paint(foot.rule, C.border, 0.7)
 	foot.rule:SetHeight(1)

@@ -1922,6 +1922,20 @@ end
 
 -- Was the console set up for different inputs than now, or with the old bar
 -- order (the main bar below another that is on: see Console.ORDER)?
+-- Two signatures read the same when every number in them does to a tenth. Some inputs are measured, not set
+-- (the XP bars' room is rows times the screen's pixel, 26.500000502914 on one load and a hair under on the next),
+-- and that much is no change to the screen. (Signatures saved before are read the same way: nothing goes stale
+-- for this alone.)
+local function Same(a, b)
+	if a == b then return true end
+	if a == nil or b == nil then return false end
+	local function Tenths(text)
+		-- (every number, whole ones too: 26 on one load can be 26.0000001 on the next)
+		return (text:gsub("%-?%d+%.?%d*", function(number) return ("%.1f"):format(tonumber(number)) end))
+	end
+	return Tenths(a) == Tenths(b)
+end
+
 function L.IsStale()
 	if ns.char.built == nil then return false end
 	local now = Now()
@@ -1931,7 +1945,14 @@ function L.IsStale()
 		local other = placed[Key(System.ActionBar, index)]
 		if now[row] and main and other and main[3] < other[3] - 1 then return true end
 	end
-	return ns.char.built ~= Signature(now)
+	local signed = Signature(now)
+	if Same(ns.char.built, signed) then
+		ns.char.staleAs = nil
+		return false
+	end
+	-- (what it was judged on, kept with the one it was laid out on: which input moved, where it can be read)
+	ns.char.staleAs = signed
+	return true
 end
 
 -- Has the player made the screen their own, so a setup would undo it? "own": another Edit Mode layout of
@@ -1965,10 +1986,12 @@ end
 
 -- A setup measures the screen before its reload, and the reload moves what it measures (the pieces only
 -- stand where it wrote them now): the first login after a setup takes the inputs as they stand, and the
--- settings it wrote as the game keeps them (L.Custom compares with these).
-function L.Settle()
+-- settings it wrote as the game keeps them (L.Custom compares with these). live: setup's picks went on as you
+-- made them, and this takes them as they stand now; the setup window is still open and Finish reloads, so the
+-- first login after it takes them again, as the screen stands without setup over it.
+function L.Settle(live)
 	if not ns.char.settle then return end
-	ns.char.settle = nil
+	if not live then ns.char.settle = nil end
 	if not L.IsActive() then return end
 	ns.char.built = Signature(Now())
 	local info = Layouts()
@@ -2543,7 +2566,7 @@ function L.SetUp(size, style, opts)
 	if opts.live then
 		-- Measured before it moved, as a setup's reload would; taken as it stands once it has.
 		ShowBars()
-		C_Timer.After(0.5, L.Settle)
+		C_Timer.After(0.5, function() L.Settle(true) end)
 		return true
 	end
 	-- Addons can't call C_UI.Reload on this client; Shy.Reload shows a button the player clicks.

@@ -45,7 +45,8 @@ local T = Shy:NewAddon(ADDON, {
 		style = "terrain",  -- a zone's map: "terrain" (the ground from overhead) | "drawn" (the game's art)
 		fog = "faded",      -- unexplored areas of a drawn map: "faded" | "clear" | "hidden"
 		remember = true,    -- reopen as it was left
-		follow = true,      -- the view keeps you in sight as you move, looking ahead the way you go (moved by hand, it stays until you walk out of sight)
+		follow = true,      -- the view keeps you in sight as you move (moved by hand, it stays until you walk out of sight)
+		followSmart = true, -- ... looking a little ahead along your way (View.lua, lean.LOOK); off, you in the very middle
 		flights = true,
 		routes = true,      -- the lines between the flight points you know
 		travel = true,      -- docks and the tram
@@ -66,6 +67,9 @@ local T = Shy:NewAddon(ADDON, {
 		notes = {},         -- { id, world, north, west, map, x, y, text, ink, at }
 		drawings = {},      -- { world, ink, north, west, north, west, ... }
 		overlay = false,    -- the map faintly over the whole screen while its window is closed, clicks passing through
+		window = true,      -- the map's key opens the map in a window of its own, sized from any edge (Window.lua)
+		windowScale = 1,    -- that window's scale
+		windowHome = 0,     -- the home the window was last made at (Window.lua's L.home): a size kept from before it is let go of
 		quietInside = false,   -- inside an instance, the map without friends, guild, boats, notes or other addons' marks
 		overlayOpacity = 0.13,  -- how solid the overlay's map is by day: faint, the game plain under it
 		overlayNight = 0.08,    -- ... by night (dawn and dusk ease between them)
@@ -115,6 +119,48 @@ function T:Open(map)
 	if ns.View then ns.View.Open(map) end
 end
 
+-- The view turned to `map` and gliding to take in `points` whole ({ x, y } shares of that map): what someone points
+-- at on the map (ShyQuest's list of your quests: one quest's ground). False while no map of ours is open.
+function T:Frame(map, points)
+	local View = ns.View
+	if not (View and View.InUse and View.InUse() and map) then return false end
+	local flat = {}
+	for _, point in ipairs(points or {}) do
+		flat[#flat + 1], flat[#flat + 2] = point.x, point.y
+	end
+	if View.Map() == map then return View.Frame(flat) end
+	-- (Another map: framed once the view stands on it, the frame after.)
+	View.Show(map)
+	C_Timer.After(0, function()
+		if View.Map() == map then View.Frame(flat) end
+	end)
+	return true
+end
+
+-- The map opened on `map` as you use it (Shy.Maps.Open): in its window of its own while that is your map, else the
+-- view turned where the game's map is open already. False where the game's map is to open (it is not ours to open).
+function T:ShowMap(map)
+	if not (self:IsOn() and ns.Window and ns.View) then return false end
+	if ns.Window.Shown() or WorldMapFrame:IsShown() then
+		if map then ns.View.Open(map) end
+		return true
+	end
+	if not self.db.window then return false end
+	ns.Window.Set(true)
+	if map then ns.View.Open(map) end
+	return true
+end
+
+-- The map's window of its own closed, where it is open (whoever docks beside it closes it with their own x).
+function T:CloseWindow()
+	if ns.Window and ns.Window.Shown() then ns.Window.Set(false) end
+end
+
+-- Whether the map stands in a window of its own now (Window.lua).
+function T:WindowShown()
+	return ns.Window ~= nil and ns.Window.Shown()
+end
+
 -- Each layer's switch, as written in the options and the map's menu.
 ns.SWITCHES = {
 	{ key = "zones", label = "Place names" },
@@ -143,6 +189,10 @@ function T:MapMenu(root)
 		quest:MapMenu(root)
 		root:CreateDivider()
 	end
+	-- The map's own tools that keep off the bar (Controls.lua, T:BarButton's `menu`): notes, sharing, the overlay.
+	local tools = ns.MenuTools and ns.MenuTools() or {}
+	for _, write in ipairs(tools) do write(root) end
+	if #tools > 0 then root:CreateDivider() end
 	for _, switch in ipairs(ns.SWITCHES) do
 		root:CreateCheckbox(switch.label, function() return T.db[switch.key] == true end, function()
 			T.db[switch.key] = not T.db[switch.key]

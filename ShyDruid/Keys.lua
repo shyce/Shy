@@ -15,6 +15,9 @@
 local ADDON, ns = ...
 local T = ns.T
 
+-- Without ShyKeys there is nothing to lay keys out: this class's keys, macros and buttons are left as they are.
+if not Shy.Keys then return end
+
 local K = {}
 
 -- Your forms, each a list: the first of it you have is the one to fight in (OPTS.keep), and the one on 1 2 3.

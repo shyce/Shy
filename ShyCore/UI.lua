@@ -31,7 +31,7 @@
 --
 -- Headers and windows (one design, three sizes: UI.HEAD):
 --   UI.Head(frame, opts)    -- the panel and its header: title strip, accent line, title, icon, ×, buttons, tabs
---   UI.Window(opts)         -- a Shy.HUD window on a panel with a header; Esc closes it
+--   UI.Window(opts)         -- a Shy.HUD window on a panel with a header; Esc closes it (opts.dock: beside another, as HUD's)
 --   UI.Body(window)         -- where a window's content stands: clear of its look's work round the edge, the window
 --                              that much bigger (UI.BodyFit(f, w, h) for one that sizes itself, UI.BodySize)
 --   UI.Close(parent, size, glyph, onClick)   -- the × button
@@ -2044,6 +2044,43 @@ function UI.Body(f)
 	end
 	UI.PlaceBody(f)
 	return body
+end
+
+-- A window is two surfaces with a setting each, not one.
+--   the housing   its fill, its strip, its edge and the look's work round them, at Theme.Strength()
+--   the sheet     what its content is read off, under the rows and words, at Theme.Sheet()
+-- So the world can show through the frame of a window without washing out what the window is for. The sheet
+-- is laid on the body -- the rect a window's content already stands on -- and is the thing to anchor to when
+-- something must cover the content rather than the window (a bar at the foot).
+--   UI.BodySheet(f, true)                   under the head, to the body's other three edges
+--   UI.BodySheet(f, true, { l, t, r, b })   further in than that (the hub leaves its rail off the sheet)
+--   UI.BodySheet(f, false)                  none
+--   -> the sheet, or nil
+function UI.BodySheet(f, on, inset)
+	local body = f and f.shyBody
+	if not body then return nil end
+	if not on then
+		if body.shySheet then body.shySheet:Hide() end
+		return nil
+	end
+	local sheet = body.shySheet
+	if not sheet then
+		-- (under everything the body holds, over the window's own fill and the look's work beneath it)
+		sheet = body:CreateTexture(nil, "BACKGROUND", nil, -8)
+		body.shySheet = sheet
+		Theme.Paint(sheet, C.sheet)
+	end
+	-- (the head is the housing's, never the content's: the sheet starts under it unless told otherwise)
+	local head = f.shyLook and f.shyLook.headLine or 0
+	local l, t, r, b = 0, head, 0, 0
+	if type(inset) == "table" then
+		l, t, r, b = inset[1] or l, inset[2] or t, inset[3] or r, inset[4] or b
+	end
+	sheet:ClearAllPoints()
+	sheet:SetPoint("TOPLEFT", body, "TOPLEFT", l, -t)
+	sheet:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -r, b)
+	sheet:Show()
+	return sheet
 end
 
 -- left, top, right, bottom the body stands in from its window's edges now; 0 for a window without a body.
@@ -9017,6 +9054,10 @@ function UI.Head(f, opts)
 		-- it says so (opts.body), since a piece keeps the size the screen's plan gives it and its content must have
 		-- room to step in. (A piece without one wears no work inside its edge: g.cleared.)
 		if opts.body or (opts.body == nil and not panel.hud) then UI.Body(f) end
+		-- And the sheet it is read off, under the head: a window is two surfaces with a setting each, so
+		-- every one of them answers the same two. (A piece on screen is one surface and keeps to the one
+		-- setting; a window that lays its own, as the /shy window does, says where it goes.)
+		if f.shyBody and panel.window and panel.sheet ~= false then UI.BodySheet(f, true) end
 	end
 	local head = CreateFrame("Frame", nil, f)
 	head:SetPoint("TOPLEFT")
@@ -9142,6 +9183,7 @@ function UI.Window(opts)
 	local box = Shy.HUD.Create({
 		id = opts.id, title = opts.title, name = opts.name, width = opts.width, height = opts.height,
 		point = opts.point, shown = opts.shown, secure = opts.secure, inCombat = opts.inCombat, hang = opts.hang, grip = opts.grip, window = true,
+		dock = opts.dock,   -- (beside another window: Shy.HUD's `dock`)
 	})
 	box:SetToplevel(true)
 	box:EnableMouse(true)   -- so clicks don't fall through to the world

@@ -226,7 +226,26 @@ local function Read()
 	return d
 end
 
--- A talent's name, picture and its words at a rank.
+local Tip                   -- a talent's hover (set below)
+local asked = {}            -- talent spell -> its words have been asked for, once
+
+-- A talent's words come with its spell's data, which the client loads on demand: the first hover of a talent
+-- reads them empty. They are asked for once, and the hover said again as they land, so the first hover fills
+-- itself in instead of waiting for the next one.
+local function Ask(spell)
+	if asked[spell] then return end
+	asked[spell] = true
+	local s = Spell:CreateFromSpellID(spell)
+	-- Its data is here and the words are still empty: the talent has none at that rank, nothing to wait for.
+	if s:IsSpellDataCached() then return end
+	s:ContinueOnSpellLoad(function()
+		local b = open and Shy.Hover.Owner()
+		if b and b.node and buttons[b.node.id] == b then Tip(b) end
+	end)
+end
+
+-- A talent's name, picture and its words at a rank. No words at that rank: nil, never the empty string the
+-- game answers with while the spell's data is still coming.
 local function About(node, rank)
 	local n = node.info
 	local entry = (n.activeEntry and n.activeEntry.entryID) or (n.entryIDs and n.entryIDs[1])
@@ -235,7 +254,9 @@ local function About(node, rank)
 	local spell = def and def.spellID
 	local name = def and (def.overrideName ~= "" and def.overrideName) or (spell and C_Spell.GetSpellName(spell)) or ""
 	local icon = def and def.overrideIcon and def.overrideIcon ~= 0 and def.overrideIcon or (spell and C_Spell.GetSpellTexture(spell))
-	local words = entry and rank and rank > 0 and C_Traits.GetTraitDescription(entry, rank)
+	local words = entry and rank and rank > 0 and C_Traits.GetTraitDescription(entry, rank) or nil
+	if words == "" then words = nil end
+	if not words and spell and rank and rank > 0 then Ask(spell) end
 	return name, icon, words, entry
 end
 
@@ -262,7 +283,19 @@ local function CanTakeBack(node)
 	return data.active and not committing and node.staged > 0 and node.info.canRefundRank == true
 end
 
-local function Tip(button)
+-- Where a talent's hover stands: off the talent's own top right corner, up and away from the grid, the place
+-- every hover over a piece with a picture takes (UI.GameTipAt). Near the screen's right edge it turns to the
+-- top left corner instead, so it is never pushed back over the talents.
+local CORNER_ROOM = 300   -- the room a card wants past the corner it stands on
+local function Corner(button)
+	local right = (button:GetRight() or 0) * button:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	if (UIParent:GetWidth() or 0) - right < CORNER_ROOM then
+		return { "BOTTOMRIGHT", button, "TOPLEFT", -2, 2 }
+	end
+	return { "BOTTOMLEFT", button, "TOPRIGHT", 2, 2 }
+end
+
+function Tip(button)
 	local node = button.node
 	if not node or not data then return end
 	local name, icon, now = About(node, math.max(node.ranks, 1))
@@ -270,13 +303,10 @@ local function Tip(button)
 	local key = { { text = ("Rank %d of %d"):format(node.ranks, node.max), color = C.dim } }
 	if node.staged > 0 then key[2] = { text = ("  \194\183  %d waiting for Apply"):format(node.staged), color = C.alert } end
 	local body = {}
-	if node.ranks > 0 and now then
-		body[#body + 1] = { text = now }
-	elseif node.ranks == 0 and now then
-		body[#body + 1] = { text = now, color = C.dim }
-	end
+	-- What it does reads in full, held or not: the rank line above already says which it is.
+	if now then body[#body + 1] = { text = now } end
 	if node.ranks > 0 and node.ranks < node.max and next then
-		body[#body + 1] = { rows = { { text = next, quiet = true } }, title = "Next rank" }
+		body[#body + 1] = { rows = { { text = next } }, title = "Next rank" }
 	end
 	local needs = {}
 	local gate = node.tab.gate
@@ -299,8 +329,10 @@ local function Tip(button)
 	local hints = {}
 	if CanLearn(node) then hints[#hints + 1] = { "left", "Learn" } end
 	if CanTakeBack(node) then hints[#hints + 1] = { "right", "Take back" } end
+	-- On the talent itself (Corner). It takes no mouse, so the talents it lies over are still hovered and
+	-- clicked straight through it, and it leaves the moment the cursor does (the button's OnLeave).
 	Shy.Hover.Show(button, { card = true, about = "talent:" .. node.id .. ":" .. node.ranks, icon = icon, title = name,
-		kind = node.tab.name, key = key, body = body, hints = hints }, { at = UI.Beside(box, button) })   -- past the window: never over the next talent
+		kind = node.tab.name, key = key, body = body, hints = hints }, { keep = false, at = Corner(button) })
 end
 
 local Lay
@@ -337,7 +369,8 @@ local function Talent(card)
 	b.pips = {}
 	b:SetScript("OnClick", Click)
 	b:SetScript("OnEnter", Tip)
-	b:SetScript("OnLeave", function(self) Shy.Hover.Hide(self) end)
+	-- Gone at once, not after the grace a row's hover gets: nothing of it is ever between you and the next talent.
+	b:SetScript("OnLeave", function(self) Shy.Hover.Hide(self, true) end)
 	return b
 end
 

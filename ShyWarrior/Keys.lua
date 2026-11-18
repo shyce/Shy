@@ -16,6 +16,9 @@
 local ADDON, ns = ...
 local T = ns.T
 
+-- Without ShyKeys there is nothing to lay keys out: this class's keys, macros and buttons are left as they are.
+if not Shy.Keys then return end
+
 local K = {}
 
 -- The stance to fight in (OPTS.keep): the first of a list you have.

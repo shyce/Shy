@@ -1,8 +1,8 @@
 -- Places shared as routes (Shy.Way.Share), on the map.
 --
--- The share button on the map's bar, a pin: it is lit while you have a pin, and its menu sends your pin or
--- where you stand to your group or a friend as a route they can accept, links the pin in any chat, drops
--- the pin with your next click on the map, or takes it away.
+-- The pin button on the map's bar: a click and your next click on the map drops your pin. Your pin's right click
+-- sends it to your group or a friend as a route they can accept, links it in any chat, or takes it away; the map's
+-- menu sends where you stand.
 --
 -- A route someone suggested stands on the map while it waits for your answer: a pin in their class's
 -- color with their name under it and a ring beating out of it. Its hover says who, where and how far; a
@@ -168,25 +168,19 @@ Shy:On("SHY_WAY_SHARE", function(what)
 	if (what == "offer" or what == "gone" or what == "ping" or what == "unping") and View.IsOpen() then Draw() end
 end)
 
--- The bar's share button
+-- The bar's pin button: a click and the next click on the map drops your pin (another click first: not now). It
+-- is lit while it waits for that click. What your pin can do (share it, link it, take it away) is its own right
+-- click on the map (Units.lua, ns.PinMenu); sharing where you stand is in the map's menu.
 
 local function Lit()
-	return C_Map.HasUserWaypoint() == true
+	return ns.Nav ~= nil and ns.Nav.Pinning ~= nil and ns.Nav.Pinning() == true
 end
 
-local function Write(root)
-	root:CreateTitle("Share a place")
-	local pinned = Lit()
-	if pinned then
-		ns.PinMenu(root)
-		root:CreateDivider()
-	end
-	local drop = root:CreateButton(pinned and "Move my pin" or "Drop a pin", function()
-		if ns.Nav and ns.Nav.PinNext then ns.Nav.PinNext(true) end
-	end)
-	drop:SetSub("Then click the map where you want it")
+-- Sharing where you stand, in the map's menu.
+local function Here(root)
+	if not (Share and Share.Write) then return end
 	local here = Share.Write(root, Share.Here, "Share where I am with")
-	if not Share.Here() then
+	if here and not Share.Here() then
 		here:SetEnabled(false)
 		here:SetDetail("not on this map")
 	end
@@ -195,13 +189,15 @@ end
 if T.BarButton then
 	T:BarButton("share", {
 		art = Shy.Skin.GLYPH.pin, size = 14, order = 1,
-		tip = "Share a place",
-		text = "Send your pin, or where you are, to your group or a friend. They get it as a route they can accept.",
-		hints = { { "left", "Choose what to share" } },
+		-- (No hover: a pin is plain to anyone.)
 		lit = Lit,
-		click = function(self) UI.DropMenu(self, Write) end,
+		click = function(self)
+			if not (ns.Nav and ns.Nav.PinNext) then return end
+			self:SetOn(ns.Nav.PinNext(not ns.Nav.Pinning()) == true)
+		end,
 		made = function(made) button = made end,
 	})
+	T:BarButton("sharehere", { order = 3, menu = Here })
 end
 
 local events = CreateFrame("Frame")

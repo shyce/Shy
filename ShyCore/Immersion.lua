@@ -339,23 +339,25 @@ local function Shown(frame)
 	return not issecretvalue(shown) and shown == true
 end
 
-local windowOpen = false
-local function WindowShown(box)
-	if box.window and Shown(box) then windowOpen = true end
+-- On screen: shown, and so is everything it stands on.
+local function Visible(frame)
+	if type(frame) ~= "table" or not frame.IsVisible then return false end
+	local visible = frame:IsVisible()
+	return not issecretvalue(visible) and visible == true
 end
+
+-- The game's windows, and ours (Shy.HUD.AnyWindow says when one of ours is open).
 local function Windows()
 	for _, key in ipairs(PANELS) do
 		if GetUIPanel(key) then return true end
 	end
 	for _, name in ipairs(UISpecialFrames) do
-		if Shown(_G[name]) then return true end
+		if Visible(_G[name]) then return true end
 	end
 	for _, name in ipairs(WINDOWS) do
-		if Shown(_G[name]) then return true end
+		if Visible(_G[name]) then return true end
 	end
-	windowOpen = false
-	Shy.HUD.Each(WindowShown)
-	return windowOpen or StaticPopup_IsAnyDialogShown() or IsAnyBagOpen()
+	return Shy.HUD.AnyWindow() or StaticPopup_IsAnyDialogShown() or IsAnyBagOpen()
 end
 
 -- The cursor resting on a piece of the interface: you are reading it. The world and what stands in it

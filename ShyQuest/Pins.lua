@@ -337,7 +337,7 @@ local function Hints(pin)
 	if stop.kind == "errand" or stop.kind == "way" then return { { "right", "Point the way" } } end
 	if stop.party then return { first } end
 	if stop.kind == "guide" or stop.kind == "fly" then return { first, { "right", "Point the way" } } end
-	return { first, { "right", stop.chosen and "Let the route choose" or "Head here first" } }
+	return { first, { "right", stop.chosen and "Remove from my route" or "Go here next" } }
 end
 
 -- mini: a minimap pin. Only the world map draws the route to a hovered pin.
@@ -362,7 +362,9 @@ local function NewPin(parent, size, mini)
 	pin:SetScript("OnMouseUp", function(self, button)
 		if not self.stop then return end
 		if button == "LeftButton" then
-			Pick(self)
+			local on = Pick(self)
+			-- Kept with its light: the hover stays and says the whole of it, with what to do about it (CardHover.lua).
+			if ns.CardHover and ns.CardHover.KeepPin then ns.CardHover.KeepPin(self, on) end
 		elseif button == "RightButton" and not self.stop.party then
 			-- As Hints says: the arrow for a guide step, flight or errand; the route for a quest or zone.
 			local kind = self.stop.kind
@@ -636,11 +638,12 @@ local Pen, Begin, Finish, Segment = Maps.Pen, Maps.Begin, Maps.Finish, Maps.Segm
 --   loose: how many times too broad or too fine on screen the map's lines may be while a zoom moves, the
 --   pins alone following it (LayMap); settle: seconds a zoom is still before all is laid as it should be.
 --   budget: milliseconds of a frame spent laying legs; the rest are laid in the frames after (LayLegs).
+--   again: seconds before a leg not found within reach is asked again (Path).
 --   ahead: the legs that stand on the world map, the route's first with a line on it. (A leg is hundreds
 --   of pieces for the game to show at every opening and to draw at every frame: a long route's were most
 --   of both.)
 ns.LEGS = { reach = 6, near = 0.92, far = 0.62, wide = 3.6, fine = 2.4, later = 1.2, lit = 1.2, glow = 1.8, bend = 0.8, close = 30,
-	round = 8, arc = 0.2, loose = 2, settle = 0.15, budget = 4, ahead = 3, stub = 2, hair = 0.04,
+	round = 8, arc = 0.2, loose = 2, settle = 0.15, budget = 4, ahead = 3, stub = 2, hair = 0.04, again = 3,
 	-- (afar: on a continent's map a zone's ground is lit only while the zone is at least this share of the
 	-- window across: Near, Shade.)
 	afar = 0.45,
@@ -861,6 +864,10 @@ ns.LEGS.status = { n = 0 }
 
 -- The kept way from place a to place b ({ continent, north, west }), nil while unknown. Sets
 -- ways.waiting while one is worked out (SHY_TERRAIN lays the map again).
+-- The legs standing on the map ahead (the first LEGS.ahead of the route) are asked as the way led along, as the
+-- trail is (Shy.Way's `lead`): your route's next places are walked next, and a search everyone else's asking has
+-- worn out is begun anew for them rather than answered "far". A leg not found within reach is no leg without a
+-- way: it is kept as unknown for LEGS.again seconds and asked again then (Retry), the map laid again for it.
 function ns.LEGS.Path(a, b)
 	local LEGS, terrain = ns.LEGS, Shy.Way
 	if not (a.north and b.north and a.continent and a.continent == b.continent) then return nil end
@@ -870,11 +877,25 @@ function ns.LEGS.Path(a, b)
 	local key = ("%d:%d:%d>%d:%d"):format(a.continent, floor(a.north), floor(a.west), floor(b.north), floor(b.west))
 	local kept = ways[key]
 	local leg = LEGS.leg
+	if type(kept) == "number" then
+		if GetTime() < kept then
+			if leg then leg.state = "working" end
+			return nil
+		end
+		ways[key], kept = nil, nil
+	end
 	if kept == nil then
-		local way, state = terrain.AskWay(a.continent, a.north, a.west, b.north, b.west)
+		local lead = LEGS.status.n < LEGS.ahead or nil
+		local way, state = terrain.AskWay(a.continent, a.north, a.west, b.north, b.west, nil, nil, lead)
 		if state == "working" then
 			ways.waiting = true
 			if leg then leg.state = "working" end
+			return nil
+		end
+		if not way and state == "far" then
+			ways[key] = GetTime() + LEGS.again
+			if leg then leg.state = "working" end
+			LEGS.Retry()
 			return nil
 		end
 		if ways.n >= 80 then
@@ -895,6 +916,18 @@ function ns.LEGS.Path(a, b)
 		Maps.LineToMap(shownMap, a.continent, path.north, path.west, path.n, kept.x, kept.y)
 	end
 	return kept
+end
+
+-- A leg kept as unknown for now (Path): the map is laid again once LEGS.again seconds have passed, once however
+-- many legs wait, while it is open.
+function ns.LEGS.Retry()
+	local LEGS = ns.LEGS
+	if LEGS.retrying then return end
+	LEGS.retrying = true
+	C_Timer.After(LEGS.again, function()
+		LEGS.retrying = false
+		if layer and layer:IsVisible() and ns.ApplyPins then ns.ApplyPins(true) end
+	end)
 end
 
 -- Which of the first `count` points (LEGS.x, LEGS.y) a line keeps to stay within `tolerance` of them all
@@ -1486,6 +1519,8 @@ end
 -- Lets go of what is kept lit (a clicked pin, a search result, a quest of the map's log), on both maps.
 function ns.LetGo()
 	picked, found = nil, nil
+	-- (A pin's kept hover goes with its light.)
+	if ns.CardHover and ns.CardHover.LetGoPin then ns.CardHover.LetGoPin() end
 	ns.ApplyPins()
 end
 
@@ -1848,6 +1883,9 @@ local function Others(map, covered, marked, mini, within, pass)
 			local quest = D.Quest(action.id)
 			if action.failed or action.held or (quest and quest.classes) then skipped = false end
 		end
+		-- (Skipped while a guide was followed: gone, its marks with it. Route.lua, R.Skip.)
+		local kept = R.Unskipped(stop, "gone")
+		if kept then stop = kept else skipped = true end
 		if not skipped and not Given(stop.kind) then
 			list[#list + 1] = { stop = stop, x = stop.x / UNITS, y = stop.y / UNITS, kind = stop.kind }
 		end
@@ -2273,8 +2311,6 @@ local function LightMap()
 	else
 		Note(nil)
 	end
-	-- A kept pin with quests to take has their page beside it (Offer.lua).
-	if ns.Offer then ns.Offer.Follow(look.map) end
 	local asked = Asking(false)
 	if asked and asked ~= kept then
 		-- An objective of a quest of several, pointed at (its mark, its row on the card or in the key): its
@@ -2409,6 +2445,7 @@ local function LayMap(zooming)
 		pin:SetAlpha(stop.party and 0.75 or 1)
 		-- A quest stop at a vendor wears the buy sign (stop.mark).
 		pin:Set(kind == "goal" and stop.mark == "buy" and "buy" or kind, lit, count, ns.StopTone(stop))
+		pin:SetMood(ns.StopMood(stop))
 		pin:SetLetter(ns.StopLetter(stop, kind))
 		local px, py = x * width / scale, y * height / scale
 		if wide then
@@ -2718,7 +2755,7 @@ function ns.ShowOnMap(name, places, exact, ground)
 	if not best then return false end
 	found = { kind = "found", who = name, places = places, exact = exact, ground = ground, actions = {} }
 	picked = nil
-	if not InCombatLockdown() then OpenWorldMap(best.map) end
+	Shy.Maps.Open(best.map)
 	ns.ApplyPins()
 	return true
 end
@@ -3390,6 +3427,7 @@ local function DrawMini()
 			pin.shownAs, pin.alphaAs, pin.hold = nil, nil, nil
 			pin:SetScale(miniScale)
 			pin:Set(kind == "goal" and stop.mark == "buy" and "buy" or kind, lit, count, ns.StopTone(stop))
+			pin:SetMood(ns.StopMood(stop))
 			pin:SetLetter(ns.StopLetter(stop, kind))
 			pin.picked = Holds(stop, picked)
 			pin:SetPicked(pin.picked)
@@ -3459,7 +3497,7 @@ local function DrawMini()
 end
 ChooseMini = DrawMini
 
--- A click on a pin toggles its lights, on both maps.
+-- A click on a pin toggles its lights, on both maps. Returns whether it is lit now.
 function Pick(pin)
 	local off = Holds(pin.stop, picked)
 	picked = not off and pin.stop.key or nil
@@ -3470,16 +3508,11 @@ function Pick(pin)
 	if pin.minimap then
 		DrawMini()
 		LayMap()
-		-- With quests to take, the map opens on it: their page stands there (Offer.lua), by the lit ground.
-		-- (Never in a fight: the game's map is not ours to open then, and the light alone is kept.)
-		local stop = pin.stop
-		if picked and stop and stop.map and ns.Offer and #ns.Offer.Quests(stop) > 0 and not InCombatLockdown() then
-			OpenWorldMap(stop.map)
-		end
 	else
 		LayMap()
 		DrawMini()
 	end
+	return picked ~= nil
 end
 
 -- The mouse entered a pin (mini: on the minimap), or left it (pin nil).
@@ -3542,6 +3575,8 @@ end
 -- which of its objectives are done. Givers, turn-ins and objective marks come from these, not the route.
 look.Read = function()
 	local out = { L.version }
+	-- (A quest skipped, or included again, is drawn so: Route.lua, R.Skip.)
+	for id, how in pairs(type(ns.char and ns.char.aside) == "table" and ns.char.aside or {}) do out[#out + 1] = id .. how end
 	for _, entry in ipairs(L.order) do
 		out[#out + 1] = entry.id .. (entry.complete and "c" or entry.failed and "f" or "o")
 		for _, goal in ipairs(entry.goals or {}) do out[#out + 1] = goal.finished and "1" or "0" end
@@ -3575,8 +3610,7 @@ function ns.SetupPins()
 	if maps and maps.BarButton and ns.Find then
 		maps:BarButton("find", {
 			art = "Interface\\Common\\UI-Searchbox-Icon", size = 11,
-			tip = "Find", text = "Search for a quest, creature, object or item, or the nearest innkeeper, trainer or vendor.",
-			hints = { { "left", "This zone's quests" } },
+			-- (No hover: a lens is plain to anyone.)
 			click = function()
 				local map = Shy.Maps.ShownMap()
 				local info = map and C_Map.GetMapInfo(map)

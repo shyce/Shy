@@ -105,35 +105,57 @@ function ns.CreateOptions()
 			desc = "How a drawn map shows the places you haven't been yet." }), panel, LEFT, -390)
 		At(group:Checkbox(panel, "Reopen where you left it", Get("remember"), Set("remember"), { enabled = On,
 			desc = "The map opens on the place and zoom you left it at, until you move to another zone." }), panel, LEFT, -446)
-		At(group:Checkbox(panel, "Follow me", Get("follow"), Set("follow"), { enabled = On,
-			desc = "Keeps you in view as you move and looks ahead the way you're going; drag it away and it offers to stay put. Also in the map's corner." }), panel, LEFT, -472)
+		At(group:Dropdown(panel, "Following you", {
+			{ value = "off", text = "Off" },
+			{ value = "me", text = "You in the middle" },
+			{ value = "smart", text = "Smart" },
+		}, function() return not T.db.follow and "off" or T.db.followSmart and "smart" or "me" end, function(v)
+			T.db.follow, T.db.followSmart = v ~= "off", v == "smart"
+		end, { width = COL, enabled = On,
+			desc = "Smart keeps you in sight with a little of your way ahead. Drag the map away and it offers to stay put." }), panel, LEFT, -472)
 		local forget = UI.Button(panel, "Forget saved views", 180, function()
 			wipe(T.db.views)
 			wipe(T.db.last)
 		end)
-		At(forget, panel, LEFT, -506)
+		At(forget, panel, LEFT, -528)
 
-		At(UI.Header(panel, "Overlay", COL), panel, LEFT, -552)
+		At(UI.Header(panel, "Window", COL), panel, LEFT, -574)
+		At(group:Checkbox(panel, "A window of its own", Get("window"), Set("window"), { enabled = On,
+			desc = "The map key opens the map in a window you size from any edge. Off, it opens the game's." }), panel, LEFT, -602)
+		local function Percent(v) return v .. "%" end
+		-- (Taken once the knob rests: the window scaled at every step would jump about under it.)
+		local scale = math.floor((T.db.windowScale or 1) * 100 + 0.5)
+		At(group:Slider(panel, "Scale", 60, 150, 5,
+			function() return scale end,
+			function(v) scale = v end,
+			{ width = COL, enabled = On, format = Percent,
+				settle = function(v)
+					scale = v
+					T.db.windowScale = v / 100
+					ns.Apply()
+				end,
+				desc = "How large everything in the map's window is drawn. Its size is yours to drag." }), panel, LEFT, -634)
+
+		At(UI.Header(panel, "Overlay", COL), panel, LEFT, -694)
 		At(group:Checkbox(panel, "Map over the screen", Get("overlay"), Set("overlay"), { enabled = On,
 			desc = "While the map is closed, it lies faintly over the whole game and clicks go through it; Key Bindings has a key to switch it." }),
-			panel, LEFT, -580)
+			panel, LEFT, -722)
 		local function Laid() return T.db.on and T.db.overlay end
-		local function Percent(v) return v .. "%" end
 		At(group:Slider(panel, "Opacity by day", 5, 70, 1,
 			function() return math.floor(T.db.overlayOpacity * 100 + 0.5) end,
 			function(v) T.db.overlayOpacity = v / 100 end,
 			{ width = COL, enabled = Laid, format = Percent,
-				desc = "How solid the map is over the game in daylight; lower lets more of the game show through." }), panel, LEFT, -612)
+				desc = "How solid the map is over the game in daylight; lower lets more of the game show through." }), panel, LEFT, -754)
 		At(group:Slider(panel, "Opacity at night", 5, 70, 1,
 			function() return math.floor(T.db.overlayNight * 100 + 0.5) end,
 			function(v) T.db.overlayNight = v / 100 end,
 			{ width = COL, enabled = Laid, format = Percent,
-				desc = "The dark makes the map stand out, so it can be fainter at night; dawn and dusk blend the two." }), panel, LEFT, -660)
+				desc = "The dark makes the map stand out, so it can be fainter at night; dawn and dusk blend the two." }), panel, LEFT, -802)
 		At(group:Slider(panel, "Trail and pins", 20, 100, 1,
 			function() return math.floor(T.db.overlayMarks * 100 + 0.5) end,
 			function(v) T.db.overlayMarks = v / 100 end,
 			{ width = COL, enabled = Laid, format = Percent,
-				desc = "How solid you, your trail and the pins stay on the faint map." }), panel, LEFT, -708)
+				desc = "How solid you, your trail and the pins stay on the faint map." }), panel, LEFT, -850)
 
 		At(UI.Header(panel, "On the map", COL), panel, RIGHT, -306)
 		local y = -338
@@ -150,7 +172,7 @@ function ns.CreateOptions()
 			links = "Doors and paths into other maps; click one to open that map.",
 			friends = "Friends who use ShyMaps, even outside your group. Friends off the map wait at its edge, on the side they're on. Battle.net friends too.",
 			guild = "Your guild: those who share where they are as a dot, the rest by the zone they're in.",
-			notesOn = "Notes you put on the map, and what you drew on it. The notes button on the map's bar adds them.",
+			notesOn = "Notes you put on the map, and what you drew on it. Notes, in the map's menu, adds them.",
 			coords = "Your coordinates, and the mouse's while it's on the map.",
 		}
 		for _, item in ipairs(ns.SWITCHES) do

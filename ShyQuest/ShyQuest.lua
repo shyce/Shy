@@ -43,6 +43,7 @@ local T = Shy:NewAddon(ADDON, {
 		minimapRim = true,             -- a lit area's outline carries on along the minimap's edge (Ground.lua)
 		logMarks = true,               -- the map's quest log wears the marks and lights the map (LogRows.lua)
 		logSort = true,                -- ... and lists each zone's quests in the route's order
+		mapQuests = true,              -- your quests in a window docked beside ShyMaps' own map window (LogRows.lua, T:QuestList)
 		services = {},                 -- town services kept on the world map, by kind: inn, flight ... (Pins.lua; set in the finder)
 		pinSize = 1,
 		doors = {},                    -- dungeon entrances seen, by instance map: { map, x, y } (ns.NoteDoor)
@@ -744,18 +745,15 @@ function T:ArrowSample(parent, widest)
 end
 
 -- T:Go(map, x, y, title [, shared])   lead somewhere now (x, y: shares of the map): the place goes first in
---                          the route under its name, the game's waypoint stands on it, and the arrow points
---                          the way. shared: { by = name, class = token } for a place someone suggested: the
+--                          the route under its name, and the arrow points the way. (No game pin is set: it would
+--                          stand over what is marked there and take its clicks.) shared: { by = name, class = token } for a place someone suggested: the
 --                          route says whose it is and its trail wears their class's color.
 --                          False where the game takes no waypoint on that map.
 local MAP_SHARE = 10000     -- a route's places are x, y in ten-thousandths of a map
 function T:Go(map, x, y, title, shared)
 	local plan = ns.Plan
 	if not (plan and ns.char and map and C_Map.CanSetUserWaypointOnMap(map)) then return false end
-	-- (The game's waypoint set to point somewhere is no stop of the route: Plan.lua.)
-	plan.OwnWaypoint(map, x * MAP_SHARE, y * MAP_SHARE)
-	Shy.Waypoint.Set(map, x, y, true)
-	plan.Go({ map = map, x = x * MAP_SHARE, y = y * MAP_SHARE, title = title, from = "map",
+	plan.Go({ map = map, x = x * MAP_SHARE, y = y * MAP_SHARE, title = title, from = "way",
 		by = shared and shared.by, class = shared and shared.class })
 	return true
 end
@@ -790,9 +788,7 @@ function T:FarmAt(item, map, x, y, who, npc)
 	plan.EndFarm()
 	-- (What you farm is what the maps light from now: a search result kept there before lets go.)
 	if ns.LetGo then ns.LetGo() end
-	plan.OwnWaypoint(map, x * MAP_SHARE, y * MAP_SHARE)
-	Shy.Waypoint.Set(map, x, y, true)
-	plan.Go({ map = map, x = x * MAP_SHARE, y = y * MAP_SHARE, title = title, from = "map", farm = ns.Route.FarmKey(item, npc) })
+	plan.Go({ map = map, x = x * MAP_SHARE, y = y * MAP_SHARE, title = title, from = "way", farm = ns.Route.FarmKey(item, npc) })
 	return true
 end
 

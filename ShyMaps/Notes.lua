@@ -3,12 +3,12 @@
 -- A note is a place with a few words, in one of the theme's inks (Shy.Theme.NOTE): the family's mark with the
 -- note sign where it is, on every map that shows that ground, its words under it. Its hover says the words,
 -- where it is and how far; a click leads you there (the way ShyQuest leads, else the game's pin and arrow); a
--- right click edits its words or ink, shares it, or takes it away. The bar's notes button puts one down with
+-- right click edits its words or ink, shares it, or takes it away. Notes, in the map's menu, puts one down with
 -- your next click on the map or where you stand, lists every note (a click shows it), and takes up the pen.
 --
 -- The pen draws on the map in a note's ink, with a tool: the pen's own line where the mouse goes, a straight line,
--- an arrow, a ring, a raid mark, or the eraser; the right button pans the map, the wheel zooms; the bar's button
--- (lit while the pen is up), or the "Done drawing" plate over the map, puts it down. A stroke is kept in the world's
+-- an arrow, a ring, a raid mark, or the eraser; the right button pans the map, the wheel zooms; the map's menu, or
+-- the "Done drawing" plate over the map, puts it down. A stroke is kept in the world's
 -- yards, so it stands on every map of that ground; the last can be taken back, or every stroke on the map shown.
 -- Drawn for a note (its menu), it goes when the note does. Notes travel as codes to paste anywhere (Notes.Code,
 -- Notes.FromCode); a pin your group shares is kept as one when that is asked for.
@@ -630,7 +630,8 @@ local function BarMenu(root)
 		root:CreateButton("Copy all as a code", function() UI.ShowCopyBox("Your notes", Notes.Code(list)) end)
 	end
 	root:CreateButton("Add from a code", function()
-		UI.WriteField(barButton, "", function(text)
+		-- (By the map's window: the notes are in its menu, with no button of their own on the bar.)
+		UI.WriteField(barButton or ns.View.Window(), "", function(text)
 			if not text then return end
 			local added = Notes.FromCode(text)
 			T:Print(added == 1 and "1 note added." or ("%d notes added."):format(added))
@@ -673,6 +674,8 @@ if T.BarButton then
 		hints = { { "left", "Add, find or draw" } },
 		lit = function() return Notes.Pen() end,
 		click = function(self) UI.DropMenu(self, BarMenu) end,
+		-- (In the map's menu, off the bar: its own rows under one of its own.)
+		menu = function(root) BarMenu(root:CreateButton("Notes")) end,
 		made = function(made)
 			barButton = made
 			Shy.Hover.Glyph(made.glyph, "note", 14)

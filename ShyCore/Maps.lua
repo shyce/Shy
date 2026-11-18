@@ -41,6 +41,8 @@
 --   Shy.Maps.OnMini(view, north, west) -> x, y            -- a place on the minimap, as shares of its range
 --   Shy.Maps.MapLayer(above) -> frame                     -- a frame over the world map's canvas, at the level
 --        of the game's quest pins (+ above)
+--   Shy.Maps.Open(map) -> opened                          -- the map you use opened on `map`: ShyMaps' window of its own
+--        while that is your map (its :ShowMap), else the game's (not in a fight: the game's map is not ours to open)
 --   Shy.Maps.Hush(who, on)                                -- every addon's layers out of sight while any `who` hushes
 --        them (ShyMaps inside an instance), back as the last lets go
 --   Shy.Maps.MapScale() -> unit, grow                     -- one screen pixel in canvas units, and the growth
@@ -1185,6 +1187,14 @@ end
 
 function Maps.ShownMap()
 	return Maps.Canvas():GetMapID()
+end
+
+function Maps.Open(map)
+	local own = Shy.addons.Maps
+	if own and own.ShowMap and own:ShowMap(map) then return true end
+	if InCombatLockdown() then return false end
+	OpenWorldMap(map)
+	return true
 end
 
 -- How far past the shown map's edges what draws the map may show, in shares of the map: 0 on the game's

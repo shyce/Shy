@@ -9,6 +9,9 @@
 local ADDON, ns = ...
 local T = ns.T
 
+-- Without ShyKeys there is nothing to lay keys out: this class's keys, macros and buttons are left as they are.
+if not Shy.Keys then return end
+
 local K = {}
 
 -- The form to stay in (OPTS.keep), on 1 for a build that takes it.

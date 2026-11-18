@@ -48,7 +48,6 @@ local T = Shy:NewAddon(ADDON, {
 		auction = true,       -- read prices at the auction house (only when you open it)
 		autoCheck = false,    -- check what wants a price as soon as the auction house opens
 		tell = true,          -- say in chat what a lookup at the auction house found
-		loot = true,          -- looting a favorite with no session starts farming it (not one you ended)
 		idle = 5,             -- minutes with nothing done before the clock stops (0: never)
 		rows = 6,             -- loot rows it is planned at
 		sound = true,         -- a sound when you have what you wanted
@@ -115,8 +114,6 @@ end
 function T:FarmAnything()
 	ns.Session.Target(nil, nil)
 	ns.Session.Clock()
-	local s = ns.Session.Current()
-	if s then s.hidden = nil end
 	if ns.Card and ns.Card.Paint then ns.Card.Paint() end
 end
 
@@ -183,10 +180,6 @@ function T:OnLoad()
 	ns.char = ShyFarmCharDB or {}
 	ShyFarmCharDB = ns.char
 	ns.char.history = ns.char.history or {}
-	-- What you ended farming by hand: { [item] = true } (looting it starts nothing until you farm it again).
-	local ended = ns.char.ended
-	ns.char.ended = type(ended) == "table" and ended or {}
-	if type(ended) == "number" then ns.char.ended[ended] = true end
 	self:RegisterOptions(ns.CreateOptions())
 end
 

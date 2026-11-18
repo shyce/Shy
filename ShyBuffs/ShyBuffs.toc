@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffBuffs|r
 ## Notes: Buffs and debuffs where you're looking in a fight |cff888888/shybuffs|r
 ## Author: Shyce Cream
-## Version: 5.1.6
-## X-Date: 2026-11-17
+## Version: 5.1.7
+## X-Date: 2026-11-18
 ## IconTexture: Interface\AddOns\ShyBuffs\Media\ShyBuffsMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyFrames, ShySkin, ShyDock

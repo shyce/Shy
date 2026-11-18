@@ -9,8 +9,8 @@
 -- Only tracked quests get a row (Tracker.lua keeps the watch list to where you are); the rest of the
 -- log folds into one line a zone.
 --
--- With a guide the header has a pager: back, "37 / 212", skip. The chevron (ns.char.guideFull)
--- opens the whole guide: a progress bar and a scrolling step list from GuideWindow.lua's
+-- With a guide the header has a pager: back, "37 / 212", skip. The count is a switch (ns.char.guideFull):
+-- it opens the whole guide: a progress bar and a scrolling step list from GuideWindow.lua's
 -- ns.GuideList; this file lays the card out and asks it for heights.
 -- With ShyXP the foot shows level progress (XP.lua) and the card stays up with no steps.
 
@@ -43,9 +43,10 @@ local BAR, BAR_TALL = 34, 3          -- a count's bar: its width, and how thick 
 local RIGHT = { size = 11, worth = 9 }   -- what stands at a line's right: a count's size, and what a hand-in pays (quieter)
 -- Row sizes: a notice or a stop with no lines (row); a zone's line, its name over what is in it (height), where its
 -- second line stands (sub), and what an open zone keeps under its last quest (gap).
--- switch: Zone | Guide | Dungeon. runLines: the lines of any stop in Dungeon mode, the whole of it, nothing cut to
+-- steps: how far the step count's plate (the whole guide's switch) reaches past its digits. switch: Zone | Guide | Dungeon. runLines: the lines of any stop in Dungeon mode, the whole of it, nothing cut to
 -- "and more" (kept here, not a local of its own: the card's maker is at the game's 60 upvalues).
-local ZONE = { row = 22, height = 32, sub = 19, gap = 4, controls = 28, switch = 150, runLines = 24 }
+local MINE = { from = 0.20, to = 0.03 }   -- the wash on a stop you put on your route: its color's share at the rail, and at the right
+local ZONE = { steps = 3, row = 22, height = 32, sub = 19, gap = 4, controls = 28, switch = 150, runLines = 24 }
 local PLATE, PLATE_AIR = 34, 5      -- the countdown's plate, and the room kept above and below it
 local PLATE_IN = 7                   -- the plate's words from its right edge
 local CLOCK_ROOM = 34                -- what the plate keeps for its clock at the least
@@ -683,6 +684,8 @@ local function Lines(stop, whole, here, rooms)
 			end
 		end
 		if broken and whole then out[#out + 1] = { text = "Click the failed quest to abandon it", color = C.alert } end
+		-- A stop of your route taken in passing says what it is on the way to, or right by, in your color.
+		if stop.along then out[#out + 1] = { text = stop.along, color = C.hot } end
 		if where then out[#out + 1] = { text = where, color = C.dim } end
 		if whole and stop.among and not here then out[#out + 1] = { text = R.Found(stop), color = C.good } end
 	end
@@ -1006,6 +1009,11 @@ local function CreateRow(card, lead)
 	row.glow:SetAllPoints()
 	UI.Paint(row.glow, C.hot, 0.07)
 	row.glow:Hide()
+	-- A stop you put on your route yourself: a wash of your color from the rail, fading out (Node.Show).
+	row.mine = row:CreateTexture(nil, "BACKGROUND", nil, -1)
+	row.mine:SetAllPoints()
+	row.mine:SetColorTexture(1, 1, 1, 1)
+	row.mine:Hide()
 	row.rail = row:CreateTexture(nil, "BACKGROUND", nil, 1)
 	row.rail:SetWidth(2)
 	UI.Paint(row.rail, C.border, 1)
@@ -1045,8 +1053,9 @@ function Node.Show(row, stop, place, bare)
 	row.tagged = sign
 	-- (The same node as last time: left as it stands.)
 	local lit = number and (kind == "zone" and stop.chosen or (place and place.lit)) or stop.chosen
+	Node.Mine(row, stop)
 	local said = ("%s|%s|%s|%s|%s|%s|%s|%d"):format(kind, tostring(number), tostring(sign), tostring(tone), tostring(bare),
-		tostring(lit), tostring(not number and ns.StopTone(stop)), written.epoch)
+		tostring(lit), tostring(not number and ns.StopTone(stop)) .. tostring(ns.StopMood(stop)), written.epoch)
 	if row.nodeSaid == said then return end
 	row.nodeSaid = said
 	row.pin:SetShown(number ~= nil)
@@ -1057,6 +1066,21 @@ function Node.Show(row, stop, place, bare)
 		if sign then row.tag:Set(sign, false, nil, tone) end
 	else
 		row.mark:Set(kind, stop.chosen, nil, ns.StopTone(stop))
+		row.mark:SetMood(ns.StopMood(stop))
+	end
+end
+
+-- A stop you put on your route yourself (a place of it, or a quest you picked): the row washed in your color
+-- (the theme's accent) from the rail, fading out to the right.
+function Node.Mine(row, stop)
+	local mine = stop ~= nil and (stop.picked ~= nil or stop.kind == "way")
+	local said = mine and written.epoch or false
+	if row.mineSaid == said then return end
+	row.mineSaid = said
+	row.mine:SetShown(mine)
+	if mine then
+		local r, g, b = Shy.Theme.Accent()
+		row.mine:SetGradient("HORIZONTAL", CreateColor(r, g, b, MINE.from), CreateColor(r, g, b, MINE.to))
 	end
 end
 
@@ -1105,8 +1129,8 @@ function ns.CreateCard(parent, onResize)
 	card.opened = {}      -- zones unfolded, by Fold's key
 
 	-- The title bar, a click across all of it: it folds the quests away, down to this bar, and opens them again, as
-	-- every piece folds (UI.FoldHead: the title, the caret after it). The tools in the bar (the pager, the lens, the
-	-- notes, the whole guide's chevron) stand over it and keep their own clicks; a drag is still a drag, and the
+	-- every piece folds (UI.FoldHead: the title, the caret after it). The tools in the bar (the pager and its step
+	-- count, the lens, the notes) stand over it and keep their own clicks; a drag is still a drag, and the
 	-- right button still the menu (SetupCard manages it). In ShyDock's deck its header does the same, the same way.
 	-- Only the on-screen card folds (Lay); docked, the bar is put away and the deck's header stands for it.
 	card.titlebar = CreateFrame("Button", nil, card)
@@ -1195,26 +1219,27 @@ function ns.CreateCard(parent, onResize)
 		return can and "Goes back to the last step you haven't finished and stays there until you do it or skip it."
 			or "No earlier step."
 	end, function(_, glyph) glyph:SetPoint("CENTER", 2, 0) end)   -- both glyphs lean toward the count
-	card.back:SetPoint("RIGHT", card.count, "LEFT", -1, 0)
 
-	-- The chevron left of the name toggles the whole guide. Only the on-screen card has the list,
-	-- so the preview never shows it (Fill).
-	card.mode = StepButton(0, function() ns.ToggleGuideWindow() end,
-		function() return card.full and "Next steps only" or "Whole guide" end,
+	-- The step count between them is the whole guide's switch: a click lists every step of your guide with your
+	-- progress, another only the steps ahead; its plate stays lit while every step is listed. The count stands on
+	-- it, so the plate is the digits' own. (Only the on-screen card has the list, so the preview's count is words
+	-- alone: Head.)
+	card.steps = StepButton(0, function() ns.ToggleGuideWindow() end,
+		function() return card.full and "The steps ahead" or "Every step" end,
 		function()
-			return card.full and "Shows only the current step and what is nearby."
-				or "Shows every step of your guide with your progress. Click a step for its options."
-		end)
-	UI.OnHead(card.mode, "LEFT", card, "LEFT", PAD - 4)
-	-- Open, the chevron turns over and its plate stays lit.
-	function card.mode:Turn(full)
+			return card.full and "Back to the steps ahead of you." or "Every step of your guide, with your progress."
+		end, function(_, glyph) glyph:Hide() end)
+	card.count:SetParent(card.steps)
+	card.steps:SetPoint("LEFT", card.count, "LEFT", -ZONE.steps, 0)
+	card.steps:SetPoint("RIGHT", card.count, "RIGHT", ZONE.steps, 0)
+	card.back:SetPoint("RIGHT", card.steps, "LEFT", -1, 0)
+	function card.steps:Turn(full)
 		full = full and true or false
 		if self.full == full then return end
 		self.full = full
-		self.glyph:SetRotation(full and math.pi or 0)
 		self:Lit(full)
 	end
-	card.mode:Turn(false)
+	card.steps:Turn(false)
 
 	-- The lens before the pager opens the finder (Find.lua): the search box's own picture, lit while it is open.
 	card.find = StepButton(0, function()
@@ -1768,12 +1793,12 @@ function ns.CreateCard(parent, onResize)
 
 	local function Head(self, guided, total, stop)
 		local column = self.column
-		-- Steps and the whole guide are for following one: in zone mode the header has neither. Its chevron stands
-		-- at the header's left, the title after it.
-		local mode = self.list ~= nil and not column and Following() and not G.current.run
-		self.mode:SetShown(mode)
-		self.fold:SetLead(mode and PAGER or 0)
-		self.mode:Turn(self.full)
+		-- Steps and the whole guide are for following one: in zone mode the header has neither. The step count is
+		-- the whole guide's switch where there is a list to show (not the preview's, nor a dungeon run's).
+		local mode = self.list ~= nil and Following() and not G.current.run
+		self.steps:SetShown(guided)
+		self.steps:EnableMouse(mode)
+		self.steps:Turn(mode and self.full)
 		if guided then
 			-- Counted among this character's steps.
 			self.count:SetText(("%d / %d"):format(G.Number(self.guideStop.view.step.index, self.guideStop.view.guide)))
@@ -1786,7 +1811,7 @@ function ns.CreateCard(parent, onResize)
 		local host = column or self
 		UI.OnHead(self.skip, "RIGHT", host, "RIGHT", -PAD + 4)
 		if guided then
-			self.count:SetPoint("RIGHT", self.skip, "LEFT", -1, 0)
+			self.count:SetPoint("RIGHT", self.skip, "LEFT", -1 - ZONE.steps, 0)
 			self.back:Able(G.CanBack())
 			self.skip:Able(true)
 		else
@@ -1837,7 +1862,7 @@ function ns.CreateCard(parent, onResize)
 		elseif stop and stop.kind == "guide" then
 			return ((stop.catch and "CATCHING UP" or "GUIDE") .. "  \194\183  %s"):format(stop.view.guide.name:upper())
 		elseif stop then
-			return stop.kind == "way" and stop.caption or stop.kind == "errand" and (stop.caption or "ON YOUR WAY")
+			return (stop.kind == "way" or stop.picked) and stop.caption or stop.kind == "errand" and (stop.caption or "ON YOUR WAY")
 				or stop.chosen and "HEADING TO" or stop.kind == "zone" and "WHERE NEXT" or stop.kind == "fly" and (stop.heading or "FLY THERE")
 				or stop.clock and "ON A TIMER" or stop.detour == "failed" and "FAILED QUEST"
 				or stop.detour == "grind" and "BETTER THAN GRINDING" or stop.detour == "class" and "FOR YOUR CLASS"
@@ -2341,6 +2366,7 @@ function ns.CreateCard(parent, onResize)
 		UI.Ink(self.caption, hereColor or C.dim)
 		self.caption:SetShown(stop ~= nil)
 		self.pick:SetShown(self.full and G.current ~= nil and stop ~= nil and not stop.urgent)
+		Node.Mine(first, stop)
 		if stop then
 			first.stop = stop
 			-- What it is for: in the dial where nothing points, over the dial's lower right while the
@@ -2781,8 +2807,14 @@ end
 
 -- A quest in the log: its page, tracking, sharing, help with it, abandoning. Written into `root`: flat
 -- under a row's own heading when the row stands for the one quest, or into the quest's own submenu.
-local function QuestActions(root, id, title, stop)
-	Row(root, "Open in the quest log", "log", function() QuestMapFrame_OpenToQuestDetails(id) end)
+-- Its page: in the Quests window beside ShyMaps' own map while that is the map you use (LogRows.lua, T:QuestPage),
+-- else the game's map at its log. page: the menu is the Quests window's own, its page a click away already.
+local function OpenQuest(id)
+	if not (T.QuestPage and T:QuestPage(id)) then QuestMapFrame_OpenToQuestDetails(id) end
+end
+ns.OpenQuest = OpenQuest
+local function QuestActions(root, id, title, stop, page)
+	if not page then Row(root, "Open quest page", "log", function() OpenQuest(id) end) end
 	if C_QuestLog.GetQuestWatchType(id) ~= nil then
 		Row(root, "Stop tracking", "track", function() C_QuestLog.RemoveQuestWatch(id) end)
 	else
@@ -2801,6 +2833,8 @@ local function QuestActions(root, id, title, stop)
 	root:CreateDivider()
 	Row(root, "Abandon", "abandon", function() QuestMapQuestOptions_AbandonQuest(id) end)
 end
+
+ns.QuestActions = QuestActions
 
 local function QuestMenu(root, id, title, stop)
 	local quest = Row(root, title, "log")
@@ -2842,7 +2876,7 @@ local function QuestMenus(root, stop, heading)
 		elseif L.Has(action.id) then
 			entry = QuestMenu(root, action.id, action.title, stop)
 		elseif stop.kind ~= "guide" then
-			entry = Row(root, "Open " .. action.title, "log", function() QuestMapFrame_OpenToQuestDetails(action.id) end)
+			entry = Row(root, "Open " .. action.title, "log", function() OpenQuest(action.id) end)
 		end
 		if entry and twice[action.title] then
 			local quest = D.Quest(action.id)
@@ -2951,7 +2985,7 @@ local function StopMenu(root, stop)
 		if stop.map then Row(root, "Point the way", "point", function() PointTheWay(stop) end) end
 		if stop.menu then stop.menu(root) end
 	else
-		Row(root, stop.chosen and "Let the route choose" or "Head here first", stop.chosen and "route" or "first", function() R.Go(stop) end)
+		Row(root, stop.chosen and "Remove from my route" or "Go here next", stop.chosen and "hide" or "route", function() R.Go(stop) end)
 		if stop.map then Row(root, "Point the way", "point", function() PointTheWay(stop) end) end
 		QuestMenus(root, stop, heading)
 	end
@@ -3325,7 +3359,7 @@ function ns.SetupCard()
 	for _, link in pairs(card.first.links) do card.manage(link) end
 	card.manage(card.back)
 	card.manage(card.skip)
-	card.manage(card.mode)
+	card.manage(card.steps)
 	card.manage(card.find)
 	card.manage(card.pick)
 	card.manage(card.first.way)

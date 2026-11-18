@@ -500,7 +500,7 @@ function Tips.ShowStop(owner, stop, side, hints, mini)
 		elseif stop.kind == "errand" then
 			hints = { { "left", stop.hint or "Point the way" } }
 		else
-			hints = { { "left", stop.chosen and "Let the route choose" or "Head here first" } }
+			hints = { { "left", stop.chosen and "Remove from my route" or "Go here next" } }
 		end
 	end
 	-- CardHover.lua may not be loaded: a file new to the TOC needs a client restart. A party member's

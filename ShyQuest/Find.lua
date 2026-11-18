@@ -451,7 +451,7 @@ local function Show(result)
 		local map = result.place.points[1].map
 		local maps = Shy.addons.Maps
 		if maps and maps.IsOn and maps:IsOn() then maps:Open(map) end
-		if not InCombatLockdown() then OpenWorldMap(map) end
+		Shy.Maps.Open(map)
 		return
 	end
 	if #result.points == 0 then
@@ -472,21 +472,20 @@ local function Place(result)
 	return { map = nearest.map, x = nearest.x, y = nearest.y, title = result.name, where = result.detail, mark = result.mark, from = "find" }
 end
 
--- Puts a result on your route: before its `at`th stop (else at its end), or `now` first, leading at once.
+-- Puts a result on your route: on top, where you go next (Plan.lua's stack), or before its `at`th stop.
 -- The route opens to show it.
-local function Add(result, at, now)
+local function Add(result, at)
 	local place = Place(result)
 	if not place then return end
 	routeShut = false
-	if now then ns.Plan.Go(place) else ns.Plan.Add(place, at) end
+	ns.Plan.Add(place, at)
 end
 
--- A result's menu: go there now, or add it to your route (at its end or before one of its stops).
+-- A result's menu: go there next (on top of your route), or put it before one of its stops.
 local function Route(owner, result)
 	Shy.UI.DropMenu(owner, function(root)
 		root:CreateTitle(result.name)
-		root:CreateButton("Go there now", function() Add(result, nil, true) end)
-		root:CreateButton("Add to my route", function() Add(result) end)
+		root:CreateButton("Go here next", function() Add(result) end)
 		local stops = ns.Plan.List()
 		if #stops > 0 then
 			local before = root:CreateButton("Add before")
@@ -504,7 +503,7 @@ end
 
 -- (A place can go to someone as a route of theirs only while ShyWay is on: ns.ShareMenu.)
 local SHARES = not Shy.Way.missing
-local HINTS = { { "left", "See it on the map" }, { "right", SHARES and "Go there, add to your route or share it" or "Go there, or add to your route" } }
+local HINTS = { { "left", "See it on the map" }, { "right", SHARES and "Go here next, or share it" or "Go here next" } }
 
 local function Tip(row)
 	local result = row.result
@@ -740,7 +739,7 @@ local function Row(i)
 	row.add:SetScript("OnClick", function(self) Add(self:GetParent().result) end)
 	row.add:SetScript("OnEnter", function(self)
 		UI.Tint(self.glyph, C.text)
-		UI.Tip(self, "Add to my route", nil, { side = "CURSOR" })
+		UI.Tip(self, "Go here next", nil, { side = "CURSOR" })
 	end)
 	row.add:SetScript("OnLeave", function(self)
 		UI.Tint(self.glyph, C.hot)
@@ -953,7 +952,7 @@ local function Minutes(seconds)
 	return ("%d min"):format(math.floor(seconds / 60 + 0.5))
 end
 
--- The route's heading: its name, how many stops and how long, the quickest-order switch and Clear. A
+-- The route's heading: its name, how many stops and how long, the newest-first switch and Clear. A
 -- click on it (not on a button) folds the stops away or opens them.
 local function RouteHead()
 	if routeHead then return routeHead end
@@ -971,8 +970,8 @@ local function RouteHead()
 	head.clear = UI.Button(head, "Clear", 50, function() ns.Plan.Clear() end)
 	head.clear:SetHeight(20)
 	head.clear:SetPoint("RIGHT", -2, 0)
-	head.quick = UI.Checkbox(head, "Quickest order", function() return ns.Plan.Quickest() end, function(on) ns.Plan.Quickest(on) end,
-		{ desc = "Puts your stops in the quickest order. Off, they stay the way you put them." })
+	head.quick = UI.Checkbox(head, "Newest first", function() return ns.Plan.Auto() end, function(on) ns.Plan.Auto(on) end,
+		{ desc = "Takes you to what you added last, and to stops on the way as you pass them. Off, they stay the way you put them." })
 	head.quick:SetPoint("RIGHT", head.clear, "LEFT", -10, 0)
 	head:EnableMouse(true)
 	head:SetScript("OnEnter", function(self)
@@ -1415,7 +1414,7 @@ FarmMenu = function(row, result)
 		end
 		root:CreateDivider()
 		root:CreateButton("Show on the map", function() Show(result) end)
-		root:CreateButton("Add to my route", function() Add(result) end)
+		root:CreateButton("Go here next", function() Add(result) end)
 	end)
 end
 

@@ -144,7 +144,7 @@ function Scan.Init()
 	Scan.All()
 end
 
-ns.Command("list", "saved characters, their gold and bags", function()
+ns.T:Command("list", "your characters, their gold and their bags", function()
 	local UI = Shy.UI
 	ns.T:Print("saved characters:")
 	for _, entry in ipairs(Store.List()) do

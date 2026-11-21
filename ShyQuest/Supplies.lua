@@ -426,11 +426,20 @@ local function Best(kind, level)
 	return most
 end
 
-local function Budget()
-	local money = GetMoney()
+-- The gold for supplies, and what is kept back for the trainer. What the trainer asks is a price weighed.
+local function Budget(weighs)
+	local money = Shy.Money()
 	local due = ns.Train and ns.Train.Waiting()
-	local kept = due and due.cost and due.cost <= money and due.cost or 0
-	return math.floor((money - kept) * SHARE)
+	local cost = due and due.cost
+	if cost and cost > 0 then weighs[#weighs + 1] = cost end
+	local kept = cost and cost <= money and cost or 0
+	return math.floor((money - kept) * SHARE), kept
+end
+
+-- A budget compared with `spent + need`: the gold at which that turns, a price the rows hang on (ns.Weighed).
+local function Weigh(spent, need)
+	local weighs = state and state.weighs
+	if weighs then weighs[#weighs + 1] = state.kept + math.ceil((spent + need) / SHARE) end
 end
 
 -- Counts the bags and works out what is short.
@@ -439,7 +448,10 @@ local function Work()
 	Load()
 	ReadBars()
 	local level = UnitLevel("player")
-	state = { level = level, budget = Budget(), plans = {}, wants = {}, checks = {}, picked = {}, checked = {} }
+	-- (Gold that crosses a price weighed here lets this go: worked out again at the next fitting.)
+	local weighs = ns.Weighed("supplies", Supplies.Stale)
+	local budget, kept = Budget(weighs)
+	state = { level = level, budget = budget, kept = kept, weighs = weighs, plans = {}, wants = {}, checks = {}, picked = {}, checked = {} }
 
 	local held = {}
 	for bag = BACKPACK, LAST_BAG do
@@ -543,10 +555,11 @@ end
 -- What to buy
 
 -- The item to buy for a plan from a shop's goods ({ [item] = true }), or nil. With a budget,
--- only what one purchase of fits in it.
-local function Pick(plan, shop, budget)
+-- only what one purchase of fits in it. spent: what the budget had paid before it (its prices are weighed).
+local function Pick(plan, shop, budget, spent)
 	if plan.kind == "reagent" then
 		local item = plan.item
+		if spent and shop[item.id] and item.price > 0 then Weigh(spent, item.price) end
 		return shop[item.id] and item.price > 0 and (not budget or item.price <= budget) and item or nil
 	end
 	local field, level = SIZED[plan.kind].field, state.level
@@ -554,6 +567,7 @@ local function Pick(plan, shop, budget)
 	for id in pairs(shop) do
 		local item = items[id]
 		local its = item and not item.reagent and item.price > 0 and item.level <= level and item[field] or 0
+		if spent and its >= plan.ref * GOOD then Weigh(spent, item.price) end
 		if its >= plan.ref * GOOD and (not budget or item.price <= budget) then
 			local full, each = its >= plan.ref, item.price / item.lot
 			local better
@@ -574,19 +588,25 @@ local function Pick(plan, shop, budget)
 end
 
 -- How many to buy and what it costs: whole purchases up to the amount carried, within the budget.
-local function Lot(plan, item, budget)
-	local lots = math.min(math.ceil((plan.carry - plan.have) / item.lot), math.floor(budget / item.price))
+-- spent: as Pick's. Below what these lots cost there are fewer. Short of what is carried, one more lot is more.
+local function Lot(plan, item, budget, spent)
+	local want, can = math.ceil((plan.carry - plan.have) / item.lot), math.floor(budget / item.price)
+	local lots = math.min(want, can)
 	if lots < 1 then return 0, 0 end
+	if spent then
+		Weigh(spent, lots * item.price)
+		if can < want then Weigh(spent, (can + 1) * item.price) end
+	end
 	return lots * item.lot, lots * item.price
 end
 
 -- What a shop can fill of the plans given, in order, sharing one budget: { { plan, item, qty, cost }, ... }.
 local function Fill(plans, shop, budget)
-	local picks = {}
+	local picks, start = {}, budget
 	for _, plan in ipairs(plans) do
-		local item = Pick(plan, shop, budget)
+		local item = Pick(plan, shop, budget, start - budget)
 		local qty, cost = 0, 0
-		if item then qty, cost = Lot(plan, item, budget) end
+		if item then qty, cost = Lot(plan, item, budget, start - budget) end
 		if qty > 0 then
 			picks[#picks + 1] = { plan = plan, item = item, qty = qty, cost = cost }
 			budget = budget - cost
@@ -707,7 +727,7 @@ local function Find(lead)
 				bags[#bags + 1] = { glyph = "bag", text = plan.label, right = ("%d of %d"):format(plan.have, plan.carry),
 					rightColor = UI.colors.dim }
 				if plan.weak > 0 then
-					bags[#bags + 1] = { quiet = true, indent = 2, text = ("%d weaker, count as %d"):format(plan.weak, plan.worth) }
+					bags[#bags + 1] = { quiet = true, indent = 2, text = ("%d weaker ones count as %d"):format(plan.weak, plan.worth) }
 				end
 				if plan.own then
 					bags[#bags + 1] = { quiet = true, indent = 2, text = ("You %s about %d every 10 fights"):format(
@@ -726,7 +746,7 @@ local function Find(lead)
 			end
 		end,
 		menu = function(root)
-			root:CreateButton("Not now: ask again next time I run low", function()
+			root:CreateButton("Ask me when I run low", function()
 				put = true
 				ns.Refresh()
 			end)
@@ -737,7 +757,7 @@ local function Find(lead)
 					ns.Apply()
 				end)
 			end
-			root:CreateButton(("%s doesn't sell this: find another"):format(at.npc.name), function()
+			root:CreateButton(("%s doesn't sell this. Find another"):format(at.npc.name), function()
 				T.db.stock[at.npc.id] = Without(at.npc.id, picks)
 				Restock()
 			end)
@@ -923,11 +943,11 @@ local function Buy()
 	if #bought > 0 then T:Print(("bought %s for %s."):format(table.concat(bought, ", "), Coins(spent))) end
 end
 
-local TALENTS = { PLAYER_TALENT_UPDATE = true, TRAIT_CONFIG_UPDATED = true, ACTIVE_TALENT_GROUP_CHANGED = true, SPELLS_CHANGED = true }
+local TALENTS = { PLAYER_TALENT_UPDATE = true, TRAIT_CONFIG_UPDATED = true, ACTIVE_TALENT_GROUP_CHANGED = true }
 
 local trackSoon
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "PLAYER_MONEY", "PLAYER_LEVEL_UP", "SPELLS_CHANGED",
+for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP",
 	"PLAYER_TALENT_UPDATE", "TRAIT_CONFIG_UPDATED", "ACTIVE_TALENT_GROUP_CHANGED", "MERCHANT_SHOW", "MERCHANT_UPDATE",
 	"PLAYER_REGEN_DISABLED", "PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "PLAYER_INTERACTION_MANAGER_FRAME_HIDE",
 	"TRADE_SKILL_SHOW", "TRADE_SKILL_CLOSE" }) do
@@ -976,6 +996,12 @@ events:SetScript("OnEvent", function(_, event, kind)
 	if TALENTS[event] then tabStale = true end
 	ns.Refresh()
 end)
+-- The spellbook, told by ShyCore when it changes: what to buy is worked out again. The supplies are an errand,
+-- so the errands are fitted again, not the route. (Gold: ns.Weighed in Work.)
+Shy:On("SHY_SPELLS", function()
+	stale, tabStale = true, true
+	if ns.char then ns.RefreshErrands() end
+end)
 
 ns.OnApply(function()
 	stale = true
@@ -1008,42 +1034,35 @@ ns.CardSwitch("errands", function(root)
 	end
 end)
 
--- Options section under the earlier files' (Spec.lua's ends 72 under its own top, 420 under `y`).
+-- Settings: whether vendors become stops when you run low, and how much of each thing to carry.
 local AMOUNTS = { water = { 10, 20, 40, 60, 80 }, food = { 10, 20, 40, 60, 80 }, heal = { 5, 10, 20 }, mana = { 5, 10, 20 }, reagents = { 5, 10, 20 } }
 
-local function Amount(page, group, key, label, desc, x, y)
+local function Amount(key, label, desc)
 	local choices = { { value = "auto", text = "Automatic" }, { value = 0, text = "Off" } }
 	for _, count in ipairs(AMOUNTS[key]) do choices[#choices + 1] = { value = count, text = tostring(count) } end
-	local box = group:Dropdown(page, label, choices, function()
-		local set = T.db.supplies.carry[key]
-		return type(set) == "number" and set or "auto"
-	end, function(v)
-		T.db.supplies.carry[key] = type(v) == "number" and v or nil
-		-- Picking an amount asks about every reagent again.
-		if key == "reagents" and ns.char then wipe(Mine().off) end
-	end, { width = 270, enabled = function() return T.db.supplies.on end, desc = desc })
-	box:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	return { label = label, items = choices, default = "auto", sub = true, desc = desc, words = "carry stock amount",
+		enabled = function() return T.db.supplies.on end,
+		get = function()
+			local set = T.db.supplies.carry[key]
+			return type(set) == "number" and set or "auto"
+		end,
+		set = function(v)
+			T.db.supplies.carry[key] = type(v) == "number" and v or nil
+			-- Picking an amount asks about every reagent again.
+			if key == "reagents" and ns.char then wipe(Mine().off) end
+		end }
 end
 
-local before = ns.MoreOptions
-function ns.MoreOptions(page, group, y)
-	local top = y
-	if before then
-		before(page, group, y)
-		top = y - 492
-	end
-	local header = UI.Header(page, "Food, water and supplies", 576)
-	header:SetPoint("TOPLEFT", page, "TOPLEFT", 24, top)
-	local box = group:Checkbox(page, "Restock at vendors", function() return T.db.supplies.on end,
-		function(v) T.db.supplies.on = v end,
-		{ desc = "When you run low, a vendor who sells what you need becomes a stop on the card if one is close or on your way, and the vendor window offers the right amount in one click. Nothing is bought for you." })
-	box:SetPoint("TOPLEFT", page, "TOPLEFT", 24, top - 32)
-	Amount(page, group, "water", "Water", "How much water to carry. Automatic learns how often you drink and plans for the fights before the next vendor. None if you don't use mana or you're a mage who conjures it.", 24, top - 64)
-	Amount(page, group, "food", "Food", "How much food to carry. Automatic learns how often you eat and plans for the fights before the next vendor.", 24, top - 126)
-	Amount(page, group, "reagents", "Spell reagents", "What your spells use up: teleport and portal runes, ankhs, candles, seeds. Automatic keeps one stack of each, up to 20. Picking an amount here also asks again about any you turned off.", 24, top - 188)
-	Amount(page, group, "heal", "Healing potions", "How many healing potions to carry. You make them with First Aid, and vendors that sell a few show up as stops you can skip. Automatic is 5 from level 10.", 330, top - 64)
-	Amount(page, group, "mana", "Mana potions", "How many mana potions to carry. Vendors that sell a few show up as stops you can skip. Automatic is 5 for casters from level 15.", 330, top - 126)
-end
+T:Settings({
+	{ section = "Food, water and supplies" },
+	{ key = "supplies.on", label = "Restock at vendors",
+		desc = "When you run low, a vendor who sells what you need becomes a stop. You do the buying." },
+	Amount("water", "Water", "How much water to carry. Automatic plans for the fights before the next vendor."),
+	Amount("food", "Food", "How much food to carry. Automatic plans for the fights before the next vendor."),
+	Amount("reagents", "Spell reagents", "Runes, ankhs, candles and seeds. Automatic keeps a stack of each, up to 20."),
+	Amount("heal", "Healing potions", "How many to carry. Automatic is 5 from level 10."),
+	Amount("mana", "Mana potions", "How many to carry. Automatic is 5 for casters from level 15."),
+})
 
 -- Guarded: the loaded Route.lua may predate R.AddErrand until the client restarts.
 if R and R.AddErrand then

@@ -18,7 +18,7 @@ function Gear.Init()
 
 	T:RegisterMark({
 		id = "upgrade", channel = "tl", title = "Upgrades",
-		desc = "An arrow on gear better than what you have equipped, outlined if you need more levels to use it.",
+		desc = "Gear better than what you wear gets an arrow. It's in outline if you need more levels for it.",
 		test = function(item)
 			if not item.live then return nil end
 			local link = C_Container.GetContainerItemLink(item.bag, item.slot)

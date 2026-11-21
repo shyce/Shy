@@ -18,6 +18,16 @@ local T = Shy:NewAddon(ADDON, {
 		mend = true,           -- what your heals over time still have to heal, at the end of a friend's health (ShyHots)
 		size = 0.94,           -- two 248 wide plates span ShyDock's 468 wide housing
 		grid = "auto",         -- the party as a healing grid: "auto" (while you're the healer), "on" or "off"
+		-- Each kind's picture: "none", "class", "face" (2D) or "head" (3D); the style, "ours" (set into the frame) or
+		-- "blizzard" (round in a ring, like the game's); that ring's color, "steel", "accent" or "class" (Portrait.lua).
+		-- In the round, your level and your target's in a small circle of their own on the picture (`level`).
+		portrait = { pair = "none", small = "none", party = "none", style = "ours", ring = "steel", level = true },
+		hurtOnly = true,       -- your health's numbers show only once you're hurt (Plate:HurtOnly)
+		height = "game",       -- your frame and your target's: "game" (as tall as the game's) or "compact" (L.HEIGHTS)
+		-- The health's words: "smart" (what you'd read: your own health, what a friend is missing, an enemy's
+		-- percent), "percent", "current", "both" (current and most), "missing", "full" (all of it) or "none".
+		healthText = "smart",
+		control = true,        -- crowd control takes a portrait over while it lasts
 		press = true,          -- a click bound to a spell casts as the button goes down (Clicks.lua)
 		-- Click casting, by class: [class][mod .. button] = "target", "menu", a spell's name or its ID.
 		clicks = {},
@@ -49,7 +59,7 @@ end
 
 -- The test party: every seat of the party's box nobody holds shows a sample member (Frames.lua's F.SAMPLES), so
 -- the frames can be looked at, placed and set up without a group. On while the screen is being arranged (layout
--- mode) and while asked for (T:Test, `/shyframes test`); never kept past a reload. Taken up and put away with
+-- mode) and while asked for (T:Test, `/shy frames test`); never kept past a reload. Taken up and put away with
 -- the frames, as the grid is (ns.TakeSample); in a fight the game itself hides the samples, and shows them after.
 local testing, sampling = false, false
 function ns.SampleWanted()
@@ -113,13 +123,9 @@ function T:Apply()
 	ns.Fader.Apply()
 	ns.Blizzard.Apply()
 	if ns.Clicks then ns.Clicks.Apply() end
-	-- ShyDock listens for this.
+	-- ShyDock listens for this; ShyBuffs too (where a frame's icons start: T:IconStart).
 	Shy:Fire("SHY_FRAMES")
 	if ns.RefreshOptions then ns.RefreshOptions() end
-end
-
-function T:OnLoad()
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -283,32 +289,32 @@ function T:Riser()
 		stacked = L.Stacked(UnitClassBase("player")) }
 end
 
+-- For ShyBuffs: where a frame's row of icons starts on its top edge. -> the side it grows from ("LEFT" or "RIGHT":
+-- your target's mirrors yours), how far in past a round portrait it starts (0: none), and how far down the housing's
+-- top stands from the frame's.
+function T:IconStart(kind)
+	local L, P = ns.Layout, ns.Portrait
+	local side = L.MIRRORED[kind] and "RIGHT" or "LEFT"
+	if not (P and P.Mode(kind) ~= "none" and P.Ringed()) then return side, 0, 0 end
+	local across, _, _, _, inset = L.Portrait(L.Of(kind), true, nil)
+	return side, across, inset
+end
+
 -- Whether a plate kind ("player", "target", ...) is on screen. "SHY_PLATE" (kind, shown) fires on change.
 function T:PlateShown(kind)
 	return ns.Frames.Shown(kind)
 end
 
-SLASH_SHYFRAMES1 = "/shyframes"
-SLASH_SHYFRAMES2 = "/sframes"
-SlashCmdList.SHYFRAMES = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "move" then
-		Shy.HUD.SetUnlocked(true)
-	elseif cmd == "clicks" and ns.Clicks then
-		ns.Clicks.Open()
-	elseif cmd == "test" then
-		if T:Test() then
-			T:Print("the test party is on: a sample member in every empty seat. /shyframes test again turns it off.")
-		else
-			T:Print("the test party is off.")
-		end
+T:Command("clicks", "set up click casting", function()
+	if ns.Clicks then ns.Clicks.Open() end
+end)
+
+T:Command("test", "show a sample party, to place the party frames without a group", function()
+	if not T.db.units.party then
+		T:Print("the party frames are off, so there is no test party to show.")
+	elseif T:Test() then
+		T:Print("the test party is on: a sample member in every empty seat. /shy frames test again turns it off.")
 	else
-		T:Print("commands:")
-		print("  /shyframes  - open options")
-		print("  /shyframes move  - open layout mode")
-		print("  /shyframes clicks  - set up click casting")
-		print("  /shyframes test  - show a sample party, to see and place the party frames without a group")
+		T:Print("the test party is off.")
 	end
-end
+end)

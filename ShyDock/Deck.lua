@@ -234,7 +234,7 @@ end
 
 local function Menu(root)
 	for _, box in ipairs(held) do Ways(root, box) end
-	root:CreateButton("Console options", function() T:OpenOptions() end)
+	root:CreateButton("Console settings", function() T:OpenOptions() end)
 end
 
 function D.Start()

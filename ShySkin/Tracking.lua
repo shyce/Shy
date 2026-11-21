@@ -782,11 +782,11 @@ local function MakeLens()
 	deck.run:SetScript("OnUpdate", Dealing)
 
 	local events = CreateFrame("Frame")
-	for _, event in ipairs({ "MINIMAP_UPDATE_TRACKING", "SPELLS_CHANGED", "PLAYER_ENTERING_WORLD", "PLAYER_DEAD", "PLAYER_ALIVE",
+	for _, event in ipairs({ "MINIMAP_UPDATE_TRACKING", "PLAYER_ENTERING_WORLD", "PLAYER_DEAD", "PLAYER_ALIVE",
 		"PLAYER_UNGHOST" }) do
 		events:RegisterEvent(event)
 	end
-	events:SetScript("OnEvent", function(_, event)
+	local function Seen(_, event)
 		if not standing then return end
 		if event == "PLAYER_DEAD" then
 			local held = Held()
@@ -797,7 +797,10 @@ local function MakeLens()
 		if dropped and Alive() and Held() then dropped = nil end
 		Look()
 		if over then Tip() end
-	end)
+	end
+	events:SetScript("OnEvent", Seen)
+	-- A tracking spell learned (the spellbook, said by ShyCore only when it really changed).
+	Shy:On("SHY_SPELLS", function() Seen(nil, "SHY_SPELLS") end)
 end
 
 -- For Minimap.lua

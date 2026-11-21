@@ -622,9 +622,10 @@ end
 -- (Before a grip has hold of it, the same is asked where it is made: UI.Window, HUD.WearMade.)
 local function Flow(g, width, height)
 	local box = g.box
-	height = HUD.DockTall(box) or height
+	local tall = HUD.DockTall(box)
 	local minW, minH, maxW, maxH = Bounds(g)
-	width, height = max(minW, math.min(maxW, width)), max(minH, math.min(maxH, height))
+	-- (Beside a host shorter than its least height, it is as tall as the host all the same: never past its foot.)
+	width, height = max(minW, math.min(maxW, width)), tall or max(minH, math.min(maxH, height))
 	if abs(box:GetWidth() - width) < 0.01 and abs(box:GetHeight() - height) < 0.01 then return false end
 	HUD.Resize(box, width, height)
 	local cw, ch = Clear(box)
@@ -1481,6 +1482,7 @@ Shy:On("SHY_THEME", function()
 	end
 end)
 
-Shy.Command("grip", "What the corner grips are doing", function()
+-- (For finding faults: what the corner grips are doing. Not listed.)
+Shy.Command("grip", nil, function()
 	UI.ShowCopyBox("Corner grips", HUD.GripReport())
 end)

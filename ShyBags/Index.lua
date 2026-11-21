@@ -68,18 +68,39 @@ function Index.All()
 	return all
 end
 
+-- A character's entries by item: made once a list (a character's list is made anew when what it holds changes),
+-- so counting one item is a look in each character's, not a walk through all they hold.
+local idsOf = setmetatable({}, { __mode = "k" })   -- entries -> item id -> its entries
+local NONE = {}
+local function ById(entries)
+	local by = idsOf[entries]
+	if not by then
+		by = {}
+		for _, e in ipairs(entries) do
+			if e.id then
+				local list = by[e.id]
+				if not list then
+					list = {}
+					by[e.id] = list
+				end
+				list[#list + 1] = e
+			end
+		end
+		idsOf[entries] = by
+	end
+	return by
+end
+
 -- Returns the total and { guid, char, bags, keys, bank, mail, auction, at } per character.
 function Index.Count(id)
 	local total, places = 0, {}
 	for _, entry in ipairs(Store.List()) do
 		local place
-		for _, e in ipairs(Index.Of(entry.guid)) do
-			if e.id == id then
-				place = place or { guid = entry.guid, char = entry.char, bags = 0, keys = 0, bank = 0, mail = 0, auction = 0 }
-				place[e.source] = place[e.source] + e.count
-				if e.at and (not place.at or e.at < place.at) then place.at = e.at end
-				total = total + e.count
-			end
+		for _, e in ipairs(ById(Index.Of(entry.guid))[id] or NONE) do
+			place = place or { guid = entry.guid, char = entry.char, bags = 0, keys = 0, bank = 0, mail = 0, auction = 0 }
+			place[e.source] = place[e.source] + e.count
+			if e.at and (not place.at or e.at < place.at) then place.at = e.at end
+			total = total + e.count
 		end
 		if place then places[#places + 1] = place end
 	end

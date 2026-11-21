@@ -609,12 +609,24 @@ function F.Sample(pair, line)
 	end
 end
 
+-- The sample fight, where the numbers are switched on: on your target's nameplate and on you. Coin is
+-- written by you either way, as it is in play.
 function F.Test()
-	local nameplate = UnitExists("target") and C_NamePlate.GetNamePlateForUnit("target") or nil
+	local db = T.db
+	if not db.on then
+		T:Print("the numbers are off. Turn them on to see a sample.")
+		return
+	end
+	local nameplate = db.plates and UnitExists("target") and C_NamePlate.GetNamePlateForUnit("target") or nil
 	if nameplate and nameplate:IsForbidden() then nameplate = nil end
-	if not nameplate then T:Print("showing the numbers on you. Target something with a nameplate to see those too.") end
+	if db.plates and not nameplate then
+		T:Print(db.you and "showing the numbers on you. Target something with a nameplate to see those too."
+			or "target something with a nameplate to see the numbers.")
+	end
 	for _, line in ipairs(F.SAMPLE) do
-		if line[2] or nameplate then
+		local shown = nameplate
+		if line[2] then shown = db.you or line.coin end
+		if shown then
 			C_Timer.After(line[1], function()
 				if line[2] then
 					F.Sample(Where.You(), line)

@@ -412,7 +412,7 @@ local function OwnCard(parent, width)
 	card.name:SetText("Your own")
 	card.ramp = Swatch(card, width - 2, 3)
 	card.ramp:SetPoint("TOPLEFT", card.scene, "BOTTOMLEFT", 0, 0)
-	UI.Help(card, "Your own", "The mix you make yourself. Picking a preset keeps it here, so you can come back to it.")
+	UI.Help(card, "Your own", "Your own mix. It stays here when you pick a preset, so you can come back to it.")
 	return card
 end
 
@@ -575,7 +575,7 @@ function Parts.color(parent, width)
 	local mode = UI.Dropdown(solid, "Color", picks, function() return own and "custom" or Theme.SolidPick() end, function(v)
 		own = nil
 		Theme.SetPick(v)
-	end, { width = COL, desc = "The one color on every window, bar and title: your class's, another class's, one of ours, or one you make." })
+	end, { width = COL, desc = "The color on every window, bar and title. Use your class color, another class's, a ready-made one, or your own." })
 	mode:SetPoint("TOPLEFT")
 	local hue = UI.Slider(solid, "Hue", 0, 359, 1, function() return (HSL()) end, function(v) Move(1, v) end,
 		{ width = COL, format = function(v) return v .. "\194\176" end, color = Making,
@@ -595,10 +595,10 @@ function Parts.color(parent, width)
 	local SR, LR = Theme.SAT_RANGE, Theme.LIGHT_RANGE
 	local function Percent(v) return v .. "%" end
 	local sat = UI.Slider(solid, "Saturation", SR[1] * 100, SR[2] * 100, 1, function() return floor(select(2, HSL()) * 100 + 0.5) end,
-		function(v) Move(2, v / 100) end, { width = COL, format = Percent, color = Making, desc = "How strong the color is: low is muted, high is vivid." })
+		function(v) Move(2, v / 100) end, { width = COL, format = Percent, color = Making, desc = "How strong the color is. Low is muted, high is vivid." })
 	sat:SetPoint("TOPLEFT", mode, "BOTTOMLEFT", 0, -ROW_GAP - 8)
 	local light = UI.Slider(solid, "Lightness", LR[1] * 100, LR[2] * 100, 1, function() return floor(select(3, HSL()) * 100 + 0.5) end,
-		function(v) Move(3, v / 100) end, { width = COL, format = Percent, color = Making, desc = "How light the color is: low is deep, high is pale." })
+		function(v) Move(3, v / 100) end, { width = COL, format = Percent, color = Making, desc = "How light the color is. Low is deep, high is pale." })
 	light:SetPoint("TOPLEFT", sat, "TOPRIGHT", COL_GAP, 0)
 	solid:SetSize(width, 46 + ROW_GAP + 8 + 46)
 	local strung
@@ -656,12 +656,12 @@ function Parts.font(parent, width)
 	local text = UI.Dropdown(f, "Text", effects, function() return Theme.TextChosen() or "look" end,
 		function(v) Theme.SetTextEffect(v ~= "look" and v or nil) end,
 		{ width = COL, preview = function(v) Theme.PreviewTextEffect(v ~= "look" and v or nil) end,
-			desc = "What your words wear over bright or busy ground: a shadow, or an outline as comics letter. By look: the one the look comes with." })
+			desc = "A shadow or an outline keeps text readable over bright or busy backgrounds. By look uses the one your look comes with." })
 	text:SetPoint("TOPLEFT", picker, "BOTTOMLEFT", 0, -ROW_GAP)
 	local deep = UI.Slider(f, "Shadow", 0, 100, 5, function() return floor(Theme.TextStrength() * 100 + 0.5) end,
 		function(v) Theme.SetTextStrength(v / 100) end,
 		{ width = COL, format = function(v) return v .. "%" end, enabled = function() return Theme.TextEffect() == "shadow" end,
-			desc = "How deep the shadow under your words is." })
+			desc = "How deep the shadow under text is." })
 	deep:SetPoint("TOPLEFT", text, "TOPRIGHT", COL_GAP, 0)
 	-- The worn font at a few sizes, as headers and titles show it.
 	local big = UI.TitleText(f, "Shyce Cream", 24, C.head)
@@ -722,23 +722,23 @@ function Parts.finish(parent, width, opts)
 	local fills = { { value = "auto", text = "By look" } }
 	for _, bar in ipairs(Skin.BARS) do fills[#fills + 1] = { value = bar.key, text = bar.name } end
 	local bars = UI.Dropdown(f, "Bar fill", fills, Skin.Bar, Skin.SetBar,
-		{ width = COL, desc = "What every health, power and cast bar is filled with. By look: the one the look comes with." })
+		{ width = COL, desc = "The texture that fills every health, power and cast bar. By look uses the one your look comes with." })
 	bars:SetPoint("TOPLEFT", 0, -top)
 	local swatch = UI.FillSwatch(f, COL, 18)
 	swatch:SetPoint("LEFT", bars, "RIGHT", COL_GAP, -11)
 	local finishes = { { value = "auto", text = "By look" } }
 	for _, style in ipairs(Slot.STYLES) do finishes[#finishes + 1] = { value = style.key, text = style.name } end
 	local slots = UI.Dropdown(f, "Icon frames", finishes, Slot.Style, Slot.SetStyle,
-		{ width = COL, desc = "The frame round every icon: action buttons, bags, buffs and cooldowns. By look: the one the look comes with." })
+		{ width = COL, desc = "The frame around every icon on action buttons, bags, buffs and cooldowns. By look uses the one your look comes with." })
 	slots:SetPoint("TOPLEFT", bars, "BOTTOMLEFT", 0, -ROW_GAP)
 	local tiles = UI.SlotSwatch(f)
 	tiles:SetPoint("LEFT", slots, "RIGHT", COL_GAP, -11)
 	local wells = UI.Slider(f, "Icon wells", 0, 100, 5, function() return floor(Slot.WellArt() * 100 + 0.5) end, Slot.SetWellArt,
-		{ width = COL, format = function(v) return v .. "%" end, desc = "How solid the art behind empty icons is. Lower lets what's behind show through." })
+		{ width = COL, format = function(v) return v .. "%" end, desc = "How solid the art behind empty icons is. Lower lets more show through." })
 	wells:SetPoint("TOPLEFT", slots, "BOTTOMLEFT", 0, -ROW_GAP)
 	-- Your health's color, made as the accent is: a pick fills the sliders; moving one makes it your own.
 	local health = UI.Dropdown(f, "Your health", Skin.HealthPicks(), Skin.HealthColor, Skin.SetHealthColor,
-		{ width = COL, desc = "The color of your own health bars: your frame's and the one under your character." })
+		{ width = COL, desc = "The color of your own health bars, on your frame and under your character." })
 	health:SetPoint("TOPLEFT", wells, "BOTTOMLEFT", 0, -ROW_GAP - 8)
 	local own
 	Shy:On("SHY_HEALTH", function() own = nil end)
@@ -795,8 +795,8 @@ function Parts.options(parent, width, opts)
 		-- The two are set apart: the frame of a window can let the world through without the window's own
 		-- words going with it.
 		sheet = UI.Slider(f, "Window content", 0, 100, 5, function() return floor(Theme.Sheet() * 100 + 0.5) end, Theme.SheetSoon,
-			{ width = COL, format = function(v) return v .. "%" end, desc = "How solid a window is behind what you read in it." })
-		reads = UI.Text(f, "The rows and words in a window sit on this; the frame round them follows Background.", 12, false, C.dim)
+			{ width = COL, format = function(v) return v .. "%" end, desc = "How solid a window's background is." })
+		reads = UI.Text(f, "This sits behind a window's rows and text. The frame around them follows Background.", 12, false, C.dim)
 		reads:SetPoint("LEFT", sheet, "RIGHT", COL_GAP, -9)
 		reads:SetWidth(width - COL - COL_GAP)
 		reads:SetWordWrap(true)
@@ -967,11 +967,11 @@ local function Lines(plan)
 	if t.font and t.font ~= Theme.FONT and FontName(t.font) then lines[#lines + 1] = { text = "Lettered in " .. FontName(t.font) } end
 	if t.bar ~= "auto" then
 		local said = Named(Skin.BARS, t.bar)
-		if said then lines[#lines + 1] = { text = "Bars filled with " .. said:lower(), sub = "whatever the look" } end
+		if said then lines[#lines + 1] = { text = "Bars filled with " .. said:lower(), sub = "on every look" } end
 	end
 	if t.slot ~= "auto" then
 		local said = Named(Slot.STYLES, t.slot)
-		if said then lines[#lines + 1] = { text = said .. " icon frames", sub = "whatever the look" } end
+		if said then lines[#lines + 1] = { text = said .. " icon frames", sub = "on every look" } end
 	end
 	if t.strength ~= t.wasStrength then lines[#lines + 1] = { text = "Background " .. t.strength .. "%", sub = "on everything on screen" } end
 	if t.wells and t.wells ~= t.wasWells then lines[#lines + 1] = { text = "Icon wells " .. t.wells .. "%", sub = "the art under every icon" } end
@@ -981,7 +981,7 @@ end
 S.Step({
 	id = "theme", order = 15, title = "Theme", glyph = "star",
 	ask = "Pick a theme",
-	lead = "Pick a ready-made theme, or change just the parts you want. You'll see it on your screen right away.",
+	lead = "Pick a ready-made theme, or change the parts you want. You'll see it on your screen right away.",
 	brief = function(plan)
 		local t = plan.theme
 		local worn = Theme.PresetWorn({ look = t.look, accent = t.pick, bar = t.bar, slot = t.slot, health = t.health,

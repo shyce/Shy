@@ -1,6 +1,6 @@
--- Additions to Blizzard's tracker: distance under each quest marker, and an "N elsewhere" count in its header.
--- Taint: nothing is written on tracker tables and its layout is never called. Labels are our own frames
--- parented to a block and re-placed after each Blizzard layout, because blocks are reused.
+-- Adds to Blizzard's tracker: the distance under each quest marker, and an "N elsewhere" count in its header.
+-- Taint: nothing is written to tracker tables and its layout is never called. Labels are our own frames,
+-- parented to a block and placed again after each Blizzard layout, because blocks are reused.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -126,7 +126,7 @@ local function BadgeTip(self)
 		rows[#rows + 1] = { text = entry.title, right = where, color = { color.r, color.g, color.b }, rightColor = C.dim }
 	end
 	UI.Tip(self, #held == 1 and "1 quest in another zone" or (#held .. " quests in other zones"),
-		"Tracked again when you get there. Track one in the quest log to keep it listed.",
+		"You'll track these again when you get there. Track one in the quest log to keep it listed.",
 		{ side = "LEFT", width = 300, sections = { { rows = rows } } })
 end
 

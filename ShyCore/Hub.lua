@@ -1,10 +1,11 @@
 -- The hub: the Shy window (/shy), where every setting has one home. A rail of rooms down its left with what each
--- holds now, the room on show beside it; an addon's own options are a room too, come to from Home. Also options
--- registration, /shy and its commands, the login splash and the version ping.
+-- holds now, the room on show beside it. Every addon's settings stand in one of them, the Settings room. Also
+-- what an addon tells of its settings, /shy and its commands, the login splash and the version ping.
 --
---   Shy.Hub.Open(room)       the window: at a room ("home", "theme", "screen", "play", "keys", "game", "profiles",
---                            "tools"), at an addon's options (the addon), or where it was
+--   Shy.Hub.Open(room)       the window: at a room ("home", "settings", "theme", "screen", "play", "keys", "game",
+--                            "profiles", "tools"), at an addon's settings (the addon), or where it was
 --   Shy.Hub.Close()          Shy.Hub.IsOpen()
+--   Bus: SHY_HUB_CLOSED      the window was closed (not lent to a guest: the guest tells its own)
 --   Shy.HubSection(room, build, order)   a section of a room, under those before it (lower orders first; 50
 --                            unless told). build(page, top) stands it under `top` (Shy.HubHead, Shy.HubPlace)
 --                            and returns its last frame and a function that refreshes it; page.width is the
@@ -13,9 +14,16 @@
 --                            captions hang under its row on the rail while it is open, each a click from its section
 --   Shy.HubPlace(page, frame, top)  a section with no caption, under what stands above it
 --   Shy.HubBrief(room, fn)   what a room holds now in a few words, under its name on the rail
---   Shy.Command(word, help, fn)     /shy <word>; with `help`, listed in the Tools room
---   T:RegisterOptions(page)  an addon's options: a room of the window, built as it first shows (its OnShow)
+--   Shy.Command(word, help, fn)     /shy <word>: fn(rest), the words after it as typed. `word` may be several
+--                            ("errors clear"): the longest the typed words begin with runs. With `help`, listed:
+--                            only what a player would type has one. A word for finding faults (a report to
+--                            copy, a test) runs without, and is never shown
+--   T:Command(word, help, fn)       an addon's: /shy <its name> <word>. No word: /shy <its name> alone, which
+--                            opens its settings unless told otherwise
+--   T:Settings(list)         an addon's settings, told as a list (Settings.lua has what an entry may say). They
+--                            stand in the Settings room, found as you type. Told again, the list grows
 --   T:OpenOptions()          the window at them
+--   /shy <anything else>     looks for it in the settings; /set does the same
 --
 -- The setup walks through the same window: lent, its rail is the guest's pages and a foot opens under its room.
 --   Shy.Hub.Lend(guest)      the window open on a guest's pages: guest = { items (the rail's), words, name (after
@@ -61,16 +69,16 @@ door:SetScript("OnShow", function(self)
 	open:SetHeight(30)
 	open:SetPrimary(true)
 	open:SetPoint("TOPLEFT", emblem, "BOTTOMLEFT", 0, -40)
-	local words = UI.Text(self, "Every setting has a window of its own. /shy opens it too.", 12, false, C.dim)
+	local words = UI.Text(self, "All the settings are in their own window. You can also type /shy.", 12, false, C.dim)
 	words:SetPoint("LEFT", open, "RIGHT", 14, 0)
 end)
 
--- The window: the rail flush with its left edge, a rule, then the room. An addon's page stands a little to the
--- left of ours (IN): its own margin is inside it. The room flows with the window, up to MOST across.
+-- The window: the rail flush with its left edge, a rule, then the room, IN from the scroll area's edge. The room
+-- flows with the window, up to MOST across.
 -- GLIDE: seconds the room takes to glide to a section picked on the rail; AIR: room left over a section's head
 -- there, and how near the top a head counts as the one in view.
 local W = { EDGE = 2, RAIL = 220, PAD = 28, IN = 24, PAGE = 700, SCROLL = 14, RIGHT = 22, TOP = 16, FOOT = 14, PAGE_H = 580,
-	BAR = 26, BAR_GAP = 10, FADE = 0.15, MEASURE = 0.2, SOON = 0.05, SETTLED = 0.5, REST = 4, BRIEFS = 0.5, GLIDE = 0.28, AIR = 10, MOST = 1000,
+	FADE = 0.15, MEASURE = 0.2, SOON = 0.05, SETTLED = 0.5, REST = 4, BRIEFS = 0.5, GLIDE = 0.28, AIR = 10, MOST = 1000,
 	WALK = 46, UNDER = 12, STEP = 10, STICK = 12 }
 -- WALK: the foot a guest walks its pages on, up from the window's bottom to its rule; UNDER: room over that rule.
 -- MOST: the widest a room flows to (maximized), the width the setup window's pages are laid out at, so every
@@ -82,8 +90,10 @@ W.HEIGHT = W.HEADER + W.TOP + W.PAGE_H + W.FOOT
 
 local ROOMS = {
 	{ key = "home", label = "Home", glyph = "home" },
+	-- (owned: Settings.lua fills it. Until that file is there the rail leaves it out.)
+	{ key = "settings", label = "Settings", glyph = "options", owned = true },
 	{ key = "theme", label = "Theme", glyph = "star", ask = "Theme",
-		lead = "Pick a ready-made theme, or change just the parts you want. You'll see it on your screen right away." },
+		lead = "Pick a ready-made theme, or change the parts you want. You'll see it on your screen right away." },
 	{ key = "screen", label = "Screen", glyph = "window", ask = "Your screen",
 		lead = "Change how big everything is, and move things where you want them." },
 	{ key = "play", label = "Play", glyph = "book", ask = "How you play",
@@ -91,18 +101,18 @@ local ROOMS = {
 	-- (owned: an addon's room, not the core's. Without that addon nothing fills it, so the rail leaves it out.)
 	-- (not paged: you come here to change a key, not to walk through setting them up again)
 	{ key = "keys", label = "Keys", glyph = "action", owned = true, ask = "Keys",
-		lead = "Your class laid out on your keys. Change any of them here; nothing is bound until you save." },
+		lead = "Your class laid out on your keys. Change any of them here. Nothing is bound until you save." },
 	{ key = "game", label = "Game", glyph = "log", ask = "Game settings",
 		lead = "Tick one and it changes right away. Untick it and you get back what you had. They're all in the game's own options too." },
 	{ key = "profiles", label = "Profile", glyph = "group", ask = "Profiles",
 		lead = "A profile saves all your addon settings and your layout. Characters on the same profile share them." },
 	{ key = "tools", label = "Tools", glyph = "use", ask = "Tools",
-		lead = "The minimap button, the login splash, and help for when something goes wrong." },
+		lead = "Help for when something goes wrong, and every command." },
 }
 local ROOM = {}
 for _, room in ipairs(ROOMS) do ROOM[room.key] = room end
 
--- at: the room on show, a key or an addon; pages: each room's page, by the same. kept: each of our rooms' pages
+-- at: the room on show, by its key; pages: each room's page, by the same. kept: each room's pages
 -- by the width it was built for (a page built is never let go: the game keeps every frame, and its sections
 -- keep what they registered).
 local win = { open = false, at = "home", pages = {}, kept = {}, parts = {}, pageH = W.PAGE_H, pageW = W.PAGE }
@@ -128,9 +138,71 @@ function Shy.HubBrief(room, fn)
 	table.insert(briefs[room], fn)
 end
 
-function Shy.Command(word, help, fn)
-	commands[word] = fn
-	if help then listed[#listed + 1] = { word = word, help = help } end
+function Shy.Command(word, help, fn, addon, bare)
+	-- (Told again by the one that told it, the new one stands: an addon loaded again is the same addon.
+	-- Another's word is an error.)
+	local was = commands[word]
+	local whose = addon and addon.name or false
+	if was and was.whose ~= whose then error("Shy.Command: /shy " .. word .. " is taken", 2) end
+	commands[word] = { fn = fn, addon = addon, whose = whose, bare = bare }
+	if not help then return end
+	for _, command in ipairs(listed) do
+		if command.word == word then
+			command.help = help
+			return
+		end
+	end
+	listed[#listed + 1] = { word = word, help = help, addon = addon }
+end
+
+-- The commands with a line of help, as they were told: { word, help, addon }.
+function Hub.Commands() return listed end
+
+-- (The addon's name alone takes no words after it: words that are none of its commands are looked for in the
+-- settings, as after any name.)
+function Addon:Command(word, help, fn)
+	local name = self.suffix:lower()
+	if word == "" then
+		Shy.Command(name, help, fn, self, true)
+	else
+		Shy.Command(name .. " " .. word, help, fn, self)
+	end
+end
+
+-- Settings: what each addon told, kept here so telling works before Settings.lua has loaded.
+--   told[suffix] = { addon, entries, apply, reset }; order: as they were told; doors: a room's own controls,
+--   to find and go to; stamp: goes up with every telling
+local Settings = { told = {}, order = {}, doors = {}, stamp = 0 }
+Shy.Settings = Settings
+function Settings.Refresh() end
+
+function Addon:Settings(list)
+	local told = Settings.told[self.suffix]
+	if not told then
+		told = { addon = self, entries = {} }
+		Settings.told[self.suffix] = told
+		Settings.order[#Settings.order + 1] = told
+	end
+	for _, entry in ipairs(list) do told.entries[#told.entries + 1] = entry end
+	told.apply, told.reset = list.apply or told.apply, list.reset or told.reset
+	Settings.stamp = Settings.stamp + 1
+end
+
+-- The entry every addon with a piece on screen ends its list with: a button to layout mode.
+--   Shy.Settings.Layout(desc)   desc: what is moved there, in a sentence
+function Settings.Layout(desc)
+	return { label = "Position", button = "Layout mode", words = "move place drag unlock size where",
+		desc = desc or "Move and size it on your screen.", run = function()
+			Hub.Close()
+			Shy.HUD.SetUnlocked(true)
+		end }
+end
+
+-- A control that lives in one of the window's own rooms: found in the settings, a click goes to its room.
+--   Shy.Settings.Door(room, label, desc, words, head)   head: the section of the room it stands in
+function Settings.Door(room, label, desc, words, head)
+	Settings.doors[#Settings.doors + 1] = { room = room, label = label, desc = desc, words = words, head = head }
+	Settings.stamp = Settings.stamp + 1
 end
 
 function Hub.Caption(parent, width, text)
@@ -235,13 +307,13 @@ function Lowest(f, lowest, floor)
 	return LowestChild(LowestRegion(lowest, floor, f:GetRegions()), floor, f:GetChildren())
 end
 
--- The room an open page has: the window's, less the strip over an addon's. Lent: less the foot under it.
+-- The room an open page has: the window's. Lent: less the foot under it.
 local function Room()
 	if win.guest then return win.pageH + W.FOOT - W.UNDER - W.WALK end
 	-- (a bar at the foot stands under the room, not in it: the room is that much shorter while it shows)
 	local page = win.pages and win.pages[win.at]
 	local stick = page and page.stick and page.stick:IsShown() and (page.stick:GetHeight() + W.STICK) or 0
-	return win.pageH - (type(win.at) == "table" and W.BAR + W.BAR_GAP or 0) - stick
+	return win.pageH - stick
 end
 
 -- Where a room's pieces stand, two deep (its sections and what they hold), as one number: how far each is
@@ -274,7 +346,15 @@ end
 -- whole: measured whatever stands where (a room just shown). Else only where its pieces have moved.
 local function Measure(whole)
 	local box, page = win.box, win.pages[win.at]
-	if win.guest or not page or page.scrollsItself then return end
+	if win.guest or not page then return end
+	-- One that scrolls by itself fills the room: the window's own scroll has nowhere to go.
+	if page.scrollsItself then
+		local room = Room()
+		if math.abs(room - page:GetHeight()) > 0.5 then page:SetHeight(room) end
+		if math.abs(room - box.content:GetHeight()) > 0.5 then box.content:SetHeight(room) end
+		box.scroll:Update()
+		return
+	end
 	local room = Room()
 	local top, bottom = page:GetTop(), page:GetBottom()
 	if not top or issecretvalue(top) or issecretvalue(bottom) then return end
@@ -287,10 +367,10 @@ local function Measure(whole)
 	-- A room's sections stand on the rail, to go to, only where the room is taller than the window shows:
 	-- with all of it in sight there is nowhere to go, and the lines under its row are only in the way.
 	-- (Less the 20 of air under the last piece: that the room scrolls by its air alone hides nothing.)
-	local lined = type(win.at) ~= "table" and page.heads ~= nil and #page.heads > 1 and (page.paged or held - 20 > room + 1)
+	local lined = page.heads ~= nil and #page.heads > 1 and (page.paged or held - 20 > room + 1)
 	if page.lined ~= lined then
 		page.lined = lined
-		if type(win.at) ~= "table" then box.rail:SetKids(win.at, lined and page.heads or nil) end
+		box.rail:SetKids(win.at, lined and page.heads or nil)
 	end
 	if math.abs(tall - page:GetHeight()) > 1 then page:SetHeight(tall) end
 	if math.abs(tall - box.content:GetHeight()) > 0.5 then box.content:SetHeight(tall) end
@@ -385,24 +465,6 @@ local function OurPage(room)
 	return page
 end
 
--- An addon's: its own frame, seated in the room. One with a scroll area of its own fills the room instead of
--- standing on ours: nested scroll areas fight over the wheel.
-local function TheirPage(addon)
-	local box, page = win.box, addon.options
-	page:Hide()
-	page:ClearAllPoints()
-	if page.scrollsItself then
-		page:SetParent(box)
-		page:SetPoint("TOPLEFT", box.scroll, "TOPLEFT")
-		page:SetPoint("BOTTOMRIGHT", box.scroll, "BOTTOMRIGHT", -W.SCROLL, 0)
-	else
-		page:SetParent(box.content)
-		page:SetPoint("TOPLEFT")
-		page:SetSize(W.IN + W.PAGE, Room())
-	end
-	return page
-end
-
 -- The scroll area, `down` from the body's top and `room` tall: from the rule's side to the window's right edge,
 -- whatever width the room on show is laid out at, so its bar stands at the edge. (Placed again only where it stands
 -- otherwise: every room hangs from it, and all of them are laid out again by the game for a place it is given
@@ -423,13 +485,12 @@ end
 local function Fit(walk)
 	local box, page = win.box, win.pages[win.at]
 	local room = Room()
-	-- (the strip an addon's room leaves at the top, for its own bar; a bar at the window's foot takes its
-	-- height off the bottom instead, so the room ends above it rather than sliding down under it)
-	local strip = type(win.at) == "table" and W.BAR + W.BAR_GAP or 0
-	Place(-(W.HEADER + W.TOP + strip), room)
+	-- (a bar at the window's foot takes its height off the bottom, so the room ends above it rather than
+	-- sliding down under it)
+	Place(-(W.HEADER + W.TOP), room)
 	if page.Fit then page:Fit(room - (page.lead and UI.LEAD_H or 0)) end
-	if walk then return Measure(true) end
-	if page.scrollsItself or not page.held then return end
+	if walk or page.scrollsItself then return Measure(true) end
+	if not page.held then return end
 	local tall = max(page.held, room)
 	if math.abs(tall - page:GetHeight()) > 1 then page:SetHeight(tall) end
 	if math.abs(tall - box.content:GetHeight()) > 0.5 then box.content:SetHeight(tall) end
@@ -443,15 +504,14 @@ end
 
 local function Show()
 	local box = win.box
-	local addon = type(win.at) == "table" and win.at or nil
 	local lap = debugprofilestop()
-	box.rail:Select(addon and "home" or win.at, true)
+	box.rail:Select(win.at, true)
 	box.rail:SetSubs(Briefs())
 	lap = Lap("hub: the rail told", lap)
 	local page = win.pages[win.at]
-	-- (One of ours laid out for another width, the window maximized or put back: the room as built for this
-	-- width when it last stood at it, else built for it now.)
-	if page and not addon and page.width ~= win.pageW then
+	-- (Laid out for another width, the window maximized or put back: the room as built for this width when
+	-- it last stood at it, else built for it now.)
+	if page and page.width ~= win.pageW then
 		page:Hide()
 		page = win.kept[win.at] and win.kept[win.at][win.pageW]
 		if page then
@@ -460,21 +520,15 @@ local function Show()
 		end
 	end
 	if not page then
-		page = addon and TheirPage(addon) or OurPage(ROOM[win.at])
+		page = OurPage(ROOM[win.at])
 		win.pages[win.at] = page
-		if not addon then
-			win.kept[win.at] = win.kept[win.at] or {}
-			win.kept[win.at][win.pageW] = page
-		end
+		win.kept[win.at] = win.kept[win.at] or {}
+		win.kept[win.at][win.pageW] = page
 		lap = Lap("hub: a room made", lap)
 	end
 	if page.paged then page:Part(win.parts[win.at]) end
-	-- The strip over an addon's page: back to all of them, its window, its defaults.
-	box.bar:SetShown(addon ~= nil)
-	if addon then
-		box.bar.open:SetShown(addon.OpenWindow ~= nil)
-		box.bar.defaults:SetShown(page.OnDefault ~= nil)
-	end
+	-- A room that scrolls by itself: the window's own scroll stands still, so there is one bar, the room's.
+	box.scroll:Rest(page.scrollsItself == true)
 	for at, other in pairs(win.pages) do
 		if other ~= page then other:Hide() end
 	end
@@ -533,6 +587,8 @@ local function Glide(room, key)
 		if at then
 			local to = max(0, math.min(box.scroll:Range(), at - W.AIR))
 			win.glide = { from = box.scroll:At(), to = to, t = 0, key = key }
+			-- (The pick, and where the room stands for it: it stays the marked one until the room is scrolled.)
+			win.picked = { key = key, at = to, page = page }
 			box.rail:SetKid(key)
 		end
 	end
@@ -540,11 +596,19 @@ end
 
 -- The section in view, marked on the rail: the last head at or over the top of the room, or the last of all
 -- once the room is scrolled to its foot. (Not while gliding: the pick stays marked.)
+-- A section picked on the rail stays the marked one while the room stands where the pick left it. A room
+-- only a little taller than the window can't bring every section to its top: it stops at its foot, where
+-- the last section would be marked instead of the one picked.
 local function InView()
 	local page, box = win.pages[win.at], win.box
-	if win.guest or win.glide or not (page and page.heads) or type(win.at) == "table" then return end
+	if win.guest or win.glide or not (page and page.heads) then return end
 	if page.paged then return box.rail:SetKid(page.part) end
 	local now, far = box.scroll:At(), box.scroll:Range()
+	local pick = win.picked
+	if pick then
+		if pick.page == page and math.abs(now - pick.at) < 1 then return box.rail:SetKid(pick.key) end
+		win.picked = nil
+	end
 	local key
 	for i, head in ipairs(page.heads) do
 		local at = HeadAt(page, head)
@@ -589,7 +653,7 @@ local function Lay(_, width, height)
 		-- (Shown whole only where it isn't up (back from a guest) or for another width: a height alone is the room
 		-- fitted, not read again.)
 		local page = win.pages[win.at]
-		if not page or page ~= win.shown or (type(win.at) ~= "table" and page.width ~= win.pageW) then
+		if not page or page ~= win.shown or page.width ~= win.pageW then
 			Show()
 		else
 			Fit(not win.sizing)
@@ -626,6 +690,7 @@ local function Create()
 		onClose = function(self)
 			if win.guest then return win.guest.Hidden(self) end
 			win.open = false
+			Shy:Fire("SHY_HUB_CLOSED")
 		end,
 		close = function() Hub.Close() end,
 		head = { icon = core.mark, brand = "", panel = { glazed = true } },
@@ -704,35 +769,6 @@ local function Create()
 	box.content = box.scroll.content
 	box.content:SetWidth(W.IN + W.PAGE)
 
-	local bar = CreateFrame("Frame", nil, box)
-	bar:SetSize(W.PAGE, W.BAR)
-	bar:SetPoint("TOPLEFT", body, "TOPLEFT", W.EDGE + W.RAIL + W.PAD, -(W.HEADER + W.TOP))
-	bar.back = UI.Button(bar, "All addons", 110, function() Hub.Open("home") end)
-	bar.back:SetPoint("LEFT")
-	bar.defaults = UI.Button(bar, "Defaults", 90, function() end)
-	bar.defaults:SetPoint("RIGHT")
-	UI.Twice(bar.defaults, function()
-		local page = win.pages[win.at]
-		if not (page and page.OnDefault) then return end
-		page:OnDefault()
-		page:Hide()
-		page:Show()
-	end)
-	Help(bar.defaults, "Defaults", "Puts every setting on this page back as it came.")
-	bar.open = UI.Button(bar, "Open", 76, function()
-		local addon = win.at
-		Hub.Close()
-		addon:OpenWindow()
-	end)
-	bar.open:SetPoint("RIGHT", bar.defaults, "LEFT", -8, 0)
-	local under = bar:CreateTexture(nil, "ARTWORK")
-	UI.Paint(under, C.border, 0.6)
-	under:SetHeight(1)
-	under:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -W.BAR_GAP / 2)
-	under:SetPoint("RIGHT")
-	bar:Hide()
-	box.bar = bar
-
 	-- While it is open: the page on show measured, and the rail's words kept up as settings change.
 	local measured, told = 0, 0
 	box:HookScript("OnUpdate", Shy.Clocked("hub: its frame (the room measured, the rail's words)", function(_, elapsed)
@@ -769,20 +805,10 @@ local function Create()
 	Lay(box, UI.BodySize(box))
 end
 
--- A room that isn't there (an addon with no options) is Home.
+-- A room that isn't there (an addon that told no settings) is Home.
 local function Known(room)
-	if type(room) == "table" then return room.options and room or "home" end
 	return ROOM[room] and room or "home"
 end
-
--- An addon's page waits out a fight when it holds something the game protects: it can't be seated or shown then.
-local waiter = CreateFrame("Frame")
-waiter:SetScript("OnEvent", function(self)
-	self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-	local room = self.room
-	self.room = nil
-	if room then Hub.Open(room) end
-end)
 
 function Hub.Open(room)
 	-- Lent: brought up as it is; a room asked for ends the guest's walk first.
@@ -794,13 +820,13 @@ function Hub.Open(room)
 		end
 		win.guest.Leave()
 	end
-	if room ~= nil then room = Known(room) end
-	if type(room) == "table" and InCombatLockdown() and room.options:IsProtected() then
-		waiter.room = room
-		waiter:RegisterEvent("PLAYER_REGEN_ENABLED")
-		core:Print("those options open after the fight.")
+	-- An addon that told its settings: the Settings room, at them.
+	if type(room) == "table" and Settings.told[room.suffix] and Settings.Show then
+		Hub.Open("settings")
+		Settings.Show(room)
 		return
 	end
+	if room ~= nil then room = Known(room) end
 	if not win.box then Create() end
 	if room ~= nil then win.at = room end
 	win.open = true
@@ -828,7 +854,6 @@ function Hub.Lend(guest)
 			page:Hide()
 			page.lined = nil
 		end
-		box.bar:Hide()
 		for _, room in ipairs(ROOMS) do box.rail:SetKids(room.key, nil) end
 		box.rail:SetItems(guest.items)
 		for _, part in ipairs(box.credits) do part:Hide() end
@@ -907,17 +932,12 @@ Shy:On("SHY_HUD_LAYOUT", function(on)
 	if on and not win.guest then Hub.Close() end
 end)
 
-function Addon:RegisterOptions(page)
-	page:Hide()   -- so its first show builds it
-	self.options = page
-end
-
 function Addon:OpenOptions()
 	Hub.Open(self)
 end
 
 -- Home: who you are playing, the two things done most (arranging the screen, setting a character up), then
--- every addon, a click from its options.
+-- every addon, a click from its settings.
 
 -- RING: the face's ring, its art's size (DialMid, drawn for 40 to 44); FACE: the face inside it.
 -- FIRST: the first caption under the band; BELOW: a caption's top to its tiles'; NEXT: the last row to the next caption.
@@ -963,12 +983,13 @@ local function AddonTile(parent, a, width)
 	b.name:SetText(a.suffix)
 	UI.Ink(b.name, C.head)
 	b.line:SetText(a.tagline or "")
-	local usable = a.options ~= nil or a.OpenWindow ~= nil
+	local told = Settings.told[a.suffix] ~= nil and Settings.Show ~= nil
+	local usable = told or a.OpenWindow ~= nil
 	b:SetAlpha(usable and 1 or 0.5)
 	b:SetScript("OnClick", function()
 		if not usable then return end
 		PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
-		if a.options then
+		if told then
 			Hub.Open(a)
 		else
 			Hub.Close()
@@ -1047,7 +1068,7 @@ function Build.home(page)
 	local arrange = Shy.HUD.LayoutButton(banner, 130)
 	arrange:SetHeight(30)
 	arrange:SetPoint("RIGHT", -16, 0)
-	Help(arrange, "Layout mode", "Move anything on screen in one editor, the game's pieces and ours. Click a piece for its settings.")
+	Help(arrange, "Layout mode", "Move the game's pieces and the addons' in one editor. Click a piece for its settings.")
 	local setup
 	if S and S.Open then
 		setup = UI.Button(banner, "Set up " .. First(), 150, function() S.Open() end)
@@ -1123,7 +1144,7 @@ Shy.HubSection("screen", function(page, top)
 	local arrange = Shy.HUD.LayoutButton(page, 180)
 	arrange:SetHeight(30)
 	arrange:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -10)
-	local words = UI.Text(page, "Move anything on screen in one editor, the game's pieces and ours. Click a piece for its settings. Ours are saved with each Edit Mode layout.", 12, false, C.dim)
+	local words = UI.Text(page, "Move the game's pieces and the addons' in one editor. Click a piece for its settings. Addon pieces are saved with each Edit Mode layout.", 12, false, C.dim)
 	words:SetPoint("TOPLEFT", arrange, "TOPRIGHT", 14, 2)
 	words:SetWidth(page.width - 180 - 14)
 	words:SetWordWrap(true)
@@ -1226,42 +1247,12 @@ end
 
 Shy.HubBrief("profiles", function() return (ProfileWords()) end)
 
--- Tools: the switches that are nobody else's, and what to reach for when something looks wrong.
+-- Tools: what to reach for when something looks wrong, and the core's commands. (An addon's commands are
+-- listed with its settings.)
 
 function Build.tools(page, top)
-	local COL, RIGHT = 260, 306
-	local group = UI.Group(function() Shy.UpdateMinimapButton() end)
-	local general = Shy.HubHead(page, top, "General")
-	local splash = group:Checkbox(page, "Show splash on login",
-		function() return core.db.splash end, function(v) core.db.splash = v end,
-		{ desc = "Shows the logo for a few seconds when you log in." })
-	splash:SetPoint("TOPLEFT", general, "BOTTOMLEFT", 0, -10)
-	local preview = UI.Button(page, "Preview splash", 130, function() B.ShowSplash() end)
-	preview:SetPoint("TOPLEFT", general, "BOTTOMLEFT", RIGHT, -8)
-
-	local minimap = group:Checkbox(page, "Show minimap button",
-		function() return core.db.minimap end, function(v) core.db.minimap = v end,
-		{ desc = "A button on the minimap: click opens /shy, right-click lists your addons. On a round minimap, drag it along the rim." })
-	minimap:SetPoint("TOPLEFT", splash, "BOTTOMLEFT", 0, -8)
-	local gather = group:Checkbox(page, "Gather addon buttons",
-		function() return core.db.gather ~= false end, function(v) core.db.gather = v end,
-		{ desc = "Moves other addons' minimap buttons off the map and into this button's right-click menu.",
-			enabled = function() return core.db.minimap end })
-	gather:SetPoint("TOPLEFT", minimap, "BOTTOMLEFT", 0, -8)
-
-	local rest = group:Slider(page, "Hover delay", 0, 3, 0.1,
-		function() return math.floor(core.db.rest * 10 + 0.5) / 10 end,
-		function(v) core.db.rest = math.floor(v * 10 + 0.5) / 10 end,
-		{ width = COL, format = function(v) return v == 0 and "At once" or string.format("%.1f s", v) end,
-			desc = "How long you hover before a tooltip shows more." })
-	rest:SetPoint("TOPLEFT", gather, "BOTTOMLEFT", 0, -16)
-	local restHelp = UI.Text(page, "Hold Shift to see it all at once. A pinned tooltip always shows everything.", 12, false, C.dim)
-	restHelp:SetPoint("TOPLEFT", rest, "TOPLEFT", RIGHT, 0)
-	restHelp:SetWidth(page.width - RIGHT)
-	restHelp:SetWordWrap(true)
-
 	-- The task manager, the Lua errors kept in a bag (Errors.lua) and who else runs these addons.
-	local wrong = Shy.HubHead(page, rest, "When something looks wrong")
+	local wrong = Shy.HubHead(page, top, "When something looks wrong")
 	local monitor = UI.Button(page, "Task manager", 130, function()
 		Hub.Close()
 		Shy.Monitor()
@@ -1277,20 +1268,15 @@ function Build.tools(page, top)
 		end)
 		report:SetPoint("LEFT", last, "RIGHT", 10, 0)
 		last = report
-		local popup = group:Checkbox(page, "Show the game's error window", function() return E.Popup() end, function(v) E.SetPopup(v) end,
-			{ desc = "Addon errors also open the game's own error window. Off, they're only kept in Errors caught." })
-		popup:SetPoint("TOPLEFT", monitor, "BOTTOMLEFT", 0, -12)
 	end
 	local ping = UI.Button(page, "Version check", 130, function() Shy.Ping() end)
 	ping:SetPoint("LEFT", last, "RIGHT", 10, 0)
 	Help(ping, "Version check", "Asks your raid, party or guild which of these addons they run.")
 
 	local cmds = Shy.HubHead(page, monitor, "Commands")
-	cmds:ClearAllPoints()
-	cmds:SetPoint("TOPLEFT", monitor, "BOTTOMLEFT", 0, Shy.Errors and -62 or -26)
-	local lines = { "|cffffd200/shy|r  open this window" }
+	local lines = { "|cffffd200/shy|r  open this window", "|cffffd200/set|r  find a setting" }
 	for _, command in ipairs(listed) do
-		lines[#lines + 1] = "|cffffd200/shy " .. command.word .. "|r  " .. command.help
+		if not command.addon then lines[#lines + 1] = "|cffffd200/shy " .. command.word .. "|r  " .. command.help end
 	end
 	-- Two columns: the list is long and each line short.
 	local half = math.ceil(#lines / 2)
@@ -1304,9 +1290,77 @@ function Build.tools(page, top)
 	right:SetPoint("TOPLEFT", cmds, "BOTTOMLEFT", page.width / 2 + 10, -10)
 	right:SetWidth(page.width / 2 - 10)
 	right:SetWordWrap(false)
+	local more = UI.Text(page, "Each addon's own commands are listed with its settings.", 12, false, C.dim)
+	more:SetPoint("TOPLEFT", left, "BOTTOMLEFT", 0, -14)
+	return more
+end
 
-	page.refresh[#page.refresh + 1] = function() group:Refresh() end
-	return left
+-- The core's own settings, in the Settings room with everyone's.
+core:Settings({
+	apply = function()
+		if Shy.UpdateMinimapButton then Shy.UpdateMinimapButton() end
+	end,
+	{ key = "splash", label = "Login splash", desc = "Shows the logo for a few seconds when you log in." },
+	{ label = "See the splash", button = "Show it", sub = true, run = function() B.ShowSplash() end },
+	{ key = "minimap", label = "Minimap button", desc = "Click it to open this window. Right-click it for your addons." },
+	{ key = "gather", label = "Gather addon buttons", sub = true, default = true, words = "minimap buttons tidy collect",
+		get = function() return core.db.gather ~= false end,
+		enabled = function() return core.db.minimap end,
+		desc = "Tucks other addons' minimap buttons into this button's right-click menu." },
+	{ key = "rest", label = "Hover delay", min = 0, max = 3, step = 0.1, words = "tooltip wait",
+		get = function() return math.floor(core.db.rest * 10 + 0.5) / 10 end,
+		set = function(v) core.db.rest = math.floor(v * 10 + 0.5) / 10 end,
+		format = function(v) return v == 0 and "At once" or string.format("%.1f s", v) end,
+		desc = "How long you hover before a tooltip shows more. Hold Shift to see it all at once." },
+	{ label = "Game's error window", default = false, words = "lua errors popup bug",
+		shown = function() return Shy.Errors ~= nil end,
+		get = function() return Shy.Errors.Popup() end, set = function(v) Shy.Errors.SetPopup(v) end,
+		desc = "Addon errors also pop up the game's own error window. Off, they're only kept in Errors caught." },
+
+	-- How threat is read for you: one pick for the meter, the nameplates and a class's own warnings. Told here,
+	-- once, and only while something of yours shows threat.
+	{ section = "Threat", shown = function() return Shy.addons.Threat ~= nil or Shy.addons.Plates ~= nil or Shy.addons.Warrior ~= nil end },
+	{ key = "threat.role", label = "You are", words = "tank dps healer role aggro",
+		items = { { value = "auto", text = "By your role" }, { value = "tank", text = "The tank" }, { value = "dps", text = "Not the tank" } },
+		get = function() return Shy.ThreatRolePick() end, set = function(v) Shy.SetThreatRole(v) end,
+		-- (By your role: what that is read as right now.)
+		says = function() return Shy.ThreatRolePick() == "auto" and Shy.RoleSays and Shy.RoleSays() or nil end,
+		desc = "Whether a mob on you is good news or bad. It colors threat everywhere it shows." },
+	-- (It sounds only while something reads the mobs: the threat meter, a class's own warning.)
+	{ key = "threat.sound", label = "Aggro sound", words = "warning alarm pull",
+		enabled = function()
+			if Shy.Aggro and Shy.Aggro.Watched and Shy.Aggro.Watched() then return true end
+			return false, "Nothing of yours is watching threat right now."
+		end,
+		get = function() return Shy.ThreatSound() end, set = function(v) Shy.SetThreatSound(v) end,
+		desc = "Plays a warning when you pull aggro, or lose it while you tank." },
+})
+-- (Picked on the meter's menu or a nameplate's too: the list reads again.)
+Shy:On("SHY_THREAT_ROLE", function() Settings.Refresh() end)
+Shy:On("SHY_THREAT_SOUND", function() Settings.Refresh() end)
+
+-- What the window's other rooms hold, so the search finds it and a click goes there.
+do
+	local Door = Settings.Door
+	Door("theme", "Ready-made themes", "Pick a whole look in one click.", "preset look style skin")
+	Door("theme", "Your color", "The accent color, or a blend of several.", "accent hue saturation lightness class color gradient")
+	Door("theme", "Text", "The font and its shadow.", "font typeface shadow outline")
+	Door("theme", "Icons", "Their shape, frames and wells.", "icon shape round square slot border")
+	Door("theme", "Bar fill", "How health and power bars are filled.", "texture statusbar")
+	Door("theme", "Your health color", "What color your own health bar is.", "health bar class color")
+	Door("theme", "Background", "How see-through panels and windows are.", "opacity transparency alpha strength")
+	Door("screen", "Size", "How big everything is.", "ui scale zoom bigger smaller")
+	Door("screen", "Layout", "Move anything on your screen.", "layout mode edit mode position unlock drag", "Layout")
+	Door("play", "Waypoint arrow", "Points the way to your next step and says how far it is.", "arrow direction distance")
+	Door("play", "Fade HUD when idle", "The HUD fades while nothing is happening.", "immersive hide ui immersion")
+	Door("play", "Voices", "People speak their lines aloud.", "voice over spoken quest text")
+	Door("play", "Quest text size", "How big a quest giver's words are.", "font size dialog")
+	Door("play", "Camera", "How the camera follows you.", "slopes map fade tilt")
+	Door("keys", "Your keys", "Your class laid out on your keys.", "keybinds hotkeys bindings action bars")
+	Door("profiles", "Profile", "Which settings this character uses, and copies of them.", "profile character global copy delete create")
+	Door("tools", "Task manager", "What each addon costs your game.", "performance fps memory cpu monitor")
+	Door("tools", "Errors caught", "The addon errors kept so far.", "lua error bug report")
+	Door("tools", "Version check", "Ask your group or guild who runs these addons.", "ping version")
 end
 
 Shy.HubBrief("tools", function()
@@ -1359,7 +1413,7 @@ Shy.Command("minimap", "show or hide the minimap button", function()
 	Shy.UpdateMinimapButton()
 	if win.open then Show() end
 end)
-Shy.Command("layout", "toggle layout mode", Layout)
+Shy.Command("layout", "move anything on your screen", Layout)
 Shy.Command("move", nil, Layout)
 
 -- For testing out of a fight: the game's limits on addons (secret values and all) forced on, one setting
@@ -1421,36 +1475,69 @@ function Shy.Monitor(view, key)
 	addon:Open(view, key)
 	return true
 end
-Shy.Command("monitor", "the task manager: what each addon costs the game", function() Shy.Monitor() end)
+-- /shy monitor: its window, opened or closed. With an addon's name, at that addon; "errors", the errors caught.
+Shy.Command("monitor", "what each addon costs your game", function(rest)
+	local addon = MonitorLoaded()
+	if not addon then return end
+	if addon.Ask then addon:Ask(rest) else addon:Open() end
+end)
 -- The census (Core.lua): the scripts no clock times, timed for the task manager, for one session. Asked for, it
 -- runs after this reload and is off again at the next; asked while it runs, the reload ends it.
-Shy.Command("census", "time the scripts no clock times, for the task manager (one session)", function()
+-- (For finding faults. Not listed.)
+Shy.Command("census", nil, function()
 	local on = not Shy.Census()
 	Shy.SetCensus(on)
 	Shy.Reload(on and "The task manager will list every script with no clock of its own, until you next reload." or "The task manager goes back to its own clocks.")
 end)
 
--- /shymon before the task manager has loaded: the first use loads it, and its own command (which
--- replaces this one as it loads) takes the words.
-local function MonitorCommand(input)
-	if not MonitorLoaded() then return end
-	local command = SlashCmdList.SHYMONITOR
-	if command ~= MonitorCommand then command(input) end
+-- /shy: a command and what was typed after it, a room or an addon by its name, anything else looked for in the
+-- settings; nothing typed, the window where it was.
+local function Words(typed)
+	local words, ends = {}, {}
+	for word, stop in typed:gmatch("(%S+)()") do
+		words[#words + 1], ends[#ends + 1] = word:lower(), stop
+	end
+	return words, ends
 end
-SLASH_SHYMONITOR1 = "/shymonitor"
-SLASH_SHYMONITOR2 = "/shymon"
-SlashCmdList.SHYMONITOR = MonitorCommand
 
--- /shy: a command, a room by its name, else the window where it was.
-SLASH_SHY1 = "/shy"
-SlashCmdList.SHY = function(input)
-	local word = strtrim(input or ""):lower()
-	local command = commands[word]
-	if command then
-		command()
-	elseif ROOM[word] then
+local function AddonNamed(word)
+	for _, a in ipairs(Shy.order) do
+		if not a.internal and a.suffix:lower() == word then return a end
+	end
+end
+
+function Hub.Run(input)
+	local typed = strtrim(input or "")
+	local words, ends = Words(typed)
+	for k = #words, 1, -1 do
+		local command = commands[table.concat(words, " ", 1, k)]
+		local rest = command and strtrim(typed:sub(ends[k]))
+		if command and not (command.bare and rest ~= "") then
+			command.fn(rest)
+			return
+		end
+	end
+	local word = words[1]
+	if not word then
+		Hub.Open()
+	elseif #words == 1 and ROOM[word] and (not ROOM[word].owned or sections[word]) then
 		Hub.Open(word)
+	elseif #words == 1 and AddonNamed(word) then
+		Hub.Open(AddonNamed(word))
+	elseif Settings.Find then
+		Settings.Find(typed)
 	else
 		Hub.Open()
 	end
 end
+
+SLASH_SHY1 = "/shy"
+SlashCmdList.SHY = function(input) Hub.Run(input) end
+
+-- /set: the settings, at what was typed after it.
+local function Set(rest)
+	if Settings.Find then Settings.Find(rest or "") else Hub.Open() end
+end
+Shy.Command("settings", "find a setting", Set)
+SLASH_SHYSET1 = "/set"
+SlashCmdList.SHYSET = function(input) Set(strtrim(input or "")) end

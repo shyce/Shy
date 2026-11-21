@@ -289,7 +289,7 @@ local function Make(parent)
 	row.star:SetScript("OnEnter", function(self)
 		row:Glow(true)
 		UI.Tip(self, J.Wanted(row.data.item) and "Starred" or "Star this drop",
-			"Starred drops are listed on the dungeon's Overview, and you're told when one drops.", { side = "LEFT" })
+			"You'll see starred drops on the dungeon's Overview, and get told when one drops.", { side = "LEFT" })
 	end)
 	row.star:SetScript("OnLeave", function(self)
 		row:Glow(false)
@@ -417,7 +417,7 @@ local function Where(tip, data)
 	end
 	if #drops > L.most then tip:AddLine(("and %d more places"):format(#drops - L.most), C.dim[1], C.dim[2], C.dim[3]) end
 end
-TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, Where)
+Shy.OnTip(Enum.TooltipDataType.Item, "where it drops", Where)
 
 -- The game told of an item a row asked for: the rows showing it say so, and a list picked without it is picked again.
 local events = CreateFrame("Frame")

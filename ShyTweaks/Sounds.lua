@@ -7,12 +7,12 @@ if not MuteSoundFile or not UnmuteSoundFile or not ns.sounds then return end
 
 -- key in Data/Sounds.lua, label, description, ticked when the tweak is first switched on
 local KINDS = {
-	{ "bells",    "City bells",      "The bell, horn or drums each capital sounds on the hour.", true },
+	{ "bells",    "City bells",      "The bell, horn or drums a capital sounds on the hour.", true },
 	{ "train",    "Train emote",     "The whistle when someone types /train.", true },
-	{ "fizzle",   "Spell fizzle",    "The sound of a spell being interrupted.", false },
+	{ "fizzle",   "Spell fizzle",    "The fizzle when a spell is interrupted.", false },
 	{ "tram",     "Deeprun Tram",    "The tram cars starting, running and stopping.", false },
-	{ "zeppelin", "Zeppelins",       "The engines, gas bags and horn of a zeppelin.", false },
-	{ "strider",  "Mechanostriders", "The clanking steps and whirs of mechanostriders.", false },
+	{ "zeppelin", "Zeppelins",       "A zeppelin's engines, gas bags and horn.", false },
+	{ "strider",  "Mechanostriders", "A mechanostrider's clanking steps and whirs.", false },
 }
 
 local muted = {}   -- file ID -> true: what this tweak has muted this session
@@ -52,7 +52,7 @@ ns.Feature({
 	id = "muteSounds",
 	category = "System",
 	title = "Mute sounds",
-	desc = "Silences the game sounds you tick below.",
+	desc = "The game sounds you switch on below go quiet.",
 	keywords = "mute sound silence quiet noise audio bell toll hourly horn drums fizzle interrupt train choo tram subway zeppelin mechanostrider gnome mount",
 	default = false,
 	options = options,

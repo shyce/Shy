@@ -34,7 +34,7 @@
 --     needs when the log is read, an item's standing once until either changes, and the bags are walked for
 --     what could be put away only by a banker. A walk asks nothing; with nothing of a quest's in the bank
 --     the finder is a few comparisons.
---   /shyquest bank copies what it knows.
+--   /shy quest bank copies what it knows.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -1354,7 +1354,7 @@ Shy:On("SHY_BAGS_SCANNED", function(guid, source)
 	ns.RefreshErrands()
 end)
 
--- What it knows, for /shyquest bank.
+-- What it knows, for /shy quest bank.
 function Stash.Report()
 	local out = {}
 	local needs, book = Needs()

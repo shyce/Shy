@@ -17,28 +17,11 @@ ns.T = T
 
 ns.isWarlock = select(2, UnitClass("player")) == "WARLOCK"
 
-function T:OnLoad()
-	self:RegisterOptions(ns.CreateOptions())
-end
-
 function T:OnLogin()
 	if not ns.isWarlock then return end
 	if ns.SetupKeys then ns.SetupKeys() end   -- (nothing to lay out without ShyKeys)
 end
 
-SLASH_SHYWARLOCK1 = "/shywarlock"
-SlashCmdList.SHYWARLOCK = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "keys" and ns.Keys then
-		ns.Keys.Run()
-	elseif cmd == "keys list" and ns.Keys then
-		Shy.Hub.Open("keys")
-	else
-		T:Print("commands:")
-		print("  /shywarlock  - open options")
-		print("  /shywarlock keys  - lay out your keys and macros, for every level")
-		print("  /shywarlock keys list  - every key and what it does")
-	end
+if ns.isWarlock and Shy.Keys then
+	T:Command("keys", "lay out your keys and macros, for every level", function() ns.Keys.Run() end)
 end

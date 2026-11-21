@@ -1,5 +1,5 @@
 -- Picking the cooldown manager's size and the tracked bars' side: one section for the setup window's
--- Cooldowns step, the /shy window and ShyDock's options page. The vessel is drawn from the same plan and
+-- Cooldowns step, and the /shy window's Screen room. The vessel is drawn from the same plan and
 -- art as the HUD, and the size and the bars' side are chips that draw their choice: beside the drawing on
 -- the setup window's wide page, under it on the narrower ones. Pointing at
 -- a choice draws it; a click applies at once (in setup it goes into the plan as well). The housings
@@ -513,7 +513,7 @@ Shy.Setup.Step({
 -- The /shy window's Screen room, under the console.
 Shy.HubSection("screen", function(page, top)
 	local head = Shy.HubHead(page, top, "Cooldown manager")
-	local words = UI.Text(page, "Its size and the bars' side. Changes apply now; drag it or take it apart in layout mode.", 12, false, C.dim)
+	local words = UI.Text(page, "Its size and the bars' side. Changes apply now. Drag it or take it apart in layout mode.", 12, false, C.dim)
 	words:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -10)
 	words:SetWidth(page.width)
 	words:SetWordWrap(false)

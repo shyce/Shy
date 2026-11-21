@@ -771,11 +771,11 @@ local function BuildPage()
 		ns.T.db.options.clickAll = on
 		page.only, page.offset = nil, 0
 		Draw()
-	end, { box = 14, size = 11, desc = "Lists every spell in your book. Off, the list is the open tab's, as the book's own pages are." })
+	end, { box = 14, size = 11, desc = "Lists every spell in your book. When off, you only see the open tab's spells." })
 	page.ranks = UI.Checkbox(page, "All ranks", function() return C_CVar.GetCVarBool(CVAR.ranks) end, function(on)
 		C_CVar.SetCVar(CVAR.ranks, on and "1" or "0")
 		Bake()
-	end, { box = 14, size = 11, desc = "Lists every rank of a spell you know, so a cheaper rank can have a click of its own." })
+	end, { box = 14, size = 11, desc = "Lists every rank of a spell you know, so you can bind a cheaper rank to its own click." })
 
 	-- The pad, and under it every binding.
 	page.pad = Pad(page)
@@ -1210,7 +1210,7 @@ local function Settings(body)
 		passives:SetEnabled(not fight)
 		local flyouts = root:CreateCheckbox("Spells grouped in flyouts", function() return not C_CVar.GetCVarBool(CVAR.flyouts) end, Flip(CVAR.flyouts))
 		flyouts:SetIcon(UI.MenuGlyph("log"))
-		flyouts:SetSub("Off lists each one on its own")
+		flyouts:SetSub("Turn off to list each one separately")
 		flyouts:SetEnabled(not fight)
 		if fight then passives:SetSub("After the fight") end
 		root:CreateSection("Show only")
@@ -1893,7 +1893,9 @@ end
 M = ns.Module({
 	id = "spells",
 	title = "Spellbook and talents",
-	desc = "Brings back the Classic spellbook, two columns to a page with tabs down the side, and packs the three talent trees closer together, each on its own painting.",
+	desc = "You get the Classic spellbook, two columns to a page, and a talent window with your three trees side by side.",
+	group = "rebuilt",
+	words = "spells abilities",
 	Ready = function()
 		local f = PlayerSpellsFrame
 		return f ~= nil and f.SpellBookFrame ~= nil and f.TalentsFrame ~= nil

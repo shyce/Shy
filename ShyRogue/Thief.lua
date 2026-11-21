@@ -104,10 +104,11 @@ local function SetupLockboxes()
 	action:SetPoint("RIGHT", -8, 0)
 
 	local events = CreateFrame("Frame")
-	for _, event in ipairs({ "BAG_UPDATE_DELAYED", "SKILL_LINES_CHANGED", "PLAYER_REGEN_ENABLED", "SPELLS_CHANGED" }) do
+	for _, event in ipairs({ "BAG_UPDATE_DELAYED", "SKILL_LINES_CHANGED", "PLAYER_REGEN_ENABLED" }) do
 		events:RegisterEvent(event)
 	end
 	events:SetScript("OnEvent", UpdateLockboxes)
+	Shy:On("SHY_SPELLS", function() UpdateLockboxes() end)   -- (Pick Lock learned: ShyCore says only a real change)
 	table.insert(ns.refreshers, UpdateLockboxes)
 	UpdateLockboxes()
 end
@@ -124,6 +125,7 @@ local function Add(money, items, value)
 	local all = ShyRogueCharDB
 	session.money, session.items, session.value = session.money + money, session.items + items, session.value + value
 	all.money, all.items, all.value = all.money + money, all.items + items, all.value + value
+	if ns.RefreshOptions then ns.RefreshOptions() end   -- the totals in the settings
 end
 
 local function OnLootReady()
@@ -141,9 +143,6 @@ local function OnLootReady()
 		end
 	end
 	Add(0, items, value)
-	if T.db.pickpocket.report and items > 0 then
-		T:Print(("pickpocketed %d item%s worth %s"):format(items, items == 1 and "" or "s", ns.Money(value)))
-	end
 end
 
 local function OnMoney()
@@ -152,7 +151,6 @@ local function OnMoney()
 	lastMoney = now
 	if gained > 0 and (looting or GetTime() < moneyUntil) then
 		Add(gained, 0, 0)
-		if T.db.pickpocket.report then T:Print("pickpocketed " .. ns.Money(gained)) end
 	end
 end
 

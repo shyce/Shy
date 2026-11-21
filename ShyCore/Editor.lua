@@ -96,7 +96,7 @@ local function Build()
 			piece.switch.set(on)
 			HUD.Switched(piece)
 		end,
-		{ desc = "Off, it doesn't show at all, and shows grey here." })
+		{ desc = "When off, it's hidden in play and shows grey here." })
 	panel.lock = group:Checkbox(panel, "Lock in place",
 		function() return piece ~= nil and Act.IsLocked(piece) end,
 		function(on) if piece then Act.Lock(piece, on) end end,

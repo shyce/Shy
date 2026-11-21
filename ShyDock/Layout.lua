@@ -1916,6 +1916,7 @@ layoutNews:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
 layoutNews:SetScript("OnEvent", function()
 	Forget()
 	C_Timer.After(0, TellRole)
+	Shy.Settings.Refresh()   -- the console came into use or went out of it: the settings that need it read again
 end)
 Shy:On("SHY_LOGIN", TellRole)
 
@@ -2222,7 +2223,7 @@ end
 
 -- The option changed: written into the console's layout at once if it is in use, with the reload
 -- asked for; otherwise it waits for the next setup. In a fight, once the fight is over.
-local afterFight
+local afterFight, owedCooldowns
 function L.CooldownsInCombat()
 	if not L.IsActive() then return end
 	if InCombatLockdown() then
@@ -2234,21 +2235,24 @@ function L.CooldownsInCombat()
 			end)
 		end
 		afterFight:RegisterEvent("PLAYER_REGEN_ENABLED")
+		owedCooldowns = true
 		return
 	end
+	owedCooldowns = nil
 	Forget()
 	local info = C_EditMode.GetLayouts()
 	local mine = Mine(info.layouts)
 	if not (mine and Visibility(info.layouts[mine])) then return end
 	C_EditMode.SaveLayouts(info)
 	Forget()
+	Shy.Settings.Refresh()
 	Shy.Reload("The cooldown setting is saved. Reload to apply it.")
 end
 
 -- The option is on but the console's layout in use was written without it. The layout is never
--- rewritten unasked, so this is only said (once per character).
+-- rewritten unasked, so this is only said (once per character). Not while a fight holds the writing up.
 function L.CooldownsWaiting()
-	return T.db.cooldownsInCombat and next(ns.char.shown) == nil and L.IsActive() and not L.CombatOnly("essential")
+	return T.db.cooldownsInCombat and not owedCooldowns and next(ns.char.shown) == nil and L.IsActive() and not L.CombatOnly("essential")
 end
 
 -- First setup, and per-size text
@@ -2367,18 +2371,19 @@ local function Tell()
 	ns.char.news, ns.char.stowed = nil, nil
 	if news then
 		T:Print("setup turned on " .. news
-			.. ". Turn any of them off in the game's options; setting up again won't turn them back on.")
+			.. ". Turn any of them off in the game's options. Setting up again won't turn them back on.")
 	end
 	if stowed then
-		T:Print("put away " .. stowed .. " until you learn more abilities. Their buttons are kept.")
+		T:Print("put away " .. stowed .. " until you learn more abilities. You keep their buttons.")
 	end
 end
 Shy:On("SHY_LOGIN", function() C_Timer.After(4, Tell) end)
 
--- Live: the setup window's picks go on the screen as they are made. The layout is written and applied
--- at once (Activate), with no reload. Edit Mode applying a layout for an addon leaves what it writes
--- tainted until the next reload, so the window's Finish reloads, and closing it puts back what stood
--- before the first pick (Unpreview) and asks for one (Owed).
+-- Live: the setup window's picks and the Screen room's go on the screen as they are made. The layout is
+-- written and applied at once (Activate), with no reload. Edit Mode applying a layout for an addon leaves
+-- what it writes tainted until the next reload, so the setup window's Finish reloads, and closing it puts
+-- back what stood before the first pick (Unpreview) and asks for one (Owed). The room keeps what it put on
+-- (Keep) and asks once its window closes.
 local before   -- what stood before the first live pick: the layouts, the bars' switches, chat's text sizes, ns.char
 local owed     -- a layout was applied live since the last reload
 local wearing  -- a live pick waiting for the bars it switched on (L.Wear)
@@ -2427,6 +2432,7 @@ end
 
 function L.Previewing() return before ~= nil end
 function L.Owed() return owed == true end
+function L.Wearing() return wearing ~= nil end
 
 -- Finish: what is on the screen is the answer. The bars it switched on or put away since the first pick are
 -- told after the reload, as a setup's are.

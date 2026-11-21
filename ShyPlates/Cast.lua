@@ -3,7 +3,7 @@
 -- "Not interruptible" can be secret too: colors and the shield go through the boolean-evaluating setters.
 
 local ADDON, ns = ...
-local L, U = ns.Layout, ns.Units
+local L = ns.Layout
 local B, UI, Theme, Skin = Shy.Brand, Shy.UI, Shy.Theme, Shy.Skin
 local Secret = ns.Secret
 
@@ -125,8 +125,8 @@ local function Show(plate, casting)
 	if casting then
 		if not was then
 			row:Show()
-			-- No reveal on a plate that was just attached, or in the preview.
-			if plate.fresh or plate.read ~= U then
+			-- No reveal on a plate that was just attached.
+			if plate.fresh then
 				row:SetAlpha(1)
 				plate.castGrow = nil
 				plate:Stack()
@@ -169,7 +169,7 @@ end
 
 function Cast.Read(plate)
 	local unit = plate.unit
-	if not unit or plate.read ~= U then return end
+	if not unit then return end
 	if not ns.T.db.casts or plate.mode ~= "full" then
 		Cast.Stop(plate)
 		return
@@ -252,7 +252,6 @@ end
 function Cast.Attach(plate)
 	local events, unit = plate.castEvents, plate.unit
 	events:UnregisterAllEvents()
-	if plate.read ~= U then return end
 	for _, event in ipairs(EVENTS) do events:RegisterUnitEvent(event, unit) end
 	Cast.Read(plate)
 end
@@ -262,31 +261,7 @@ function Cast.Detach(plate)
 	Cast.Stop(plate)
 end
 
--- Preview cast. cast: { name =, icon =, at = 0-1, left = "1.4", locked = }
-function Cast.Fake(plate, cast)
-	plate.fakeCast = cast
-	local bar = plate.cast
-	bar.binding:SetEnabled(false)
-	if not cast or not ns.T.db.casts or plate.mode ~= "full" then
-		Show(plate, false)
-		return
-	end
-	bar:SetMinMaxValues(0, 1)
-	bar:SetValue(cast.at)
-	bar.spell:SetText(cast.name)
-	bar.spell:SetTextColor(1, 1, 1)
-	bar.time:SetShown(ns.T.db.castTime)
-	bar.time:SetText(cast.left)
-	plate.castIcon.art:SetTexture(cast.icon)
-	Dress(plate, cast.locked == true, false)
-	Show(plate, true)
-end
-
 -- Called on a theme or settings change.
 function Cast.Paint(plate)
-	if plate.read ~= U then
-		Cast.Fake(plate, plate.fakeCast)
-	elseif plate.unit then
-		Cast.Read(plate)
-	end
+	if plate.unit then Cast.Read(plate) end
 end

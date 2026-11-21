@@ -152,6 +152,14 @@ function A.Left()
 	return #queue + (asking and 1 or 0)
 end
 
+-- You stopped letting it read: what stood in line is dropped, and the one asked is forgotten (its answer would
+-- go unheard, and count as nobody selling one).
+function A.Rest()
+	if T.db.auction then return end
+	wipe(queue)
+	asking, said = nil, 0
+end
+
 local events = CreateFrame("Frame")
 local handlers = {
 	AUCTION_HOUSE_SHOW = function()

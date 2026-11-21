@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffPlates|r
-## Notes: Nameplates with casts, debuffs, threat and combo points |cff888888/shyplates|r
+## Notes: Nameplates with casts, debuffs, threat and combo points |cff888888/shy plates|r
 ## Author: Shyce Cream
-## Version: 5.2.0
+## Version: 5.2.2
 ## X-Date: 2026-11-21
 ## IconTexture: Interface\AddOns\ShyPlates\Media\ShyPlatesMarkColor
 ## Dependencies: ShyCore

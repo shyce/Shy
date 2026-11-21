@@ -3,7 +3,7 @@
 -- The container can't be reconfigured in combat or while auras are secret: changes wait (Auras.waiting).
 
 local ADDON, ns = ...
-local L, U = ns.Layout, ns.Units
+local L = ns.Layout
 local UI, Skin = Shy.UI, Shy.Skin
 
 local Auras = {}
@@ -88,7 +88,6 @@ local function Container(plate)
 end
 
 function Auras.Build(plate)
-	if plate.read ~= U then return end   -- preview plates use Auras.Fake
 	plate.auraPieces, plate.auraSetting = {}, {}
 	plate.auras = Container(plate)
 end
@@ -109,10 +108,6 @@ end
 -- Applies settings: enabled groups and scale.
 function Auras.Arrange(plate)
 	local c, db = plate.auras, ns.T.db
-	if plate.read ~= U then
-		Auras.Fake(plate, plate.fakeAuras)
-		return
-	end
 	if not c then return end
 	if Restricted() then
 		-- Retried by Driver.lua once allowed, for this plate alone (Auras.CatchUp): a plate built in a fight
@@ -167,61 +162,9 @@ end
 
 -- Repaints borders on a theme change. Skipped while restricted: the borders catch up on the next change.
 function Auras.Paint(plate)
-	if plate.read ~= U then
-		Auras.Fake(plate, plate.fakeAuras)
-	elseif plate.auraPieces and not Restricted() then
+	if plate.auraPieces and not Restricted() then
 		for _, p in ipairs(plate.auraPieces) do
 			p.edge:SetVertexColor(p.rim[1], p.rim[2], p.rim[3])
 		end
 	end
-end
-
--- Preview auras. list: { { icon =, time = "6", count = "3", kind = "control" | "steal" | nil } }
-
-local RIMS = { control = Skin.colors.lit, steal = UI.colors.alert }
-
-function Auras.Fake(plate, list)
-	plate.fakeAuras = list
-	local db = ns.T.db
-	local row = plate.fakeRow
-	if not row then
-		row = CreateFrame("Frame", nil, plate.root)
-		row:SetPoint("BOTTOM", plate.name, "TOP", 0, L.AURA_RISE)
-		row.frames = {}
-		plate.fakeRow = row
-	end
-	local shown, width, height = {}, 0, 1
-	if plate.mode == "full" and plate.unit and not plate:IsFriend() then
-		for _, aura in ipairs(list or {}) do
-			local on = db.auras
-			if aura.kind == "control" then on = db.control elseif aura.kind == "steal" then on = db.steal end
-			if on then shown[#shown + 1] = aura end
-		end
-	end
-	for i, frame in ipairs(row.frames) do frame:SetShown(shown[i] ~= nil) end
-	for i, aura in ipairs(shown) do
-		local scale = aura.kind == "control" and L.CONTROL or 1
-		local w, h = L.AURA_W * scale, L.AURA_H * scale
-		local frame = row.frames[i]
-		if not frame then
-			frame = CreateFrame("Frame", nil, row)
-			frame.pieces = Pieces(frame, w, h, Skin.colors.metal)
-			row.frames[i] = frame
-		end
-		local p, rim = frame.pieces, RIMS[aura.kind] or Skin.colors.metal
-		frame:SetSize(w, h)
-		frame:ClearAllPoints()
-		frame:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", width, 0)
-		p.icon:SetTexture(aura.icon)
-		p.edge:SetVertexColor(rim[1], rim[2], rim[3])
-		p.time:SetText(aura.time or "")
-		p.count:SetText(aura.count or "")
-		p.cooldown:Hide()
-		frame:Show()
-		width = width + w + L.AURA_GAP
-		height = math.max(height, h)
-	end
-	row:SetSize(math.max(1, width - L.AURA_GAP), height)
-	row:SetScale(db.auraSize)
-	row:SetShown(#shown > 0)
 end

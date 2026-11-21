@@ -24,12 +24,11 @@ function Views.Left(when)
 end
 
 function Views.Gold()
-	local me = Store.Me()
-	local realm = me and me.realm
 	local out = { hand = 0, mail = 0, sold = 0, today = 0, week = 0, ever = 0, rows = {} }
+	-- (Your realm's characters: Store.List, by the realm each one's GUID says.)
 	for _, entry in ipairs(Store.List()) do
 		local c = entry.char
-		if c.realm == realm and not c.skip then
+		if not c.skip then
 			local mail, sold = ns.Ledger.Waiting(c)
 			local row = { guid = entry.guid, char = c, hand = c.money or 0, mail = mail, sold = sold }
 			if not c.mail and not c.auctions then
@@ -138,7 +137,7 @@ local function Shell(parent, rowHeight, make, fill)
 	plate:Hide()
 	plate.none = UI.Text(plate, "", 11, false, C.dim)
 	plate.none:SetPoint("TOPLEFT", 10, -8)
-	plate.none:SetWidth(WIDTH - 20)
+	plate.none:SetPoint("RIGHT", plate, "RIGHT", -10, 0)
 	plate.none:SetWordWrap(true)
 	plate.list = ns.Rows.New(plate, rowHeight, make, fill)
 	plate.list:SetPoint("TOPLEFT", 6, -3)
@@ -147,7 +146,7 @@ local function Shell(parent, rowHeight, make, fill)
 	-- none: the empty-state text; head: height reserved above the list.
 	function plate:List(things, none, rows, head)
 		self.none:SetText(#things == 0 and none or "")
-		self.list:SetShownRows(math.max(1, math.floor((rows * STEP - 5 - 6 - (head or 0)) / self.rowHeight)))
+		self.list:SetShownRows(math.max(1, (rows * STEP - 5 - 6 - (head or 0)) / self.rowHeight))
 		self.list:SetThings(things)
 	end
 	return plate
@@ -176,32 +175,17 @@ local function Misses(slots, guid, source)
 	return true
 end
 
--- Mail
+-- Mail: what waits in a character's mailbox. Over the letters, what they hold in all and when the first goes; each
+-- letter led by what it holds, who sent it and when it goes, its gold (or what it costs, cash on delivery) at the right.
 do
 	local wing, plate, owner = {}, nil, nil
 	Views.Wings.mail = wing
-
-	local function Make(row)
-		Parted(row)
-		row.left = Rounded(row, 10.5, C.dim)
-		row.left:SetPoint("TOPRIGHT", 0, -5)
-		row.from = Name(row, 12)
-		row.from:SetPoint("TOPLEFT", 0, -4)
-		row.from:SetPoint("TOPRIGHT", row.left, "TOPLEFT", -6, 1)
-		row.subject = UI.Text(row, "", 10.5, false, C.dim)
-		row.subject:SetPoint("BOTTOMLEFT", 0, 6)
-		row.subject:SetWidth(120)
-		row.subject:SetWordWrap(false)
-		row.gold = Rounded(row, 10.5)
-		row.gold:SetPoint("BOTTOMRIGHT", 0, 6)
-		row.pics = {}
-		for i = 1, 4 do
-			row.pics[i] = Pic(row)
-			row.pics[i]:SetPoint("BOTTOMRIGHT", row.gold, "BOTTOMLEFT", -4 - (i - 1) * 20, -3)
-			-- (The quest's mark on what a letter holds, as on a slot: Marks.lua's word for it.)
-			row.pics[i].pin = Shy.Slot.Pin(row, row.pics[i], "TOPRIGHT", 10)
-		end
-	end
+	local HEAD = 40     -- height above the rows: two lines and a rule
+	local ROW = 40
+	local LEAD = 26     -- what a letter holds first, as a picture
+	local MORE = 3      -- the rest of what it holds, smaller, beside its gold
+	local COIN = "Interface\\Icons\\INV_Misc_Coin_01"
+	local mine = {}     -- your characters' names -> their class, for the senders
 
 	-- What a letter holds, as { item, count, mark } each: what a quest needs first (now, then later), so it is
 	-- among the few pictures a row has room for.
@@ -222,22 +206,85 @@ do
 		return out
 	end
 
+	local function Make(row)
+		Parted(row)
+		row:EnableMouse(true)
+		row.fill = row:CreateTexture(nil, "BACKGROUND")
+		row.fill:SetAllPoints()
+		UI.Paint(row.fill, C.row)
+		row.fill:Hide()
+		-- The lead: what it holds first, its gold, or the letter itself.
+		row.lead = Pic(row)
+		row.lead:SetSize(LEAD, LEAD)
+		row.lead:SetPoint("LEFT", 2, 0)
+		row.lead.pin = Shy.Slot.Pin(row, row.lead, "TOPRIGHT", 11)
+		row.letter = row:CreateTexture(nil, "ARTWORK")
+		row.letter:SetSize(18, 18)
+		row.letter:SetPoint("CENTER", row.lead, "CENTER")
+		row.letter:SetTexture(ns.MEDIA .. "DoorMail")
+		Shy.Theme.Tint(row.letter, C.dim)
+		row.left = Rounded(row, 10.5, C.dim)
+		row.left:SetPoint("TOPRIGHT", 0, -5)
+		row.from = Name(row, 12)
+		row.from:SetPoint("TOPLEFT", row.lead, "TOPRIGHT", 7, 1)
+		row.from:SetPoint("RIGHT", row.left, "LEFT", -6, 0)
+		row.gold = Rounded(row, 10.5)
+		row.gold:SetPoint("BOTTOMRIGHT", 0, 6)
+		row.pics = {}
+		for i = 1, MORE do
+			row.pics[i] = Pic(row)
+			row.pics[i]:SetPoint("BOTTOMRIGHT", row.gold, "BOTTOMLEFT", -4 - (i - 1) * 20, -3)
+			-- (The quest's mark on what a letter holds, as on a slot: Marks.lua's word for it.)
+			row.pics[i].pin = Shy.Slot.Pin(row, row.pics[i], "TOPRIGHT", 10)
+		end
+		row.subject = UI.Text(row, "", 10.5, false, C.dim)
+		row.subject:SetPoint("BOTTOMLEFT", row.lead, "BOTTOMRIGHT", 7, -1)
+		row.subject:SetPoint("RIGHT", row.pics[MORE], "LEFT", -6, 0)
+		row.subject:SetWordWrap(false)
+		row:SetScript("OnEnter", function(self) self.fill:Show() end)
+		row:SetScript("OnLeave", function(self) self.fill:Hide() end)
+	end
+
 	local function Fill(row, mail)
-		row.from:SetText(mail.from ~= "" and mail.from or "The game")
-		if mail.sent then ClassColor(row.from, ns.Store.Me() and ns.Store.Me().class) else UI.Ink(row.from, C.text) end
+		local from = mail.from ~= "" and mail.from or "The game"
+		row.from:SetText(from)
+		-- Your own characters in their class color; the game's letters (the auction house's) quieter.
+		local class = mail.sent and ns.Store.Me() and ns.Store.Me().class or mine[from]
+		if class then ClassColor(row.from, class) else UI.Ink(row.from, mail.sys and C.dim or C.text) end
 		if mail.sent then
-			row.left:SetText("sent by you, not seen arriving yet")
+			row.left:SetText("on its way")
 			UI.Ink(row.left, C.dim)
 		else
 			local left, soon = Views.Left(mail.exp)
 			row.left:SetText(left)
 			UI.Ink(row.left, soon and C.alert or C.dim)
 		end
-		row.subject:SetText(mail.subj)
-		row.gold:SetText(mail.money > 0 and Coins(mail.money) or "")
+		row.subject:SetText(mail.ret and ("Returned \194\183 " .. mail.subj) or mail.subj)
+		if mail.cod then
+			row.gold:SetText("COD " .. Coins(mail.cod))
+			UI.Ink(row.gold, C.bad)
+		else
+			row.gold:SetText(mail.money > 0 and Coins(mail.money) or "")
+			UI.Ink(row.gold, C.text)
+		end
 		local held = Held(mail)
+		local first = held[1]
+		if first and first.id then
+			row.lead:Set(first.id, first.count)
+			row.lead.pin:Set(Shy.Slot.PINS[first.mark] and first.mark or nil)
+		elseif mail.money > 0 then
+			row.lead:SetTexture(COIN)
+			row.lead:Show()
+			row.lead.count:SetText("")
+			row.lead.pin:Set(nil)
+		else
+			row.lead:Hide()
+			row.lead.count:SetText("")
+			row.lead.pin:Set(nil)
+		end
+		row.letter:SetShown(not row.lead:IsShown())
 		for i, pic in ipairs(row.pics) do
-			local one = held[i]
+			local one = held[i + 1]
 			pic:Set(one and one.id, one and one.count)
 			pic.pin:Set(one and one.id and Shy.Slot.PINS[one.mark] and one.mark or nil)
 		end
@@ -245,16 +292,53 @@ do
 	end
 
 	function wing.Build(parent)
-		plate = Shell(parent, 41, Make, Fill)
+		plate = Shell(parent, ROW, Make, Fill)
 		wing.frame = plate
+		plate.none:ClearAllPoints()
+		plate.none:SetPoint("TOPLEFT", 10, -(HEAD + 4))
+		plate.list:ClearAllPoints()
+		plate.list:SetPoint("TOPLEFT", 6, -HEAD)
+		plate.list:SetPoint("RIGHT", plate, "RIGHT", -3, 0)
+		-- The head: the gold waiting, what else waits, and when the first letter goes.
+		plate.gold = Rounded(plate, 12)
+		plate.gold:SetPoint("TOPLEFT", 8, -7)
+		plate.things = Rounded(plate, 10.5, C.dim)
+		plate.things:SetPoint("TOPRIGHT", -8, -8)
+		plate.soon = Rounded(plate, 10.5, C.dim)
+		plate.soon:SetPoint("TOPLEFT", 8, -22)
+		local rule = plate:CreateTexture(nil, "ARTWORK")
+		rule:SetPoint("TOPLEFT", 6, -(HEAD - 3))
+		rule:SetPoint("TOPRIGHT", -6, -(HEAD - 3))
+		rule:SetHeight(1)
+		UI.Paint(rule, C.border, 0.65)
 	end
 
 	function wing.Show(c, guid, _, rows)
 		owner = { char = c, guid = guid }
+		wipe(mine)
+		for _, entry in ipairs(ns.Store.List()) do
+			if entry.char.class then mine[ns.Store.Name(entry.char)] = entry.char.class end
+		end
 		local list = c.mail and c.mail.rows or {}
+		local gold, items, first = 0, 0, nil
+		for _, mail in ipairs(list) do
+			if not mail.ret then gold = gold + (mail.money or 0) end
+			items = items + #mail.items
+			if not mail.sent and (not first or mail.exp < first) then first = mail.exp end
+		end
+		plate.gold:SetText(gold > 0 and (Coins(gold) .. Shy.Theme.Wrap(C.dim, "  waiting")) or Shy.Theme.Wrap(C.dim, "No gold waiting"))
+		plate.things:SetText(items > 0 and Count(items, "item") or "")
+		if first then
+			local left, soon = Views.Left(first)
+			plate.soon:SetText("The first goes: " .. left)
+			UI.Ink(plate.soon, soon and C.alert or C.dim)
+		else
+			plate.soon:SetText(#list > 0 and "Nothing about to go" or "")
+			UI.Ink(plate.soon, C.dim)
+		end
 		local none = c.mail and "The mailbox was empty."
 			or ("Mailbox not scanned yet. Open a mailbox on " .. ns.Store.Name(c) .. " once.")
-		plate:List(list, none, rows)
+		plate:List(list, none, rows, HEAD)
 		return WIDTH, "Mail", Count(#list, "letter"), Seen(c.mail)
 	end
 end
@@ -387,7 +471,6 @@ do
 	function wing.Build(parent)
 		plate = Shell(parent, 16, Make, Fill)
 		wing.frame = plate
-		plate.none:SetWidth(GOLD - 20)
 		plate.list:ClearAllPoints()
 		plate.list:SetPoint("TOPLEFT", 6, -HEAD)
 		plate.list:SetPoint("RIGHT", plate, "RIGHT", -3, 0)
@@ -483,11 +566,51 @@ do
 	end
 end
 
--- Make room: what Room.lua says can go, cheapest first
+-- Make room: what Room.lua says can go, under what kind of thing it is, cheapest first in each. The row you pick is
+-- what Drop (Sell, at a vendor) takes, lit alone in your bags. Until you pick one, the cheapest is picked.
 do
 	local wing, plate = {}, nil
 	Views.Wings.room = wing
-	local HEAD = 36   -- height above the rows: two lines and a rule
+	local HEAD = 40                -- height above the rows: two lines and a rule
+	local ROW = 28
+	local PIC = 22
+	local KEY = { w = 54, h = 20 }  -- the Drop key in the head
+	local KIND = { "Junk", "Plain materials", "Outgrown gear" }
+	local shown = {}               -- the rows as last listed, captions among them
+	local picked                   -- { bag, slot, id } of the row you picked
+	local at = 1                   -- where in the list the pick stood, for after it is gone
+
+	local function Items()
+		local out = {}
+		for _, thing in ipairs(shown) do
+			if not thing.caption then out[#out + 1] = thing end
+		end
+		return out
+	end
+
+	-- The row picked, still where it was; gone, the one now where it stood; else the cheapest.
+	local function Picked()
+		local items = Items()
+		for index, entry in ipairs(items) do
+			if picked and entry.bag == picked[1] and entry.slot == picked[2] and entry.id == picked[3] then
+				at = index
+				return entry
+			end
+		end
+		return items[math.min(at, #items)] or items[1]
+	end
+
+	local function Pick(entry)
+		picked = entry and { entry.bag, entry.slot, entry.id } or nil
+		if plate then plate.list:Refresh() end
+		if ns.Window.Point then
+			local now = Picked()
+			ns.Window.Point(now and now.bag, now and now.slot)
+		end
+		if wing.Head then wing.Head() end
+	end
+
+	local function Vendor() return MerchantFrame ~= nil and MerchantFrame:IsShown() end
 
 	local function Make(row)
 		row:EnableMouse(true)
@@ -495,99 +618,146 @@ do
 		row.fill:SetAllPoints()
 		UI.Paint(row.fill, C.row)
 		row.fill:Hide()
+		-- Picked: the row steeped in your color, an edge of it each side.
+		row.pick = row:CreateTexture(nil, "BACKGROUND", nil, 1)
+		row.pick:SetAllPoints()
+		UI.Paint(row.pick, C.pick)
+		row.edges = {}
+		for i, side in ipairs({ "TOP", "BOTTOM" }) do
+			local t = row:CreateTexture(nil, "BORDER")
+			t:SetPoint(side .. "LEFT")
+			t:SetPoint(side .. "RIGHT")
+			t:SetHeight(1)
+			UI.Paint(t, C.hot, 0.8)
+			row.edges[i] = t
+		end
+		-- What has to go for the room asked: a gold mark down its left.
 		row.lead = row:CreateTexture(nil, "ARTWORK")
-		row.lead:SetPoint("TOPLEFT", 0, -2)
-		row.lead:SetPoint("BOTTOMLEFT", 0, 2)
+		row.lead:SetPoint("TOPLEFT", 0, -3)
+		row.lead:SetPoint("BOTTOMLEFT", 0, 3)
 		row.lead:SetWidth(2)
 		UI.Paint(row.lead, C.alert)
 		row.pic = Pic(row)
+		row.pic:SetSize(PIC, PIC)
 		row.pic:SetPoint("LEFT", 6, 0)
-		row.worth = Rounded(row, 10.5)
-		row.worth:SetPoint("RIGHT", -2, 0)
+		row.worth = Rounded(row, 11)
+		row.worth:SetPoint("TOPRIGHT", -4, -3)
 		row.name = UI.Text(row, "", 12, true)
-		row.name:SetPoint("LEFT", row.pic, "RIGHT", 6, 0)
+		row.name:SetPoint("TOPLEFT", row.pic, "TOPRIGHT", 6, 2)
 		row.name:SetPoint("RIGHT", row.worth, "LEFT", -6, 0)
 		row.name:SetWordWrap(false)
+		row.each = Rounded(row, 10, C.dim)
+		row.each:SetPoint("BOTTOMLEFT", row.pic, "BOTTOMRIGHT", 6, -1)
+		-- A caption: the kind of thing under it, a hairline, and what the kind is worth.
+		row.caption = UI.Text(row, "", 10, true, C.dim)
+		row.caption:SetPoint("BOTTOMLEFT", 6, 5)
+		row.total = Rounded(row, 10, C.dim)
+		row.total:SetPoint("BOTTOMRIGHT", -4, 5)
+		row.rule = row:CreateTexture(nil, "ARTWORK")
+		row.rule:SetPoint("BOTTOMLEFT", 6, 2)
+		row.rule:SetPoint("BOTTOMRIGHT", -4, 2)
+		row.rule:SetHeight(1)
+		UI.Paint(row.rule, C.border, 0.65)
 		row:SetScript("OnEnter", function(self)
-			self.fill:Show()
 			local entry = self.entry
 			if not entry then return end
-			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			GameTooltip:SetBagItem(entry.bag, entry.slot)
-			GameTooltip:Show()
+			self.fill:Show()
+			-- Its slot lit alone, and its tooltip off that slot's corner: the list and the bags stay in sight.
 			if ns.Window.Point then ns.Window.Point(entry.bag, entry.slot) end
+			ns.Window.TipAt(self, entry.bag, entry.slot)
 		end)
 		row:SetScript("OnLeave", function(self)
 			self.fill:Hide()
 			GameTooltip:Hide()
-			if ns.Window.Point then ns.Window.Point(nil) end
+			-- The pick lit alone again.
+			local now = Picked()
+			if ns.Window.Point then ns.Window.Point(now and now.bag, now and now.slot) end
+		end)
+		row:SetScript("OnMouseUp", function(self, button)
+			if button == "LeftButton" and self.entry then Pick(self.entry) end
 		end)
 	end
 
-	local function Fill(row, entry)
-		row.entry = entry
-		row.pic:Set(entry.id, entry.count)
-		row.name:SetText(entry.name or ("item " .. tostring(entry.id)))
-		QualityColor(row.name, entry.quality)
-		row.worth:SetText(ns.Room.Coins(entry.value))
-		row.lead:SetShown(entry.lead == true)
-		row:SetAlpha(entry.lit and 1 or 0.45)
+	local function Fill(row, thing)
+		local caption = thing.caption ~= nil
+		row.entry = not caption and thing or nil
+		row:EnableMouse(not caption)
+		row.caption:SetShown(caption)
+		row.total:SetShown(caption)
+		row.rule:SetShown(caption)
+		for _, part in ipairs({ row.pic, row.pic.count, row.name, row.worth, row.each }) do part:SetShown(not caption) end
+		if caption then
+			row.caption:SetText(thing.caption:upper())
+			row.total:SetText(ns.Room.Coins(thing.value))
+			row.lead:Hide()
+			row.pick:Hide()
+			for _, t in ipairs(row.edges) do t:Hide() end
+			row.fill:Hide()
+			return
+		end
+		row.pic:Set(thing.id, thing.count)
+		row.name:SetText(thing.name or ("item " .. tostring(thing.id)))
+		QualityColor(row.name, thing.quality)
+		-- The whole stack's worth; under the name, what one is worth, or why it can go.
+		row.worth:SetText(ns.Room.Coins(thing.value))
+		if thing.over then
+			row.each:SetText("Its quest is done")
+		elseif thing.count > 1 then
+			row.each:SetText(("%d \195\151 %s each"):format(thing.count, ns.Room.Coins(math.floor(thing.value / thing.count))))
+		elseif thing.tier == 3 then
+			row.each:SetText("Worse than what you wear")
+		else
+			row.each:SetText(thing.value > 0 and "One" or "No vendor buys it")
+		end
+		row.lead:SetShown(thing.lead == true)
+		local now = Picked()
+		local on = now == thing
+		row.pick:SetShown(on)
+		for _, t in ipairs(row.edges) do t:SetShown(on) end
 	end
 
-	-- What Drop takes: the cheapest lit item of those that have to go for the room asked, else the cheapest lit one.
-	local function Next()
-		local things = ns.Room.Told()
-		for _, entry in ipairs(things) do
-			if entry.lead then return entry end
-		end
-		for _, entry in ipairs(things) do
-			if entry.lit then return entry end
-		end
-	end
-
-	-- One press drops it: picked out of its slot (still the item listed) and destroyed. Nothing to drag to the world.
-	local function Drop()
-		local entry = Next()
+	-- Picked out of its slot (still the item listed) and destroyed, or sold at a vendor. Nothing to drag to the world.
+	local function Act()
+		local entry = Picked()
 		if not entry or C_Container.GetContainerItemID(entry.bag, entry.slot) ~= entry.id then return end
+		if Vendor() then
+			C_Container.UseContainerItem(entry.bag, entry.slot)
+			return
+		end
 		ClearCursor()
 		C_Container.PickupContainerItem(entry.bag, entry.slot)
 		local kind, id = GetCursorInfo()
 		if kind == "item" and id == entry.id then DeleteCursorItem() else ClearCursor() end
 	end
 
-	local DROP = { w = 50, h = 20 }   -- the Drop key in the head
-
 	function wing.Build(parent)
-		plate = Shell(parent, 20, Make, Fill)
+		plate = Shell(parent, ROW, Make, Fill)
 		wing.frame = plate
 		plate.none:ClearAllPoints()
 		plate.none:SetPoint("TOPLEFT", 10, -(HEAD + 4))
 		plate.list:ClearAllPoints()
 		plate.list:SetPoint("TOPLEFT", 6, -HEAD)
 		plate.list:SetPoint("RIGHT", plate, "RIGHT", -3, 0)
-		plate.drop = UI.Button(plate, "Drop", DROP.w, Drop)
-		plate.drop:SetHeight(DROP.h)
-		plate.drop:SetPoint("TOPRIGHT", -6, -(HEAD - DROP.h) / 2 + 1)
-		-- Which item it takes, lit in the bags and named, while the mouse is on it.
-		plate.drop:HookScript("OnEnter", function(self)
-			local entry = Next()
+		plate.key = UI.Button(plate, "Drop", KEY.w, Act)
+		plate.key:SetHeight(KEY.h)
+		plate.key:SetPoint("TOPRIGHT", -6, -(HEAD - KEY.h) / 2 + 1)
+		plate.key:HookScript("OnEnter", function(self)
+			local entry = Picked()
 			if not entry then return end
-			if ns.Window.Point then ns.Window.Point(entry.bag, entry.slot) end
-			UI.Tip(self, "Drop", ("Destroys %s."):format(entry.name or "it"), { side = "TOP" })
+			local what = entry.count > 1 and ("%s \195\151%d"):format(entry.name or "it", entry.count) or (entry.name or "it")
+			UI.Tip(self, Vendor() and "Sell" or "Drop", (Vendor() and "Sells %s for %s." or "Destroys %s, worth %s."):format(what,
+				ns.Room.Coins(entry.value)), { side = "TOP" })
 		end)
-		plate.drop:HookScript("OnLeave", function(self)
-			if ns.Window.Point then ns.Window.Point(nil) end
-			UI.TipHide(self)
-		end)
+		plate.key:HookScript("OnLeave", function(self) UI.TipHide(self) end)
 		-- One line each, never wrapped: another addon's reason is cut at the wing's edge.
 		plate.why = UI.Text(plate, "", 12, true, C.alert)
-		plate.why:SetPoint("TOPLEFT", 8, -6)
-		plate.why:SetWidth(WIDTH - 16 - DROP.w - 6)
+		plate.why:SetPoint("TOPLEFT", 8, -7)
+		plate.why:SetPoint("RIGHT", plate.key, "LEFT", -6, 0)
 		plate.why:SetJustifyH("LEFT")
 		plate.why:SetWordWrap(false)
 		plate.how = Rounded(plate, 10.5, C.dim)
-		plate.how:SetPoint("TOPLEFT", 8, -20)
-		plate.how:SetWidth(WIDTH - 16 - DROP.w - 6)
+		plate.how:SetPoint("TOPLEFT", 8, -22)
+		plate.how:SetPoint("RIGHT", plate.key, "LEFT", -6, 0)
 		plate.how:SetJustifyH("LEFT")
 		plate.how:SetWordWrap(false)
 		local rule = plate:CreateTexture(nil, "ARTWORK")
@@ -595,21 +765,52 @@ do
 		rule:SetPoint("TOPRIGHT", -6, -(HEAD - 3))
 		rule:SetHeight(1)
 		UI.Paint(rule, C.border, 0.65)
+		-- Closed, nothing in the bags stays pointed at.
+		plate:HookScript("OnHide", function()
+			picked, at = nil, 1
+			if ns.Window.Point then ns.Window.Point(nil) end
+		end)
+	end
+
+	-- The head says what the key will do to the row picked.
+	function wing.Head()
+		local entry = Picked()
+		local vendor = Vendor()
+		plate.key:SetLabel(vendor and "Sell" or "Drop")
+		plate.key:SetUsable(entry ~= nil, "Nothing is safe to drop.")
+		if entry then
+			plate.how:SetText(vendor and "Click a row, then Sell." or "Click a row, then Drop.")
+		end
 	end
 
 	function wing.Show(_, _, _, rows)
 		local room = ns.Room
 		if not room then
-			plate:List({}, "", rows, HEAD)
+			shown = {}
+			plate:List(shown, "", rows, HEAD)
 			return WIDTH, "Make room", "", ""
 		end
-		local things, why, how, pressing, lit = room.Told()
+		local things, why, how, pressing = room.Told()
+		-- Under what kind of thing each is, in the list's own order: the kinds as Room.lua ranks them.
+		shown = {}
+		local total, head = 0, nil
+		for _, entry in ipairs(things) do
+			if not head or entry.tier ~= head.tier then
+				head = { caption = KIND[entry.tier] or "Other", tier = entry.tier, value = 0 }
+				shown[#shown + 1] = head
+			end
+			head.value = head.value + entry.value
+			total = total + entry.value
+			shown[#shown + 1] = entry
+		end
 		plate.why:SetText(why)
 		plate.how:SetText(how)
 		UI.Ink(plate.how, pressing and C.alert or C.dim)
-		plate:List(things, "Nothing is safe to drop: it's all quest items, soulbound, in use or worth more than a vendor pays.", rows, HEAD)
-		plate.drop:SetUsable(lit > 0, "Nothing is safe to drop.")
-		local detail = #things == 0 and "" or (lit .. " of " .. #things .. " lit")
-		return WIDTH, "Make room", detail, ""
+		plate:List(shown, "Nothing is safe to drop. It's all quest items, soulbound, in use or worth more than a vendor pays.", rows, HEAD)
+		wing.Head()
+		local now = Picked()
+		if ns.Window.Point then ns.Window.Point(now and now.bag, now and now.slot) end
+		local count = #things
+		return WIDTH, "Make room", count == 0 and "" or Count(count, "item"), count == 0 and "" or ns.Room.Coins(total)
 	end
 end

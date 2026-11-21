@@ -161,13 +161,17 @@ numbers = ns.Feature({
 	id = "cooldownNumbers",
 	category = "Combat",
 	title = "Cooldown numbers",
-	desc = "Shows the seconds left on action bar cooldowns. The cooldown manager has its own setting for this in Edit Mode.",
+	desc = "Your action bar cooldowns count down in numbers. The cooldown manager has its own switch in Edit Mode.",
 	keywords = "cooldown cooldowns cd numbers countdown timer seconds text action bar button",
 	default = true,
+	-- (Off gives back what you had: with the game's own Show Numbers for Cooldowns ticked, they stay.)
+	says = function(f)
+		if not f:IsOn() and GetCVar("countdownForCooldowns") == "1" then return "already on in the game" end
+	end,
 	options = {
 		{ key = "size", kind = "slider", label = "Number size", min = 12, max = 24, step = 1, default = 18,
-			format = function(v) return tostring(math.floor(v + 0.5)) end,
-			desc = "Font size of the numbers. They scale with your bars in Edit Mode." },
+			settle = true, format = function(v) return tostring(math.floor(v + 0.5)) end,
+			desc = "How big the numbers are. They grow with your bars in Edit Mode." },
 	},
 	events = { ACTIONBAR_UPDATE_COOLDOWN = Face },
 	Enable = function(f)
@@ -352,7 +356,7 @@ armed = ns.Feature({
 	id = "armed",
 	category = "Combat",
 	title = "Highlight active abilities",
-	desc = "An ability that is queued, casting or auto-repeating (Heroic Strike, Auto Shot) gets a gold frame and a sweeping sheen. Works on action bars and the cooldown manager.",
+	desc = "An ability that's queued, casting or on repeat gets a gold frame, like Heroic Strike or Auto Shot.",
 	keywords = "armed queued toggle toggled active on checked heroic strike cleave maul raptor next swing auto shot casting highlight glow border button ability cooldown manager essential",
 	default = true,
 	events = {
@@ -579,9 +583,9 @@ end
 afford = ns.Feature({
 	id = "afford",
 	category = "Combat",
-	title = "Show power toward abilities",
-	desc = "An ability you lack the rage, energy or mana for fills from the left as the power comes in. Works on action bars and the cooldown manager.",
-	keywords = "afford cost rage energy mana power resource fill progress enough not enough usable button ability action bar cooldown manager line bar",
+	title = "Abilities fill with power",
+	desc = "An ability you can't afford yet fills from the left as your rage, energy or mana comes in.",
+	keywords = "afford cost rage energy mana power resource fill progress enough not enough usable button ability action bar cooldown manager line bar show toward",
 	default = true,
 	options = {
 		{ key = "style", kind = "dropdown", label = "Style", default = "fill",
@@ -589,13 +593,13 @@ afford = ns.Feature({
 				{ value = "fill", text = "Icon fills" },
 				{ value = "bar", text = "Bar under the icon" },
 			},
-			desc = "Icon fills: the part you have power for is in full color, the rest is dark. Bar under the icon: the icon keeps the default look and a slim bar fills below it." },
+			desc = "The icon itself fills, dark where you're short. Or a slim bar fills under it." },
 		{ key = "color", kind = "dropdown", label = "Color", default = "theme",
 			items = {
 				{ value = "theme", text = "Accent color" },
-				{ value = "power", text = "Rage red, energy gold, mana blue" },
+				{ value = "power", text = "By power type" },
 			},
-			desc = "Colors the line or bar in your accent color, or by power type." },
+			desc = "The fill takes your accent color, or the color of the power it waits for." },
 	},
 	events = {
 		UNIT_POWER_FREQUENT = Power,
@@ -698,8 +702,8 @@ local followingRange
 range = ns.Feature({
 	id = "outOfRange",
 	category = "Combat",
-	title = "Tint out of range abilities",
-	desc = "When your target is out of range, the whole button turns red, not just the keybind.",
+	title = "Tint out-of-range abilities",
+	desc = "The whole button turns red when your target is too far, not just its key.",
 	keywords = "range out of range far distance reach close enough melee charge red tint button ability attack target",
 	default = true,
 	events = {
@@ -801,11 +805,13 @@ local function WarmAll()
 end
 ns.WarmIcons = WarmAll
 
--- The cooldown manager may load after the tweaks have started.
+-- The cooldown manager may load after the tweaks have started. Once it has, nothing more is listened for.
 local late = CreateFrame("Frame")
 late:RegisterEvent("ADDON_LOADED")
-late:SetScript("OnEvent", function(_, _, name)
-	if name == "Blizzard_CooldownViewer" then Later("items", SyncItems) end
+late:SetScript("OnEvent", function(self, _, name)
+	if name ~= "Blizzard_CooldownViewer" then return end
+	self:UnregisterEvent("ADDON_LOADED")
+	Later("items", SyncItems)
 end)
 
 -- Kit-painted and directly colored art doesn't follow the theme by itself.

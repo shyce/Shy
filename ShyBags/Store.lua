@@ -111,12 +111,32 @@ function Store.Name(c)
 	return c.name
 end
 
--- { guid, char } each: this character first, then by name.
+-- Your realm's ruleset where the game hasn't said its name yet: as this character last had it, else another of yours
+-- on that realm (asked in one order, so the answer is always the same).
+local function Ruleset()
+	if me and me.realm and me.realm ~= "" then return Shy.Ruleset(me.realm) end
+	local mine, guids = Shy.RealmOf(myGuid), {}
+	for guid, c in pairs(db.chars) do
+		if c.realm and c.realm ~= "" and Shy.RealmOf(guid) == mine then guids[#guids + 1] = guid end
+	end
+	table.sort(guids)
+	return guids[1] and Shy.Ruleset(db.chars[guids[1]].realm) or nil
+end
+
+-- { guid, char } each of the characters on your realm (Shy.SameServer: and on a PvP one your side): this character
+-- first whatever its level, then the highest level down, then the most gold, then by name. The rest are kept, not shown.
 function Store.List()
 	local list = {}
-	for guid, c in pairs(db.chars) do list[#list + 1] = { guid = guid, char = c } end
+	local ruleset = Shy.Ruleset() or Ruleset()
+	for guid, c in pairs(db.chars) do
+		if guid == myGuid or Shy.SameServer(guid, c, ruleset) then list[#list + 1] = { guid = guid, char = c } end
+	end
 	table.sort(list, function(a, b)
 		if (a.guid == myGuid) ~= (b.guid == myGuid) then return a.guid == myGuid end
+		local al, bl = a.char.level or 0, b.char.level or 0
+		if al ~= bl then return al > bl end
+		local ag, bg = a.char.money or 0, b.char.money or 0
+		if ag ~= bg then return ag > bg end
 		local an, bn = Store.Name(a.char), Store.Name(b.char)
 		if an ~= bn then return an < bn end
 		return a.guid < b.guid
@@ -191,6 +211,13 @@ function Store.Open()
 	db.chars, db.items, db.checks = db.chars or {}, db.items or {}, db.checks or {}
 end
 
+-- Your realm's name, once the game says it: a moment into a session it may still be empty, and an empty one is never
+-- kept over the one known.
+function Store.Realm(c)
+	local realm = GetRealmName()
+	if type(realm) == "string" and not issecretvalue(realm) and realm ~= "" then c.realm = realm end
+end
+
 -- Nothing is stored until the player's GUID is readable.
 function Store.Login()
 	local guid = UnitGUID("player")
@@ -205,7 +232,8 @@ function Store.Login()
 	c.name = c.name or "?"
 	local _, class = UnitClass("player")
 	if class and not issecretvalue(class) then c.class = class end
-	c.realm = GetRealmName()
+	Store.Realm(c)
+	c.ruleset = nil   -- (once kept, and read from an empty name: the realm's name says it)
 	c.faction = UnitFactionGroup("player")
 	c.level = UnitLevel("player")
 	c.seen = ns.Now()
@@ -218,6 +246,7 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("ITEM_DATA_LOAD_RESULT")
 events:RegisterEvent("PLAYER_LEVEL_UP")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_LOGOUT")
 events:SetScript("OnEvent", function(_, event, a, b)
 	if not db then return end
@@ -228,6 +257,8 @@ events:SetScript("OnEvent", function(_, event, a, b)
 		end
 	elseif event == "PLAYER_LEVEL_UP" then
 		if me then me.level = a end
+	elseif event == "PLAYER_ENTERING_WORLD" then
+		if me then Store.Realm(me) end
 	else
 		ns.Guard(Sweep)
 	end

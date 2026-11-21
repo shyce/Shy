@@ -288,7 +288,9 @@ function D.Parts() return box, stand end
 ns.Module({
 	id = "durability",
 	title = "Armor stand",
-	desc = "Shows the worn and broken gear figure on a plate in your color, with your worst piece's durability under it. Move it in layout mode.",
+	desc = "The damaged gear figure stands on a plate in your color, with your worst piece's durability under it.",
+	group = "screen",
+	words = "durability broken repair",
 
 	Ready = function() return DurabilityFrame ~= nil end,
 

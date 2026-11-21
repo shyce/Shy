@@ -58,10 +58,11 @@ local function Taken()
 end
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "TRAIT_CONFIG_UPDATED", "TRAIT_CONFIG_LIST_UPDATED", "PLAYER_TALENT_UPDATE", "SPELLS_CHANGED" }) do
+for _, event in ipairs({ "TRAIT_CONFIG_UPDATED", "TRAIT_CONFIG_LIST_UPDATED", "PLAYER_TALENT_UPDATE" }) do
 	events:RegisterEvent(event)
 end
 events:SetScript("OnEvent", function() taken = nil end)
+Shy:On("SHY_SPELLS", function() taken = nil end)
 
 function Talents.For(spell)
 	local list = type(spell) == "number" and Changes(spell)

@@ -1,13 +1,16 @@
--- The dungeons step of character setup (Shy.Setup): which dungeons' quests join the guide. Three ways
--- (T.db.guide.dungeonPlan): at your level ("ready": each dungeon's quests come in as you reach the levels
--- the Group Finder suggests, and the ones you tick whatever your level), the ones you tick ("ticked"),
--- or none ("never"). Under the ways stands the gallery: every dungeon and raid the Group Finder lists
--- (Shy.Instances), dungeons by level then raids, each as the game's own picture of it (its loading
--- screen, drawn by file ID and cut to 2:1: nothing shipped), its name, its levels and whether it is in.
--- One the guides have steps for on this faction (ns.Detours, by instance map) is ticked with a click;
--- the rest stand grey until a guide covers them, so the whole road is in view from the start. The picks
--- are profile settings, so a setup that changes profile hands them to Shy.Setup.Wait and they land
--- after the reload (Later), as the immersion step's do.
+-- The dungeons step of character setup (Shy.Setup): which dungeons' quests join the guide.
+-- Three ways (T.db.guide.dungeonPlan):
+--   "ready"    at your level. Each dungeon's quests come in when you reach the levels the Group
+--              Finder suggests. The ones you tick come in at any level.
+--   "ticked"   only the ones you tick
+--   "never"    none
+-- Under the ways is the gallery: every dungeon and raid the Group Finder lists (Shy.Instances),
+-- dungeons by level, then raids. Each shows the game's own picture (its loading screen, drawn by
+-- file ID and cut to 2:1, so nothing is shipped), its name, its levels and whether it is in.
+-- A click ticks one the guides have steps for on this faction (ns.Detours, by instance map). The
+-- rest are grey until a guide covers them, so the whole list is in view from the start.
+-- The picks are profile settings. A setup that changes profile hands them to Shy.Setup.Wait and
+-- they land after the reload (Later), like the immersion step's.
 
 local _, ns = ...
 local T = ns.T
@@ -19,7 +22,7 @@ ns.Dungeons = Dungeons
 
 -- (Each way's line fits a tile's one line.)
 local WAYS = {
-	{ value = "ready", name = "At my level", glyph = "up", say = "Each as you reach its level, plus any you tick" },
+	{ value = "ready", name = "At my level", glyph = "up", say = "Each one at its level, plus any you tick" },
 	{ value = "ticked", name = "The ones I pick", glyph = "star", say = "Only the dungeons ticked below" },
 	{ value = "never", name = "None", glyph = "go", say = "No dungeon quests in your guide" },
 }
@@ -111,7 +114,7 @@ function Dungeons.Card(parent, width, one, onClick)
 		if not one.dungeon then
 			words = "No guide steps for it yet. They'll come in a later update."
 		else
-			words = ("Puts its quests in your guide: where to pick them up, what to do inside and where to turn them in. Click to %s."):format(
+			words = ("Adds its quests to your guide, with where to pick them up, what to do inside and where to turn them in. Click to %s."):format(
 				self.on and "take it out" or "keep it in at any level")
 		end
 		UI.Tip(self, one.name, words, { side = "RIGHT" })
@@ -246,7 +249,7 @@ end
 Dungeons.Step = {
 	id = "dungeons", order = 24, title = "Dungeons", glyph = "kill",
 	ask = function() return ("Pick the dungeons you'll run, %s"):format(UnitName("player")) end,
-	lead = "Their quests go into your guide, with where to pick them up, what to do inside and where to hand them in.",
+	lead = "Your guide adds their quests, with where to pick them up, what to do inside and where to turn them in.",
 	brief = function(plan)
 		local p = plan.dungeons
 		if p.plan == "never" then return "None" end

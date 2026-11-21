@@ -217,6 +217,15 @@ local function Soon(unit)
 end
 
 function M.Apply()
+	-- Yours are as big as the shelf's icons, whatever their size and look are now.
+	local mine = trays.player
+	if mine then
+		local _, size = ns.Shelf.End()
+		if mine.size ~= size then
+			mine.size = size
+			mine.tray:SetScale(size / mine.tray.size)
+		end
+	end
 	for unit in pairs(trays) do Update(unit) end
 end
 

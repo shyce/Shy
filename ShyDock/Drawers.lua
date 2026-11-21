@@ -362,15 +362,18 @@ function W.Start()
 	driver:SetScript("OnEvent", function(_, event)
 		-- A fight begins: the parked rows are brought back while they still may be; after it they are parked again.
 		-- Rows that aren't parked (the drawer pinned out, or no drawer) have nothing to change as it begins.
+		-- (Only their scale changes: Arrange.Park sets that alone, and nothing else is arranged again.)
 		if event == "PLAYER_REGEN_DISABLED" then
 			fighting = true
 			if not ns.Arrange.parked then return end
-			Rehang()
+			if ns.Arrange.On() then ns.Arrange.Park() end
 			menu:Measure()   -- the catcher over them, at once
 		elseif event == "PLAYER_REGEN_ENABLED" then
 			fighting = false
-			Rehang()
-			menu:Measure()
+			if ns.Arrange.On() and ns.Arrange.parked ~= W.Parked() then
+				ns.Arrange.Park()
+				menu:Measure()
+			end
 		end
 		W.Touch()
 	end)

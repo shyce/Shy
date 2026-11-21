@@ -532,7 +532,9 @@ end
 ns.Module({
 	id = "messages",
 	title = "Messages",
-	desc = "Shows quest progress, errors and other messages at the top of the screen, in the drawer under the head. Move them in layout mode.",
+	desc = "Quest progress, errors and other messages show at the top of your screen.",
+	group = "screen",
+	words = "red error text",
 
 	Ready = function() return UIErrorsFrame ~= nil end,
 

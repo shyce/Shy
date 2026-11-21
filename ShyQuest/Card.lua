@@ -1,17 +1,17 @@
--- The quest window: the guide and the quests you track as one road. ns.CreateCard builds it for
--- both the Shy.HUD box and the options preview.
+-- The quest window: your guide and tracked quests as one route. ns.CreateCard builds it for both
+-- the Shy.HUD box and the options preview.
 --
--- A rail down the left is the route in the order it is walked. The stop it heads for leads on a dial;
--- the stops after it wear the numbers their pins have on the map (Pins.lua, ns.RoutePlaces). Under
--- each stop stand the quests done there with their counts. With a guide the rail carries on through
--- its next places. Where the rail ends stand the errands that are not on the way (a trainer, a vendor,
--- a flight point), a line each under their signs, and after them the quests the guide has no step for.
--- Only tracked quests get a row (Tracker.lua keeps the watch list to where you are); the rest of the
--- log folds into one line a zone.
+-- A rail down the left is the route, in the order you walk it. The stop you head for leads, on a
+-- dial. Later stops wear the numbers their pins have on the map (Pins.lua, ns.RoutePlaces). Under
+-- each stop are the quests done there, with their counts. With a guide, the rail carries on through
+-- its next places. After the rail come the errands that are not on the way (a trainer, a vendor, a
+-- flight point), one line each under their signs. After them come the quests the guide has no step
+-- for. Only tracked quests get a row (Tracker.lua keeps the watch list to where you are). The rest
+-- of the log folds into one line per zone.
 --
--- With a guide the header has a pager: back, "37 / 212", skip. The count is a switch (ns.char.guideFull):
--- it opens the whole guide: a progress bar and a scrolling step list from GuideWindow.lua's
--- ns.GuideList; this file lays the card out and asks it for heights.
+-- With a guide the header has a pager: back, "37 / 212", skip. The count is a switch
+-- (ns.char.guideFull) that opens the whole guide: a progress bar and a scrolling step list from
+-- GuideWindow.lua's ns.GuideList. This file lays the card out and asks it for heights.
 -- With ShyXP the foot shows level progress (XP.lua) and the card stays up with no steps.
 
 local ADDON, ns = ...
@@ -625,7 +625,7 @@ local function Lines(stop, whole, here, rooms)
 		if not whole then return out end
 		if broken then out[#out + 1] = { text = "Click the failed quest to abandon it", color = C.alert } end
 		if stop.manual then out[#out + 1] = { text = "Click when done", color = C.dim } end
-		if stop.here then out[#out + 1] = { text = "On your way: do it while you're here", color = C.dim } end
+		if stop.here then out[#out + 1] = { text = "Do it while you're here", color = C.dim } end
 		-- Notes from Route.lua's GuideStops. Sent for an item first: what, and where it is had.
 		local needs, from = R.Needs(stop)
 		if needs then
@@ -647,7 +647,7 @@ local function Lines(stop, whole, here, rooms)
 			out[#out + 1] = { text = why, color = C.alert }
 		elseif stop.first then
 			local name = stop.needed and D.Name("quests", stop.needed)
-			out[#out + 1] = { text = name and ("A later step needs %s."):format(name) or "The next step waits on this one.", color = C.alert }
+			out[#out + 1] = { text = name and ("A later step needs %s."):format(name) or "The next step needs this one.", color = C.alert }
 		end
 	else
 		local title, lines, where = Describe(stop)
@@ -1154,7 +1154,7 @@ end
 
 -- The card
 
-ns.QUESTS_TIP = "Your quests, and where to go for them."   -- the card's hover, and its tab's in the deck
+ns.QUESTS_TIP = "Your quests and where to go for them."   -- the card's hover, and its tab's in the deck
 
 function ns.CreateCard(parent, onResize)
 	local width = WIDTH   -- current width; changed by card:Fit
@@ -1242,7 +1242,7 @@ function ns.CreateCard(parent, onResize)
 		local stop = card.guideStop
 		if stop then G.Skip(stop.view.step.index, stop.view.guide) end
 	end, "Skip this step", function(can)
-		return can and "Skips this step. If it picks up a quest, that quest's later steps go too. Back undoes it."
+		return can and "Skips this step. If it picks up a quest, you skip that quest's later steps too. Back undoes it."
 			or "No step to skip."
 	end, function(button, glyph)
 		glyph:SetPoint("CENTER", -2, 0)
@@ -1282,7 +1282,7 @@ function ns.CreateCard(parent, onResize)
 	card.find = StepButton(0, function()
 		if ns.Find then ns.Find.Toggle() end
 	end, "Find anywhere", function()
-		return "Search the whole game: any quest, creature, object or item, or the nearest innkeeper, trainer or vendor. (The box under the header only filters your own quests.)"
+		return "Find any quest, creature, object or item, or the nearest innkeeper, trainer or vendor. The box under the header only filters your own quests."
 	end, function(_, glyph) glyph:SetPoint("CENTER", 0, -1) end)
 	card.find.glyph:SetTexture("Interface\\Common\\UI-Searchbox-Icon")
 	card.find.glyph:SetSize(11, 11)
@@ -1311,9 +1311,9 @@ function ns.CreateCard(parent, onResize)
 			T:SetQuestStyle(index == 2 and "guide" or "zone")
 		end,
 		{ width = ZONE.switch, height = 24, tips = {
-			"The quests for where you are, in the order your route takes them.",
-			"Follow your leveling guide: its steps lead, with nearby quests after them.",
-			"Only the steps to get one dungeon's quests, in its own colors." } })
+			"The quests where you are, in the order you'll do them.",
+			"Follow your leveling guide. Its steps come first, then nearby quests.",
+			"Just the steps for one dungeon's quests, in that dungeon's colors." } })
 	card.style:SetPoint("LEFT", PAD, 0)
 	card.search = UI.Input(card.controls, nil, function() return card.filter or "" end, function(text)
 		text = text:gsub("^%s+", ""):gsub("%s+$", "")
@@ -1675,9 +1675,9 @@ function ns.CreateCard(parent, onResize)
 	local function NewHead(parent)
 		local head = UI.GroupHead(parent, { height = ZONE.height, rail = RAIL, gutter = GUTTER, right = PAD, foldSize = MARK,
 			tip = function(self)
-				return self.name, self.aside and "Quests out of your way for now. They join your route when you pass near."
-					or self.open and "Quests you aren't tracking, by where they are."
-					or "Quests in your log for somewhere else. They come back when you get there.",
+				return self.name, self.aside and "Quests out of your way for now. You'll get them when you pass nearby."
+					or self.open and "Quests you aren't tracking, by zone."
+					or "Quests in your log for other zones. You'll see them again when you get there.",
 					{ side = "LEFT", hints = { { "left", self.open and "Fold" or "Show them" } } }
 			end,
 			click = function(self, mouse)
@@ -2984,7 +2984,8 @@ local function FloorMenu(root, stop)
 	-- (No floor the ground knows, over the roof of one it does: the straight line leads until you say.)
 	local words = look and (FLOORS[look] or "No floor known") or "Whichever is quickest"
 	entry:SetSub(how == "said" and ("You said: " .. words:lower()) or how == "guess" and ("Best guess: " .. words:lower()) or words)
-	for pick = 0, 2 do
+	-- No "On the ground" in a city's halls. Nothing there stands on the ground above.
+	for pick = W.Halls(stop) and 1 or 0, 2 do
 		entry:CreateRadio(FLOORS[pick], function() return look == pick end, function() W.Learn(stop, pick) end)
 	end
 	if how == "said" then
@@ -3073,14 +3074,14 @@ local function CardMenu(root)
 	local groups = GroupQuests()
 	if #groups > 0 then
 		local menu = root:CreateButton("Group quests")
-		menu:SetSub(#groups == 1 and groups[1].title or (#groups .. " in your log: ask chat for help, find a group"))
+		menu:SetSub(#groups == 1 and groups[1].title or (#groups .. " in your log. Ask chat for help or find a group"))
 		menu:SetIcon(Glyph("group"))
 		for _, quest in ipairs(groups) do QuestMenu(menu, quest.id, quest.title, quest.stop) end
 	end
 
 	-- The game's quest log, on the map.
 	local log = root:CreateButton("Quest log", function() ToggleQuestLog() end)
-	log:SetSub("Every quest you carry, on the map")
+	log:SetSub("All your quests, on the map")
 	log:SetIcon(Glyph("log"))
 
 	-- At the top level the guide, pickups, zones and errands (levelling help) are this character's to take back;
@@ -3094,7 +3095,7 @@ local function CardMenu(root)
 	if levelling then
 		-- The guide: whole or next steps, which one, your place in it, and what it leaves out here.
 		local guide = root:CreateButton("Guide")
-		guide:SetSub("Which guide, your place in it, what it leaves out")
+		guide:SetSub("Pick a guide, find your place, see what it skips")
 		guide:SetIcon(Glyph("guide"))
 		guide:CreateCheckbox("Follow a leveling guide", function() return T:QuestStyle() == "guide" end, function()
 			T:SetQuestStyle(T:QuestStyle() == "guide" and "zone" or "guide")
@@ -3119,7 +3120,7 @@ local function CardMenu(root)
 	end
 
 	-- What the card lists and shows.
-	local shows = root:CreateButton("What the card shows")
+	local shows = root:CreateButton("What the window shows")
 	shows:SetSub("Steps listed, pickups, buttons, the arrow")
 	shows:SetIcon(Glyph("shows"))
 	local steps = shows:CreateButton("Steps listed")
@@ -3148,7 +3149,7 @@ local function CardMenu(root)
 				ns.Apply()
 			end)
 		end
-		Flag("Show them on this card", "buttons")
+		Flag("Show them here", "buttons")
 		Flag("Mark who I target", "marks")
 		Flag("Alert when a rare is up", "scan")
 	end
@@ -3165,8 +3166,8 @@ local function CardMenu(root)
 	-- What the route adds on its own, and what the card speaks up about (registered by the files that do it).
 	-- Without levelling help only the errands for the quests you have and getting back to life are left.
 	local errands = root:CreateButton("Errands")
-	errands:SetSub(levelling and "What the route adds on its own: vendors, trainers, flights"
-		or "What the route adds on its own: your bank, the mailbox")
+	errands:SetSub(levelling and "Stops added for you: vendors, trainers, flights"
+		or "Stops added for you: your bank, the mailbox")
 	errands:SetIcon(Glyph("errands"))
 	errands:CreateSection("Errands")
 	Switches(errands, "errands", not levelling)
@@ -3174,11 +3175,11 @@ local function CardMenu(root)
 	Switches(errands, "suggestions")
 
 	root:CreateDivider()
-	Row(root, "Options", "options", function() T:OpenOptions() end)
-	Row(root, "Hide this card", "hide", function()
+	Row(root, "Settings", "options", function() T:OpenOptions() end)
+	Row(root, "Hide this window", "hide", function()
 		T.db.card.shown = false
 		ns.Apply()
-		T:Print("quest card hidden, and the game's tracker is back. Turn the card on again in /shyquest.")
+		T:Print("quest window hidden, and the game's tracker is back. Turn it on again with /shy quest window.")
 	end)
 end
 
@@ -3326,7 +3327,7 @@ function ns.SetupCard()
 				ns.Apply()
 				if ns.RefreshOptions then ns.RefreshOptions() end
 			end,
-			hint = "What to do next, and your quests",
+			hint = "Your next step and your quests",
 		},
 		hang = true,   -- grows downward, so the heading stays put
 		-- ShyDock's deck tab: the card is the quests, and this folds it away, or opens it again.

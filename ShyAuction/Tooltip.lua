@@ -11,8 +11,6 @@ local UI = Shy.UI
 local Tooltip = {}
 ns.Tooltip = Tooltip
 
-T.defaults.tooltip = true
-
 local HEAD = Shy.Hover.Heading("At the auction house")
 local said = {}      -- item -> its lines, or false; let go when prices change (the book's stamp)
 local saidAt
@@ -67,7 +65,7 @@ end
 
 -- Asked for once every addon has logged in, so these lines stand after everyone else's.
 function Tooltip.Hook()
-	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tip, data)
+	Shy.OnTip(Enum.TooltipDataType.Item, "what it sells for", function(tip, data)
 		Tooltip.For(tip, data, tip == GameTooltip or tip == ItemRefTooltip)
 	end)
 end

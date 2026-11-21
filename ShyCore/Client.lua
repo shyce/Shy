@@ -116,4 +116,5 @@ local function Notice()
 end
 
 Shy:On("SHY_LOGIN", Notice)
-Shy.Command("data", "compare the addons' data with this game", function() D.Copy() end)
+-- (For finding faults: the addons' data compared with this game. Not listed.)
+Shy.Command("data", nil, function() D.Copy() end)

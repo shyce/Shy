@@ -194,7 +194,10 @@ end
 ns.Module({
 	id = "auras",
 	title = "Buffs and debuffs",
-	desc = "Restyles your buffs and debuffs, and the ones under your target and focus, as slots in the icon shape set in /shy. A debuff's frame is red, or the color of its type: poison, curse, magic or disease.",
+	desc = "The game's buff and debuff icons take your icon shape. A debuff's frame is the color of its type.",
+	group = "screen",
+	words = "auras target focus",
+	shown = function() return ns.Theirs(BuffFrame, DebuffFrame, TargetFrame, FocusFrame) end,
 
 	Hook = function(m)
 		borders = {}

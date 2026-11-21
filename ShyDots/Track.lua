@@ -252,7 +252,9 @@ end
 
 local function Learn(dot)
 	if dot.key and dot.seen > 0 then
+		local first = T.db.ticks[dot.key] == nil
 		T.db.ticks[dot.key] = math.floor(dot.sum / dot.seen / dot.mult * 10 + 0.5) / 10
+		if first and ns.RefreshOptions then ns.RefreshOptions() end
 		if fighting then Fought(dot.spell).shown = true end   -- its size showed: the meter has nothing to add
 	end
 end

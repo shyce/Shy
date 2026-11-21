@@ -257,7 +257,7 @@ I.GAME = {
 		desc = "The camera tilts up as you climb a slope and down as you descend. (Options > Controls > Follow Terrain)",
 		want = { cameraTerrainTilt = "1" } },
 	{ key = "mapFade", title = "Map fades as you move", say = "See the world through the map",
-		desc = "With the map open, it turns half see-through while you move and solid again when you stop or the mouse is on it.",
+		desc = "The open map turns half see-through while you move. It's solid again when you stop or hover it.",
 		want = { mapFade = "1" } },
 }
 
@@ -1063,7 +1063,8 @@ Shy:On("SHY_HUD_LAYOUT", Poke)
 Shy:On("SHY_LOGIN", Wake)
 
 -- /shy watch: what keeps watch right now, piece by piece, for when something on screen looks wrong.
-Shy.Command("watch", "What keeps watch while the HUD is faded", function()
+-- (For finding faults: what keeps watch while the HUD is faded. Not listed.)
+Shy.Command("watch", nil, function()
 	local count = 0
 	for _ in pairs(kept) do count = count + 1 end
 	core:Print(("watch: HUD %.2f, shade %.2f, away %.2f%s, wants %d, %d kept"):format(alpha, shade, away,
@@ -1096,13 +1097,13 @@ local TEXTS = {
 	{ value = "normal", glyph = "note", name = "Normal", say = "Quest text fades in as you read." },
 	{ value = "immersive", glyph = "talk", name = "Immersive", say = "Talking heads tell the story." },
 }
-local NO_GUIDE = "The guides end at level 30."
+local NO_GUIDE = "The guides end at level 60."
 local TILE_MIN = 170   -- a tile narrower than this has no room for its words: the row breaks in two
 local ARROW = { title = "Waypoint arrow", say = "Points the way to your next step and says how far it is.",
 	desc = "At the top of the screen an arrow points the way to your next step and says how far it is." }
 local ARROW_WIDEST, ARROW_WIDEST_NARROW = 180, 120   -- the room its picture's plate gives the words, on a wide card and a narrow one
 local FADE = { title = "Fade HUD when idle", say = "Chat, group and minimap stay readable",
-	desc = "Out of combat your UI fades after 30 seconds idle, keeping chat, your group, the minimap and the map dimly readable and lighting them up when something happens. A minute later an away screen shows your character, big chat and what you missed. Anything you do brings it all back." }
+	desc = "Out of combat your UI fades after 30 seconds idle. Chat, your group, the minimap and the map stay dimly readable and light up when something happens. A minute later an away screen shows your character, big chat and what you missed. Anything you do brings it all back." }
 
 local VOICE = { title = "Voices", say = "People speak their lines aloud.",
 	desc = "In the immersive dialog, people speak their lines in recorded voices and the pages turn as they go." }

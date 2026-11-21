@@ -377,30 +377,47 @@ function J.Door(map)
 	return doors and doors[map]
 end
 
--- Every drop by item, made the first time one is asked for.
-local drops
-function J.Drops(item)
-	if not drops then
-		drops = {}
-		for _, one in ipairs(J.List()) do
-			local book = J.Book(one.map)
-			local function Take(key, boss)
-				for _, row in ipairs(J.Loot(one.map, key)) do
-					local list = drops[row.item]
-					if not list then
-						list = {}
-						drops[row.item] = list
-					end
-					list[#list + 1] = { map = one.map, name = one.name, boss = boss, index = type(key) == "number" and key or nil,
-						chance = row.chance, source = row.source }
-				end
+-- Every drop by item. Made a dungeon at a time a while after logging in, out of a fight (all at once on the first
+-- hover it was a hitch), and whatever is left of it at once if asked first.
+J.drops = { by = {}, done = 0, WAIT = 20, EVERY = 0.2 }
+local function TakeDungeon(one)
+	local by, book = J.drops.by, J.Book(one.map)
+	local function Take(key, boss)
+		for _, row in ipairs(J.Loot(one.map, key)) do
+			local list = by[row.item]
+			if not list then
+				list = {}
+				by[row.item] = list
 			end
-			for index, boss in ipairs(book.bosses) do Take(index, boss.name) end
-			Take("trash")
+			list[#list + 1] = { map = one.map, name = one.name, boss = boss, index = type(key) == "number" and key or nil,
+				chance = row.chance, source = row.source }
 		end
 	end
-	return item and drops[item] or nil
+	for index, boss in ipairs(book.bosses) do Take(index, boss.name) end
+	Take("trash")
 end
+-- The dungeons up to `last` taken in; true once all are.
+function J.drops.Upto(last)
+	local list, d = J.List(), J.drops
+	while d.done < math.min(last, #list) do
+		d.done = d.done + 1
+		TakeDungeon(list[d.done])
+	end
+	return d.done >= #list
+end
+function J.Drops(item)
+	J.drops.Upto(math.huge)
+	return item and J.drops.by[item] or nil
+end
+Shy:On("SHY_LOGIN", function()
+	C_Timer.After(J.drops.WAIT, function()
+		local ticker
+		ticker = C_Timer.NewTicker(J.drops.EVERY, function()
+			if InCombatLockdown() then return end
+			if J.drops.Upto(J.drops.done + 1) then ticker:Cancel() end
+		end)
+	end)
+end)
 
 ---------------------------------------------------------------------------
 -- Finding, and what you want
@@ -452,7 +469,7 @@ function J.WantedIn(map)
 	if not (T.db and next(T.db.want)) then return out end
 	J.Drops()
 	for item in pairs(T.db.want) do
-		for _, drop in ipairs(drops[item] or NONE) do
+		for _, drop in ipairs(J.drops.by[item] or NONE) do
 			if drop.map == map then
 				out[#out + 1] = { item = item, boss = drop.boss, index = drop.index }
 				break
@@ -464,6 +481,4 @@ function J.WantedIn(map)
 end
 
 -- Your spells changed: what you can answer is asked again.
-local events = CreateFrame("Frame")
-events:RegisterEvent("SPELLS_CHANGED")
-events:SetScript("OnEvent", function() wipe(can) end)
+Shy:On("SHY_SPELLS", function() wipe(can) end)

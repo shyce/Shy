@@ -241,7 +241,14 @@ end
 ns.Module({
 	id = "bags",
 	title = "Bags",
-	desc = "Restyles the default bags as dark panels with quality-colored slots. Search and Clean Up share one row, and the gold box shows your free slots.",
+	desc = "The game's bags become dark panels with quality-colored slots, and the gold line counts your free slots.",
+	group = "window",
+	words = "backpack inventory",
+	-- (The family's one bag window stands in for the game's bags: nothing of theirs is seen.)
+	shown = function()
+		local bags = Shy.addons.Bags
+		return not (bags and bags.WindowOn and bags:WindowOn())
+	end,
 
 	Hook = function(m)
 		hooksecurefunc("ContainerFrame_GenerateFrame", function(frame)

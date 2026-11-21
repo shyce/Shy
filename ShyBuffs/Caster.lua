@@ -30,7 +30,7 @@ local REACH = 400         -- how far from a container's corner its icons may sta
 local ticker
 local holder              -- owns the tooltip while it is ours
 local told                -- the first failure, said once
-local last = {}           -- what the last looks found (for /shybuffs who)
+local last = {}           -- what the last looks found (for /shy buffs who)
 local looks = 0
 local shownKey, shownAt   -- what the tooltip shows, and since when
 
@@ -362,7 +362,7 @@ local function Shield()
 	end)
 end
 
--- /shybuffs who: what the looker found, as text for the copy box.
+-- /shy buffs who: what the looker found, as text for the copy box.
 function C.Report()
 	local lines = {}
 	local function Say(text) lines[#lines + 1] = text end

@@ -97,7 +97,7 @@ function Pl.Init()
 		root:CreateButton("Hide this box", function()
 			T.db.pill = false
 			T:Apply()
-			T:Print("status box hidden. Turn it back on in the options: /shygroup options")
+			T:Print("run status hidden. Turn it back on in the settings: /shy group status")
 		end)
 	end)
 	box:SetScript("OnEnter", function(self)
@@ -121,7 +121,7 @@ function Pl.Init()
 			if Run.Get() then
 				root:CreateButton("Finish the run", function() Run.Stop() end)
 			end
-			root:CreateButton("Options", function() T:OpenOptions() end)
+			root:CreateButton("Settings", function() T:OpenOptions() end)
 			if ns.Listing.Available() then
 				root:CreateButton("Who list", function() ns.Listing.OpenWho() end)
 				root:CreateButton("Default Group Finder", function() ns.Listing.OpenBlizzard() end)
@@ -130,7 +130,7 @@ function Pl.Init()
 			root:CreateButton("Hide this button", function()
 				T.db.minimap = false
 				T:Apply()
-				T:Print("minimap button hidden. Turn it back on in the options: /shygroup options")
+				T:Print("minimap button hidden. Turn it back on in the settings: /shy group minimap")
 			end)
 		end)
 	end

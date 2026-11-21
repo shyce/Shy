@@ -99,19 +99,14 @@ function P.Create(owner, kind)
 	self.layout, self.width = layout, (L.Size(kind))
 	playerClass = playerClass or UnitClassBase("player")
 
-	-- A static accent line instead of the panel's animated one: many plates are on screen at once.
-	-- (The target's target, a small piece hanging off the target: the look's mini border.)
-	UI.Panel(owner, { brackets = false, line = false, hud = true, mini = kind == "targettarget" })
-	if layout.line ~= false then
-		local line = owner:CreateTexture(nil, "BORDER", nil, 2)
-		line:SetPoint("TOPLEFT", 2, -2)
-		line:SetPoint("TOPRIGHT", -2, -2)
-		line:SetHeight(2)
-		UI.Paint(line, Theme.Accent)
-		self.line = line
-		-- Housing, like the panel: it goes with the HUD while the frame keeps watch.
-		if owner.shyHousing then owner.shyHousing[#owner.shyHousing + 1] = line end
-	end
+	-- The housing, on a frame of its own over the host's rect (under the bars), so a portrait like the game's can
+	-- stand it back behind its circle (Portrait.lua). No accent line along its top: the look's own border is the
+	-- frame. (The target's target, a small piece hanging off the target: the look's mini border.)
+	local house = CreateFrame("Frame", nil, owner)
+	house:SetAllPoints()
+	house:SetFrameLevel(owner:GetFrameLevel())
+	self.house = house
+	UI.Panel(house, { brackets = false, line = false, hud = true, mini = kind == "targettarget" })
 
 	self.bars = {}
 	for _, bar in ipairs(layout.bars) do
@@ -204,10 +199,15 @@ function P.Create(owner, kind)
 	self.overlay = overlay
 
 	self.texts = {}
+	-- The health's words on a frame of their own: one alpha hides them all at full health (HurtOnly).
+	local said = CreateFrame("Frame", nil, overlay)
+	said:SetAllPoints()
+	said:SetFrameLevel(level + LEVELS.texts)
+	self.said = said
 	for id, def in pairs(layout.texts) do
 		if id == "health" then
 			self.healthSegs = {}
-			for i = 1, Texts.SEGMENTS do self.healthSegs[i] = NewText(overlay, def) end
+			for i = 1, Texts.SEGMENTS do self.healthSegs[i] = NewText(said, def) end
 		elseif id ~= "druid" or self.bars.druid then
 			self.texts[id] = NewText(overlay, def)
 		end
@@ -269,28 +269,40 @@ end
 -- the plate (a level under it, reaching under its edge by the look's border, so its foot is hidden).
 local risers = {}   -- every riser made: { frame, owner, rise }, laid again on a change of look
 
+-- It stands on the housing's top, which a round portrait stands in from the frame's (plate.drop).
 local function Seat(riser)
 	local frame = riser.frame
 	-- (Asked of the look by name with the mini flag: a housing not yet dressed doesn't know its look.)
 	local _, _, _, under = UI.LookBorder({ look = Theme.Look(), mini = true })
 	under = math.max(1, under)
+	local drop = riser.plate and riser.plate.drop or 0
 	frame:ClearAllPoints()
-	frame:SetPoint("BOTTOMLEFT", riser.owner, "TOPLEFT", 0, -under)
-	frame:SetPoint("BOTTOMRIGHT", riser.owner, "TOPRIGHT", 0, -under)
+	frame:SetPoint("BOTTOMLEFT", riser.owner, "TOPLEFT", 0, -under - drop)
+	frame:SetPoint("BOTTOMRIGHT", riser.owner, "TOPRIGHT", 0, -under - drop)
 	frame:SetHeight(riser.rise + under)
 end
 
-local function Riser(frame, owner, rise)
+local function Riser(frame, owner, rise, plate)
 	frame:SetFrameLevel(math.max(0, owner:GetFrameLevel() - 1))
 	UI.Panel(frame, { hud = true, mini = true, brackets = false, line = false })
-	local riser = { frame = frame, owner = owner, rise = rise }
+	local riser = { frame = frame, owner = owner, rise = rise, plate = plate }
+	if plate then plate.riser = riser end
 	risers[#risers + 1] = riser
 	Seat(riser)
 end
 
 Shy:On("SHY_THEME", function()
 	for _, riser in ipairs(risers) do Seat(riser) end
+	-- Another look, another border: the bars' room again (Plate:Pad). Out of a fight only: a portrait's cover waits.
+	if ns.Frames and ns.Frames.list then
+		for _, frame in ipairs(ns.Frames.list) do frame.plate:Arrange() end
+	end
 end)
+
+-- The plate's riser seated again: its housing's top moved (a round portrait).
+function Plate:SeatRiser()
+	if self.riser then Seat(self.riser) end
+end
 
 -- An empty blade's color: nearly black, with a trace of the lit color.
 function P.ComboDull(i)
@@ -304,7 +316,7 @@ function Plate:BuildCombo(layer)
 	local def = L.COMBO
 	local combo = CreateFrame("Frame", nil, layer)
 	combo:Hide()
-	Riser(combo, self.owner, def.rise)
+	Riser(combo, self.owner, def.rise, self)
 	combo.segs, combo.flashes, combo.gleam = {}, {}, 0
 	local width = (self.width - def.inset * 2 - def.gap * (def.count - 1)) / def.count
 	for i = 1, def.count do
@@ -353,6 +365,29 @@ end
 
 -- Layout
 
+-- The bars' room in from the housing's edges: the look's own border on each side, and inside it the same gap of
+-- whole screen pixels all round (L.GAP), so the gap reads the same at the top, the foot and the ends. The layout's
+-- own room where the screen's pixels can't be read. Kept while the look, the scale and the layout stand.
+local PIXEL_PAD = {}
+function Plate:Pad(layout)
+	local scale = self.owner:GetEffectiveScale()
+	local factor = PixelUtil.GetPixelToUIUnitFactor()
+	if issecretvalue(scale) or not scale or scale <= 0 or not factor or factor <= 0 then return L.Pad(layout) end
+	local per = scale / factor   -- screen pixels a unit
+	local l, t, r, b = UI.LookBorder(self.house)
+	local look = Theme.Look()
+	local key = look .. ":" .. per .. ":" .. l .. ":" .. t .. ":" .. r .. ":" .. b
+	local pad = PIXEL_PAD[key]
+	if not pad then
+		local gap = math.max(1, math.floor(L.GAP * per + 0.5))
+		-- The border's inner face and the gap, each a whole number of pixels from the edge.
+		local function In(edge) return (math.floor(edge * per + 0.5) + gap) / per end
+		pad = { top = In(t), bottom = In(b), side = In(math.max(l, r)) }
+		PIXEL_PAD[key] = pad
+	end
+	return pad
+end
+
 -- Which bars are shown now: the druid mana bar comes and goes with the form.
 function Plate:Present()
 	local present, bars = self.present, self.bars
@@ -380,7 +415,11 @@ function Plate:Arrange()
 	self.width = (L.Size(self.kind))   -- a party cell's width follows the plates under it
 	local trim = self:PetTrim()
 	self.trimmed = trim ~= nil
-	local rects = L.Bars(layout, self.width, self:Present(), trim)
+	-- The room a portrait takes from the bars (Portrait.lua): their width, their foot, or a ring they start under.
+	self.pad = self:Pad(layout)
+	local on, give, mirrored, inset, ring = false, 0, false, 0, 0
+	if ns.Portrait then on, give, mirrored, inset, ring = ns.Portrait.Room(self) end
+	local rects = L.Bars(layout, self.width, self:Present(), trim, give, mirrored, inset, ring, self.pad)
 	self.rects = rects
 	for id, bar in pairs(bars) do
 		local rect = rects[id]
@@ -399,7 +438,10 @@ function Plate:Arrange()
 	-- The name is anchored to the health text, so it truncates where they meet.
 	local segs = self.healthSegs
 	segs[1]:ClearAllPoints()
-	segs[1]:SetPoint("RIGHT", bars.health, "RIGHT", -L.TEXT_INSET, layout.lift or 0)
+	-- (Words keep clear of a ring lying over a bar's end: its rect's `clear`, at the end the ring is.)
+	local healthClear, powerClear = rects.health.clear, rects.power and rects.power.clear or 0
+	self.clearL = mirrored and 0 or healthClear
+	segs[1]:SetPoint("RIGHT", bars.health, "RIGHT", -L.TEXT_INSET - (mirrored and healthClear or 0), layout.lift or 0)
 	for i = 2, #segs do
 		segs[i]:ClearAllPoints()
 		segs[i]:SetPoint("RIGHT", segs[i - 1], "LEFT", 0, 0)
@@ -408,11 +450,11 @@ function Plate:Arrange()
 
 	if texts.power then
 		texts.power:ClearAllPoints()
-		texts.power:SetPoint("RIGHT", bars.power, "RIGHT", -L.TEXT_INSET, 0)
+		texts.power:SetPoint("RIGHT", bars.power, "RIGHT", -L.TEXT_INSET - (mirrored and powerClear or 0), 0)
 	end
 	if texts.class then
 		texts.class:ClearAllPoints()
-		texts.class:SetPoint("LEFT", bars.power, "LEFT", L.TEXT_INSET, 0)
+		texts.class:SetPoint("LEFT", bars.power, "LEFT", L.TEXT_INSET + (mirrored and 0 or powerClear), 0)
 		texts.class:SetPoint("RIGHT", texts.power, "LEFT", -L.TEXT_SPACING, 0)
 	end
 	if texts.druid then
@@ -421,6 +463,7 @@ function Plate:Arrange()
 		texts.druid:ClearAllPoints()
 		texts.druid:SetPoint("CENTER", bars.power, "CENTER", 0, 0)
 	end
+	if ns.Portrait then ns.Portrait.Arrange(self, on, mirrored) end
 	self.markBits = nil   -- laid out again whatever shows
 	self:ArrangeMarks()
 end
@@ -598,6 +641,7 @@ function Plate:Update(newUnit)
 		wipe(self.memory)
 		self:ReadReady()
 		if self.combo then self.combo.points = nil end   -- so points already on a new target don't flash
+		if self.portrait and ns.Portrait then ns.Portrait.Draw(self) end
 	end
 	self:UpdateForm()
 	-- A pet's bar takes the end of its owner's health bar, or has given it back.
@@ -626,7 +670,8 @@ function Plate:UpdateHealth()
 	self:UpdateTone()
 	self:Flash(hp, max)
 	Texts.InkName(self.texts.name, unit)
-	Texts.WriteHealth(self.healthSegs, unit, self.layout.short)
+	Texts.WriteHealth(self.healthSegs, unit, self.layout.short, ns.T.db.healthText)
+	self:HurtOnly()
 	self:UpdateHeals()
 	self:UpdateShield()
 end
@@ -653,7 +698,37 @@ function Plate:UpdateForm()
 end
 
 function Plate:UpdateClass()
-	if self.texts.class then Texts.WriteClass(self.texts.class, self.unit) end
+	-- (A portrait that holds the level in a circle of its own keeps it off the class line.)
+	local apart = ns.Portrait and ns.Portrait.Level and ns.Portrait.Level(self) or false
+	if self.texts.class then Texts.WriteClass(self.texts.class, self.unit, apart) end
+end
+
+-- Your health's numbers only once you're hurt (T.db.hurtOnly): the words' alpha from how full the health is,
+-- set unread, since it may be secret. Dead and offline say so at any health. A party cell says only what is
+-- missing already.
+function Plate:HurtOnly()
+	local unit, said = self.unit, self.said
+	local hide = ns.T.db.hurtOnly and not self.layout.short and unit ~= nil
+	if hide then
+		local dead, offline = UnitIsDeadOrGhost(unit), Units.Offline(unit)
+		hide = not (Secret(dead) or dead or Secret(offline) or offline)
+	end
+	if hide then
+		local hp, max, secret = Units.Health(unit)
+		if secret then
+			said:SetAlpha(UnitHealthPercent(unit, true, UI.HurtCurve()))
+			self.saidHidden = true
+		else
+			local hidden = type(hp) == "number" and type(max) == "number" and max > 0 and hp >= max
+			if self.saidHidden ~= hidden then
+				said:SetAlpha(hidden and 0 or 1)
+				self.saidHidden = hidden
+			end
+		end
+	elseif self.saidHidden ~= false then
+		said:SetAlpha(1)
+		self.saidHidden = false
+	end
 end
 
 -- Edge color: gold for an elite or boss, silver for a rare, and ember with a light crossing it
@@ -674,7 +749,7 @@ function Plate:UpdateEdge()
 	-- The palette's tables change in place with the theme, so the same table needs no second telling.
 	if color == self.edgeColor then return end
 	self.edgeColor = color
-	UI.SetBorder(self.owner, color)
+	UI.SetBorder(self.house, color)
 	if self.combo then UI.SetBorder(self.combo, color) end   -- the riser is the plate's: its edge too
 end
 
@@ -799,16 +874,24 @@ end
 
 -- The shield left on them, against their whole health. Both numbers may be the game's to keep: they go to the
 -- bar unread.
+-- The shield, told only when what it shows changed (a secret is always told: it can't be compared).
+local function Shield(shield, value, most)
+	shield:SetMinMaxValues(0, most)
+	shield:SetValue(value)
+end
+
 function Plate:UpdateShield()
 	local unit, shield = self.unit, self.shield
 	local absorb, max = UnitGetTotalAbsorbs(unit), UnitHealthMax(unit)
-	if (not Secret(absorb) and absorb == nil) or (not Secret(max) and (max == nil or max <= 0)) then
-		shield:SetMinMaxValues(0, 1)
-		shield:SetValue(0)
+	if Secret(absorb, max) then
+		self.shieldAt, self.shieldOf = nil, nil
+		Shield(shield, absorb, max)
 		return
 	end
-	shield:SetMinMaxValues(0, max)
-	shield:SetValue(absorb)
+	if absorb == nil or max == nil or max <= 0 then absorb, max = 0, 1 end
+	if absorb == self.shieldAt and max == self.shieldOf then return end
+	self.shieldAt, self.shieldOf = absorb, max
+	Shield(shield, absorb, max)
 end
 
 -- Five second rule: after a spell that cost mana, a spark crosses the mana bar until regen resumes.
@@ -1074,13 +1157,13 @@ function Plate:BuildSignals()
 		t:SetTexture(UI.BRACKET)
 		t:SetTexCoord(def[2], def[3], def[4], def[5])
 		t:SetSize(UI.BRACKET_SIZE, UI.BRACKET_SIZE)
-		t:SetPoint(def[1], owner, def[1], (def[2] == 0) and -2 or 2, (def[4] == 0) and 2 or -2)
+		t:SetPoint(def[1], self.house, def[1], (def[2] == 0) and -2 or 2, (def[4] == 0) and 2 or -2)
 		UI.Tint(t, Theme.Accent)
 		t:SetAlpha(0)
 		self.brackets[i] = t
 	end
 	-- An enemy on them: the edge turns ember and a light crosses its top.
-	local alarm = CreateFrame("Frame", nil, owner)
+	local alarm = CreateFrame("Frame", nil, self.house)
 	alarm:SetPoint("TOPLEFT", 1, 0)
 	alarm:SetPoint("TOPRIGHT", -1, 0)
 	alarm:SetHeight(2)
@@ -1115,13 +1198,13 @@ function Plate:ArrangeName()
 	local lift = self.layout.lift or 0
 	if self.role then
 		self.role:ClearAllPoints()
-		self.role:SetPoint("LEFT", self.bars.health, "LEFT", L.TEXT_INSET, lift)
+		self.role:SetPoint("LEFT", self.bars.health, "LEFT", L.TEXT_INSET + (self.clearL or 0), lift)
 	end
 	name:ClearAllPoints()
 	if self.role and self.role:IsShown() then
 		name:SetPoint("LEFT", self.role, "RIGHT", 3, 0)
 	else
-		name:SetPoint("LEFT", self.bars.health, "LEFT", L.TEXT_INSET, lift)
+		name:SetPoint("LEFT", self.bars.health, "LEFT", L.TEXT_INSET + (self.clearL or 0), lift)
 	end
 	name:SetPoint("RIGHT", segs[#segs], "LEFT", -L.TEXT_SPACING, 0)
 end
@@ -1199,8 +1282,8 @@ function Plate:Sample(s)
 		Fill(bars.power, s.power, s.powerMax)
 		bars.power:SetStatusBarColor(Theme.Power(s.powerType))
 	end
-	self.shield:SetMinMaxValues(0, s.max)
-	self.shield:SetValue(s.shield or 0)
+	self.shieldAt, self.shieldOf = nil, nil   -- whoever comes next is told afresh
+	Shield(self.shield, s.shield or 0, s.max)
 	if self.role and self.role:IsShown() then
 		self.role:Hide()
 		self:ArrangeName()
@@ -1224,7 +1307,7 @@ function Plate:Sample(s)
 	if self.alarm then self.alarm:Hide() end
 	if self.edgeColor ~= Skin.colors.metal then
 		self.edgeColor = Skin.colors.metal
-		UI.SetBorder(self.owner, self.edgeColor)
+		UI.SetBorder(self.house, self.edgeColor)
 	end
 	if self.brackets then
 		for _, bracket in ipairs(self.brackets) do bracket:SetAlpha(0) end

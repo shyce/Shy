@@ -501,22 +501,19 @@ end
 ns.Module({
 	id = "meter",
 	title = "Damage meter",
-	desc = "Restyles the default damage meter to match the console: a dark panel with a title strip, tightly packed class-colored bars and square class icons.",
+	desc = "The game's damage meter gets a dark panel and class-colored bars. Drag its title to move it.",
+	group = "screen",
+	words = "dps healing",
 
 	Ready = function()
 		local _, loaded = C_AddOns.IsAddOnLoaded("Blizzard_DamageMeter")
 		return loaded
 	end,
 
-	options = {
-		{ key = "move", label = "Move and resize", default = true,
-			desc = "Drag the meter's title strip to move it, with snapping (hold Shift to place it freely), and any side or corner to resize it. Right-click either to lock or reset it. Off leaves its position and size to Edit Mode." },
-	},
-
 	Hook = function(m)
 		box = Shy.HUD.Adopt(DamageMeter, {
 			id = "shyskin.meter", title = "Damage meter", editMode = true,
-			active = function() return m.on and m.opt.move end,
+			active = function() return m.on end,
 		})
 		DamageMeter:ForEachSessionWindow(function(window) HookWindow(m, window) end)
 		hooksecurefunc(DamageMeter, "SetupSessionWindow", function(self, index)

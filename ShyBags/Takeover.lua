@@ -6,7 +6,8 @@
 -- and item clicks then get blocked. Our controls Show/Hide the reparented frames directly.
 -- Frames are only reparented while none is shown; moving a shown one would run its scripts tainted.
 -- On a gamepad the default bags are kept (they carry the gamepad bag bar).
---   Takeover.Visible() returns window up, key ring up; OnChange(fn(visible, keys)); OnSwitch(fn(on))
+--   Takeover.Visible() returns window up, key ring up; OnChange(fn(visible, keys)); OnSwitch(fn(on));
+--   Takeover.Gamepad() whether you play on one
 
 local ADDON, ns = ...
 
@@ -109,12 +110,19 @@ local function Called(kind)
 	C_Timer.After(0, Settle)
 end
 
+-- Switched off with our window up: it closes right then, and the bags are the game's from the next time
+-- they open. (Switched on with the game's bags up, it waits for them to close: a shown one can't be moved.)
 function Takeover.Set(value)
 	want = value and true or false
-	Apply()
+	if not want and on and (visible or keys) then
+		Takeover.Close()
+	else
+		Apply()
+	end
 end
 
 function Takeover.IsOn() return on end
+function Takeover.Gamepad() return OnGamepad() end
 function Takeover.Attic() return attic end
 function Takeover.Visible() return visible, keys end
 function Takeover.OnChange(fn) listeners[#listeners + 1] = fn end

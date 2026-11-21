@@ -222,8 +222,10 @@ ns.MenuAlert = { Parts = function() return alert, keys, deaf end, Name = Name, W
 
 ns.Module({
 	id = "menu",
-	title = "Menu",
-	desc = "Restyles the micro menu buttons as steel-framed slots that light up on hover and glow while their window is open, and shows their alerts on a card beside the menu.",
+	title = "Micro menu",
+	desc = "The small menu buttons get steel frames, and their alerts show on a card beside them.",
+	group = "screen",
+	words = "micro buttons",
 
 	Hook = function(m)
 		-- Blizzard swaps the icons' art whenever a window opens or closes.

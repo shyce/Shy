@@ -2,8 +2,10 @@
 -- Shy.Skin kit: regions only, so it is safe on protected buttons and in combat, and fully restorable.
 --
 -- ns.Module{...}:
---   id, title, desc                -- shown in the options
---   options = { { key =, label =, desc =, default = } }
+--   id, title, desc                -- its switch in the settings: a label and a sentence (/shy skin <id> flips it too)
+--   group, words                   -- where its switch stands there ("screen", "window" or "rebuilt"), more words to find it by
+--   options = { { key =, label =, desc =, default = } }   -- switches of its own, under its switch while it is on
+--   shown()         -- optional: false leaves its switch out (a piece this client doesn't have)
 --   Ready(m)        -- optional: false while its Blizzard frames aren't loaded
 --   Switch(m, on)   -- optional: on every refresh, before Ready is asked (what doesn't wait for the game's frames)
 --   Hook(m)         -- once, on first switch-on: post-hooks where Blizzard redraws
@@ -21,6 +23,7 @@
 --   ns.Own(kit, owner, key, build)         -- our own region, made once per frame, hidden with the module
 --   ns.Gloss(kit, owner, opts)             -- a highlight across the top of a strip or button
 --   ns.AfterCombat(key, fn)                -- run now, or when combat ends
+--   ns.Theirs(frame, ...)                  -- whether any of these game frames is on screen as the game's own
 --
 -- Widgets.lua has painters for Blizzard's stock controls. One module per file; Spellbook (with
 -- Talents.lua) is the exception to "regions only": it lays its window out again (Shop.lua's attic; its
@@ -44,6 +47,7 @@ ns.T = T
 -- For other addons, through Shy.addons.Skin: .owns[piece] is true while a module here provides that
 -- piece and the other addon should not (SHY_SKIN_OWNS fires on change).
 --   trainAll   the trainer window has its own "Train all"; ShyTweaks hides its button
+--   barText    the action bars show or hide each button's key and macro name by their own switches
 --   flights    the flight master's window offers the guide's flight; ShyQuest doesn't take it the moment the map opens
 T.owns = {}
 
@@ -168,14 +172,17 @@ function ModuleMixin:Refresh()
 	if not ok then geterrorhandler()(err) end
 end
 
+-- (Whoever switches it, a command too: the settings' rows read again.)
 function ModuleMixin:SetOn(on)
 	T.db.modules[self.id] = on
 	self:Refresh()
+	Shy.Settings.Refresh()
 end
 
 function ModuleMixin:SetOption(key, value)
 	T.db.options[self.id][key] = value
 	self:Refresh()
+	Shy.Settings.Refresh()
 end
 
 function ns.Module(def)
@@ -189,10 +196,25 @@ function ns.Module(def)
 	T.defaults.options[m.id] = optDefaults
 	table.insert(ns.modules, m)
 	byId[m.id] = m
+	-- /shy skin <id>: the module on or off.
+	T:Command(m.id, nil, function()
+		m:SetOn(not m:IsOn())
+		T:Print(m.title .. (m:IsOn() and ": restyled." or ": back to default."))
+	end)
 	return m
 end
 
 function ns.Get(id) return byId[id] end
+
+-- Whether any of these game frames is on screen as the game's own: shown, and not stood down by its roles
+-- (how another addon takes a default frame's place). A part's `shown` asks it: no switch for what you never see.
+function ns.Theirs(...)
+	for i = 1, select("#", ...) do
+		local frame = select(i, ...)
+		if frame and frame:IsShown() and frame:IsRolesetFiltered() ~= true then return true end
+	end
+	return false
+end
 
 function T:Apply()
 	for _, m in ipairs(ns.modules) do m:Refresh() end
@@ -237,7 +259,6 @@ end
 function T:OnLoad()
 	-- (The game's world map is ShyMaps' now: the module that dressed it is gone, and its settings with it.)
 	self.db.modules.worldmap, self.db.options.worldmap = nil, nil
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -267,23 +288,3 @@ events:SetScript("OnEvent", function(_, event, isLogin, isReload)
 		T:Apply()
 	end
 end)
-
-SLASH_SHYSKIN1 = "/shyskin"
-SLASH_SHYSKIN2 = "/sskin"
-SlashCmdList.SHYSKIN = function(input)
-	local cmd = strtrim(input or ""):lower()
-	local m = byId[cmd]
-	if cmd == "" then
-		T:OpenOptions()
-	elseif m then
-		m:SetOn(not m:IsOn())
-		T:Print(m.title .. (m:IsOn() and ": restyled." or ": back to default."))
-		if ns.RefreshOptions then ns.RefreshOptions() end
-	else
-		T:Print("commands:")
-		print("  /shyskin  - open options")
-		for _, mod in ipairs(ns.modules) do
-			print("  /shyskin " .. mod.id .. "  - toggle " .. mod.title:lower())
-		end
-	end
-end

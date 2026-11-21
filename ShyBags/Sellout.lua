@@ -1,11 +1,11 @@
 -- What to sell at a vendor: everything in your bags you most likely want gone, each with why, ready for the vendor
 -- window's sell page (ShySkin's) to show and sell in one press. Read from make room's list (Room.lua: junk, plain
 -- materials, outgrown bound gear) and from unbound gear ShyGear calls no use to you, priced at the vendor and, with
--- ShyAuction, at the auction house (what it fetches there less the house's cut):
+-- ShyAuction, at the auction house (what it fetches there less the auction house's cut):
 --   junk       grey items and what is left of finished quests                                   checked
 --   outgrown   bound gear ShyGear rates worse or that you can't use                              checked
---   plain      materials and unbound gear the house pays no more for than a vendor (or no price) checked
---   house      what the house pays more for than a vendor: listed to see, not sold unless ticked unchecked
+--   plain      materials and unbound gear the auction house pays no more for than a vendor (or no price) checked
+--   house      what the auction house pays more for than a vendor: listed to see, not sold unless ticked unchecked
 -- What you untick is kept and remembered: it isn't offered again for ten levels, then it is asked about again; kept
 -- at the highest level, it is kept for good. Ticking it again lets it go.
 --   T:SaleList()            { groups = { { key, rows = { row } } }, count, value } (checked ones counted); a row:
@@ -25,7 +25,7 @@ ns.Sellout = Sellout
 T.defaults.keptFromSale = {}   -- [itemID] = the level it was kept at, or true: kept for good (at the highest level)
 
 local AGAIN = 10                 -- levels before something kept is asked about again
-local BETTER = 1.1               -- the house must pay this much more than a vendor to be worth listing
+local BETTER = 1.1               -- the auction house must pay this much more than a vendor to be worth listing
 local PACE = 0.2                 -- seconds between two sales
 local GROUPS = { "junk", "outgrown", "plain", "house" }
 local CLASS = { Weapon = Enum.ItemClass.Weapon, Armor = Enum.ItemClass.Armor }
@@ -43,7 +43,7 @@ local function Kept(id)
 	return type(at) == "number" and Level() < at + AGAIN
 end
 
--- What the house pays for `count` of it, less its cut; nil without a price.
+-- What the auction house pays for `count` of it, less its cut; nil without a price.
 local function House(id, count)
 	local auction = Shy.addons.Auction
 	local price = auction and auction:Price(id)
@@ -117,13 +117,13 @@ function Sellout.List()
 			else
 				r.house = House(id, r.count)
 				if r.house and r.house > r.value * BETTER then
-					r.kind, r.why = "house", ("the house pays %s"):format(Money(r.house))
+					r.kind, r.why = "house", ("the auction house pays %s"):format(Money(r.house))
 				elseif r.gear and not r.house then
-					-- Unbound gear with no price yet: worth a look at the house before a vendor has it.
-					r.kind, r.why = "house", "no price at the house yet"
+					-- Unbound gear with no price yet: worth a look at the auction house before a vendor has it.
+					r.kind, r.why = "house", "no price at the auction house yet"
 				else
 					r.kind = "plain"
-					r.why = r.house and ("the house pays %s"):format(Money(r.house))
+					r.why = r.house and ("the auction house pays %s"):format(Money(r.house))
 						or (r.gear == "cant" and "you can't use it" or r.gear and "worse than what you wear" or "no market for it")
 				end
 			end

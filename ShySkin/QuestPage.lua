@@ -184,7 +184,9 @@ end
 ns.Module({
 	id = "questpage",
 	title = "Quest pages",
-	desc = "Shows a quest's page opened from the tracker in a window of your theme, its words light.",
+	desc = "A quest's page opened from the tracker wears your theme, with light text.",
+	group = "window",
+	words = "quest log details",
 
 	Ready = function()
 		return QuestLogPopupDetailFrame ~= nil and ns.Window ~= nil

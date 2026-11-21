@@ -74,6 +74,8 @@ function T:SetDocked(by, docked)
 	ns.dockedBy = next(docks)
 	ns.UpdateBox()
 	if ns.ApplyBlizzardBar then ns.ApplyBlizzardBar() end
+	-- (The settings say whether the stats window stands in for the quest window.)
+	if ns.RefreshOptions then ns.RefreshOptions() end
 	Shy:Fire("SHY_XP_DOCKED")
 end
 

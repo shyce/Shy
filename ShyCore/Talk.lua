@@ -1658,7 +1658,7 @@ function Answer.detail()
 	Seal()
 	local auto = QuestGetAutoAccept()
 	return Buttons({ text = auto and "Okay" or "Accept", space = true,
-		say = auto and "The quest is already yours." or "Accepts the quest.", act = function()
+		say = auto and "You already have this quest." or "Accepts the quest.", act = function()
 		PlaySound(SOUNDKIT.IG_QUEST_LIST_SELECT)
 		if QuestFlagsPVP() then
 			StaticPopup_Show("CONFIRM_ACCEPT_PVP_QUEST")

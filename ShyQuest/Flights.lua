@@ -1,8 +1,9 @@
--- Flight points as part of the route: a flight master near by, or on the way, whose point the
--- character does not have yet is a stop, guide or no guide. A guide's own "get the flight path"
--- steps count as done while this is loaded (Guide.lua): flight points are this file's to send for.
+-- Flight points as part of the route. A flight master nearby or on the way, whose point the character
+-- doesn't have yet, is a stop with or without a guide. A guide's own "get the flight path" steps count
+-- as done while this is loaded (Guide.lua), because this file sends you for flight points.
 --   Known points: ShyWay's (Shy.Way.Flights, by node), learned from the flight map whenever one opens
---     and when the game says a flight path was found beside one.
+--     and when the game says a flight path was found beside one. Until a flight map has opened for the
+--     character, the nearest flight master is asked to be talked to once, so they are all learned.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -14,6 +15,26 @@ ns.Flights = Flights
 T.defaults.flights = { on = true }    -- flight masters as stops on the card
 
 local LISTED = 600           -- yards: a flight master this near gets a row though it is off the way
+local WORDS = {
+	unread = {
+		title = "Talk to the flight master: %s",
+		line = "Talk to them once so the guide knows your flight paths",
+		caption = "FLIGHT PATHS  \194\183  NOT KNOWN YET",
+		tip = "Until then the guide won't plan flights for you here.",
+	},
+	new = {
+		title = "Get the flight path: %s",
+		line = "You don't have this one yet",
+		caption = "FLIGHT POINT  \194\183  NEW TO YOU",
+		tip = "Talk to the flight master to learn it.",
+	},
+	maybe = {
+		title = "Get the flight path: %s",
+		line = "You may have it. Your flight map can't reach it",
+		caption = "FLIGHT POINT  \194\183  MAYBE NEW",
+		tip = "Talk to the flight master to learn it, or to show the guide you have it.",
+	},
+}
 
 -- This character's flight points left alone, by the point's key.
 local function Skipped()
@@ -44,21 +65,25 @@ local function Find(lead)
 	local busy = InCombatLockdown() or UnitOnTaxi("player") or UnitIsDeadOrGhost("player")
 	local passing = not busy and R.Passing("flightpath", at.map, at.x, at.y, lead)
 	if not passing and yards > LISTED then return nil end
+	-- What the guide knows of this point: your flight points here not read yet (any flight master teaches
+	-- them all), surely new, or maybe yours already (cut off from the points your map reached).
+	local words = not Shy.Way.FlightsRead(W.continent) and WORDS.unread or Shy.Way.FlightNew(point.node) and WORDS.new
+		or WORDS.maybe
 	return {
-		title = "Get the flight path: " .. point.town,
-		lines = { at.npc.title and ("%s, %s"):format(at.npc.name, at.npc.title) or at.npc.name, "You don't have this one yet" },
-		caption = "FLIGHT POINT  \194\183  NEW TO YOU",
+		title = words.title:format(point.town),
+		lines = { at.npc.title and ("%s, %s"):format(at.npc.name, at.npc.title) or at.npc.name, words.line },
+		caption = words.caption,
 		mark = "flight",
 		map = at.map, x = at.x, y = at.y, thing = at.npc, who = at.npc.name,
 		first = passing or nil,
-		tip = function(tip)
-			tip:AddLine("Talk to the flight master to learn it.", 0.6, 0.6, 0.6, true)
-		end,
+		tip = function(tip) tip:AddLine(words.tip, 0.6, 0.6, 0.6, true) end,
 		menu = function(root)
-			root:CreateButton("Not this one", function()
-				Skipped()[point.key] = true
-				ns.Refresh()
-			end)
+			if words ~= WORDS.unread then
+				root:CreateButton("Not this one", function()
+					Skipped()[point.key] = true
+					ns.Refresh()
+				end)
+			end
 			root:CreateButton("Stop asking about flight points", function()
 				T.db.flights.on = false
 				ns.Apply()

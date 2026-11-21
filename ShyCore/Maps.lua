@@ -1170,6 +1170,8 @@ end
 --   Shy.Maps.Canvas() -> what answers as the canvas in use: WorldMapFrame, or ShyMaps' view
 --   Shy.Maps.ShownMap() -> the map shown;   Shy.Maps.PinLevel(name) -> a pin level on the canvas in use
 --   Shy.Maps.Beyond() -> how far past the map's edges the canvas in use may show, in shares of the map
+--   Shy.Maps.PinLayer(above) -> a frame over the map's window that the zoom never scales: pins on it hang from a
+--                                           point on a MapLayer and keep their size on screen
 --   Shy.Maps.Over(frame, point, x, y)       a frame of one's own over the map's window (a note, a key), at Maps.OVER scale, placed
 --                                           at `point` of the canvas's frame in use, and kept there; it stays with the
 --                                           window when ShyMaps lays its view over the whole screen (its overlay)
@@ -1213,17 +1215,23 @@ end
 
 local layers, overs = {}, {}  -- { frame, above }; { frame, point, x, y }
 
--- (Asked at every opening: only what is no longer so is set.)
+-- (Asked at every opening: only what is no longer so is set. A pin layer stands on the canvas's container, the
+-- window the map shows in, which the zoom never scales.)
 local function Home(entry)
 	local canvas = Maps.Canvas():GetCanvas()
+	local on = entry.still and Maps.Canvas():GetCanvasContainer() or canvas
 	local frame = entry.frame
-	if frame:GetParent() ~= canvas then
-		frame:SetParent(canvas)
+	if frame:GetParent() ~= on then
+		frame:SetParent(on)
 		frame:ClearAllPoints()
-		frame:SetAllPoints(canvas)
+		frame:SetAllPoints(on)
 	end
 	local level = Maps.PinLevel("PIN_FRAME_LEVEL_ACTIVE_QUEST") + entry.above
 	if frame:GetFrameLevel() ~= level then frame:SetFrameLevel(level) end
+	if entry.still then
+		layers.Follow(canvas)
+		layers.Fade(entry, canvas:GetAlpha())
+	end
 end
 
 local function Place(entry)
@@ -1261,8 +1269,30 @@ local function Seat(on)
 	seated = on
 	local show = on and next(hushed) == nil
 	for _, entry in ipairs(layers) do
-		if entry.frame:IsShown() ~= show then seat[show](entry.frame) end
+		local want = show and not entry.faded
+		if entry.frame:IsShown() ~= want then seat[want](entry.frame) end
 	end
+end
+
+-- A pin layer fades as the canvas it stands for does (ShyMaps' view fades what stands on the map for a focus), and
+-- is out of sight with it at none, so nothing unseen takes the mouse.
+local faders = setmetatable({}, { __mode = "k" })   -- canvas -> true once its fading is followed
+function layers.Fade(entry, alpha)
+	entry.frame:SetAlpha(alpha)
+	local faded = alpha <= 0
+	if faded == (entry.faded == true) then return end
+	entry.faded = faded or nil
+	Seat(seated)
+end
+function layers.Follow(canvas)
+	if faders[canvas] then return end
+	faders[canvas] = true
+	hooksecurefunc(canvas, "SetAlpha", function(self, alpha)
+		if Maps.Canvas():GetCanvas() ~= self then return end
+		for _, entry in ipairs(layers) do
+			if entry.still then layers.Fade(entry, alpha) end
+		end
+	end)
 end
 
 -- Every addon's layers out of sight for a while (who: whoever asks, on: true to hush, false to let them back):
@@ -1277,6 +1307,19 @@ function Maps.MapLayer(above)
 	local entry = { frame = CreateFrame("Frame", nil, Maps.Canvas():GetCanvas()), above = above or 0 }
 	layers[#layers + 1] = entry
 	entry.frame:SetAllPoints()
+	entry.frame:SetShown(seated and next(hushed) == nil)
+	Home(entry)
+	return entry.frame
+end
+
+-- A layer for pins that keep their size on screen whatever the zoom: over the map's window at the layer's level,
+-- cut to the window, moved with the canvas in use, and out of sight with the layers. A pin hangs from a point on a
+-- MapLayer (anchored to a region there), so the zoom carries it to its place and nothing is told of a zoom's step.
+function Maps.PinLayer(above)
+	local entry = { frame = CreateFrame("Frame", nil, Maps.Canvas():GetCanvasContainer()), above = above or 0, still = true }
+	layers[#layers + 1] = entry
+	entry.frame:SetAllPoints()
+	entry.frame:SetClipsChildren(true)
 	entry.frame:SetShown(seated and next(hushed) == nil)
 	Home(entry)
 	return entry.frame

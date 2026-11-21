@@ -28,7 +28,7 @@ local function Categories()
 	return cats_ or {}
 end
 
--- The house answers one question at a time: one asked while it is busy waits (ns.WhenReady), the newest only.
+-- The auction house answers one question at a time: one asked while it is busy waits (ns.WhenReady), the newest only.
 local function Ask(query)
 	ns.WhenReady("browse", function()
 		ns.Note("SendBrowseQuery", query.searchString, #query.itemClassFilters)
@@ -107,7 +107,7 @@ local function Heard()
 	ns.Window.Stale()
 end
 
--- What is listed of the item picked, cheapest first: asked again each visit, as the house forgets it when it closes.
+-- What is listed of the item picked, cheapest first: asked again each visit, as the auction house forgets it when it closes.
 local function Search()
 	state.asked = state.pick
 	ns.Search(state.key)
@@ -278,7 +278,7 @@ local function DrawCard(width, height)
 
 	-- The cheapest listings.
 	state.ladder = Ladder()
-	card.kick2:Say("Cheapest", #state.ladder == 0 and "asking the house..." or "")
+	card.kick2:Say("Cheapest", #state.ladder == 0 and "asking the auction house..." or "")
 	local most = 1
 	for _, rung in ipairs(state.ladder) do most = math.max(most, rung.quantity) end
 	for i = 1, L.ladder do
@@ -331,7 +331,7 @@ local function Build(frame)
 	side:SetPoint("TOPLEFT", 10, -4)
 	side:SetPoint("BOTTOMLEFT", 10, 6)
 	side:SetWidth(L.side)
-	search = Shop.Search(side, "Search the house", function(text)
+	search = Shop.Search(side, "Search the auction house", function(text)
 		state.find = text
 		state.searchAt = GetTime()
 		C_Timer.After(0.4, function()
@@ -442,12 +442,12 @@ local function Draw(frame, width, height)
 		found = #rows > 0 and ("nothing in %s: %d found elsewhere, lit at the left"):format(state.cat and state.cat.name or "it", #rows)
 			or ("nothing anywhere for \"%s\""):format(state.find)
 	elseif ns.Waiting("browse") then
-		found = "asking the house..."
+		found = "asking the auction house..."
 	else
 		found = ("%d found"):format(#rows)
 	end
 	head:Say(state.browsing and "Items" or "Deals now", state.browsing and found
-		or (#rows > 0 and "under the market on your last scan" or "scan the house to find them"))
+		or (#rows > 0 and "under the market on your last scan" or "scan the auction house to find them"))
 	scroll.content:SetWidth(midWidth - 14)
 	list:Lay(#rows, function(row, i)
 		local r = rows[i]
@@ -470,7 +470,7 @@ ns.AddPage({ key = "buy", label = "Buy", order = 1, Build = Build, Draw = Draw }
 ns.BuyPage = { state = state, Parts = function() return list, card, search end, Browse = function() Browse() end,
 	Pick = function(item) Pick(item) end }
 
--- What the house says.
+-- What the auction house says.
 local events = CreateFrame("Frame")
 for _, event in ipairs({ "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", "AUCTION_HOUSE_BROWSE_RESULTS_ADDED", "COMMODITY_SEARCH_RESULTS_UPDATED",
 	"ITEM_SEARCH_RESULTS_UPDATED", "COMMODITY_PRICE_UPDATED", "COMMODITY_PURCHASE_SUCCEEDED", "COMMODITY_PURCHASE_FAILED",

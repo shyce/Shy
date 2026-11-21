@@ -228,10 +228,12 @@ local function Sync()
 end
 
 -- CVars. Friendly nameplates in instances are forbidden, so Blizzard draws them. To match `friendNames`
--- there, these two CVars are set while it is on and restored after. Nameplate CVars can't change in combat.
+-- there, these two CVars are held while it is on and restored after: names alone, in class colors where
+-- `classColors` has them. Nameplate CVars can't change in combat.
 -- (Settings runs at every PLAYER_ENTERING_WORLD: going into an instance and coming out of one.)
 
-local FRIEND_NAMES = { "nameplateShowOnlyNameForFriendlyPlayerUnits", "nameplateUseClassColorForFriendlyPlayerUnitNames" }
+local CLASS_NAMES = "nameplateUseClassColorForFriendlyPlayerUnitNames"
+local FRIEND_NAMES = { "nameplateShowOnlyNameForFriendlyPlayerUnits", CLASS_NAMES }
 -- The game gives out 40 nameplates and no more, the nearest first; past them it writes a name over the unit itself
 -- (in our font: ShyPlates.lua). A friendly player's pet, totem or guardian has a nameplate only where the game is
 -- told to give its kind one: outdoors, while pets are ours to name (db.pets) this is on, so it is a small name with
@@ -279,7 +281,7 @@ local function Settings()
 				db.cvars[name] = nil
 			end
 		else
-			Hold(db, name, wanted)
+			Hold(db, name, wanted, (name == CLASS_NAMES and not db.classColors) and "0" or "1")
 		end
 	end
 	Hold(db, PET_PLATES, db.on and not IsInInstance(), db.pets and "1" or "0")
@@ -438,9 +440,9 @@ local HANDLERS = {
 		if ns.Auras.waiting and not ns.Auras.Restricted() then ns.Auras.CatchUp() end
 	end,
 	PLAYER_ENTERING_WORLD = function()
-		Settings()
 		if Sideways() then Each("Berth") end
 		Sync()
+		Settings()
 	end,
 }
 
@@ -462,7 +464,7 @@ function D.Start()
 	end
 	events:SetScript("OnEvent", function(_, event, ...) HANDLERS[event](...) end)
 
-	-- Plates set colors directly (restricted regions), so repaint on a theme change. Includes preview plates.
+	-- Plates set colors directly (restricted regions), so repaint on a theme change. The spares too.
 	-- The target's mark follows the look too, when the look picks it.
 	Shy:On("SHY_THEME", function()
 		for plate in pairs(P.all) do plate:Paint() end
@@ -487,21 +489,40 @@ Shy:On("SHY_THREAT_ROLE", function() Each("UpdateColor") end)
 			if plate.Fade then plate:Fade() end
 		end
 	end)
+	-- Settings goes after Sync: Sync's SHY_NAMEPLATES lets ShyTweaks hand over or take back the two name settings.
 	ns.OnApply(function()
-		Settings()
 		Sideways()
 		Sync()
+		Settings()
 		Rearrange()
 	end)
-	Settings()
 	Sideways()
 	Sync()
+	Settings()
 	Stock()
 end
 
 function D.PlateOn(nameplate)
 	return active[nameplate]
 end
+
+-- One setting changed: only what it touches.
+--   D.Tell(...)   every plate on screen runs these: a plate's method by name, or a function given the plate
+--   D.Relay()     sizes, fonts and debuff rows: every plate laid out again, the spares too
+--   D.Game()      the game's settings held while the plates are on
+function D.Tell(...)
+	local steps = select("#", ...)
+	for _, plate in pairs(active) do
+		if plate.unit and plate.read.Exists(plate.unit) then
+			for i = 1, steps do
+				local step = select(i, ...)
+				if type(step) == "function" then step(plate) else plate[step](plate) end
+			end
+		end
+	end
+end
+D.Relay = Rearrange
+D.Game = Settings
 
 -- Public API (see ShyPlates.lua).
 function T:Tag(nameplate, info)

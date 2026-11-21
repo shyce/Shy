@@ -316,6 +316,7 @@ end
 
 -- The trainer as a route errand (R.AddErrand), or nil.
 local function Find(lead)
+	local weighs = ns.Weighed("train")
 	if not T.db.train.on then return nil end
 	local waiting = Train.Waiting()
 	local level = UnitLevel("player")
@@ -328,13 +329,14 @@ local function Find(lead)
 		due.names[i] = (spell.rank and spell.rank ~= "") and ("%s (%s)"):format(spell.name, spell.rank) or spell.name
 		if due.cost then due.cost = spell.cost and due.cost + spell.cost or nil end
 	end
-	local money = GetMoney()
-	if due.cost and money < due.cost then return nil end
+	-- (The gold the row waits on: only crossing it brings the row or takes it away.)
+	if due.cost and due.cost > 0 then weighs[1] = due.cost end
+	if due.cost and Shy.Money() < due.cost then return nil end
 	local busy = InCombatLockdown() or UnitOnTaxi("player") or UnitIsDeadOrGhost("player")
 	local passing = not busy and R.Passing("train", at.map, at.x, at.y, lead, nil, WORTH, true)
 	if not passing and at.yards > LISTED then return nil end
 	local lines = { at.npc.name }
-	if due.cost and due.cost > 0 then lines[2] = ("%s of your %s"):format(Coins(due.cost), Coins(money)) end
+	if due.cost and due.cost > 0 then lines[2] = "Costs " .. Coins(due.cost) end
 	return {
 		title = ("Train: %d new spell%s"):format(due.count, due.count == 1 and "" or "s"),
 		lines = lines,
@@ -356,7 +358,7 @@ local function Find(lead)
 			local sections = { { title = "To learn", rows = rows } }
 			if due.cost and due.cost > 0 then
 				sections[2] = { title = "Costs", rows = { { glyph = "coin", tint = UI.colors.alert, text = Coins(due.cost),
-					right = "of your " .. Coins(money), rightColor = UI.colors.dim } } }
+					right = "of your " .. Coins(Shy.Money()), rightColor = UI.colors.dim } } }
 			else
 				sections[2] = { title = "Costs", rows = { { glyph = "note", quiet = true, text = "Known after you visit a trainer" } } }
 			end
@@ -368,7 +370,7 @@ local function Find(lead)
 			if not due.cost then tip:AddLine("Costs show after you visit a trainer.", 0.6, 0.6, 0.6, true) end
 		end,
 		menu = function(root)
-			root:CreateButton("Not now: ask again next level", function()
+			root:CreateButton("Ask me next level", function()
 				Mine().skip = UnitLevel("player")
 				ns.Refresh()
 			end)
@@ -453,7 +455,7 @@ local function Teach()
 end
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "SPELLS_CHANGED", "PLAYER_MONEY", "QUEST_TURNED_IN",
+for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "QUEST_TURNED_IN",
 	"TRAINER_SHOW", "TRAINER_UPDATE", "TRAINER_CLOSED" }) do
 	events:RegisterEvent(event)
 end
@@ -475,7 +477,13 @@ events:SetScript("OnEvent", function(_, event, id)
 		Mine().blocked = {}
 	end
 	stale = true
-	ns.Refresh()
+	-- (The trainer's row is an errand: the errands are fitted again, not the route.)
+	ns.RefreshErrands()
+end)
+-- A spell learned, or a new one to come: the spells due are counted again.
+Shy:On("SHY_SPELLS", function()
+	stale = true
+	if ns.char then ns.RefreshErrands() end
 end)
 
 ns.CardSwitch("errands", function(root)

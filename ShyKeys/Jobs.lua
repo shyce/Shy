@@ -329,7 +329,7 @@ function Keys.Carried(jobs, spec)
 	if spec.drink then
 		Add({ name = "Drink", key = "SHIFT-X", what = "Drink your best water", supply = { "drink" }, item = true })
 	end
-	Add({ name = "Bandage", key = "SHIFT-C", what = "Bandage the friend the mouse is on, else yourself", supply = { "bandage" }, over = true })
+	Add({ name = "Bandage", key = "SHIFT-C", what = "Bandage the friend under your mouse, or yourself", supply = { "bandage" }, over = true })
 	if spec.stone then
 		Add({ name = "Healing", key = "SHIFT-V", what = "A healthstone if you carry one, then your best healing potion",
 			supply = { "healthstone", "potion" }, turns = true })
@@ -368,7 +368,7 @@ end
 -- people with none has no job).
 function Keys.People(jobs)
 	jobs[#jobs + 1] = { name = "Mount", key = "SHIFT-3", asdf = "SHIFT-3", stay = true,
-		what = "Your mount, a favorite first; pressed again it gets you off", make = Mount }
+		what = "Your mount, a favorite first. Press again to dismount", make = Mount }
 	for n, key in ipairs({ "SHIFT-1", "SHIFT-2" }) do
 		local race = {}
 		for id, pair in pairs(Shy.KeyRacials or EMPTY) do
@@ -376,7 +376,7 @@ function Keys.People(jobs)
 			race[id] = { name = pair[n][2], what = pair[n][2], spell = pair[n][1], "#showtooltip", ("/cast {%d}"):format(pair[n][1]) }
 		end
 		jobs[#jobs + 1] = { name = n == 1 and "Racial" or "Racial 2", key = key, asdf = key, stay = true,
-			what = "What your people alone can do", race = race }
+			what = "Your racial ability", race = race }
 	end
 	return jobs
 end

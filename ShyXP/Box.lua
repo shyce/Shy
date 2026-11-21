@@ -1,4 +1,4 @@
--- The stats box: a card with the bar and stat tiles, a Shy.HUD box. The same card is the options preview.
+-- The stats box: a card with the bar and stat tiles, a Shy.HUD box.
 -- Its head is what the bar is of (your level, or the faction you track) and how far along; under the bar a line of
 -- what is left and when; then the stats, three to a row, close.
 
@@ -320,7 +320,7 @@ local function BoxMenu(root)
 	end)
 	root:CreateDivider()
 	root:CreateButton("Share my progress", ns.Share)
-	root:CreateButton("Options", function() T:OpenOptions() end)
+	root:CreateButton("Settings", function() T:OpenOptions() end)
 	local move = root:CreateButton("Move the bars")
 	for _, place in ipairs(ns.Places()) do
 		if place.value ~= "box" then move:CreateButton(place.text, function() ns.SetPlace(place.value) end) end

@@ -1,123 +1,50 @@
--- The options: one card per module with a switch and, while it is on, its checkboxes.
--- Cards are built from ns.modules when the page shows, so a module only has to register itself.
+-- Settings: every part a switch, under its kind, with its own switches while it is on.
+-- Told as this file loads: it is the last, so every module has registered.
 
 local ADDON, ns = ...
 local T = ns.T
-local B, UI = Shy.Brand, Shy.UI
 
-local LEFT, INTRO, CARD_W = 24, -112, 596   -- the intro starts under the page header
-local PAD = 16                          -- card padding
-local COLUMN = (CARD_W - 2 * PAD) / 2   -- width of one of two columns
-local ROW = 28                          -- height of a row of checkboxes
+ns.RefreshOptions = Shy.Settings.Refresh
 
--- Two checkboxes to a row; one whose label is wider than a column takes a whole row.
-local function PlaceOptions(body, boxes)
-	local column, y = 0, 0
-	for _, box in ipairs(boxes) do
-		local wide = box:GetWidth() > COLUMN - 12
-		if wide and column > 0 then column, y = 0, y - ROW end
-		box:SetPoint("TOPLEFT", column * COLUMN, y)
-		if wide or column > 0 then column, y = 0, y - ROW else column = 1 end
-	end
-	if column > 0 then y = y - ROW end
-	return -y
+-- The kinds, in the order they stand: a module's `group`, its caption, and what closes it.
+local GROUPS = {
+	{ "screen", "On your screen", function(list)
+		list[#list + 1] = { note = "To move or size a bar or frame, or hide your main bar's gryphons, use Edit Mode." }
+		list[#list + 1] = Shy.Settings.Layout("Move the messages, the armor stand and the breath bars.")
+	end },
+	{ "window", "The game's windows" },
+	{ "rebuilt", "Windows made new" },
+}
+
+-- One of a part's own switches: in the list while the part is on, stood in under it.
+local function Option(m, o)
+	return { sub = true, key = "options." .. m.id .. "." .. o.key, label = o.label, desc = o.desc, words = m.title,
+		shown = function() return m:IsOn() == true and (m.shown == nil or m.shown() == true) end,
+		set = function(v) m:SetOption(o.key, v) end }
 end
 
-local function Card(parent, m, index, group)
-	local card = CreateFrame("Frame", nil, parent)
-	card:SetWidth(CARD_W)
-	UI.Skin(card, UI.colors.row, UI.colors.rowEdge)
-	card.module = m
-
-	-- The side bars run along the accent ramp from the first card to the last.
-	local accent = card:CreateTexture(nil, "ARTWORK")
-	accent:SetPoint("TOPLEFT")
-	accent:SetPoint("BOTTOMLEFT")
-	accent:SetWidth(3)
-	UI.Paint(accent, function() return B.Ramp((index - 1) / math.max(1, #ns.modules - 1)) end)
-	card.accent = accent
-
-	local title = UI.Text(card, m.title, 16, true)
-	title:SetPoint("TOPLEFT", PAD, -10)
-	local desc = UI.Text(card, m.desc, 12, false, UI.colors.dim)
-	desc:SetWidth(CARD_W - 110)
-	desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
-
-	card.switch = group:Switch(card, m.title, function() return m:IsOn() end, function(v) m:SetOn(v) end,
-		{ desc = "Off puts this part back to the default UI." })
-	card.switch:SetPoint("TOPRIGHT", -PAD, -12)
-
-	local body = CreateFrame("Frame", nil, card)
-	body:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -12)
-	body:SetWidth(CARD_W - 2 * PAD)
-	local boxes = {}
-	for i, o in ipairs(m.options or {}) do
-		boxes[i] = group:Checkbox(body, o.label, function() return m.opt[o.key] end,
-			function(v) m:SetOption(o.key, v) end, { desc = o.desc })
-	end
-	local height = PlaceOptions(body, boxes)
-	body:SetHeight(math.max(1, height))
-
-	function card:Layout()
-		local open = m:IsOn() == true and height > 0
-		body:SetShown(open)
-		self:SetHeight(10 + title:GetStringHeight() + 5 + desc:GetStringHeight() + 12 + (open and height or 0))
-	end
-	return card
-end
-
-function ns.CreateOptions()
-	local panel = CreateFrame("Frame")
-	local cards, intro, footer = {}, nil, nil
-	local group
-
-	local function Relayout()
-		local y = INTRO - intro:GetStringHeight() - 10
-		for _, card in ipairs(cards) do
-			card:Layout()
-			card:ClearAllPoints()
-			card:SetPoint("TOPLEFT", panel, "TOPLEFT", LEFT, y)
-			y = y - card:GetHeight() - 8
-		end
-		footer:ClearAllPoints()
-		footer:SetPoint("TOPLEFT", panel, "TOPLEFT", LEFT, y - 6)
-	end
-
-	local function Build()
-		UI.PageHeader(panel, T)
-		group = UI.Group(Relayout)
-
-		intro = UI.Text(panel, "Turn any part off and it's back to the game's look at once. Most keep the game's layout; the vendor, trainer, mail, professions, spellbook, friends and guild windows are rebuilt to be easier to use.", 13)
-		intro:SetWidth(CARD_W)
-		intro:SetPoint("TOPLEFT", LEFT, INTRO)
-
-		footer = UI.Text(panel, "To move or resize a bar or frame, or hide the main bar's gryphons or page arrows, use Edit Mode.", 12, false, UI.colors.dim)
-		footer:SetWidth(CARD_W)
-	end
-
-	local function Refresh()
-		for i = #cards + 1, #ns.modules do cards[i] = Card(panel, ns.modules[i], i, group) end
-		group:Refresh()
-		Relayout()
-	end
-
-	ns.RefreshOptions = function()
-		if panel.built then Refresh() end
-	end
-
-	panel:SetScript("OnShow", function(self)
-		if not self.built then
-			Build()
-			self.built = true
-		end
-		Refresh()
-	end)
-
-	function panel:OnDefault()
+-- (A switch paints its own part again and no other.)
+local list = {
+	apply = function() end,
+	reset = function()
 		T:ResetDB()
 		T:Apply()
-		ns.RefreshOptions()
+	end,
+	{ note = "Switch a part off and the game's own look is back at once. In a fight a few wait until it ends." },
+}
+for _, group in ipairs(GROUPS) do
+	local captioned = false
+	for _, m in ipairs(ns.modules) do
+		if (m.group or GROUPS[1][1]) == group[1] then
+			if not captioned then
+				captioned = true
+				list[#list + 1] = { section = group[2] }
+			end
+			list[#list + 1] = { key = "modules." .. m.id, label = m.title, desc = m.desc, words = m.words, shown = m.shown,
+				set = function(v) m:SetOn(v) end }
+			for _, o in ipairs(m.options or {}) do list[#list + 1] = Option(m, o) end
+		end
 	end
-
-	return panel
+	if captioned and group[3] then group[3](list) end
 end
+T:Settings(list)

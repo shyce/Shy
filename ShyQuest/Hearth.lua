@@ -1,17 +1,16 @@
--- The hearthstone as part of the route. When to use it and where to set it are decided here,
--- live, from where the character is and where the guide goes next; a guide's own "hearth to"
--- and "set your hearthstone" steps count as done while this is on (Guide.lua).
+-- The hearthstone as part of the route. When to use it and where to set it are decided here, live,
+-- from where the character is and where the guide goes next. A guide's own "hearth to" and "set
+-- your hearthstone" steps count as done while this is on (Guide.lua).
 --   What lies ahead: the guide's next steps that have a place (G.Places), with a clock run along
---     them: the way from one to the next (R.Travel) and what each takes (R.Effort: how many, the
---     drop chance, how far apart the spawns stand, other players). Only the stone's hour of
---     them counts: what comes after is another use.
---   Using it: a row that leads when home is the quicker way to what comes next, unless a step
---     within that hour is a use that saves a good deal more: then the card says to save it.
---   Nearly ready: with a few minutes left on the stone and a use that is worth the wait, the row
---     says so.
---   Setting it: a stop at an inn the character stands in or passes, when the stone would save
---     a good deal more from there than from home on the way ahead, or when several of the log's
---     quests are handed in around it.
+--     them. The clock adds the way from one to the next (R.Travel) and what each takes (R.Effort:
+--     how many, the drop chance, how far apart the spawns are, other players). Only the steps
+--     within the stone's hour count. What comes after is another use.
+--   Using it: a row that leads when home is the quicker way to what comes next. If a step within
+--     that hour is a use that saves a good deal more, the card says to save it instead.
+--   Nearly ready: with a few minutes left on the stone and a use worth the wait, the row says so.
+--   Setting it: a stop at an inn the character is in or passes, when the stone would save a good
+--     deal more from there than from home on the way ahead, or when several of the log's quests
+--     are turned in around it.
 --   Where home is: the game names it (GetBindLocation) but not its place. The place is noted when
 --     the stone is set, and whenever the character rests where the name says (ns.char.home).
 -- The stone is never used for you. Setting it is: talking to the inn row's innkeeper picks the
@@ -431,7 +430,7 @@ local function Use(lead)
 	return {
 		title = waiting and ("Hearth to %s in %s"):format(home.name, Minutes(left)) or ("Hearth to " .. home.name),
 		lines = { ("About %s sooner to %s"):format(Minutes(saved - (waiting and left or 0)), what),
-			waiting and "Finish up here while it cools" or nil },
+			waiting and "Finish up here while it's on cooldown" or nil },
 		caption = waiting and "HEARTHSTONE  \194\183  NEARLY READY" or "HEARTHSTONE  \194\183  THE SHORT WAY",
 		mark = "home",
 		first = not Busy() or nil,
@@ -440,7 +439,7 @@ local function Use(lead)
 		wait = waiting and left or nil,
 		tip = function(tip)
 			tip:AddLine(waiting and "Waiting for your hearthstone beats walking. Do what's nearby first."
-				or "Your hearthstone is ready, and nothing coming up needs it more.", 0.6, 0.6, 0.6, true)
+				or "Your hearthstone is ready. Nothing ahead needs it more.", 0.6, 0.6, 0.6, true)
 		end,
 		menu = function(root)
 			root:CreateButton("Not now", function()

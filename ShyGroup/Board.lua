@@ -49,12 +49,14 @@ local function OnChannel(text, sender, channel, guid)
 	ns.Changed()
 end
 
+-- Posts go when nobody reposts them in time, or when you stop reading their channel.
 local function Prune()
 	local cutoff = time() - T.db.expire * 60
+	local skip = T.db.skipChannels
 	local removed = false
 	for i = #Bd.posts, 1, -1 do
 		local post = Bd.posts[i]
-		if post.last < cutoff then
+		if post.last < cutoff or skip[post.channel] then
 			table.remove(Bd.posts, i)
 			byName[post.name] = nil
 			removed = true
@@ -62,6 +64,7 @@ local function Prune()
 	end
 	if removed then ns.Changed() end
 end
+Bd.Prune = Prune
 
 -- Foreign posts are stored but hidden, so the option applies live.
 function Bd.Readable(post)

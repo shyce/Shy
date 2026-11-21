@@ -220,10 +220,17 @@ function Terrain.Lay(p, id, left, right, top, bottom, w, h, scale, world, most)
 		and was[5] == cx1 and was[6] == cx2 and was[7] == cy1 and was[8] == cy2 then
 		return true
 	end
-	local wantFar = {}
+	-- Ours too come in at most `most` a frame, those nearest the middle first: a zoom onto another level
+	-- brings a whole sheet of them. Until the level is all in, the one it takes over from stays under it, so
+	-- nothing goes missing meanwhile; then that one goes.
+	local wantFar, farShort = {}, false
 	if level and lod[level] then
-		local px, span, tiles = lod[level][1], lod[level][2], lod[level][3]
+		local span, tiles = lod[level][2], lod[level][3]
 		local x1, x2, y1, y2 = Range(span)
+		local missing, dist, n = p.farMissing or {}, p.farDist or {}, 0
+		p.farMissing, p.farDist = missing, dist
+		local mx = (32 * BLOCK - (westL + westR) / 2) / (span * BLOCK)
+		local my = (32 * BLOCK - (northT + northB) / 2) / (span * BLOCK)
 		for ty = y1, y2 do
 			for tx = x1, x2 do
 				local tile = ty * 64 + tx
@@ -231,18 +238,32 @@ function Terrain.Lay(p, id, left, right, top, bottom, w, h, scale, world, most)
 					local key = level * 4096 + tile
 					wantFar[key] = true
 					if not p.far[key] then
-						local t = Take(p, -3)
-						t:SetTexture(LOD .. world .. "_" .. level .. "_" .. tx .. "_" .. ty, nil, nil, "LINEAR")
-						t.tx, t.ty, t.span = tx, ty, span
-						Stand(t, tx, ty, span)
-						p.far[key] = t
+						n = n + 1
+						missing[n] = key
+						dist[key] = (tx + 0.5 - mx) ^ 2 + (ty + 0.5 - my) ^ 2
 					end
 				end
 			end
 		end
+		for i = n + 1, #missing do missing[i] = nil end
+		local budget = most or n
+		if n > budget then
+			table.sort(missing, function(a, b) return dist[a] < dist[b] end)
+			farShort = true
+		end
+		for i = 1, math.min(n, budget) do
+			local key = missing[i]
+			local tile = key % 4096
+			local tx, ty = tile % 64, math.floor(tile / 64)
+			local t = Take(p, -3)
+			t:SetTexture(LOD .. world .. "_" .. level .. "_" .. tx .. "_" .. ty, nil, nil, "LINEAR")
+			t.tx, t.ty, t.span = tx, ty, span
+			Stand(t, tx, ty, span)
+			p.far[key] = t
+		end
 	end
 	for key, t in pairs(p.far) do
-		if not wantFar[key] then
+		if not wantFar[key] and not (farShort and math.floor(key / 4096) ~= level) then
 			p.far[key] = nil
 			Free(p, t)
 		end
@@ -296,6 +317,8 @@ function Terrain.Lay(p, id, left, right, top, bottom, w, h, scale, world, most)
 			Free(p, t)
 		end
 	end
+	-- (Ours still to come: laid on, a frame at a time, as the close ones are.)
+	if farShort then p.short = true end
 	local laid = p.laidFor or {}
 	p.laidFor = laid
 	laid.level, laid.close, laid.most = level, close, most

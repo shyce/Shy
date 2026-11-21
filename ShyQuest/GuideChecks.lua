@@ -91,7 +91,7 @@ checks.money = function(element)
 	local op, amount = element.args:match("^%s*([<>])%s*([%d.]+)")
 	amount = tonumber(amount)
 	if not amount then return false end
-	local rich = GetMoney() >= amount * 10000
+	local rich = Shy.Money() >= amount * 10000
 	-- "<" skips below the amount, ">" skips at or above it.
 	if rich == (op == ">") then return "skip" end
 	return false

@@ -1,4 +1,4 @@
--- ShyKeys: Their homes: the /shy window's Keys room, a tab of setup's, a class's own page
+-- ShyKeys: Their homes: the /shy window's Keys room and a tab of setup's
 -- (Shy.Keys is written across this folder's files, in the order the TOC lists them.)
 
 local ADDON, ns = ...
@@ -12,7 +12,7 @@ local Pick, Press, Ready, Scheme = ns.Pick, ns.Press, ns.Ready, ns.Scheme
 local Several, Theme = ns.Several, ns.Theme
 
 ---------------------------------------------------------------------------
--- Their homes: the /shy window's Keys room, a tab of setup's, a class's own page
+-- Their homes: the /shy window's Keys room and a tab of setup's
 ---------------------------------------------------------------------------
 
 -- The width the keys' controls are drawn best at: a room of the /shy window, inside its margins.
@@ -45,7 +45,7 @@ local ROOM_PARTS = {
 	-- (the room's own heading says Keys and the column over the plates says KEY: this one says what the list
 	-- is for, not the same word a third time)
 	{ label = "What changes", ask = "What changes", order = 30,
-		lead = "Every key of yours that changes, and where what it did goes.",
+		lead = "Every key that changes, and where its old job goes.",
 		build = function(page)
 			local panel = Keys.Panel(page, page.width, nil, "changes")
 			panel.hot.foot = function(bar) Shy.HubFoot(page, bar) end
@@ -151,7 +151,7 @@ function Keys.Ask(parent, width, plan, room)
 	f.board:SetPoint("TOP")
 	f.question = UI.Text(column, Keys.QUESTION, 18, true, C.head)
 	f.question:SetPoint("TOP", f.board, "BOTTOM", 0, -ASK.board)
-	f.say = UI.Text(column, "Every ability gets a key close to your hand, your bars and macros are laid out for you, and each new ability comes to its key as you learn it. You see everything before anything changes, and one click puts it all back.", 12, false, C.dim)
+	f.say = UI.Text(column, "Every ability gets a key close to your hand. Your bars and macros are laid out for you, and each new ability lands on its key when you learn it. You see everything before anything changes, and one click puts it all back.", 12, false, C.dim)
 	f.say:SetPoint("TOP", f.question, "BOTTOM", 0, -10)
 	f.answer = UI.Text(column, "", 12, false, C.text)
 	for _, text in ipairs({ f.question, f.say, f.answer }) do
@@ -200,7 +200,7 @@ function Keys.Ask(parent, width, plan, room)
 		self.no:SetOn(no == true)
 		self.board:Light(function(letter) return Scheme().move[letter] == true end)
 		if no then
-			self.answer:SetText("Your key binds, macros and bars stay exactly as they are. Nothing of them is touched.")
+			self.answer:SetText("Your key binds, macros and bars stay exactly as they are.")
 		elseif yes then
 			local line = Keys.STEP.Lines(plan)[1]
 			self.answer:SetText(("%s. Press Yes to look through it again."):format(line.text))
@@ -233,7 +233,7 @@ function Keys.Review(parent, width, plan)
 	f.moving = Part(2, "How you move", "keys.move")
 	f.changes = Part(3, "What changes", "keys.changes")
 	f.board = Part(4, "Your new keys", "keys.board")
-	f.foot = UI.Text(f, "Finish in setup does all of this. Until then nothing of yours changes, and later one click in /shy keys puts it all back.", 12, false, C.alert)
+	f.foot = UI.Text(f, "Finish in setup does all of this. Until then nothing changes, and later one click in /shy keys puts it all back.", 12, false, C.alert)
 	f.foot:SetWidth(width)
 	f.foot:SetJustifyH("LEFT")
 	function f:Refresh()
@@ -244,7 +244,7 @@ function Keys.Review(parent, width, plan)
 			or "WASD: W forward, S back, as the game has it.")
 		local line = Keys.STEP.Lines(plan)[1]
 		self.changes.say:SetText(line.sub and line.sub ~= "" and line.sub or line.text)
-		self.board.say:SetText(pick == "shy" and "Every ability on its own key, from your first level to your last. Each new one comes to its key as you learn it."
+		self.board.say:SetText(pick == "shy" and "Every ability on its own key, from your first level to your last. Each new one lands on its key when you learn it."
 			or pick == "own" and "Your abilities on the keys you already use. Any whose key does something else waits."
 			or "Your keys as you have them now.")
 		local y = 0
@@ -329,9 +329,9 @@ Keys.STEP = {
 			end
 			local parts = {}
 			if #moves > 0 then parts[#parts + 1] = ("Moves %s."):format(Several(moves, HOTVIEW.most)) end
-			if #sides > 0 then parts[#parts + 1] = ("%s strafe; hold the right mouse button to turn."):format(table.concat(sides, " and ")) end
+			if #sides > 0 then parts[#parts + 1] = ("%s strafe. Hold the right mouse button to turn."):format(table.concat(sides, " and ")) end
 			if #parts > 0 then
-				parts[#parts + 1] = "Everything of yours is saved, and one click puts it back."
+				parts[#parts + 1] = "Your old setup is saved, and one click puts it back."
 				return { { text = text, sub = table.concat(parts, " ") } }
 			end
 		end
@@ -383,7 +383,7 @@ Keys.WALK = {
 		end,
 		lead = function(plan)
 			local pick = Picked(plan)
-			return pick == "shy" and "Every key of yours that changes, and where what it did goes. Take the new key or keep yours."
+			return pick == "shy" and "Every key that changes, and where its old job goes. Take the new key or keep yours."
 				or pick == "own" and "Your hotkeys stay. These abilities wait, because their keys do something else."
 				or "Every button and hotkey stays as it is."
 		end,

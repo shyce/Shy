@@ -2,10 +2,13 @@
 -- make (Kit.Shell).
 --
 --   you         your debuffs, then your short buffs (a heal over time, a shield): what a fight puts on you
---   target      every debuff on it, yours first (a hair of your color under each), everyone's with its time: a raid
---               boss's whole set, so a raid leader sees what is up and a warlock whose curse is on; its buffs in a
---               column at the far end
+--   target      as the game orders them: its buffs (half a row at most), then every debuff on it, yours first (a hair of your
+--               color under each), everyone's with its time: a raid boss's whole set, so a raid leader sees what is up
+--               and a warlock whose curse is on
 --   party       debuffs on the cell, then its buffs, up to the reminders at the cell's other end
+--
+-- Each frame's row grows from its portrait's end (ShyFrames' T:IconStart): yours from the left, your target's from
+-- the right, so the pair mirrors. Past a round portrait it starts after the circle, on the housing's top edge.
 --
 -- A plate's icons stand in two rows at most, a party cell's in one: the room ShyFrames makes over each (T:Riser),
 -- with the party's row, the target's target or the cooldown manager above it. One pitch for every icon. Each group's
@@ -59,12 +62,23 @@ local function Group(r, spec)
 	return K.Group(spec)
 end
 
--- A row: its container, its housing, how many rows it may take, its line's room (`line()`), and each group's cap
--- for so many icons a row (`caps(cols)`).
-local function Row(button, r, side, inset, lift, lines, line, caps)
-	local cols = Fit(line(), r.size)
-	local c = Stand(button, side, Long(cols, r.size))
-	return { c = c, rows = lines, line = line, caps = caps, cols = cols, side = side, inset = inset, lift = lift }
+-- Where a frame's row starts: the side it grows from, how far in, and how far down the frame's housing stands
+-- (ShyFrames' T:IconStart; the left, the plate's own ends and no drop where it can't tell).
+local function Start(kind, r)
+	local side, past, drop = "LEFT", 0, 0
+	if frames.IconStart then side, past, drop = frames:IconStart(kind) end
+	return side, past > 0 and past + GAP or r.ends, drop
+end
+
+-- A row: its container, its housing, how many rows it may take, its line's room (`line()`, from where it starts),
+-- and each group's cap for so many icons a row (`caps(cols)`). It stands `lift` over the housing's top.
+local function Row(button, r, kind, lift, lines, line, caps)
+	local side, inset, drop = Start(kind, r)
+	local row = { rows = lines, line = line, caps = caps, side = side, inset = inset, rise = lift, lift = lift - drop,
+		kind = kind }
+	row.cols = Fit(line(row), r.size)
+	row.c = Stand(button, side, Long(row.cols, r.size))
+	return row
 end
 
 local function House(button, r, row)
@@ -76,8 +90,7 @@ local BUILD = {}
 
 -- Your debuffs a row, your short buffs after them.
 function BUILD.player(unit, button, r)
-	local width = button:GetWidth()
-	local row = Row(button, r, "LEFT", r.ends, 0, r.lines, function() return width - 2 * r.ends end, function(cols)
+	local row = Row(button, r, "player", 0, r.lines, function(row) return button:GetWidth() - row.inset - r.ends end, function(cols)
 		return { harm = cols, short = math.min(SHORT, (r.lines - 1) * cols) }
 	end)
 	local most = row.caps(row.cols)
@@ -90,34 +103,30 @@ function BUILD.player(unit, button, r)
 	return { room = Room(r, 0, r.lines), list = { row } }
 end
 
--- Every debuff, yours first, through both rows; its buffs in a column of their own at the far end.
+-- As the game orders them: its buffs, half a row at most, then every debuff, yours first, through the rest.
 function BUILD.target(unit, button, r)
 	-- Combo points have the edge itself on a rogue's or a druid's target: the rows stand on their housing.
 	local lift = r.stacked and r.combo or 0
-	local width = button:GetWidth()
-	local column = r.size + 2 * r.ends   -- the buffs' column with its housing
-	local buffs = Row(button, r, "RIGHT", r.ends, lift, r.lines, function() return r.size end, function()
-		return { buffs = r.lines }
-	end)
-	K.AddGroup(buffs.c, "buffs", "HELPFUL", Group(r, { most = r.lines }))
-	local harm = Row(button, r, "LEFT", r.ends, lift, r.lines,
-		function() return width - 2 * r.ends - column - GAP end, function(cols)
+	local row = Row(button, r, "target", lift, r.lines, function(row) return button:GetWidth() - row.inset - r.ends end,
+		function(cols)
+			-- (Half a row of buffs at most: the rest of the room is the debuffs'.)
+			local buffs = math.floor(cols / 2)
 			local mine = math.min(MINE, cols)
-			return { mine = mine, theirs = r.lines * cols - mine }
+			return { buffs = buffs, mine = mine, theirs = r.lines * cols - buffs - mine }
 		end)
-	local most = harm.caps(harm.cols)
-	K.AddGroup(harm.c, "mine", "HARMFUL|PLAYER", Group(r, { most = most.mine, time = "in", harm = true, mine = true }))
-	K.AddGroup(harm.c, "theirs", "HARMFUL|!PLAYER", Group(r, { most = most.theirs, time = "in", harm = true }))
-	House(button, r, buffs)
-	House(button, r, harm)
-	return { room = Room(r, lift, r.lines), list = { harm, buffs } }
+	local most = row.caps(row.cols)
+	K.AddGroup(row.c, "buffs", "HELPFUL", Group(r, { most = most.buffs }))
+	K.AddGroup(row.c, "mine", "HARMFUL|PLAYER", Group(r, { most = most.mine, time = "in", harm = true, mine = true }))
+	K.AddGroup(row.c, "theirs", "HARMFUL|!PLAYER", Group(r, { most = most.theirs, time = "in", harm = true }))
+	House(button, r, row)
+	return { room = Room(r, lift, r.lines), list = { row } }
 end
 
 -- Debuffs, then buffs, in one row up to the reminders at the cell's other end.
 function BUILD.party(unit, button, r)
-	local row = Row(button, r, "LEFT", r.ends, 0, 1, function()
+	local row = Row(button, r, "party", 0, 1, function(row)
 		local far = room[unit] or 0
-		return button:GetWidth() - 2 * r.ends - (far > 0 and far + GAP or 0)
+		return button:GetWidth() - row.inset - r.ends - (far > 0 and far + GAP or 0)
 	end, function(cols)
 		local harm = math.min(HARM_CELL, cols)
 		return { harm = harm, buffs = cols - harm }
@@ -137,32 +146,36 @@ local function Build()
 			local made = build(unit, button, r)
 			made.button, made.kind = button, kind
 			rows[unit] = made
-			local band = CreateFrame("Frame", nil, button)
-			band:SetPoint("BOTTOMLEFT", button, "TOPLEFT", 0, 0)
-			band:SetPoint("BOTTOMRIGHT", button, "TOPRIGHT", 0, 0)
+				local band = CreateFrame("Frame", nil, button)
 			band:SetHeight(made.room)
 			bands[unit] = band
+			P.Band(unit, made.list[1].lift - made.list[1].rise)
 		end
 	end)
 end
 
--- Each row fitted to its frame as it stands now: its line, its caps, its housings.
+-- Each row fitted to its frame as it stands now: where it starts, its line, its caps, its housings.
 local function Refit()
 	if not next(rows) then return end
 	local r = frames:Riser()
-	for _, made in pairs(rows) do
+	for unit, made in pairs(rows) do
+		local _, inset, drop = Start(made.kind, r)
 		for _, row in ipairs(made.list) do
-			local line = row.line()
+			local moved = inset ~= row.inset or row.rise - drop ~= row.lift
+			row.inset, row.lift = inset, row.rise - drop
+			local line = row.line(row)
 			if not issecretvalue(line) and line then
 				local cols = Fit(line, r.size)
 				K.Line(row.c, Long(cols, r.size))
 				for key, most in pairs(row.caps(cols)) do K.Most(row.c, key, most) end
-				if cols ~= row.cols then
+				if cols ~= row.cols or moved then
 					row.cols = cols
+					row.shell.o.inset, row.shell.o.lift = row.inset, row.lift
 					K.FitShell(row.shell, cols, row.rows)
 				end
 			end
 		end
+		P.Band(unit, -drop)
 	end
 end
 
@@ -177,8 +190,17 @@ function P.Under()
 	end
 end
 
-function P.Band(unit)
-	return bands[unit]
+-- The frame over a unit's rows (the mouse's), and, with `y`, laid that far up from its frame's top.
+function P.Band(unit, y)
+	local band = bands[unit]
+	if band and y and band.y ~= y then
+		band.y = y
+		local button = rows[unit].button
+		band:ClearAllPoints()
+		band:SetPoint("BOTTOMLEFT", button, "TOPLEFT", 0, y)
+		band:SetPoint("BOTTOMRIGHT", button, "TOPRIGHT", 0, y)
+	end
+	return band
 end
 
 -- A unit's rows: { { c, shell, cols, rows }, ... }, for tests and the tooltip.
@@ -233,6 +255,8 @@ function P.Start()
 	events:SetScript("OnEvent", function(_, event)
 		Refresh(event == "PLAYER_TARGET_CHANGED" and "target" or "party")
 	end)
-	-- ShyFrames sized its frames again (a layout's party cells are narrower or wider).
+	-- ShyFrames sized its frames again (a layout's party cells are narrower or wider), or laid them out again (a round
+	-- portrait came or went: where each row starts).
 	Shy:On("SHY_FRAMES_FIT", function() ns.WhenFree("plates-fit", Refit) end)
+	Shy:On("SHY_FRAMES", function() ns.WhenFree("plates-fit", Refit) end)
 end

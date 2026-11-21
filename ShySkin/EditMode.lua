@@ -221,7 +221,9 @@ end
 module = ns.Module({
 	id = "editmode",
 	title = "Edit Mode",
-	desc = "Restyles Edit Mode to match: its window, settings and dialogs, the highlight on each piece, and the grid and snap lines in your color.",
+	desc = "Edit Mode's windows match the rest, with its highlights, grid and snap lines in your color.",
+	group = "window",
+	words = "layout hud",
 
 	Hook = function(m)
 		hooksecurefunc(EditModeSystemSettingsDialog, "UpdateDialog", function()

@@ -709,7 +709,9 @@ end
 M = ns.Module({
 	id = "flights",
 	title = "Flight master",
-	desc = "Replaces the flight master's map with a window you can size: your guide's flight first and picked, every other flight with its time and cost, and the way each one flies on a map framed in your theme's look.",
+	desc = "The flight map becomes a window you can resize, with each flight's time, cost and route.",
+	group = "rebuilt",
+	words = "taxi flight path",
 	Ready = function() return TaxiFrame ~= nil and Shop ~= nil and WIN ~= nil end,
 	Hook = Hook,
 	Paint = Paint,

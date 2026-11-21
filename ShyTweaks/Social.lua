@@ -75,25 +75,15 @@ end
 ns.Feature({
 	id = "partyInvites",
 	category = "Social",
-	title = "Auto-accept party invites",
-	desc = "Accepts party invites from friends and guildmates. Can also decline invites from everyone else.",
-	keywords = "group party invite auto accept decline friends guild stranger block",
+	title = "Accept party invites",
+	desc = "You join the group as soon as a friend or guildmate invites you.",
+	keywords = "group party invite auto accept friends guild",
 	default = false,
-	options = {
-		{ key = "acceptKnown", kind = "checkbox", label = "Accept from friends and guildmates", default = true },
-		{ key = "declineStrangers", kind = "checkbox", label = "Decline everyone else", default = false },
-	},
 	events = {
-		PARTY_INVITE_REQUEST = function(f, _, _, _, _, _, _, _, _, inviterGUID)   -- (event, name, three roles, native realm, cross shard, multiple roles)
-			if Known(inviterGUID) then
-				if f.opt.acceptKnown then
-					AcceptGroup()
-					HidePopup("PARTY_INVITE")
-				end
-			elseif f.opt.declineStrangers then
-				DeclineGroup()
-				HidePopup("PARTY_INVITE")
-			end
+		PARTY_INVITE_REQUEST = function(_, _, _, _, _, _, _, _, _, inviterGUID)   -- (event, name, three roles, native realm, cross shard, multiple roles)
+			if not Known(inviterGUID) then return end
+			AcceptGroup()
+			HidePopup("PARTY_INVITE")
 		end,
 	},
 })
@@ -118,18 +108,25 @@ ns.Feature({
 	id = "strangers",
 	category = "Social",
 	title = "Turn strangers away",
-	desc = "Declines requests from players who aren't friends or guildmates.",
-	keywords = "stranger block decline request join group quest share shared battle.net bnet friend request spam",
+	desc = "Anyone who isn't a friend or guildmate is declined for you. Pick what for below.",
+	keywords = "stranger block decline request join group party invite quest share shared battle.net bnet friend request spam",
 	default = false,
 	options = {
+		{ key = "invites", kind = "checkbox", label = "Party invites", default = false,
+			desc = "A stranger's party invite is declined." },
 		{ key = "requests", kind = "checkbox", label = "Requests to join", default = true,
-			desc = "Declines a stranger asking to join your group." },
+			desc = "A stranger asking to join your group is declined." },
 		{ key = "quests", kind = "checkbox", label = "Shared quests", default = false,
-			desc = "Declines a quest a stranger in your group shares." },
+			desc = "A quest shared by a stranger in your group is declined." },
 		{ key = "battleNet", kind = "checkbox", label = "All Battle.net requests", default = false,
-			desc = "Declines every Battle.net friend request as it arrives." },
+			desc = "Every Battle.net friend request is declined as it arrives, whoever sent it." },
 	},
 	events = {
+		PARTY_INVITE_REQUEST = function(f, _, _, _, _, _, _, _, _, inviterGUID)
+			if not f.opt.invites or Known(inviterGUID) then return end
+			DeclineGroup()
+			HidePopup("PARTY_INVITE")
+		end,
 		GROUP_INVITE_CONFIRMATION = function(f)
 			if not f.opt.requests then return end
 			local invite = GetNextPendingInviteConfirmation()
@@ -158,11 +155,12 @@ ns.Feature({
 	id = "declineDuels",
 	category = "Social",
 	title = "Decline duels",
-	desc = "Declines duel requests before the popup shows.",
+	desc = "Duel requests are declined before the box pops up.",
 	keywords = "duel challenge request auto decline block death friends",
 	default = false,
 	options = {
-		{ key = "friends", kind = "checkbox", label = "Allow friends and guildmates", default = true },
+		{ key = "friends", kind = "checkbox", label = "Allow friends and guildmates", default = true,
+			desc = "A friend or guildmate can still ask you." },
 	},
 	events = {
 		DUEL_REQUESTED = function(f, _, name)
@@ -179,26 +177,17 @@ ns.Feature({
 })
 
 ns.Feature({
-	id = "declineGuild",
-	category = "Social",
-	title = "Decline guild invites",
-	desc = "Declines every guild invite.",
-	keywords = "guild invite invitation auto decline block spam",
-	default = false,
-	Enable = function() SetAutoDeclineGuildInvites(true) end,
-	Disable = function() SetAutoDeclineGuildInvites(false) end,
-})
-
-ns.Feature({
 	id = "whisperInvite",
 	category = "Social",
 	title = "Invite by whisper",
-	desc = "Invites anyone who whispers you the keyword. In a group you need lead or assist.",
+	desc = "Anyone who whispers you the keyword gets an invite. In a group, you need lead or assist.",
 	keywords = "whisper keyword inv invite auto group party lfg raid",
 	default = false,
 	options = {
-		{ key = "keyword", kind = "input", label = "Keyword", default = "inv", placeholder = "inv" },
-		{ key = "knownOnly", kind = "checkbox", label = "Only friends and guildmates", default = false },
+		{ key = "keyword", kind = "input", label = "Keyword", default = "inv", placeholder = "inv",
+			desc = "The word to whisper you." },
+		{ key = "knownOnly", kind = "checkbox", label = "Friends and guildmates only", default = false,
+			desc = "A whisper from anyone else gets no invite." },
 	},
 	events = {
 		CHAT_MSG_WHISPER = function(f, _, text, sender, _, _, _, _, _, _, _, _, _, guid)
@@ -214,8 +203,8 @@ ns.Feature({
 ns.Feature({
 	id = "acceptSummon",
 	category = "Social",
-	title = "Auto-accept summons",
-	desc = "Accepts warlock and meeting stone summons, unless you are in combat.",
+	title = "Accept summons",
+	desc = "You take a warlock's or a meeting stone's summon, unless you're in a fight.",
 	keywords = "summon warlock meeting stone portal auto accept",
 	default = false,
 	events = {
@@ -233,12 +222,13 @@ ns.Feature({
 ns.Feature({
 	id = "acceptRes",
 	category = "Social",
-	title = "Auto-accept resurrections",
-	desc = "Accepts a resurrection out of combat, unless you have a soulstone or Reincarnation ready.",
+	title = "Accept resurrections",
+	desc = "You take a resurrection out of combat, unless a soulstone or Reincarnation is ready.",
 	keywords = "resurrect resurrection rez res revive dead auto accept soulstone reincarnation",
 	default = false,
 	options = {
-		{ key = "notInCombat", kind = "checkbox", label = "Not while the caster is in combat", default = true },
+		{ key = "notInCombat", kind = "checkbox", label = "Not while they fight", default = true,
+			desc = "You stay down while whoever is raising you is still in combat." },
 	},
 	events = {
 		RESURRECT_REQUEST = function(f, _, caster)
@@ -257,8 +247,8 @@ ns.Feature({
 ns.Feature({
 	id = "releaseBG",
 	category = "Combat",
-	title = "Auto-release in battlegrounds",
-	desc = "Releases your spirit when you die in a battleground, unless you can resurrect yourself.",
+	title = "Release in battlegrounds",
+	desc = "You release as soon as you die in a battleground, unless you can raise yourself.",
 	keywords = "battleground bg pvp die death auto release spirit graveyard",
 	default = false,
 	events = {

@@ -29,6 +29,7 @@
 --   View.Canvas()         what stands on the map goes here    View.Land()   the map's own ground and art
 --   View.Chrome()         what stands over the map's window goes here (its size and place; never on the overlay)
 --   View.Overlaid()       the view lies over the screen (the overlay), not in the window
+--   View.Faint()          the overlay's opacity, read again from the settings
 --   View.Size() -> art width, height    View.Cursor() -> x, y (shares of the art; nil off it)
 --   View.ToPort(x, y) -> port units from its top left    View.PlayerAt(map) -> x, y
 --   View.Place(frame, x, y, size)   a frame on the canvas, `size` times its own size on screen at any zoom
@@ -1290,6 +1291,10 @@ local function Fade()
 	local ground = night + (day - night) * light
 	cover:SetAlpha(ground)
 	laid.over:SetAlpha(math.max(ground, T.db.overlayMarks * (OVERLAY.MARKS_NIGHT + (1 - OVERLAY.MARKS_NIGHT) * light)))
+end
+
+function View.Faint()
+	if port then Fade() end
 end
 
 -- Each frame on the overlay: new frames kept from the mouse now and then, and each second its opacity for

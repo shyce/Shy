@@ -267,10 +267,12 @@ end
 ns.Module({
 	id = "cooldowns",
 	title = "Cooldown manager",
-	desc = "Restyles the default cooldown manager: cooldowns and tracked buffs as slots in the icon shape set in /shy, tracked bars in your accent color. An out-of-range spell's frame turns red.",
+	desc = "The game's cooldown manager takes your icon shape, with its bars in your color.",
+	group = "screen",
+	words = "tracked buffs",
 	options = {
 		{ key = "gloss", label = "Glossy icons", default = true,
-			desc = "Adds a soft highlight across the top of every icon." },
+			desc = "A soft highlight runs across the top of each icon." },
 	},
 
 	Ready = function()

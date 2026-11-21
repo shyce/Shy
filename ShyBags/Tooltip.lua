@@ -62,6 +62,6 @@ end
 -- Asked for once every addon has logged in, so these lines are the last on the tooltip: nothing of another addon's
 -- stands under the heading.
 function Tooltip.Init()
-	Shy:On("SHY_LOGIN", function() TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, OnItem) end)
+	Shy:On("SHY_LOGIN", function() Shy.OnTip(Enum.TooltipDataType.Item, "where else you have it", OnItem) end)
 	Shy:On("SHY_BAGS_SCANNED", function() said = {} end)
 end

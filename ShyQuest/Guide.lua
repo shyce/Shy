@@ -24,6 +24,7 @@ local ARRIVE = 30            -- yards: default arrival radius
 local guides, byName         -- parsed guide headers, in file order
 local facts                  -- faction, race and class, as the guides spell them
 local applies = {}           -- condition -> result cache; cleared on level up
+local appliesAll = {}        -- ... and by a whole "a|b" text, cleared with it
 local generation = 0         -- bumped whenever that cache is cleared
 local canBack                -- cached "is there a step to go back to"; reset on every Refresh
 
@@ -69,17 +70,26 @@ local function Applies(cond)
 	return match
 end
 
--- "a|b": all must fit.
+-- "a|b": all must fit. (Kept by the whole text too: every step's and guide's are asked at each scan, and taking
+-- the text apart made something every time.)
 local function AppliesAll(conds)
 	if not conds or conds == "" then return true end
+	local known = appliesAll[conds]
+	if known ~= nil then return known end
+	local fits = true
 	for cond in conds:gmatch("[^|]+") do
-		if not Applies(cond) then return false end
+		if not Applies(cond) then
+			fits = false
+			break
+		end
 	end
-	return true
+	appliesAll[conds] = fits
+	return fits
 end
 
 local function ForgetApplies()
 	wipe(applies)
+	wipe(appliesAll)
 	generation = generation + 1
 end
 
@@ -123,7 +133,13 @@ end
 
 -- Guide names repeat across faction groups.
 local function Key(guide)
-	return guide.group .. "\\" .. guide.name
+	-- (Asked at every look at what is saved for it: made once a guide.)
+	local key = guide.savedKey
+	if not key then
+		key = guide.group .. "\\" .. guide.name
+		guide.savedKey = key
+	end
+	return key
 end
 
 -- Guide format to elements
@@ -429,7 +445,7 @@ local LINES = {
 	end,
 	abandon = Listed("abandon", "quest"),
 	grind = function(line) return "xp", Point(line.to) end,
-	die = function() return "deathskip", "", "Die here and rise at the spirit healer" end,
+	die = function() return "deathskip", "", "Die here and res at the spirit healer" end,
 	train = function(line)
 		return "train", tostring(line.spell), line.spell and ("Train " .. (C_Spell.GetSpellName(line.spell) or "at your trainer")) or nil
 	end,
@@ -607,6 +623,7 @@ local function LoadGuides()
 end
 
 local FarDetours   -- (below, with the places steps are at)
+local Away         -- (below too)
 
 local function Step(guide, index)
 	local step = guide.steps[index]
@@ -677,6 +694,8 @@ local function Wanted(step)
 					-- A run's own dungeon is in.
 					local on = step.run == name or (ns.DungeonOn(name) and (not step.far or ns.DungeonTicked(name)))
 					if on == (not_ == "!") then return false end
+					-- You said to do it as you get there: its step waits until you're near.
+					if on and not_ == "" and step.run ~= name and Away(step, name) then return false end
 				end
 			end
 		end
@@ -1125,6 +1144,30 @@ local function Place(element)
 	end
 	element.at = at
 	return at
+end
+
+-- A dungeon taken "as you get there" (Run.lua's question): its step waits while you're far from it.
+-- Near is ALONG.near yards, a little more once it leads. A step with no place never waits.
+local ALONG = { near = 500, stay = 1.3 }
+function Away(step, short)
+	if not (ns.DungeonAlong and ns.DungeonAlong(short)) then return false end
+	local at = step.spot
+	if at == nil then
+		at = false
+		for _, element in ipairs(step.elements) do
+			local place = (element.command == "goto" or element.command == "waypoint") and Place(element)
+			if place and place.continent and place.north then
+				at = place
+				break
+			end
+		end
+		step.spot = at
+	end
+	if not at then return false end
+	local near = W.Known() and at.continent == W.continent
+		and W.Between(W.north, W.west, at.north, at.west) <= ALONG.near * (step.nearby and ALONG.stay or 1)
+	step.nearby = near or nil
+	return not near
 end
 
 -- Whether a step is ever this character's: its class, race, side and starting place fit (the level it waits
@@ -1879,27 +1922,28 @@ end
 --   want "hand"   it must be ready to turn in
 --   want "done"   it must be turned in
 --   want "open"   it must be available
+-- (The steps of `steps` before `limit`, from `left` on unless `anywhere`, into `found`: no function made a call.)
+local function RootsAdd(found, steps, limit, left, quest, anywhere)
+	for _, index in ipairs(steps or NOTHING) do
+		if index < limit and (anywhere or index >= left) then found[#found + 1] = { index, quest } end
+	end
+end
 local function Roots(guide, quest, limit, found, want, depth)
 	if depth > CHAIN or L.Done(quest) then return end
 	local asks = Asks(guide)
 	local left = Saved(guide).left or 1
-	local function Add(steps, anywhere)
-		for _, index in ipairs(steps or NOTHING) do
-			if index < limit and (anywhere or index >= left) then found[#found + 1] = { index, quest } end
-		end
-	end
 	local data = D.Quest(quest)
 	if want == "done" or want == "hand" then
 		-- Its unfinished objectives and collects.
 		local entry = L.entries[quest]
-		if entry and not entry.complete then Add(asks.complete[quest]) end
-		Add(asks.collect[quest])
-		if want == "done" then Add(asks.turnin[quest]) end
+		if entry and not entry.complete then RootsAdd(found, asks.complete[quest], limit, left, quest) end
+		RootsAdd(found, asks.collect[quest], limit, left, quest)
+		if want == "done" then RootsAdd(found, asks.turnin[quest], limit, left, quest) end
 	end
 	if want ~= "open" and not L.Holds(quest) then
 		if data and data.minLevel > L.Level() then return end
 		-- A failed quest is fetched even from before saved.left.
-		Add(asks.accept[quest], L.Failed(quest))
+		RootsAdd(found, asks.accept[quest], limit, left, quest, L.Failed(quest))
 	end
 	if L.Has(quest) or not data then return end
 	-- Prerequisites: all of preGroup, any one of preSingle.
@@ -2620,7 +2664,7 @@ local function FindLive()
 				-- The last guide: Route.lua suggests zones from here.
 				G.finished = guide
 				if playing and settled then
-					T:Print(("|cffffffff%s|r is done. That was your last guide; the card now shows nearby quests and zones to try.")
+					T:Print(("|cffffffff%s|r is done. That was your last guide. The card now shows nearby quests and zones to try.")
 						:format(guide.name))
 					G.Cheer(guide)
 				end
@@ -3058,6 +3102,8 @@ local function Words(part)
 		return id and ("%s: %d/%d"):format(ItemName(id) or "Item", have, need) or nil
 	end
 	if part.grounded then
+		-- Before a flight master's map has opened, the guide doesn't know your flight paths yet.
+		if not Shy.Way.FlightsRead() then return "Talk to a flight master once so the guide knows your flight paths" end
 		local to = strtrim(element.args or "")
 		return to ~= "" and ("You can't fly to %s from here yet"):format(to) or "You can't fly there from here yet"
 	end
@@ -3464,7 +3510,32 @@ function G.Describe(guide, step, parts, whole, ghosts)
 		view.map, view.north, view.west, view.continent = at.map, at.north, at.west, at.continent
 		view.x, view.y = at.x, at.y
 	end
+	-- A boat's step sits on the dock the boat leaves from. If you're already across the water, the step
+	-- moves to where the boat lands. You aren't sent to the far dock to sail back.
+	local far = view.north and W.continent and view.continent ~= W.continent
+	for _, line in ipairs(far and view.lines or NOTHING) do
+		local landing = line.command == "zone" and line.can and not line.done and G.RideInto(view, MapOf(strtrim(line.spec or "")))
+		if landing and landing.world == W.continent then
+			view.map, view.north, view.west, view.continent = landing.map, landing.north, landing.west, landing.world
+			view.x, view.y = math.floor(landing.x * UNITS + 0.5), math.floor(landing.y * UNITS + 0.5)
+			break
+		end
+	end
 	return view
+end
+
+-- Where the ride from a step's place lands on a map. nil if your side has no ride from there to that map.
+local RIDE_NEAR = 60         -- yards. A step this close to a ride's start belongs to that ride.
+function G.RideInto(view, map)
+	if not (map and Shy.Way.Rides) then return nil end
+	local side = (UnitFactionGroup("player") or ""):sub(1, 1)
+	for _, ride in ipairs(Shy.Way.Rides()) do
+		local from, to = ride.from, ride.to
+		if to.map == map and to.x and from.world == view.continent and (ride.whose == "" or side == "" or ride.whose:find(side, 1, true))
+			and (from.north - view.north) ^ 2 + (from.west - view.west) ^ 2 <= RIDE_NEAR * RIDE_NEAR then
+			return to
+		end
+	end
 end
 
 -- The short name of the dungeon a step is for, or nil. `guide`: the step's own, where an earlier guide's leads.
@@ -3864,7 +3935,7 @@ function G.Setup()
 
 	local events = CreateFrame("Frame")
 	for _, event in ipairs({ "HEARTHSTONE_BOUND", "TAXIMAP_OPENED", "PLAYER_UNGHOST", "PLAYER_LEVEL_UP", "MERCHANT_CLOSED", "TRAINER_CLOSED",
-		"ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "SPELLS_CHANGED", "PLAYER_MONEY",
+		"ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED",
 		"PLAYER_EQUIPMENT_CHANGED", "SKILL_LINES_CHANGED", "PLAYER_LOGOUT", "PLAYER_XP_UPDATE", "GET_ITEM_INFO_RECEIVED",
 		"MERCHANT_SHOW", "TRAINER_SHOW" }) do
 		events:RegisterEvent(event)
@@ -3906,19 +3977,6 @@ function G.Setup()
 			G.Happened("home")
 			ns.RefreshErrands()
 			return
-		elseif event == "PLAYER_MONEY" then
-			-- Every sale and every coin looted: the guide only asks again while a live step weighs the gold;
-			-- the errands (a trainer, a weapon master) read it at their next refit.
-			local weighs = false
-			EachLive(function(entry)
-				for _, part in ipairs(entry.parts) do
-					if part.element.command == "money" then weighs = true end
-				end
-			end)
-			if not weighs then
-				ns.RefreshErrands()
-				return
-			end
 		elseif event == "MERCHANT_CLOSED" then
 			-- On close, not on open: the step's text says what to buy. (Latch builds again when it ticked one.)
 			Served("vendor")
@@ -3963,4 +4021,20 @@ function G.Setup()
 		end
 		ns.Refresh()
 	end)
+	-- The gold a live step weighs (".money > 5"). Only crossing it asks the guide again: every other sale and coin
+	-- looted wakes nothing (Shy.MoneyEdges). Weighed again with each route, as the live steps change.
+	local function Gold() ns.Refresh(nil, "gold") end
+	ns.OnRoute(function(rebuilt)
+		if not rebuilt then return end
+		local weighs = Shy.MoneyEdges("ShyQuest guide", Gold)
+		EachLive(function(entry)
+			for _, part in ipairs(entry.parts) do
+				local element = part.element
+				local amount = element.command == "money" and tonumber((element.args or ""):match("^%s*[<>]%s*([%d.]+)"))
+				if amount then weighs[#weighs + 1] = math.ceil(amount * 10000) end
+			end
+		end)
+	end, true)
+	-- A spell learned or lost (said only when the spellbook really changed): what a step asks may have changed.
+	Shy:On("SHY_SPELLS", function() ns.Refresh(nil, "spells") end)
 end

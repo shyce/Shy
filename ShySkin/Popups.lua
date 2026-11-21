@@ -31,7 +31,9 @@ end
 ns.Module({
 	id = "popups",
 	title = "Pop-ups",
-	desc = "Restyles the game's pop-ups, such as the logout countdown and confirmations, as steel panels with plate buttons.",
+	desc = "The game's pop-ups, like the logout countdown, become steel panels with plate buttons.",
+	group = "window",
+	words = "confirm dialog popup",
 
 	Ready = function() return StaticPopup1 ~= nil end,
 

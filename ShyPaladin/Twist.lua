@@ -125,8 +125,6 @@ local function OnEvent(_, event, a, b)
 				TW.Play(T.db.twist)
 			end
 		end
-	elseif event == "SPELLS_CHANGED" then
-		TW.Apply()
 	else
 		Read()
 	end
@@ -221,8 +219,8 @@ end
 function TW.Start()
 	events = CreateFrame("Frame")
 	events:SetScript("OnEvent", OnEvent)
-	-- Always: a talent learned or a respec turns the twist on or off.
-	events:RegisterEvent("SPELLS_CHANGED")
+	-- Always: a talent learned or a respec turns the twist on or off (the spellbook, from ShyCore).
+	Shy:On("SHY_SPELLS", TW.Apply)
 	Shy:On("SHY_THEME", TW.Apply)
 	if ns.Seal then ns.Seal.Watch(Replaced) end   -- guarded: a newly added file isn't loaded until the client restarts
 	TW.Apply()

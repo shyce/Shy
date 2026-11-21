@@ -7,7 +7,7 @@
 -- shows the land round it. When the view turns into another map of the world (Steps.lua) the art it
 -- leaves fades out over the new one coming in.
 --
---   Art.New(canvas, level) -> painter   a painter lays art on a canvas of anyone's (the view's, the options' preview)
+--   Art.New(canvas, level) -> painter   a painter lays art on a canvas of anyone's
 --   Art.Paint(painter, map, fog, bare, feather)   fog: "faded" | "clear" | "hidden"; bare: draw nothing
 --                                        (the terrain look draws the map); feather: its edges run out
 --   Art.Detail(painter, zoom)            the detail level for a zoom (times the whole map's size)

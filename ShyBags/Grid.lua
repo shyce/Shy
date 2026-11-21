@@ -6,11 +6,14 @@
 --     When it alone changes, the slots slide to their new places and nothing is read again (grid:Lay).
 --   grid:Morph(from, to, f) draws the slots a share f of the way between two column counts.
 --   grid.order(bags, sizes) returns every slot as { bag, slot } in layout order; grid.sort names that order.
---     Whatever the order, a special bag's slots (herbs, souls, arrows...) stand after the ordinary ones, framed
---     and welled in their kind's color (BagBar.KindColor).
+--     A special bag's slots (herbs, souls, arrows, the reagent bag...) are framed and welled in their kind's
+--     color (BagBar.Kind). With grid.apart they stand after the ordinary ones whatever the order, a run for
+--     each kind on rows of its own under the kind's name; without it they stand in with the rest.
 --     The order is read only on Build, so slots don't move under the mouse; grid:Settled() is false once
 --     a fresh Build would lay them out differently.
 --   grid:Filter(test), grid:Room() (free, total), grid:Shape() (columns, rows), grid.onChange
+--   grid:Down(columns) the rows the slots take that many across; grid.gap the room the runs' names take,
+--     over the rows' own height
 -- A live slot is the game's own button (Tile.lua). Every slot of every bag has one of its own for good
 -- (grid.where), made, told its bag and place and seated out of a fight: at login and whenever a bag changes
 -- size, shown or not. So a fight finds the window whole and only paints. A fight never makes, moves, shows,
@@ -22,6 +25,7 @@
 
 local ADDON, ns = ...
 local Tile = ns.Tile
+local UI = Shy.UI
 
 local Grid = {}
 ns.Grid = Grid
@@ -29,7 +33,9 @@ ns.Grid = Grid
 local KEYS = Enum.BagIndex.Keyring
 local STEP = Tile.SIZE + Tile.GAP
 local MOST, LEAST = 10, 4   -- most columns; fewest columns, and rows filled before widening
+local CAPTION = 14          -- room over a run that stands apart, for its name
 Grid.SLIDE = 0.16           -- seconds a slot takes to slide to a new place as the grid is reshaped
+Grid.CAPTION = CAPTION
 
 local Methods = {}
 
@@ -50,6 +56,7 @@ end
 -- moves the slots without changing what any of them holds.
 local function Held(self)
 	return table.concat(self.bags or {}, ",") .. "|" .. tostring(self.rows) .. "|" .. tostring(self.columns) .. "|" .. tostring(self.sort)
+		.. "|" .. tostring(self.apart)
 end
 
 local function Asked(self)
@@ -103,6 +110,17 @@ function Grid.Columns(n)
 	return LEAST, math.max(LEAST, math.ceil(n / LEAST))
 end
 
+-- The rows n slots take with `columns` across: a run that stands apart starts a row of its own.
+local function Down(self, n, columns)
+	local spans, rows = self.spans, 0
+	if spans and #spans > 1 then
+		for _, span in ipairs(spans) do rows = rows + math.ceil(span.count / columns) end
+	else
+		rows = math.ceil(n / columns)
+	end
+	return math.max(self.least or 1, rows)
+end
+
 local function Fit(self, n)
 	local columns, rows
 	if self.columns then
@@ -116,7 +134,7 @@ local function Fit(self, n)
 		-- The title and footer need at least LEAST columns.
 		columns = math.max(LEAST, math.min(MOST, math.ceil(n / LEAST)))
 	end
-	rows = self.rows or math.max(self.least or 1, math.ceil(n / columns))
+	rows = self.rows or Down(self, n, columns)
 	return columns, rows
 end
 
@@ -132,10 +150,8 @@ local function Put(self, tile, x, y)
 	tile:SetPoint("TOPLEFT", self, "TOPLEFT", x, -y)
 end
 
-local function Place(self, tile, n, columns, lead, slide)
+local function PlaceAt(self, tile, n, x, y, slide)
 	if Frozen(self) then return end
-	local cell = lead + n - 1
-	local x, y = (cell % columns) * STEP, math.floor(cell / columns) * STEP
 	local at = self.at[n]
 	if slide and at then
 		at.fromX, at.fromY = at.nowX or at.x, at.nowY or at.y
@@ -146,6 +162,74 @@ local function Place(self, tile, n, columns, lead, slide)
 		Put(self, tile, x, y)
 	end
 	tile:Show()
+end
+
+local function Place(self, tile, n, columns, lead, slide)
+	local cell = lead + n - 1
+	PlaceAt(self, tile, n, (cell % columns) * STEP, math.floor(cell / columns) * STEP, slide)
+end
+
+-- The name over a run that stands apart, in its kind's color, and a rule on to the grid's right edge.
+-- Made as they are needed and kept. y: the middle of its line, down from the grid's top.
+local function Caption(self, k, span, y)
+	self.heads = self.heads or {}
+	local head = self.heads[k]
+	if not head then
+		head = { text = UI.Text(self, "", 9, true, UI.colors.dim), rule = self:CreateTexture(nil, "ARTWORK") }
+		head.text:SetWordWrap(false)
+		head.rule:SetHeight(1)
+		UI.Paint(head.rule, UI.colors.border, 0.9)
+		self.heads[k] = head
+	end
+	if head.name ~= span.name or head.color ~= span.color then
+		head.name, head.color = span.name, span.color
+		head.text:SetText(span.name:upper())
+		Shy.Theme.Ink(head.text, span.color)
+	end
+	head.text:ClearAllPoints()
+	head.text:SetPoint("LEFT", self, "TOPLEFT", 1, -y)
+	head.rule:ClearAllPoints()
+	head.rule:SetPoint("LEFT", self, "TOPLEFT", head.text:GetStringWidth() + 8, -y)
+	head.rule:SetPoint("RIGHT", self, "TOPRIGHT", 0, -y)
+	head.text:Show()
+	head.rule:Show()
+end
+
+local function HideCaptions(self, from)
+	local heads = self.heads
+	for k = from, heads and #heads or 0 do
+		heads[k].text:Hide()
+		heads[k].rule:Hide()
+	end
+end
+
+-- Every slot to its place, `columns` across and `rows` down. The first run is indented so its last slot
+-- ends its last row (a fixed shape fills from the top left); a run that stands apart starts a row of its
+-- own, under its name. Keeps the room the names take (grid.gap).
+local function Stand(self, columns, rows, slide)
+	local spans = self.spans
+	local runs = spans and #spans or 1
+	local fixed = self.rows or self.columns
+	local row, gap = 0, 0
+	for k = 1, runs do
+		local first, count = 1, self.count
+		if spans then first, count = spans[k].first, spans[k].count end
+		local down = runs == 1 and rows or math.ceil(count / columns)
+		local lead = 0
+		if k == 1 then
+			if not fixed then lead = math.max(0, columns * down - count) end
+		else
+			Caption(self, k - 1, spans[k], row * STEP + gap + (CAPTION - Tile.GAP) / 2)
+			gap = gap + CAPTION
+		end
+		for i = 1, count do
+			local cell, n = lead + i - 1, first + i - 1
+			PlaceAt(self, self.tiles[n], n, (cell % columns) * STEP, (row + math.floor(cell / columns)) * STEP + gap, slide)
+		end
+		row = row + down
+	end
+	HideCaptions(self, runs)
+	self.gap = gap
 end
 
 -- Every slot in its place at once, whatever was sliding.
@@ -198,13 +282,11 @@ function Methods:Lay(slide)
 		Queue(self)
 		return
 	end
-	local total = self.count
-	local columns, rows = Fit(self, total)
-	local lead = (self.rows or self.columns) and 0 or math.max(0, columns * rows - total)
+	local columns, rows = Fit(self, self.count)
 	self.laid, self.held = Asked(self), Held(self)
-	for n = 1, total do Place(self, self.tiles[n], n, columns, lead, slide) end
+	Stand(self, columns, rows, slide)
 	self.across, self.down = columns, rows
-	self:SetSize(columns * STEP - Tile.GAP, rows * STEP - Tile.GAP)
+	self:SetSize(columns * STEP - Tile.GAP, rows * STEP - Tile.GAP + self.gap)
 	-- A live slot is the game's button and can't be moved in a fight: a slide stops where it is.
 	if slide and not InCombatLockdown() then
 		if self.live and not self.sliding then self:RegisterEvent("PLAYER_REGEN_DISABLED") end
@@ -222,17 +304,36 @@ function Methods:Morph(from, to, f)
 	if Frozen(self) then return end
 	Arrive(self)
 	local total = self.count
-	local least = self.least or 1
-	local fromRows, toRows = math.max(least, math.ceil(total / from)), math.max(least, math.ceil(total / to))
-	local fromLead, toLead = math.max(0, from * fromRows - total), math.max(0, to * toRows - total)
-	for n = 1, total do
-		local a, b = fromLead + n - 1, toLead + n - 1
-		local ax, ay = (a % from) * STEP, math.floor(a / from) * STEP
-		local at = self.at[n]
-		at.x, at.y = ax + ((b % to) * STEP - ax) * f, ay + (math.floor(b / to) * STEP - ay) * f
-		Put(self, self.tiles[n], at.x, at.y)
+	local fromRows, toRows = Down(self, total, from), Down(self, total, to)
+	local spans = self.spans
+	local runs = spans and #spans or 1
+	local rowA, rowB, gap = 0, 0, 0
+	for k = 1, runs do
+		local first, count = 1, total
+		if spans then first, count = spans[k].first, spans[k].count end
+		local downA = runs == 1 and fromRows or math.ceil(count / from)
+		local downB = runs == 1 and toRows or math.ceil(count / to)
+		local leadA, leadB = 0, 0
+		if k == 1 then
+			leadA, leadB = math.max(0, from * downA - count), math.max(0, to * downB - count)
+		else
+			Caption(self, k - 1, spans[k], (rowA + (rowB - rowA) * f) * STEP + gap + (CAPTION - Tile.GAP) / 2)
+			gap = gap + CAPTION
+		end
+		for i = 1, count do
+			local a, b, n = leadA + i - 1, leadB + i - 1, first + i - 1
+			local ax, ay = (a % from) * STEP, (rowA + math.floor(a / from)) * STEP
+			local at = self.at[n]
+			at.x, at.y = ax + ((b % to) * STEP - ax) * f, ay + ((rowB + math.floor(b / to)) * STEP - ay) * f + gap
+			Put(self, self.tiles[n], at.x, at.y)
+		end
+		rowA, rowB = rowA + downA, rowB + downB
 	end
-	self:SetSize((from + (to - from) * f) * STEP - Tile.GAP, (fromRows + (toRows - fromRows) * f) * STEP - Tile.GAP)
+	self:SetSize((from + (to - from) * f) * STEP - Tile.GAP, (fromRows + (toRows - fromRows) * f) * STEP - Tile.GAP + gap)
+end
+
+function Methods:Down(columns)
+	return Down(self, self.count, columns)
 end
 
 -- Seating: a button of its own for every slot the bags have, kept for good (a slot gone keeps its button
@@ -289,16 +390,17 @@ local function Seat(self)
 	return total, true
 end
 
--- Special bags (herbs, souls, arrows...): their kind's color by bag, as the bag column shows it
--- (BagBar.KindColor); an ordinary bag and the key ring have none. A live grid only: a stored one can't be asked.
+-- Special bags (herbs, souls, arrows, the reagent bag...): by bag, their kind's color as the bag column
+-- shows it, its name and its name for several (BagBar.Kind); an ordinary bag and the key ring have none.
+-- A live grid only: a stored one can't be asked.
 local function Kinds(self)
-	local kind = ns.BagBar and ns.BagBar.KindColor
-	if not (self.live and kind) then return {} end
-	local out = {}
+	local kind = ns.BagBar and ns.BagBar.Kind
+	local colors, names, many = {}, {}, {}
+	if not (self.live and kind) then return colors, names, many end
 	for _, bag in ipairs(self.bags or {}) do
-		if bag ~= KEYS then out[bag] = kind(bag) end
+		if bag ~= KEYS then colors[bag], names[bag], many[bag] = kind(bag) end
 	end
-	return out
+	return colors, names, many
 end
 
 -- A kind's color as a slot's well: deep, so the item in it still reads (one table per color, kept).
@@ -310,25 +412,56 @@ local function Deep(color)
 	return deep[color]
 end
 
--- The ordinary bags' slots first, then the special bags', each in the order it came in: what a special bag
--- holds stands apart at the end whatever the sort. bagOf(entry) is an entry's bag.
-local function SpecialLast(self, list, bagOf)
-	local kinds = Kinds(self)
-	if next(kinds) == nil then return list end
-	local out, after = {}, {}
+-- The slots in the runs they are laid out in, with grid.apart: the ordinary bags' first, then a run for each
+-- kind of special bag in the order its first slot came, whatever the sort. Returns the list in that order
+-- and its runs, the ordinary one first: { first, count, name, color }. Not apart, or no special bag: the
+-- list as it came, and no runs. bagOf(entry) is an entry's bag.
+local function Runs(self, list, bagOf)
+	if not self.apart then return list end
+	local colors, names, many = Kinds(self)
+	if next(names) == nil then return list end
+	local out, runs, byName = {}, {}, {}
 	for _, entry in ipairs(list) do
-		local to = kinds[bagOf(entry)] and after or out
-		to[#to + 1] = entry
+		local bag = bagOf(entry)
+		local name = names[bag]
+		if name then
+			local run = byName[name]
+			if not run then
+				run = { list = {}, bags = {}, held = 0, name = name, many = many[bag], color = colors[bag] }
+				byName[name] = run
+				runs[#runs + 1] = run
+			end
+			if not run.bags[bag] then
+				run.bags[bag] = true
+				run.held = run.held + 1
+			end
+			run.list[#run.list + 1] = entry
+		else
+			out[#out + 1] = entry
+		end
 	end
-	for _, entry in ipairs(after) do out[#out + 1] = entry end
+	if #runs == 0 then return list end
+	local spans = { { first = 1, count = #out } }
+	for _, run in ipairs(runs) do
+		spans[#spans + 1] = { first = #out + 1, count = #run.list, name = run.held > 1 and run.many or run.name, color = run.color }
+		for _, entry in ipairs(run.list) do out[#out + 1] = entry end
+	end
+	return out, spans
+end
+
+-- The runs in a word, to tell when they change though no slot moved (a bag swapped for one of another kind).
+local function Told(spans)
+	local out = ""
+	for _, span in ipairs(spans or {}) do out = out .. span.first .. ":" .. tostring(span.name) .. ";" end
 	return out
 end
 
 local function PlaceBag(place) return place[1] end
 local function TileBag(tile) return (Tile.At(tile)) end
 
--- The seated buttons in the order they are laid out: the sort's, else bag by bag, a special bag's last
--- (SpecialLast). (A sort that misses a slot, or names one with no seat, falls back to bag order.)
+-- The seated buttons in the order they are laid out, and their runs: the sort's order, else bag by bag,
+-- the special bags' apart when asked (Runs). (A sort that misses a slot, or names one with no seat, falls
+-- back to bag order.)
 local function Arrange(self)
 	local list
 	local places = self.order and self.order(self.bags, self.sizes)
@@ -349,7 +482,7 @@ local function Arrange(self)
 			for slot = 1, self.sizes[bag] do list[#list + 1] = self.where[Key(bag, slot)] end
 		end
 	end
-	return SpecialLast(self, list, TileBag)
+	return Runs(self, list, TileBag)
 end
 
 local function SameOrder(self, list)
@@ -367,6 +500,7 @@ local function BuildStored(self)
 	self.pending = nil
 	Arrive(self)
 	self.laid, self.held = Asked(self), Held(self)
+	self.spans, self.gap = nil, 0
 	local columns, rows = Fit(self, total)
 	-- A short first row is indented, like the combined bag, so the last slot ends the last row.
 	local lead = math.max(0, columns * rows - total)
@@ -397,23 +531,21 @@ function Methods:Build()
 	if not self.bags then return end
 	local total, reseated = Seat(self)
 	if total == nil then return end
-	local list = Arrange(self)
-	local asked = Asked(self)
-	if reseated or self.pending or asked ~= self.laid or not SameOrder(self, list) then
+	local list, spans = Arrange(self)
+	local asked, told = Asked(self), Told(spans)
+	if reseated or self.pending or asked ~= self.laid or told ~= self.told or not SameOrder(self, list) then
 		if Frozen(self) then
 			Queue(self)
 		else
 			self.pending = nil
 			Arrive(self)
 			self.tiles, self.count = list, #list
+			self.spans, self.told = spans, told
 			self.laid, self.held = asked, Held(self)
 			local columns, rows = Fit(self, total)
-			-- A short first row is indented, like the combined bag, so the last slot ends the last row;
-			-- a fixed shape fills from the top left.
-			local lead = (self.rows or self.columns) and 0 or math.max(0, columns * rows - total)
-			for n, tile in ipairs(list) do Place(self, tile, n, columns, lead) end
+			Stand(self, columns, rows)
 			self.across, self.down = columns, rows
-			self:SetSize(columns * STEP - Tile.GAP, rows * STEP - Tile.GAP)
+			self:SetSize(columns * STEP - Tile.GAP, rows * STEP - Tile.GAP + self.gap)
 		end
 	end
 	if self:IsVisible() then self:Paint() end
@@ -505,7 +637,7 @@ end
 function Methods:Settled()
 	local places = self.live and self.order and self.order(self.bags or {}, self.sizes)
 	if not places or #places ~= self.count then return true end
-	places = SpecialLast(self, places, PlaceBag)
+	places = Runs(self, places, PlaceBag)
 	for i, place in ipairs(places) do
 		local tile = self.tiles[i]
 		local bag, slot = Tile.At(tile)
@@ -585,7 +717,7 @@ function Grid.New(parent, live)
 	local grid = CreateFrame("Frame", nil, parent)
 	for name, method in pairs(Methods) do grid[name] = method end
 	grid.live = live ~= false
-	grid.tiles, grid.sizes, grid.count, grid.at = {}, {}, 0, {}
+	grid.tiles, grid.sizes, grid.count, grid.at, grid.gap = {}, {}, 0, {}, 0
 	if grid.live then
 		grid.where, grid.spare = {}, {}   -- bag * 1000 + slot -> its button, seated; set aside
 		grid:Hide()   -- a new frame starts shown, so OnShow would never fire

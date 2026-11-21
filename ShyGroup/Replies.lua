@@ -173,7 +173,7 @@ function Rp.Create(page)
 	ignore:SetPoint("RIGHT", clear, "LEFT", -8, 0)
 	W.Tip(ignore, function(self) return self.ignoring and "Stop ignoring" or "Ignore" end, function(self)
 		if self.ignoring then return "Takes them off your ignore list. They can be asked again." end
-		return "Puts them on your ignore list: no more whispers, and they leave your lists here."
+		return "Puts them on your ignore list. No more whispers, and they come off your lists here."
 	end)
 	local pass = W.Button(pane, "Not interested", 110, function()
 		People.Pass(selected)
@@ -399,7 +399,7 @@ function Rp.Create(page)
 
 		local canInvite = Run.CanInvite() and p.status ~= "joined" and p.status ~= "invited" and not Run.IsFull() and not ignoring
 		invite:SetOn(canInvite, ignoring and "They're on your ignore list." or p.status == "joined" and "They're in your group."
-			or p.status == "invited" and "Invited; waiting on them." or Run.IsFull() and "Your group is full."
+			or p.status == "invited" and "Invited. Waiting on them." or Run.IsFull() and "Your group is full."
 			or "Only the group leader or an assistant can invite.")
 		invite:SetPrimary(p.status == "yes" or p.status == "wants" or p.said ~= nil)
 		pass:SetOn(p.status ~= "passed" and p.status ~= "joined")

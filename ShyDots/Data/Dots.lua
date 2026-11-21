@@ -255,8 +255,6 @@ ns.builders = {
 	[425013] = 1,   -- Poisoned Knife
 	[1241582] = 2,   -- Mutilate
 	[1241584] = 2,   -- Mutilate
-	[1329283] = 0,   -- Shank
-	[1329549] = 0,   -- Shank
 }
 -- Auras that change the damage their bearer deals by a share: school mask, percent, for each.
 ns.mods = {
@@ -455,7 +453,7 @@ ns.mods = {
 	[1287664] = { 127, 5 },   -- Unstable Possession
 	[1289125] = { 127, 500 },   -- Berserk
 	[1289134] = { 127, 15 },   -- Lunar Guidance
-	[1289238] = { 1, 25 },   -- Tiger's Fury
+	[1289238] = { 1, 20 },   -- Tiger's Fury
 	[1293803] = { 32, 10 },   -- Pyroclasm
 	[1293816] = { 32, 10 },   -- Shadow
 	[1294684] = { 64, 1 },   -- Lunar Suffusion
@@ -475,4 +473,5 @@ ns.mods = {
 	[1328904] = { 127, 300 },   -- Enrage
 	[1328911] = { 127, 300 },   -- Enrage
 	[1328913] = { 127, 300 },   -- Enrage
+	[1331089] = { 127, 500 },   -- Berserk
 }

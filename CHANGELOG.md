@@ -1,5 +1,43 @@
 # Changelog
 
+## 5.2.2 (21 Nov 2026)
+
+### Added
+- **ShyBags:** Hover the gold button to see every character's gold on your realm. It also shows who has gold waiting in the mail
+- **ShyBags:** The bag bar has a reagent bag slot. Dropping a bag on a worn one swaps them, even from inside it
+- **ShyCore:** Any window docks to any other, on any side. Windows docked to one host line up past each other
+
+### Changed
+- **ShyBags:** Your character list and gold show only the characters on your realm. On a PvP realm that means your side too
+- **ShyBags:** Your other characters are listed highest level first, then by gold. The one you're playing stays on top
+- **ShyBags:** A character's hover on the bag rail opens to the left, clear of your bags
+- **ShyBags:** You can size the mail, auction and gold windows. Mail letters show what they hold. Hovering the footer buttons says what they open
+- **ShyQuest:** The guide asks you to talk to a flight master once so it learns your flight paths. It no longer says you may need ones you have
+
+### Fixed
+- **ShyBags:** The gold list could pick the wrong side on a PvP realm before the game named it. It keeps to your character's own realm now
+
+## 5.2.1 (21 Nov 2026)
+
+### Added
+- **ShyCore:** One Settings room in /shy for every addon. Search it as you type. Each addon's command is now /shy and its name
+- **ShyFrames:** Round portraits for your frames. Debuff rows start after the portrait and line up with it
+
+### Changed
+- **Shy:** The family does less work on busy moments. Coins, spellbook looks, tooltips and scaled windows no longer make every addon refresh
+- **ShyAuction:** Scanning the auction house takes much less memory
+- **ShyBags:** Item tooltips count what your characters hold faster
+- **ShyCore:** Zooming the world map no longer redraws your route at every step. It redraws once you stop
+- **ShyMaps:** Hovering an item for the first time no longer stalls. Dungeon drops load in the background after you log in
+- **ShyQuest:** Guides check what applies to you faster. Fewer hitches while the route updates
+- **ShyQuest:** Leveling guides are re-planned all the way to 60. Routes stay out of land you can't enter
+
+### Fixed
+- **ShyCore:** The Matrix look's scan on headers could jump back to the start. It runs smoothly now
+- **ShyQuest:** A "Fly to Ironforge" step stayed on your route after you landed there. It clears now, and also after a portal or hearthstone
+- **ShyWay:** The map's route from Ironforge's flight master started on the mountain top. It starts in the hall now
+- **ShyWay:** Ironforge routes from the flight master started on the mountain top. They start in the hall now. Mines and fast mounts aren't taken for lifts or rides
+
 ## 5.2.0 (21 Nov 2026)
 
 ### Added

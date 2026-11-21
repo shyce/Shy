@@ -386,14 +386,17 @@ function Keys.Training(play)
 	local sum = 0
 	for _, entry in ipairs(out) do sum = sum and entry.cost and sum + entry.cost or nil end
 	-- (each ability the guide asks for that you haven't learned: its price as its when)
-	local gold = GetMoney()
+	local gold, most = Shy.Money(), #out > 0 and sum or 0
 	for _, step in ipairs(steps) do
 		local entry = step.untrained and priced[step.name]
 		if entry and entry.cost then
 			step.when = entry.cost <= gold and ("train it: %s"):format(UI.Money(entry.cost, true, 10))
 				or ("train it: %s short"):format(UI.Money(entry.cost - gold, true, 10))
+			if entry.cost > most then most = entry.cost end
 		end
 	end
+	-- (The most gold any of this is weighed against: at or above it, a coin changes none of the words.)
+	Keys.goldMost = most > 0 and most or nil
 	return out, #out > 0 and sum or nil
 end
 
@@ -412,7 +415,7 @@ function Keys.TrainingSays(list, sum)
 		return table.concat(names, ", ") .. more
 	end
 	if not sum then return ("At your trainer: %s."):format(Named(1, 3, true)) end
-	local gold = GetMoney()
+	local gold = Shy.Money()
 	if sum <= gold then return ("At your trainer: %s, %s. You can afford it all."):format(Named(1, 3, true), UI.Money(sum, true, 11)) end
 	-- (the most that fits, from the top)
 	local can, spent = 0, 0
@@ -430,7 +433,7 @@ end
 
 -- Its hover: every lesson in that order, its price against your gold.
 function Keys.TrainingHover(owner, list)
-	local rows, gold = {}, GetMoney()
+	local rows, gold = {}, Shy.Money()
 	for _, entry in ipairs(list or NONE) do
 		local can = entry.cost and entry.cost <= gold
 		if entry.cost then gold = gold - entry.cost end

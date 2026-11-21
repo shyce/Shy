@@ -1,18 +1,18 @@
--- Sell: what's in your bags that the house takes, worth first (its market against the vendor's), and the listing of the
--- item picked: the price each (a copper under the cheapest, or what you type, or a row of the house's clicked), how
--- many (all of it, unless you say), for how long, the deposit, the house's cut, what you get, Post; and what is on the
--- house now. An auction can't be reposted in place: one cancelled or run out comes back by mail, and is posted again
+-- Sell: what's in your bags that the auction house takes, worth first (its market against the vendor's), and the listing of the
+-- item picked: the price each (a copper under the cheapest, or what you type, or a row of the auction house's clicked), how
+-- many (all of it, unless you say), for how long, the deposit, the auction house's cut, what you get, Post; and what is on the
+-- auction house now. An auction can't be reposted in place: one cancelled or run out comes back by mail, and is posted again
 -- from here once you have it.
 -- How many goes up in as many posts as the game needs: one post takes what the game says it can from your biggest
 -- stack (all of it, or that stack alone), so the rest goes up a press at a time, your biggest stacks first. The posts
 -- are drawn as a strip, what is up filled in; each press posts the next, and Space posts while this page is up. What
--- went up is read from your bags, so the strip is right whatever the house took. Once all of an item is up, the next
+-- went up is read from your bags, so the strip is right whatever the auction house took. Once all of an item is up, the next
 -- in the list is picked.
--- Post waits for the house's answer before the next can go. A post goes only from your press (the game allows it no
--- other way): while the house is busy Post rests and says so, ready again as soon as the house is (or after a few
--- seconds, should it not say). A search asked while it is busy is sent once it is ready. This house leaves a single
+-- Post waits for the auction house's answer before the next can go. A post goes only from your press (the game allows it no
+-- other way): while the auction house is busy Post rests and says so, ready again as soon as the auction house is (or after a few
+-- seconds, should it not say). A search asked while it is busy is sent once it is ready. This auction house leaves a single
 -- item (not a commodity) priced under a silver unanswered, and answers nothing more until you log in again: such a
--- post isn't sent, and the card says why. The house's warning is answered here (Post anyway) and its errors said
+-- post isn't sent, and the card says why. The auction house's warning is answered here (Post anyway) and its errors said
 -- under Post: the game's own sell frames, hidden, can't answer for ours.
 
 local ADDON, ns = ...
@@ -26,14 +26,14 @@ local P = ns.Parts
 local L = { list = 300, row = 34, rung = 22, ladder = 4, field = 70, price = 110, count = 150, rail = 6, gap = 2,
 	segs = 24, digits = 18 }
 local DURATION = { 1, 2, 3 }                      -- the game's three: 2, 8 and 24 hours here (AUCTION_DURATION_*)
-local WAIT = 10                                   -- seconds a post waits for the house's answer
-local BUSY = 3                                    -- seconds Post rests for a busy house that doesn't say it is ready
+local WAIT = 10                                   -- seconds a post waits for the auction house's answer
+local BUSY = 3                                    -- seconds Post rests for a busy auction house that doesn't say it is ready
 local LEAST = 100                                 -- the least a single item's buyout may be here (a silver)
 local KEY = { key = "SPACE", button = "ShyAuctionPostKey", word = "Space" }
-local WORDS = { busy = "The house is busy, a moment.", reading = "Reading the item, a moment.",
+local WORDS = { busy = "The auction house is busy. One moment.", reading = "Reading the item. One moment.",
 	posting = "Posting\226\128\166", anyway = "Post anyway",
-	unanswered = "The house didn't answer that post. It answers nothing more until you log out and back in.",
-	least = "This house doesn't answer a single item under 1 silver (and then stops answering until you log in again). Price it at 1 silver or more.",
+	unanswered = "The auction house didn't answer that post. It won't answer again until you log out and back in.",
+	least = "This auction house ignores a single item under 1 silver, then stops answering until you log in again. Price it at 1 silver or more.",
 	poor = "Not enough gold for the deposit.", moving = "Put down the stack you're moving first.", vendor = "A vendor pays more for these: %s." }
 local STATUS = Enum.ItemCommodityStatus
 
@@ -41,14 +41,14 @@ local page, scroll, list, card
 -- pick: the item picked; at: its place in the list (the next one slides into it once it's all up); count: how many
 -- still to post (nil: all you have); run: the posts made of the item picked ({ item, done = { n a press }, last = how
 -- many you had }); up: the last item all posted ({ item, n }); asked: the item whose listings this visit asked for;
--- posting: when a post was sent; kept: that post, should the house ask to be sure; sure: the house asked (Post
--- anyway); busy: since when the house has been busy; said: words under Post.
+-- posting: when a post was sent; kept: that post, should the auction house ask to be sure; sure: the auction house asked (Post
+-- anyway); busy: since when the auction house has been busy; said: words under Post.
 local state = { pick = nil, price = nil, typed = false, count = nil, duration = 3 }
 local goods = {}
 local plan = {}
 
--- Items the house took when last asked, so a stack you are moving (its slot locked, which the house refuses to look
--- at) still counts as yours. Forgotten as the house closes.
+-- Items the auction house took when last asked, so a stack you are moving (its slot locked, which the auction house refuses to look
+-- at) still counts as yours. Forgotten as the auction house closes.
 local sellable = {}
 
 -- Posted from first: a stack you aren't moving, the biggest.
@@ -58,7 +58,7 @@ local function BySize(a, b)
 	return a.n < b.n
 end
 
--- What the house takes from your bags, an entry an item: { item, count, stacks (biggest first: { location, count }),
+-- What the auction house takes from your bags, an entry an item: { item, count, stacks (biggest first: { location, count }),
 -- location (the biggest stack's), worth, unit, vendor }. Where your stacks stand in your bags changes nothing.
 local function Read()
 	wipe(goods)
@@ -102,7 +102,7 @@ local function Read()
 		if a.worth ~= b.worth then return a.worth > b.worth end
 		return a.item < b.item
 	end)
-	-- What went up since the last press: what left your bags while it was sent (the house took it), counted to it.
+	-- What went up since the last press: what left your bags while it was sent (the auction house took it), counted to it.
 	local run = state.run
 	if run then
 		local have = by[run.item] and by[run.item].count or 0
@@ -157,13 +157,13 @@ end
 
 local function Ready() return C_AuctionHouse.IsThrottledMessageSystemReady() end
 
--- A price the house takes: whole silver at a house that takes no copper.
+-- A price the auction house takes: whole silver at an auction house that takes no copper.
 local function Fit(copper)
 	if not copper or C_AuctionHouse.SupportsCopperValues() then return copper end
 	return math.max(COPPER_PER_SILVER, math.floor(copper / COPPER_PER_SILVER) * COPPER_PER_SILVER)
 end
 
--- The house busy, and not yet waited on long enough: Post rests, and looks again once the house is ready.
+-- The auction house busy, and not yet waited on long enough: Post rests, and looks again once the auction house is ready.
 local function Busy()
 	if Ready() then
 		state.busy = nil
@@ -178,8 +178,8 @@ local function Busy()
 	return true
 end
 
--- What is listed of the item picked, sent once the house can take it: asked by the key of the very item in your bags,
--- as the game's own sell window does. Asked again each visit, as the house forgets it when it closes.
+-- What is listed of the item picked, sent once the auction house can take it: asked by the key of the very item in your bags,
+-- as the game's own sell window does. Asked again each visit, as the auction house forgets it when it closes.
 local function Ask()
 	local g = Picked()
 	local key = g and C_Item.DoesItemExist(g.location) and C_AuctionHouse.GetItemKeyFromItem(g.location)
@@ -242,7 +242,7 @@ local function Post()
 	local g = Picked()
 	if not (g and state.price) or state.posting or g.stacks[1].locked or Busy() then return end
 	if state.sure then
-		-- The house asked to be sure: the same post, confirmed.
+		-- The auction house asked to be sure: the same post, confirmed.
 		local p = state.sure
 		state.sure, state.said, state.posting = nil, nil, GetTime()
 		ns.Note("ConfirmPost", p.location, p.duration, p.quantity, p.unit)
@@ -275,7 +275,7 @@ local function Post()
 		state.run = run
 	end
 	run.done[#run.done + 1], run.sent = 0, GetTime()
-	-- Kept first: the house may ask to be sure before the call returns.
+	-- Kept first: the auction house may ask to be sure before the call returns.
 	state.kept, state.posting, state.said = p, GetTime(), nil
 	local asks
 	if p.commodity then
@@ -414,13 +414,13 @@ local function DrawCard(width)
 	local total = (Fit(state.price) or 0) * count
 	local net = math.floor(total * (1 - cut))
 	card.deposit:SetText(UI.Money(deposit, true, 10, card.deposit))
-	card.cutWord:SetText(("The house keeps %d%%"):format(cut * 100))
+	card.cutWord:SetText(("The auction house keeps %d%%"):format(cut * 100))
 	card.cut:SetText(UI.Money(math.floor(total * cut), true, 10, card.cut))
 	card.netWord:SetText(count < g.count and ("You get for %d"):format(count) or "You get")
 	card.net:SetText(UI.Money(net, true, 13, card.net))
-	-- A post sent waits for the house's answer (or a while, should none come).
+	-- A post sent waits for the auction house's answer (or a while, should none come).
 	if state.posting and GetTime() - state.posting > WAIT then
-		-- No answer: the house holds that post, and answers nothing more until you log in again.
+		-- No answer: the auction house holds that post, and answers nothing more until you log in again.
 		Settled()
 		state.said = WORDS.unanswered
 	end
@@ -434,14 +434,14 @@ local function DrawCard(width)
 	card.usable = state.price ~= nil and not poor and not state.posting and not busy and not cheap and not moving
 	card.post:SetUsable(card.usable, (not state.price and "Type a price first.") or (poor and WORDS.poor) or (moving and WORDS.moving) or nil)
 	card.post.key:SetShown(T.db.spacePosts == true and not state.posting)
-	-- What a vendor pays, should it be more than the house would.
+	-- What a vendor pays, should it be more than the auction house would.
 	local vendor = g.vendor * count
 	local low = state.price and vendor > 0 and vendor >= net
 	card.why:SetText(state.said or (cheap and WORDS.least) or (poor and state.price and WORDS.poor) or (busy and WORDS.busy) or (moving and WORDS.moving)
 		or (low and WORDS.vendor:format(UI.Money(vendor, true, 10, card.why))) or "")
 	UI.Ink(card.why, ((busy or moving) and not state.said) and C.dim or (low and not (state.said or cheap or poor)) and C.alert or C.bad)
 
-	card.kick:Say("On the house now", #ladder == 0 and "nobody is selling it" or "click one to price under it")
+	card.kick:Say("On the auction house now", #ladder == 0 and "nobody is selling it" or "click one to price under it")
 	local top = 1
 	for _, rung in ipairs(ladder) do top = math.max(top, rung.quantity) end
 	for i = 1, L.ladder do
@@ -570,8 +570,8 @@ local function Build(frame)
 		y = y - (big and 22 or 16)
 		return right, left
 	end
-	card.deposit = Sum("Deposit, back when it sells")
-	card.cut, card.cutWord = Sum("The house keeps 5%")
+	card.deposit = Sum("Deposit, refunded when it sells")
+	card.cut, card.cutWord = Sum("The auction house keeps 5%")
 	card.net, card.netWord = Sum("You get", true)
 	card.post = UI.Button(card, "Post", 160, function() Post() end)
 	card.post:SetHeight(26)
@@ -592,7 +592,7 @@ local function Build(frame)
 			Post()
 		end
 	end)
-	-- Under Post: what holds it back, the house's warning or error.
+	-- Under Post: what holds it back, the auction house's warning or error.
 	card.why = Shop.Text(card, UI.TextFont(10), C.bad)
 	card.why:SetPoint("TOPLEFT", 0, y - 36)
 	card.why:SetPoint("RIGHT")
@@ -605,7 +605,7 @@ local function Build(frame)
 	card.kick:SetPoint("RIGHT")
 	card.rungs = {}
 	for i = 1, L.ladder do
-		-- A row of the house's: clicked, your price a copper under it (or at it, where it's yours).
+		-- A row of the auction house's: clicked, your price a copper under it (or at it, where it's yours).
 		local r = CreateFrame("Button", nil, card)
 		r:SetHeight(L.rung)
 		r:SetPoint("TOPLEFT", 0, y - 62 - (i - 1) * L.rung)

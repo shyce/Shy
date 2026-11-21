@@ -1,7 +1,8 @@
 -- As good as dead: what your damage over time still has to deal (ShyDots), on the target's, the focus's and
 -- the target's target's health bar. From the fill's end back toward the bar's start, one segment a spell in
--- its school's color, as long as what that spell still has to deal; once they reach the start a check lights
--- before the name: move on.
+-- its school's color, as long as what that spell still has to deal; once they reach the start a check lights on
+-- the bar's start, a mark on its edge: move on. The name never moves for it (whether it is lit may be the game's
+-- secret, so making room for it would leave a gap while it is dark).
 -- Health is secret in a fight, so the game does the comparing: each segment is a bar filled from the right
 -- whose most is the unit's most health and whose value is the damage coming, the first hung on the fill's
 -- end and each next on the one before it; the check rides the end of a long bar whose most is the health
@@ -22,6 +23,7 @@ local ALPHA = 0.7         -- a segment over the fill
 local DEEP = 0.88         -- a segment's color is its school's, this much of it, so the live fill stays the brightest
 local SEAM = 1            -- the dark line at a segment's far end
 local ENEMIES = { target = true, focus = true, targettarget = true }
+local EDGE = -1           -- the check's middle from the bar's start: on the frame's edge, clear of the name
 
 local function Build(self)
 	local health = self.bars.health   -- clips its children already (incoming heals)
@@ -52,7 +54,7 @@ local function Build(self)
 
 	local gate = CreateFrame("Frame", nil, self.overlay)
 	gate:SetSize(CHECK, CHECK)
-	gate:SetPoint("LEFT", health, "LEFT", L.TEXT_INSET, 0)
+	gate:SetPoint("CENTER", health, "LEFT", EDGE, 0)
 	gate:SetClipsChildren(true)
 	gate:Hide()
 	local meter = CreateFrame("StatusBar", nil, gate)
@@ -123,16 +125,14 @@ local function UpdateDoom(self)
 		doom.used = used
 		for i, seg in ipairs(doom.segs) do seg:SetShown(i <= used) end
 	end
-	if was ~= shown then self:ArrangeName() end   -- the name starts after the check's window
 end
 
--- Woven into the plates' class once the first is made: sized with the plate, updated with its health, the
--- name after the check's window.
+-- Woven into the plates' class once the first is made: sized with the plate, updated with its health.
 local woven = false
 local function Weave(class)
 	if woven then return end
 	woven = true
-	local arrange, updateHealth, arrangeName = class.Arrange, class.UpdateHealth, class.ArrangeName
+	local arrange, updateHealth = class.Arrange, class.UpdateHealth
 	class.UpdateDoom = UpdateDoom
 	function class:Arrange()
 		arrange(self)
@@ -143,13 +143,6 @@ local function Weave(class)
 	function class:UpdateHealth()
 		updateHealth(self)
 		UpdateDoom(self)
-	end
-	function class:ArrangeName()
-		arrangeName(self)
-		local doom = self.doom
-		if doom and doom.gate:IsShown() and not (self.role and self.role:IsShown()) then
-			self.texts.name:SetPoint("LEFT", doom.gate, "RIGHT", 3, 0)
-		end
 	end
 end
 
@@ -162,7 +155,7 @@ function ns.Plate.Create(owner, kind)
 end
 
 -- Said for one mob at a time: only the frames showing it (or that can't be told apart) are drawn again.
-Shy:On("SHY_DOTS", function(guid)
+local function Told(guid)
 	local all = guid == nil or Secret(guid)
 	for _, frame in ipairs(ns.Frames.list) do
 		local plate = frame.plate
@@ -175,4 +168,10 @@ Shy:On("SHY_DOTS", function(guid)
 			end
 		end
 	end
-end)
+end
+Shy:On("SHY_DOTS", Told)
+
+-- The switch was flipped: every frame that can carry the marks reads again.
+function ns.Doom()
+	Told()
+end

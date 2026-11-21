@@ -273,7 +273,9 @@ end
 ns.Module({
 	id = "timers",
 	title = "Breath and fatigue",
-	desc = "Moves the breath, fatigue and feign death bars to the top of the screen, in the drawer under the head.",
+	desc = "Your breath, fatigue and feign death bars show at the top of your screen.",
+	group = "screen",
+	words = "drowning timer",
 
 	Ready = function()
 		return MirrorTimerContainer ~= nil and MirrorTimerContainer.mirrorTimers ~= nil and Shy.Top ~= nil and Shy.Top.Make ~= nil

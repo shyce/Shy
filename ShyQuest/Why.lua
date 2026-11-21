@@ -301,7 +301,7 @@ function Why.Content(id, hints)
 		if where then rows[2] = { quiet = true, indent = 1, text = where } end
 		-- A long-shot drop is no stop on the route (Route.lua): say why, and to watch for it.
 		if start.item and D.LongShot(start.item) then
-			rows[#rows + 1] = { quiet = true, indent = 1, text = "A rare drop: watch for it as you go" }
+			rows[#rows + 1] = { quiet = true, indent = 1, text = "A rare drop. Watch for it as you go" }
 		end
 		sections[#sections + 1] = { title = "Starts with", rows = rows }
 	end

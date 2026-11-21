@@ -1,16 +1,17 @@
--- Dying. While the character is dead, getting back to life is what the route leads with: before a
--- stop singled out, the guide's step, a flight or a zone to go to (an "urgent" errand, Route.lua).
---   dead, not released   a row to release, or to take the resurrection someone offers
---   a ghost              the way back to the body: the card's first row, the waypoint arrow, and the
---                        lit mark on both maps (a red skull: Marks.lua's "body"), which is all that
---                        marks the place: no ground is drawn round it, and none for the quests
---                        meanwhile. In reach of it the row says so, and nothing points any more.
--- Each time, a line of someone's words stands under the row (ns.LastWords); the row's menu has the
--- switch, and tells a chat of the player's choice who killed them and where the body lies.
--- Nothing is done for the player: releasing and coming back are theirs to accept.
+-- Dying. While you are dead, getting back to life leads the route. It comes before a stop you
+-- singled out, the guide's step, a flight or a zone to go to (an "urgent" errand, Route.lua).
+--   dead, not released   a row to release, or to take a resurrection someone offers
+--   a ghost              the way back to your body: the card's first row, the waypoint arrow, and
+--                        the lit mark on both maps (a red skull: Marks.lua's "body"). The mark is
+--                        all that shows the place. No ground is drawn round it, and none for
+--                        quests meanwhile. Once the body is in reach the row says so, and nothing
+--                        points any more.
+-- Each time, a quote shows under the row (ns.LastWords). The row's menu has the switch for it, and
+-- tells a chat you choose who killed you and where your body is.
+-- Nothing is done for the player. Releasing and coming back are theirs to accept.
 --
---   /shyquest death        what this file knows right now, to copy
---   /shyquest death show   the row, the mark and the ground for half a minute, as if a ghost
+--   /shy quest death        what this file knows right now, to copy
+--   /shy quest death show   the row, the mark and the ground for half a minute, as if a ghost
 
 local ADDON, ns = ...
 local T = ns.T

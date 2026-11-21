@@ -1,7 +1,8 @@
--- Bank steps done for you. A live step's `deposit` lines name what to put away and its `withdraw` lines
--- what to take out (GuideChecks.lua judges them: .bankdeposit, .bankwithdraw); when the bank opens, those
--- items are moved, as GuideTalk.lua accepts the guide's quests. Shift held as it opens leaves it all to
--- the player. Nothing else in the bags or the bank is touched, and nothing is bought.
+-- Bank steps done for you. A live step's `deposit` lines name what to put away and its `withdraw`
+-- lines what to take out (GuideChecks.lua judges them: .bankdeposit, .bankwithdraw). When the bank
+-- opens, those items are moved, the same way GuideTalk.lua accepts the guide's quests. Holding Shift
+-- as it opens leaves it all to the player. Nothing else in the bags or the bank is touched, and
+-- nothing is bought.
 
 local ADDON, ns = ...
 local T = ns.T

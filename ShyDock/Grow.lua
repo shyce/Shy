@@ -73,7 +73,7 @@ local function Build()
 	card.words:SetPoint("TOPLEFT", card.drawing, "TOPRIGHT", 14, 2)
 	card.words:SetWidth(W - 14 - card.drawing:GetWidth() - 14 - 10)
 	card.words:SetWordWrap(true)
-	local later = UI.Text(body, "Turn this off in /shydock.", 10, false, C.dim)
+	local later = UI.Text(body, "Turn this off in /shy screen.", 10, false, C.dim)
 	later:SetPoint("BOTTOMLEFT", 10, 14)
 
 	card.add = UI.Button(body, "Add bars", 96, function()
@@ -136,9 +136,11 @@ function G.Start()
 	if started then return end
 	started = true
 	local events = CreateFrame("Frame")
-	for _, event in ipairs({ "SPELLS_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE", "PLAYER_LEVEL_UP", "PLAYER_REGEN_ENABLED" }) do
+	for _, event in ipairs({ "LEARNED_SPELL_IN_SKILL_LINE", "PLAYER_LEVEL_UP", "PLAYER_REGEN_ENABLED" }) do
 		events:RegisterEvent(event)
 	end
+	-- (The spellbook from ShyCore: said only when it really changed.)
+	Shy:On("SHY_SPELLS", function() G.Soon() end)
 	events:RegisterEvent("PLAYER_REGEN_DISABLED")
 	-- After a fight the card is looked at again only if the fight put it away or something asked meanwhile.
 	local owed

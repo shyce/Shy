@@ -1,10 +1,14 @@
--- The finder window, in two panes: down the left what to find (a zone's quests by how they stand with
--- you (Why.lua), your friends online as ShyMaps knows them, with ShyFarm what to farm (the best farms for
--- you and your favorites), and the nearest of each town service: innkeeper, flight master, trainers,
--- vendors, spirit healers ...; each service with the game's own picture and a star that keeps it on the
--- map), on the right what was found under a search box that looks everything up by name (a number is a
--- quest's ID), or on the farm side only what you could farm. Click shows a result on the world map
--- (ns.ShowOnMap), right-click points the arrow at it; on the farm side a click farms it. /shyquest find [name].
+-- The finder window, in two panes.
+-- Left, what to find:
+--   a zone's quests, by how they stand with you (Why.lua)
+--   your friends online, as ShyMaps knows them
+--   with ShyFarm, what to farm: the best farms for you and your favorites
+--   the nearest of each town service: innkeeper, flight master, trainers, vendors, spirit healers ...
+--     Each service has the game's own picture and a star that keeps it on the map.
+-- Right, what was found, under a search box that looks everything up by name (a number is a quest's
+-- ID). On the farm side it only searches what you could farm.
+-- Click shows a result on the world map (ns.ShowOnMap). Right-click points the arrow at it. On the
+-- farm side a click farms it. /shy quest find [name].
 
 local ADDON, ns = ...
 local T = ns.T
@@ -537,7 +541,7 @@ local function Tip(row)
 		Tips.Double(lines, result.name, W.Yards(result.yards), C.text, C.hot)
 		Tips.Line(lines, result.detail, C.dim)
 		if result.kind == "friends" then
-			if not result.placed then Tips.Line(lines, "Not on the map: they don't use ShyMaps, or don't share where they are", C.dim, true) end
+			if not result.placed then Tips.Line(lines, "Not on the map. They don't use ShyMaps or don't share where they are", C.dim, true) end
 		elseif result.kind == "items" then
 			for i, source in ipairs(D.Item(id).sources) do
 				local thing = i <= 6 and D.Thing(source.kind, source.id)
@@ -763,7 +767,7 @@ local function Row(i)
 	end)
 	row.farm:SetScript("OnEnter", function(self)
 		UI.Tint(self.glyph, C.text)
-		UI.Tip(self, "Farm this", "Leads you to the best camp to farm it, then counts what you loot, what it's worth and how fast it comes.", { side = "CURSOR" })
+		UI.Tip(self, "Farm this", "Takes you to the best camp to farm it, then counts what you loot, what it's worth and how fast you get it.", { side = "CURSOR" })
 	end)
 	row.farm:SetScript("OnLeave", function(self)
 		UI.Tint(self.glyph, C.alert)
@@ -794,7 +798,7 @@ local function Row(i)
 	row.star:SetScript("OnEnter", function(self)
 		UI.Tint(self.glyph, C.alert, 1)
 		UI.Tip(self, Starred(self) and "A favorite" or "Keep as a favorite",
-			"Your favorites stand under Farm, with how your farming of each went, to farm again in a click.", { side = "CURSOR" })
+			"You'll find your favorites under Farm, with how each one went. Click one to farm it again.", { side = "CURSOR" })
 	end)
 	row.star:SetScript("OnLeave", function(self)
 		Starred(self)
@@ -971,7 +975,7 @@ local function RouteHead()
 	head.clear:SetHeight(20)
 	head.clear:SetPoint("RIGHT", -2, 0)
 	head.quick = UI.Checkbox(head, "Newest first", function() return ns.Plan.Auto() end, function(on) ns.Plan.Auto(on) end,
-		{ desc = "Takes you to what you added last, and to stops on the way as you pass them. Off, they stay the way you put them." })
+		{ desc = "Takes you to what you added last, and to other stops as you pass them. When this is off, your stops stay in the order you set." })
 	head.quick:SetPoint("RIGHT", head.clear, "LEFT", -10, 0)
 	head:EnableMouse(true)
 	head:SetScript("OnEnter", function(self)
@@ -1611,7 +1615,7 @@ local SECTIONS = {
 				return list and #list or 0
 			end },
 		{ key = "favorites", label = "Favorites", glyph = Shy.MEDIA .. "GlyphStar",
-			help = "What you farm again and again, with how it went and a graph of your sessions. A click farms one again.",
+			help = "The things you farm most, with how each one went and a graph of your sessions. Click one to farm it again.",
 			count = function() local farm = Shy.addons.Farm; return farm and farm.Favorites and #farm:Favorites() or 0 end },
 	} },
 	{ head = "NEARBY", rows = {
@@ -1631,7 +1635,7 @@ local SECTIONS = {
 		{ key = "trade", label = "Trade goods", word = "Sells trade goods" },
 		{ key = "spirit", label = "Spirit healer", word = "Spirit healer" },
 		{ key = "stone", label = "Meeting stone", word = "Meeting stone" },
-		{ key = "profession", label = "Professions", menu = ProfessionMenu, help = "Trainers of a profession." },
+		{ key = "profession", label = "Professions", menu = ProfessionMenu, help = "Profession trainers." },
 		{ key = "trainers", label = "All trainers", menu = TrainerMenu, picture = "trainer", help = "Every kind of trainer, by title." },
 	} },
 }
@@ -1742,7 +1746,7 @@ local function Category(spec, y)
 		end)
 		star:SetScript("OnEnter", function(self)
 			UI.Tint(self.glyph, C.alert, 1)
-			UI.Tip(self, "Keep on the map", ("%s stay on the map whatever you look for."):format(KEPT[spec.key] or spec.label), { side = "CURSOR" })
+			UI.Tip(self, "Keep on the map", ("%s stay on the map no matter what you search for."):format(KEPT[spec.key] or spec.label), { side = "CURSOR" })
 		end)
 		star:SetScript("OnLeave", function(self)
 			UI.TipHide(self)

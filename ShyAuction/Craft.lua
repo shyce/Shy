@@ -1,6 +1,6 @@
--- What a recipe is worth to make, at this house's prices. What it makes is worth its market, or, where the house can't
+-- What a recipe is worth to make, at this auction house's prices. What it makes is worth its market, or, where the auction house can't
 -- sell it (bound when picked up, or never listed), what a vendor pays. Each reagent costs the cheaper of a vendor's price
--- (Data/Vendor.lua: what vendors sell, by the stack they sell it in) and its market. Sold at the house, the house keeps
+-- (Data/Vendor.lua: what vendors sell, by the stack they sell it in) and its market. Sold at the auction house, the auction house keeps
 -- its cut (5% at a faction's, 15% at a goblin's), so the profit is what you get less the reagents; the deposit comes
 -- back when it sells, so it isn't counted. The profit counts every reagent at
 -- its price, the ones you hold too (making it spends what you could sell); what you lack is apart: what it costs to buy
@@ -11,7 +11,7 @@
 --   Craft.Worth(item)       copper one fetches, and how: "auction" | "vendor" | nil
 --   Craft.Plan(r)           r = { item, count (what one craft makes, a range's middle), reagents = { { item, need } },
 --                           have = function(item) -> count, gold, recipe (the item that teaches it) } ->
---                           { value, worth, cut (the house's share of value), rate, cost, profit, unpriced, buy, afford,
+--                           { value, worth, cut (the auction house's share of value), rate, cost, profit, unpriced, buy, afford,
 --                           reagents = { { item, need, have, short,
 --                           unit, from, buy } }, learn = { cost, from, crafts } }
 --   Craft.Rank(plans)       the best profit first, a loss after the profits, the unpriced last

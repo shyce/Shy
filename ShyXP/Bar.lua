@@ -111,6 +111,7 @@ function ns.ShowRepTooltip(owner, hints)
 end
 
 function ns.ShowSummaryTooltip(owner, hints, source)
+	if not T.db.tooltip then return end
 	if (source or S.Mode()) == "rep" then return ns.ShowRepTooltip(owner, hints) end
 	Leaves(owner)
 	local on = T.db.lines
@@ -291,7 +292,6 @@ local function Hook(bar)
 	extra.shy:SetAllPoints()
 	extra.shy:SetFrameStrata("MEDIUM")
 	extra.shy:SetFrameLevel(container:GetFrameLevel() + 10)
-	extra.shy.followsQuestSetting = true   -- the stats box always shows the band
 
 	-- Sublevels 1 to 3: above the default rested fill, under the XP fill.
 	extra.log = bar:CreateTexture(nil, "ARTWORK", nil, 1)
@@ -397,16 +397,34 @@ local function RepBars()
 	return list
 end
 
--- A setting changed: everything laid out and said again.
+-- Where the bars stand, and whose they are under the action bars: what the console keeps room by.
+local stood
+local function Stand()
+	local place = ns.Place()
+	return place == "under" and (place .. " " .. T.db.barStyle) or place
+end
+
+-- A setting changed: everything laid out and said again, the game's bars shown or stood down, and the
+-- console told when the bars moved.
 function ns.Refresh()
 	if ns.Under then ns.Under.Place() end
+	ns.ApplyBlizzardBar()
 	for bar in pairs(bars) do UpdateBar(bar) end
 	for bar in pairs(repBars) do UpdateRepBar(bar) end
 	for card in pairs(ns.cards) do
 		card:Layout()
 		card:Refresh()
 	end
+	-- A bar someone else carries (the quest window's) is said again too.
+	for bar in pairs(ns.bars) do
+		if bar:IsVisible() then bar:Update() end
+	end
 	ns.UpdateBox()
+	local stands = Stand()
+	if stands ~= stood then
+		stood = stands
+		Shy:Fire("SHY_XP_PLACE")
+	end
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
@@ -418,7 +436,6 @@ function ns.Update()
 	for bar in pairs(repBars) do UpdateRepBar(bar) end
 	for card in pairs(ns.cards) do card:Refresh() end
 	ns.UpdateBox()
-	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
 -- Asked for many times in a frame (a kill: the XP, the quest log twice or more): done once, the frame after.
@@ -475,6 +492,7 @@ local function HookBlizzardBar()
 end
 
 function ns.SetupBar()
+	stood = Stand()
 	for _, bar in ipairs(ExpBars()) do Hook(bar) end
 	for _, bar in ipairs(RepBars()) do HookRep(bar) end
 	HookBlizzardBar()

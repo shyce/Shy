@@ -1,15 +1,19 @@
--- The quests you could take at a giver, so the trip there can be weighed before it is made. A pin's hover names
--- them, each on a line with what it pays; a click on the pin keeps the hover and it says the rest (CardHover.lua,
--- with these blocks), with what to do about it at its foot:
---   the head     who gives them, how far; then how many quests, their XP together (and how much of your level
---                that is) and whether anything in them is an upgrade
---   each quest   its name in the color of its difficulty and its level; what it asks for, in its own
---                sentence (Data/Offers.lua, the server's word), else each thing the data has it ask for;
---                what it pays: XP as you would be paid it now, money, what it costs; the items it gives and
---                the ones to choose from, each with what it is and what ShyGear makes of it for you (the mouse
---                on one shows the game's own tooltip, a held key links it); a spell it teaches; who takes it
---                back where that isn't its giver; the quest it leads to; and, in gold, why the route leaves it
---                or what your guide does with it
+-- The quests you could take at a giver, so you can weigh the trip before making it. A pin's hover
+-- names them, one per line, with what each pays. Clicking the pin keeps the hover and it says the
+-- rest (CardHover.lua, with these blocks), with what to do about it at its foot:
+--   the head     who gives them and how far. Then how many quests, their XP together (and how much
+--                of your level that is) and whether anything in them is an upgrade.
+--   each quest   its name in its difficulty color, and its level
+--                what it asks for, in its own sentence (Data/Offers.lua, the server's word), else
+--                  each thing the data has it ask for
+--                what it pays: XP as you would be paid it now, money, what it costs
+--                the items it gives and the ones to choose from, each with what it is and what
+--                  ShyGear makes of it for you (the mouse on one shows the game's own tooltip, a
+--                  held key links it)
+--                a spell it teaches
+--                who takes it back, where that isn't its giver
+--                the quest it leads to
+--                in gold, why the route leaves it or what your guide does with it
 --
 --   ns.Offer.Quests(stop) -> { { id, action, who } }   the quests picked up at a stop, in its order (who: their
 --                                                 giver, on a pin of several); empty for none

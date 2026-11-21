@@ -1,9 +1,9 @@
--- Farm: ShyFarm's farm finder at the auction house, priced by this house. Three views, picked along the top:
+-- Farm: ShyFarm's farm finder at the auction house, priced by this auction house. Three views, picked along the top:
 --   Best gold an hour   every farm you could farm, ranked by gold an hour with the trip by the flights you know taken out;
 --   For an item         the farms for the item last picked on Buy or Sell (or a favorite clicked), by how many an hour;
 --   Your favorites      what you farm again and again, and what your own farming of each came to.
 -- A farm's row: its rank, the creature and its levels, where it is and how long the way, its camp, what brings most of
--- its worth (each drop's card on hover, with this house's price), its gold an hour with a meter of it against the best,
+-- its worth (each drop's card on hover, with this auction house's price), its gold an hour with a meter of it against the best,
 -- and Farm this (ShyFarm farms it and ShyQuest leads to that camp). The best is lit in gold. At the right of the views:
 -- your level, the flights and your pace the ranking went by. Without ShyFarm the tab says what it needs.
 
@@ -65,7 +65,7 @@ local function Where(f)
 	return table.concat(parts, "  \194\183  ")
 end
 
--- A drop: its picture in a slot and how often it comes; its card (with this house's price) on hover.
+-- A drop: its picture in a slot and how often it comes; its card (with this auction house's price) on hover.
 local function Drop(row, d)
 	local piece = CreateFrame("Frame", nil, row)
 	piece:SetSize(L.tile, L.tile)
@@ -251,7 +251,7 @@ local function DrawFavorite(row, fav)
 		row.note:SetText(WORDS.items:format(math.floor((st.rate or 0) + 0.5)))
 	else
 		row.money:SetText(price and price.market and UI.Money(price.market, true, 15, row.money) or "")
-		row.note:SetText(price and price.market and "each, at this house" or "")
+		row.note:SetText(price and price.market and "each, at this auction house" or "")
 	end
 	row.track:Hide()
 	row.fill:Hide()

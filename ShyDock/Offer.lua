@@ -43,30 +43,30 @@ function O.Lines(plan)
 	local L = ns.Layout
 	local pick = plan.screen
 	if not pick.on and pick.custom then
-		return { { text = "Your own layout stays as it is", sub = "pick a layout on the Screen page to start fresh" } }
+		return { { text = "Your own layout stays as it is", sub = "Pick a layout on the Screen page to start fresh." } }
 	elseif not pick.on then
-		return { { text = "Your screen stays as it is", sub = "you can set up the console later from /shy" } }
+		return { { text = "Your screen stays as it is", sub = "You can set up the console later from /shy." } }
 	end
 	local name = ns.Preview.NAMES[pick.size]
 	local style = pick.style or L.Style()
 	local sub
 	if L.IsActive() then
-		sub = L.Size() == pick.size and L.Style() == style and "its layout is rewritten so every piece fits"
-			or "its layout is rewritten at this size, chat text included"
+		sub = L.Size() == pick.size and L.Style() == style and "The layout is rewritten so everything fits."
+			or "The layout is rewritten at this size, chat text too."
 	elseif ns.char.furnished or Grow(pick) then
-		sub = "as a new Edit Mode layout; your own layout is kept"
+		sub = "Saved as a new Edit Mode layout. Yours is kept."
 	else
-		sub = "as a new Edit Mode layout; turns on " .. MADE_OF
+		sub = "Saved as a new Edit Mode layout. Turns on " .. MADE_OF .. "."
 	end
-	if Grow(pick) then sub = sub .. "; bars grow with you" end
-	if pick.drawer then sub = sub .. "; the menu in a drawer" end
-	if pick.bags == "screen" then sub = sub .. "; bag buttons with the menu" end
+	if Grow(pick) then sub = sub .. " Bars grow as you level." end
+	if pick.drawer then sub = sub .. " The menu goes in a drawer." end
+	if pick.bags == "screen" then sub = sub .. " Bag buttons sit with the menu." end
 	local away = {}
 	for _, side in ipairs({ "left", "right" }) do
 		if pick.sides and pick.sides[side] == false then away[#away + 1] = side end
 	end
-	if #away == 2 then sub = sub .. "; both side bars tucked away"
-	elseif #away == 1 then sub = sub .. "; the " .. away[1] .. " side bar tucked away" end
+	if #away == 2 then sub = sub .. " Both side bars are tucked away."
+	elseif #away == 1 then sub = sub .. " The " .. away[1] .. " side bar is tucked away." end
 	local named = ns.Preview.STYLE_NAMED[style]:gsub("^%l", string.upper)
 	return { { text = named .. " is set up at " .. name, sub = sub } }
 end
@@ -87,10 +87,10 @@ function O.BandWords(pick)
 	local title = P.STYLES[pick.style or L.Style()] .. ", " .. P.NAMES[pick.size]:lower()
 	local ok, why = L.CanSetUp()
 	if not ok then return title, L.Words(why), true end
-	if pick.custom == "own" then return title, "This takes over from your layout. Yours stays in Edit Mode's list.", true end
+	if pick.custom == "own" then return title, "This replaces your layout. Yours stays in Edit Mode's list.", true end
 	if pick.custom then return title, "You'll lose the changes you made to your layout. Keep mine to hold on to them.", true end
 	if L.IsActive() then return title, "Your bars, chat and meter are laid out again with what you pick.", false end
-	return title, "Added as a new Edit Mode layout. Your own layout is kept.", false
+	return title, "Added as a new Edit Mode layout. You keep your own layout.", false
 end
 
 -- The page's measures. BAND: the band's height; RING, GLYPH: the dial at its left and the glyph in it; EDGE: its
@@ -119,7 +119,7 @@ local function MenuWords(drawer)
 end
 local function BagWords(keeper, where, drawer)
 	if where == "screen" then
-		return (drawer and "The bag bar tucks into the drawer with the menu." or "The bag bar stands under the menu.")
+		return (drawer and "The bag bar tucks into the drawer with the menu." or "The bag bar sits under the menu.")
 			.. " Click a bag to open them all."
 	end
 	local key = keeper.BagsKey and keeper:BagsKey()
@@ -450,16 +450,16 @@ function O.Build(parent, width, plan)
 		if not pick.on then
 			barsSection.words:SetText("Your bars stay as they are.")
 		elseif keyed then
-			barsSection.words:SetText("Your keys stand on every bar, so they're all there from the start, the flyout with them.")
+			barsSection.words:SetText("Your keys use every bar, so they're all there from the start, flyout included.")
 		elseif grow and step == #L.STEPS then
 			barsSection.words:SetText(("You know %d abilities or already use every bar, so they're all there from the start."):format(L.Abilities()))
 		elseif grow then
 			local have = L.STEPS[step]
 			local sideBars = have.sides > 1 and "both side bars" or "a side bar for food and potions"
-			barsSection.words:SetText(("%s and %s to start. You're offered more as you learn abilities. You know %d."):format(
+			barsSection.words:SetText(("%s and %s to start. You'll be offered more as you learn abilities. You know %d."):format(
 				ROWS[have.rows], sideBars, L.Abilities()))
 		else
-			barsSection.words:SetText("Three rows and both side bars from the start, as the game has them.")
+			barsSection.words:SetText("Three rows and both side bars from the start, like the default UI.")
 		end
 
 		-- The side bars: the ones the layout has, as picked or pointed at. A layout that shows its bars as you point

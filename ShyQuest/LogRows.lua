@@ -1,25 +1,27 @@
 -- The map's quest log (QuestScrollFrame), tied to the route and the map beside it:
 --
---   the order          each zone's quests in the order the route takes them, where the game lists them
---                      by level and offers no other order.
---   a quest's mark     where the game stands its marker button, which it only does while the map's
---                      "Show Quest Objectives" is on: the quest's mark as the card and the map have it.
---                      The number of its place on the route where it has one (Pins.lua, ns.RoutePlaces),
---                      else a "?" to hand in or the emblem of what it asks for next; lit while it leads.
---   an objective       the emblem of its kind where the line's dash was.
---   under the mouse    a row, its mark or one objective lights that ground on the open map, as a pin does,
---                      and the row keeps its own light wherever on it the mouse is.
---   a click            on a mark or an objective keeps that light, with the note at the top of the map,
---                      and turns the map to where it is; a second click lets go. A right click on a mark
---                      heads there first, as a click on the card's row does. A click on the row opens the
---                      quest's page as ever, and the quest stays lit for as long as the page is open.
+--   the order          each zone's quests in route order. The game lists them by level and offers
+--                      no other order.
+--   a quest's mark     sits where the game puts its marker button, which it only does while the
+--                      map's "Show Quest Objectives" is on. It is the quest's mark as on the card
+--                      and the map: the number of its place on the route where it has one (Pins.lua,
+--                      ns.RoutePlaces), else a "?" to turn in or the emblem of what it asks for next.
+--                      Lit while it leads.
+--   an objective       the emblem of its kind, where the line's dash was.
+--   under the mouse    a row, its mark or one objective lights that ground on the open map, like a
+--                      pin does. The row keeps its own light wherever the mouse is on it.
+--   a click            on a mark or an objective keeps that light, with the note at the top of the
+--                      map, and turns the map to where it is. A second click lets go. A right click
+--                      on a mark heads there first, like a click on the card's row. A click on the
+--                      row opens the quest's page as usual, and the quest stays lit while the page
+--                      is open.
 --
--- No field is written on a Blizzard frame or table: what is drawn is our own frames on theirs, kept in
--- weak tables, and every hook is a post-hook. What is touched of the game's: an objective line's dash
--- (its alpha) and words (their color while the mouse is on them), a row's own light (shown and hidden),
--- and, for the order, a row's one anchor (see "The order").
+-- No field is written on a Blizzard frame or table. What is drawn is our own frames on theirs, kept
+-- in weak tables, and every hook is a post-hook. What is touched of the game's: an objective line's
+-- dash (its alpha) and words (their color while the mouse is on them), a row's own light (shown and
+-- hidden), and, for the order, a row's one anchor (see "The order").
 --
--- The game shows no Lua errors, so everything the game calls here runs under Safe: a failure is said
+-- The game shows no Lua errors, so everything the game calls here runs under Safe. A failure is said
 -- once in chat and kept for the report.
 
 local ADDON, ns = ...
@@ -59,7 +61,7 @@ local function Safe(fn)
 		turning = nil
 		if failed ~= err then
 			failed = err
-			T:Print("the quest log's marks hit an error. |cff888888/shyquest rows|r has the details.")
+			T:Print("the quest log's marks hit an error. |cff888888/shy quest rows|r has the details.")
 		end
 	end
 end
@@ -669,7 +671,7 @@ local function Switch(root, key, text, tip)
 end
 
 function T:MapMenu(root)
-	Switch(root, "mapPins", "Quest pins", "Quest givers, turn-ins and the numbered places of your route.")
+	Switch(root, "mapPins", "Quest pins", "Quest givers, turn-ins and your route's numbered stops.")
 	Switch(root, "goals", "Quest objectives", "A mark on each unfinished objective. Point at one to see where to look.")
 	if ns.KEPT then
 		local services = root:CreateButton("Town services")
@@ -684,8 +686,8 @@ function T:MapMenu(root)
 end
 
 function T:LogMenu(root)
-	Switch(root, "logMarks", "Marks and map lights", "Marks each quest and objective, and lights up the map where the one under your mouse is.")
-	Switch(root, "logSort", "Quests in route order", "Each zone's quests in the order your route takes them, instead of by level.")
+	Switch(root, "logMarks", "Marks and map lights", "Marks each quest and objective. Hover one to light it up on the map.")
+	Switch(root, "logSort", "Quests in route order", "Lists each zone's quests in the order you'll do them, not by level.")
 end
 
 function T:QuestMenu(root, id)

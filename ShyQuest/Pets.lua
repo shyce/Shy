@@ -1,15 +1,18 @@
--- The class's pet as route errands, as talents are (Spec.lua): one module, one sign (a paw print, fawn).
---   Hunter: the pet trainer while it has ranks for the levels gained since a visit (a trainer window at a
---     "Pet Trainer", read and kept with the character), and Beast Training while the pet can learn
---     something with its training points (the trainer window of type Pet, titled with the pet's name, read
---     per pet; a click on its row casts Beast Training through a secure key, Spec.KeyOver). Where that
---     window was seen at a pet trainer instead, the trainer is the stop for it.
---   Warlock: the demon trainer (an NPC the data titles "Demon Trainer", no trainer in the town's lists; its
---     vendor window sells grimoires) while grimoires wait there for levels gained since a visit.
---   The class's pet quests: a hunter's taming (hunter-only quests with a creature to count) and a warlock's
---     bindings (warlock-only quests up to BOUND with a creature to count: the demon bound in the circle),
---     each with the quests leading to it. The first one the character can take is a stop at whoever gives
---     it; one in the log is the route's own. A taming quest's stop says the beast is tamed, not killed.
+-- The class's pet as route errands, like talents (Spec.lua): one module, one sign (a paw print, fawn).
+--   Hunter: the pet trainer is a stop while it has ranks for the levels gained since the last visit
+--     (read from a trainer window at a "Pet Trainer" and saved with the character). Beast Training
+--     is a row while the pet can learn something with its training points (read per pet from the
+--     trainer window of type Pet, titled with the pet's name). A click on that row casts Beast
+--     Training through a secure key (Spec.KeyOver). If that window was seen at a pet trainer
+--     instead, the trainer is the stop for it.
+--   Warlock: the demon trainer is a stop while grimoires wait there for levels gained since the
+--     last visit. It is an NPC the data titles "Demon Trainer". It is not a trainer in the town's
+--     lists, and its vendor window sells grimoires.
+--   The class's pet quests: a hunter's taming (hunter-only quests with a creature to count) and a
+--     warlock's bindings (warlock-only quests up to BOUND with a creature to count: the demon bound
+--     in the circle), each with the quests leading to it. The first one the character can take is
+--     a stop at whoever gives it. One in the log is the route's own. A taming quest's stop says the
+--     beast is tamed, not killed.
 -- Nothing is bought, taught or tamed for you.
 
 local ADDON, ns = ...
@@ -242,7 +245,7 @@ local function Skipped()
 end
 
 local function Skip(root)
-	root:CreateButton("Not now: ask again next level", function()
+	root:CreateButton("Ask me next level", function()
 		Mine().skip = UnitLevel("player")
 		stale = true
 		ns.Refresh()
@@ -251,6 +254,7 @@ end
 
 -- The pet's trainer as a route errand (R.AddErrand), or nil: the pet trainer, or the demon trainer.
 local function Trainer(lead)
+	local weighs = ns.Weighed("pettrainer")
 	if not T.db.pets.on or Skipped() then return nil end
 	local now = Pets.Now()
 	if not now then return nil end
@@ -259,7 +263,8 @@ local function Trainer(lead)
 	local due, pet = now.trainer, now.pet
 	-- Beast Training's window seen at the trainer: the pet's skills are learned there too.
 	local there = pet and pet.at and not Training()
-	if due and GetMoney() < due.least then due = nil end
+	if due and due.least > 0 then weighs[1] = due.least end
+	if due and Shy.Money() < due.least then due = nil end
 	if not due and not there and now.visited then return nil end
 	local at = ns.Train and ns.Train.Nearest and ns.Train.Nearest(PET_TRAINER, not hunter and DemonTrainers() or nil)
 	if not at then return nil end
@@ -268,7 +273,7 @@ local function Trainer(lead)
 	local count = (due and #due.list or 0) + (there and #pet.list or 0)
 	local word = hunter and "skill" or "grimoire"
 	local lines = { at.npc.name }
-	if due and due.cost > 0 then lines[2] = ("%s of your %s"):format(Coins(due.cost), Coins(GetMoney())) end
+	if due and due.cost > 0 then lines[2] = "Costs " .. Coins(due.cost) end
 	return {
 		title = count > 0 and ("%s: %d new %s%s"):format(hunter and "Pet trainer" or "Demon trainer", count, word, count == 1 and "" or "s")
 			or (hunter and "Pet trainer" or "Demon trainer"),
@@ -386,7 +391,7 @@ local function PetQuests(class)
 	return quests
 end
 
--- What the rules last went by: [spell] = known. A change asks again what is on offer (SPELLS_CHANGED below).
+-- What the rules last went by: [spell] = known. A change asks again what is on offer (SHY_SPELLS below).
 local knew = {}
 local function Knows(spells)
 	local any = nil
@@ -493,19 +498,19 @@ end
 -- Events
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "PLAYER_MONEY", "SPELLS_CHANGED", "TRAINER_SHOW",
+for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "TRAINER_SHOW",
 	"TRAINER_UPDATE", "MERCHANT_SHOW", "UNIT_PET_TRAINING_POINTS", "QUEST_TURNED_IN", "QUEST_ACCEPTED" }) do
 	events:RegisterEvent(event)
 end
 events:RegisterUnitEvent("UNIT_PET", "player")
 events:RegisterUnitEvent("UNIT_LEVEL", "pet")
-events:SetScript("OnEvent", function(_, event)
+local function Seen(_, event)
 	if not ns.char or not Class() then return end
 	if event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
 		ReadTrainers()
 	elseif event == "MERCHANT_SHOW" then
 		ReadDemons()
-	elseif event == "SPELLS_CHANGED" and Relearned() then
+	elseif event == "SHY_SPELLS" and Relearned() then
 		-- (A lesson learned, Tame Beast after the last taming: what is on offer is asked again.)
 		wipe(knew)
 		ns.RefreshOffers()
@@ -513,7 +518,10 @@ events:SetScript("OnEvent", function(_, event)
 	stale = true
 	-- (What a trainer or a vendor lists is the pet errand's alone: the errands are fitted again, not the route.)
 	ns.RefreshErrands()
-end)
+end
+events:SetScript("OnEvent", Seen)
+-- The spellbook, told by ShyCore when it changes. (Gold: ns.Weighed in Trainer.)
+Shy:On("SHY_SPELLS", function() Seen(nil, "SHY_SPELLS") end)
 
 ns.cardNotes = ns.cardNotes or {}
 table.insert(ns.cardNotes, Note)

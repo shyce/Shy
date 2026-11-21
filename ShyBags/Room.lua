@@ -9,7 +9,7 @@
 -- special bag (dropping it frees no ordinary slot).
 -- The price label is the "top" channel of Marks.lua. It shows on every stack with a price while the bags are sorted
 -- by price (Order.lua), otherwise on the cheapest one once the bags are nearly full. While making room it stays off
--- the items: the few cheapest are the slots left lit, and the wing beside them lists their prices.
+-- the items: the wing beside them lists what can go, and the one picked there is the slot left lit.
 --   Room.Free()               free, total ordinary slots
 --   Room.List()               everything that can go, cheapest first
 --   Room.Lit(bag, slot)       the entry while that slot shows its price
@@ -479,7 +479,7 @@ function Room.Told()
 	end
 	local vendor = MerchantFrame ~= nil and MerchantFrame:IsShown()
 	local why = state and state.why or "Cheapest items you could drop"
-	local how = vendor and "Right-click a lit slot to sell it." or "Drop destroys the cheapest one."
+	local how = vendor and "Pick one to sell." or "Pick one to drop."
 	return rows, why, how, vendor, lit
 end
 
@@ -524,7 +524,7 @@ end
 
 ns.Marks.Register({
 	id = "worth", channel = "top", title = "Cheapest to drop",
-	desc = "Shows the vendor price on the cheapest item you could drop or sell once your bags are nearly full, and on everything while your bags are sorted by price.",
+	desc = "With your bags nearly full, the cheapest thing to drop shows its vendor price. Sorted by price, everything does.",
 	test = function(item)
 		if not item.live or state then return nil end
 		return Room.Lit(item.bag, item.slot)
@@ -574,7 +574,7 @@ end
 
 -- Events
 
--- For /shybags check: the free-slot count against a manual count, and hasNoValue against the sell price.
+-- For /shy bags check: the free-slot count against a manual count, and hasNoValue against the sell price.
 function Room.Check()
 	local byHand, special = 0, 0
 	local priced, none, odd = 0, 0, 0
@@ -649,6 +649,6 @@ function Room.Init()
 	Recount()
 end
 
-ns.Command("room", "toggle lighting the cheapest items you could drop or sell", function()
+T:Command("room", "light the cheapest things you could drop or sell, or stop", function()
 	Room.Toggle()
 end)

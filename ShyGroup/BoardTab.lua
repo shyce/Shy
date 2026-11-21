@@ -219,7 +219,7 @@ local function UpdateRow(row, post)
 		row.state:Set(nil)
 	end
 	row.invite:SetShown(not ignored and not group and Run.CanInvite() and not inGroup)
-	row.invite:SetOn(not (p and p.status == "invited"), "Invited; waiting on them.")
+	row.invite:SetOn(not (p and p.status == "invited"), "Invited. Waiting on them.")
 	if ignored then row.chip:Set("Ignored", C.bad) end
 	row:SetAlpha(ignored and 0.5 or 1)
 end
@@ -248,7 +248,7 @@ function Bt.Create(page)
 	W.Tip(refresh, "Refresh", function()
 		local finder = Search.finder
 		local when = finder.when and finder.kind == ViewKind() and ("Last asked " .. W.When(finder.when) .. ". ") or ""
-		return when .. "Asks the Group Finder again for " .. D.KindName(ViewKind()):lower() .. ". Listings update on their own after that; chat posts show up as people post them."
+		return when .. "Asks the Group Finder again for " .. D.KindName(ViewKind()):lower() .. ". Listings update on their own after that. Chat posts show up as people post them."
 	end)
 
 	local find = UI.Input(page, nil, function() return search end, function(v)
@@ -403,7 +403,7 @@ function Bt.Create(page)
 		local parts = {}
 		if filtered > 0 then parts[#parts + 1] = W.Plural(filtered, "post") .. " hidden by your filters" end
 		if foreign > 0 then
-			parts[#parts + 1] = foreign .. " in a language you can't read (shown with \"Only posts I can read\" off in the options)"
+			parts[#parts + 1] = foreign .. " in a language you can't read (shown with \"Posts you can read\" off in the settings)"
 		end
 		return "Nothing matches.\n" .. table.concat(parts, "\n")
 	end

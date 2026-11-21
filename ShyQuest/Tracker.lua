@@ -47,7 +47,7 @@ end
 -- The next quest's marker: Look.lua paints the leading quest's marker in the focus color.
 
 local function NextQuest()
-	local stop = T.db.marker and R.stops[1]
+	local stop = R.stops[1]
 	-- Flights and errands never lead.
 	local at = 1
 	while stop and (stop.kind == "fly" or stop.kind == "errand") do
@@ -441,21 +441,6 @@ local function SetupParking()
 	hooksecurefunc(QuestObjectiveTracker, "AddAutoQuestPopUp", function() ns.Refresh() end)
 	hooksecurefunc(QuestObjectiveTracker, "RemoveAutoQuestPopUp", function() ns.Refresh() end)
 	Park()
-end
-
--- Quest level and difficulty color in titles (CVars with no default option)
-
-ns.TITLE_SETTINGS = { level = "showQuestLevel", color = "showQuestDifficultyColor" }
-
-function ns.GetTitleSetting(key)
-	return C_CVar.GetCVarBool(ns.TITLE_SETTINGS[key]) or false
-end
-
-function ns.SetTitleSetting(key, on)
-	C_CVar.SetCVar(ns.TITLE_SETTINGS[key], on and "1" or "0")
-	-- SortQuestWatches makes the tracker redraw its titles; it sorts by distance, so refresh the route order.
-	C_QuestLog.SortQuestWatches()
-	ns.Refresh()
 end
 
 function ns.ApplyTracker()

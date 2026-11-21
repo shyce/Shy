@@ -1,4 +1,4 @@
--- Auctions: three figures (what you have on the house, how many are undercut, what sold today), then your listings: each
+-- Auctions: three figures (what you have on the auction house, how many are undercut, what sold today), then your listings: each
 -- price and whether it is the cheapest or undercut (by what your last scan or search saw), time left as a bar, Cancel.
 -- An auction can't be reposted in place: one cancelled (its deposit lost) or run out comes back by mail, and is posted
 -- again from Sell once you have it, so an undercut row says which to do. Sold ones say the gold is in your mail.
@@ -21,7 +21,7 @@ local function Read()
 	for _, a in ipairs(C_AuctionHouse.GetOwnedAuctions() or {}) do
 		local item = a.itemKey and a.itemKey.itemID
 		if item and not issecretvalue(item) and a.buyoutAmount and not issecretvalue(a.buyoutAmount) then
-			-- The house gives a listing's price each; a sale's, the whole of it.
+			-- The auction house gives a listing's price each; a sale's, the whole of it.
 			local quantity = math.max(1, a.quantity or 1)
 			local sold = a.status == Enum.AuctionStatus.Sold
 			local unit = sold and math.floor(a.buyoutAmount / quantity + 0.5) or a.buyoutAmount
@@ -57,7 +57,7 @@ local function Build(frame)
 	page = frame
 	figures = {}
 	for i = 1, 3 do figures[i] = Figure(page) end
-	figures[1].word:SetText("ON THE HOUSE")
+	figures[1].word:SetText("LISTED")
 	figures[2].word:SetText("UNDERCUT")
 	figures[3].word:SetText("SOLD")
 	scroll = UI.ScrollArea(page, 600, 300, { quiet = true, smooth = true })

@@ -12,7 +12,8 @@
 -- The game says none of this but "quest item", so the rest comes from other addons' tests, asked only about
 -- this character's items: T:Needed's answer "now" or "later" (anything else true is "now"; a second answer,
 -- a number, is how soon its quest comes, for the sort by type), T:Leftover's yes about a quest item.
---   Marks.Register({ id, channel, after, title, desc, default, test, make, show })
+--   Marks.Register({ id, channel, after, title, desc, default, with, test, make, show })
+--       title, desc: its switch in the settings. with: another mark's id, whose switch it follows instead
 --       make(tile) creates custom art once per slot; show(mark, kind) shows it, or hides it when kind is nil
 --   Marks.For(item)        channel -> { id, kind, def } for the enabled marks that apply
 
@@ -77,17 +78,29 @@ function Marks.Register(def)
 		end
 	end
 	table.insert(list, at, def)
+	-- One that comes after the settings were told (another addon's, at login) joins them.
+	if ns.TellMark then ns.TellMark(def) end
 end
 
+-- A mark with `with` has no switch of its own: it is on while that mark is.
 function Marks.IsOn(def)
+	def = def.with and byId[def.with] or def
 	local set = T.db.marks[def.id]
 	if set == nil then return def.default ~= false end
 	return set
 end
 
+-- The same by its id, for what wears a mark outside a slot (a door of the window).
+function Marks.On(id)
+	local def = byId[id]
+	return def ~= nil and Marks.IsOn(def)
+end
+
 function Marks.SetOn(id, on)
-	T.db.marks[id] = on and true or false
+	local def = byId[id]
+	T.db.marks[def and def.with or id] = on and true or false
 	Marks.Refresh()
+	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
 function Marks.List() return list end
@@ -169,7 +182,7 @@ end
 
 Marks.Register({
 	id = "quality", channel = "border", title = "Quality",
-	desc = "Colors the slot border by item quality. Grey items get a dull border, white ones the plain one.",
+	desc = "A slot's border takes the color of the item's quality. Greys get a dull one.",
 	test = function(item)
 		local quality = item.quality
 		if quality and quality ~= Enum.ItemQuality.Common then return quality end
@@ -178,47 +191,45 @@ Marks.Register({
 
 Marks.Register({
 	id = "new", channel = "glow", title = "New items",
-	desc = "Highlights items picked up since you last opened your bags, until you mouse over them.",
+	desc = "What you picked up since your bags were last open glows until you point at it.",
 	test = function(item)
 		return item.live and Marks.IsNew(item.bag, item.slot) or false
 	end,
 })
 
+-- The quest's mark in its states. One switch for them all ("quest"): a state switched off alone would
+-- leave the whole mark in its place.
 -- Registered before "starter" and "quest", which it replaces on a leftover.
 Marks.Register({
-	id = "over", channel = "tr", title = "Quest leftovers",
-	desc = "A broken quest mark on quest items no quest needs any more. They are safe to drop.",
+	id = "over", channel = "tr", with = "quest",
 	test = function(item) return item.over end,
 })
 
 Marks.Register({
-	id = "starter", channel = "tr", title = "Starts a quest",
-	desc = "A corner mark on items that start a quest you don't have yet.",
+	id = "starter", channel = "tr", with = "quest",
 	test = function(item) return item.starter end,
 })
 
--- Before "quest" and "needed", which it stands in for on what can wait: switched off, those show as needed now.
+-- Before "quest" and "needed", which it stands in for on what can wait.
 Marks.Register({
-	id = "ahead", channel = "tr", title = "Needed later",
-	desc = "The quest mark in outline on things no quest needs for a while. They can wait in your bank.",
+	id = "ahead", channel = "tr", with = "quest",
 	test = function(item) return item.ahead end,
 })
 
 Marks.Register({
-	id = "quest", channel = "tr", title = "Quest items",
-	desc = "The quest mark on quest items.",
+	id = "quest", channel = "tr", title = "Quest marks",
+	desc = "Whatever a quest needs, or starts one, wears the quest mark. It's in outline on what can wait and broken on what you can drop.",
 	test = function(item) return item.quest end,
 })
 
 Marks.Register({
-	id = "needed", channel = "tr", title = "Needed for a quest",
-	desc = "The quest mark on things a quest needs that aren't quest items, like meat or cloth.",
+	id = "needed", channel = "tr", with = "quest",
 	test = function(item) return item.needed end,
 })
 
 Marks.Register({
 	id = "junk", channel = "bl", title = "Junk",
-	desc = "A coin on grey items and quest leftovers that a vendor will buy.",
+	desc = "Greys and quest leftovers a vendor will buy get a coin.",
 	test = function(item)
 		if item.over then return item.noValue == false end
 		return item.quality == Enum.ItemQuality.Poor and not item.noValue
@@ -227,7 +238,7 @@ Marks.Register({
 
 Marks.Register({
 	id = "boe", channel = "bl", title = "Bind on equip",
-	desc = "A tag on bind-on-equip gear you can still trade or sell.",
+	desc = "Gear that binds when equipped gets a tag while you can still trade it.",
 	test = function(item) return item.bind == Enum.ItemBind.OnEquip and not item.bound end,
 })
 

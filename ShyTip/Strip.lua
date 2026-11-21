@@ -104,7 +104,7 @@ local function Things()
 	for _, index in ipairs(MARKS) do
 		-- Right button: the game hands you the world marker to place with a click on the ground.
 		list[#list + 1] = { icon = MARK_ART .. index, tip = _G["RAID_TARGET_" .. index] or ("Mark " .. index),
-			text = "Marks your target; click again to remove it. Right-click to place it on the ground instead (in a group).",
+			text = "Marks your target. Click again to remove it. Right-click to place it on the ground instead (in a group).",
 			secure = { type = "raidtarget", action = "toggle", marker = index, unit = "target",
 				type2 = "worldmarker", action2 = "toggle", marker2 = WORLD[index] } }
 	end
@@ -320,7 +320,7 @@ function Strip.Start()
 		point = { "BOTTOM", "BOTTOM", 0, 300 },
 		-- The box itself only shows in layout mode; in play the secure holder is here.
 		shown = function() return false end,
-		-- Off until you turn it on (ShyTip's options, or this piece's layout panel).
+		-- Off until you turn it on (in the settings, or on this piece's layout panel).
 		switch = {
 			get = function() return ns.T.db.strip == true end,
 			set = function(on)

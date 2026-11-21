@@ -18,21 +18,19 @@ local T = Shy:NewAddon(ADDON, {
 	keep = { air = true, escorts = true, survey = true, offers = true, dev = true, floors = true, drops = true },
 	defaults = {
 		floors = {},                   -- which floor you said a place is on, by world: north, west, level (World.lua, W.Learn)
-		dev = false,                   -- gather quest data: the survey and givers' lists (/shyquest dev)
+		dev = false,                   -- gather quest data: the survey and givers' lists (/shy quest dev)
 		survey = { build = "", at = 0, answered = 0, missing = {}, done = false },   -- the quest survey's progress (Survey.lua)
 		offers = {},                   -- what each giver offered or didn't, and what was done then (Log.lua, L.Heard)
 		card = {
 			shown = true,
 			rows = 4,                  -- steps listed
 			hideInCombat = false,
-			flying = true,             -- flight countdown (GuideTimers.lua)
 		},
 		pickups = true,                -- available quests count as steps
 		zones = "short",               -- suggest zones: short (when steps run low) | always | never
 		lowLevel = false,              -- include outgrown quests
 		repeatable = false,            -- include repeatable quests
 		tips = true,                   -- quest details on hovering a tracked quest
-		marker = true,                 -- glow behind the next quest's marker in the tracker
 		grayZone = false,              -- zone mode: also tracks and lists gray (too low) quests
 		track = "zone",                -- the tracker's watch list: zone (current zone, route order) | order (tracked quests, route order) | off
 		look = {                       -- the restyled tracker (Look.lua)
@@ -78,7 +76,6 @@ local T = Shy:NewAddon(ADDON, {
 			buttons = true,            -- use and target buttons for the current step (GuideButtons.lua)
 			marks = true,              -- raid marker on whoever those buttons target, when solo
 			scan = true,               -- alert when a creature a step waits for appears
-			timers = true,             -- the guide's countdowns on the card (GuideTimers.lua)
 			gossip = false,            -- pick the gossip option a step needs (GuideTalk.lua)
 			takeFlights = true,        -- take the flight a step names
 			setHome = true,            -- set the hearthstone at a step's innkeeper
@@ -272,9 +269,19 @@ function ns.StandingText()
 	return table.concat(parts, ",")
 end
 
--- Rebuild on the next pulse. `log`: the quest log changed too.
-function ns.Refresh(log)
-	if not (stale or staleWhy) then staleWhy = (debugstack(2, 1, 0) or ""):match("([%w_]+%.lua\"?%]?:%d+)") or "?" end
+-- Who asked for a rebuild without saying why: the file and line that called. The stack is read only while the
+-- monitor looks closely (Shy.ClockDetail). It costs too much for every ask.
+local function Asker()
+	if not Shy.ClockDetail() then return "?" end
+	local line = debugstack(3, 1, 0)
+	if issecretvalue(line) or not line then return "?" end
+	local file, at = line:match("([%w_]+%.lua)[\"%]]*:(%d+)")
+	return file and (file .. ":" .. at) or "?"
+end
+
+-- Rebuild on the next pulse. `log`: the quest log changed too. `why`: what changed, for the timing.
+function ns.Refresh(log, why)
+	if not (stale or staleWhy) then staleWhy = type(why) == "string" and why or Asker() end
 	stale, guideStale = true, true
 	if log then staleLog = true end
 	-- (Something changed besides a walk: what leads is chosen afresh.)
@@ -284,8 +291,8 @@ function ns.Refresh(log)
 end
 
 -- Rebuild on the next pulse for a change only the route's errands read (an aura, a fight): the guide stands.
-function ns.RefreshRoute()
-	if not (stale or staleWhy) then staleWhy = (debugstack(2, 1, 0) or ""):match("([%w_]+%.lua\"?%]?:%d+)") or "?" end
+function ns.RefreshRoute(why)
+	if not (stale or staleWhy) then staleWhy = type(why) == "string" and why or Asker() end
 	stale = true
 end
 
@@ -294,6 +301,25 @@ end
 local errandsStale = false
 function ns.RefreshErrands()
 	errandsStale = true
+end
+
+-- Gold, as the errands weigh it (Shy.MoneyEdges). Each errand lists the prices it held your gold against, read
+-- with Shy.Money(). A coin that crosses none changes nothing they show, and nothing runs for it.
+--   ns.Weighed(owner, crossed) -> the owner's list, emptied, to put the prices in (copper: enough is >= it).
+--                                 crossed(): a cache let go, before the errands are fitted again
+local refits = {}   -- owner -> what runs when its gold is crossed (made once an owner)
+function ns.Weighed(owner, crossed)
+	local entry = refits[owner]
+	if not entry then
+		entry = {}
+		entry.run = function()
+			if entry.crossed then entry.crossed() end
+			ns.RefreshErrands()
+		end
+		refits[owner] = entry
+	end
+	entry.crossed = crossed
+	return Shy.MoneyEdges("ShyQuest " .. owner, entry.run)
 end
 
 -- QUEST_LOG_UPDATE arrived. The log is read on the next pulse (ns.Pulse), not in the event.
@@ -411,6 +437,7 @@ end
 local function Pulse()
 	local W, L, R = ns.World, ns.Log, ns.Route
 	local known = W.Update()
+	R.Moved(ns.Carried(), known and W.north or nil, known and W.west or nil)
 	local fighting = InCombatLockdown() and not UnitIsDeadOrGhost("player")
 	-- (Carried a long way in a fight, by a portal or the stone: not the same ground, the route is built.)
 	local carried = known and builtNorth and W.Between(W.north, W.west, builtNorth, builtWest) > FIGHT_YARDS
@@ -436,7 +463,6 @@ local function Pulse()
 		if not stale and matters then
 			builtFighting, fightBuilt = fighting, fighting
 			errandsStale = false
-			Asked(fighting and "a fight began" or "a fight is over")
 			W.Budgeted(R.RefitErrands)
 			Tell(true)
 			if fighting then return end
@@ -596,10 +622,11 @@ function T:OnLoad()
 	-- guide.takeFlights and giver.auto replaced these keys, whose saved "off" was only the old default.
 	self.db.guide.flights = nil
 	self.db.giver.on = nil
+	-- Creatures' and objects' tooltips are one switch.
+	self.db.hover.objects = self.db.hover.units
 	-- The game's own quest markers stay off (the map's "Show Quest Objectives": its pins and areas on the
 	-- map, the buttons beside the quest log's rows and the tracker's quests): ours stand in those places.
 	Shy.Hold("questPOI", "0")
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -645,7 +672,7 @@ function T:OnLogin()
 			-- errands', and only the route is built again for them.)
 			if not ns.Log.BagsChanged() then
 				-- A vendor trash looted, a stack counted: the errands may come or go. The route's stops do not.
-				Asked("the bags changed")
+				-- (No reason is noted: one is for a rebuild, and this isn't one. Left, it would name the next.)
 				ns.RefreshErrands()
 				return
 			end
@@ -661,10 +688,7 @@ function T:OnLogin()
 			-- (A part of the zone the route reads nothing of: it stands. A walk builds it as anywhere.)
 			local route, errands = within.Changed()
 			if not route then
-				if errands then
-					Asked(event)
-					ns.RefreshErrands()
-				end
+				if errands then ns.RefreshErrands() end
 				return
 			end
 		elseif STANDING_EVENTS[event] then
@@ -1023,7 +1047,7 @@ Shy:On("SHY_GROUP_RUN", function(map)
 		if dungeon.map == map and (db.dungeons[dungeon.short] ~= true or ns.Snoozed(dungeon.short)) then
 			db.dungeons[dungeon.short] = true
 			ns.Unsnooze(dungeon.short)
-			T:Print(("added the quests for |cffffffff%s|r to your guide. Untick it in the options to remove them."):format(dungeon.name))
+			T:Print(("added the quests for |cffffffff%s|r to your guide. Switch it off in |cff888888/shy quest|r to drop them."):format(dungeon.name))
 			ns.Apply()
 		end
 	end
@@ -1162,139 +1186,109 @@ do
 	end)
 end
 
--- Slash command
+-- Commands: /shy quest <word>. The ones with no help line copy a report and aren't listed.
 
-SLASH_SHYQUEST1, SLASH_SHYQUEST2 = "/shyquest", "/sq"
-SlashCmdList.SHYQUEST = function(msg)
-	msg = strtrim(msg or ""):lower()
-	if msg == "" then
-		T:OpenOptions()
-	elseif msg == "next" then
-		local stop = ns.Route.stops[1]
-		if not stop then
-			T:Print("nothing to do nearby.")
-			return
-		end
-		local title, lines, where = ns.Route.Describe(stop)
-		local yards = stop.yards and (", " .. ns.World.Yards(stop.yards)) or ""
-		T:Print(("next: |cffffffff%s|r%s%s%s"):format(title, lines[1] and (", " .. lines[1]:lower()) or "", where and (" " .. where) or "", yards))
-	elseif msg == "guide" then
-		ns.ToggleGuideWindow()
-	elseif msg == "dungeon" or msg:sub(1, 8) == "dungeon " then
-		-- A dungeon's quests from the start (Run.lua). It may not be loaded: a file new to the TOC needs a
-		-- client restart.
-		if ns.Run then
-			ns.Run.Command(msg:sub(9))
-		else
-			T:Print("restart the game once to use this.")
-		end
-	elseif msg == "talk" then
-		-- A log of recent quest giver interactions (GuideTalk.lua).
-		if ns.ShowTalks then ns.ShowTalks() end
-	elseif msg == "areas" then
-		-- What the game knows of the log's quest areas (Ground.lua).
-		if ns.Ground and ns.Ground.Report then Shy.UI.ShowCopyBox("ShyQuest: quest areas", ns.Ground.Report()) end
-	elseif msg == "talents" then
-		-- What Spec.lua reads of the talents and found of the talent window.
-		if ns.Spec and ns.Spec.Report then Shy.UI.ShowCopyBox("ShyQuest: talents", ns.Spec.Report()) end
-	elseif msg == "legacy" then
-		-- What Legacy.lua reads of the account's Legacy points. A file new to the TOC needs a client restart.
-		if ns.Legacy then
-			Shy.UI.ShowCopyBox("ShyQuest: Legacy", ns.Legacy.Report())
-		else
-			T:Print("restart the game once to use this.")
-		end
-	elseif msg == "death" or msg == "death show" then
-		-- What Death.lua knows right now, or a look at its row and marks without dying. It may not be
-		-- loaded: a file new to the TOC needs a client restart.
-		if not ns.Death then
-			T:Print("restart the game once to use this.")
-		elseif msg == "death" then
-			Shy.UI.ShowCopyBox("ShyQuest: death", ns.Death.Report())
-		else
-			T:Print(ns.Death.Show())
-		end
-	elseif msg == "escort" then
-		-- What Escort.lua has timed, walked and heard. It may not be loaded: a file new to the TOC needs a
-		-- client restart.
-		if ns.Escort then
-			Shy.UI.ShowCopyBox("ShyQuest: escorts", ns.Escort.Report())
-		else
-			T:Print("restart the game once to use this.")
-		end
-	elseif msg == "bank" then
-		-- What Stash.lua knows of the quest items in the bags and the bank. It may not be loaded: a file new
-		-- to the TOC needs a client restart.
-		if ns.Stash then
-			Shy.UI.ShowCopyBox("ShyQuest: quest items and the bank", ns.Stash.Report())
-		else
-			T:Print("restart the game once to use this.")
-		end
-	elseif msg == "rows" then
-		-- What the map's quest log wears (LogRows.lua). It may not be loaded: a file new to the TOC needs
-		-- a client restart.
-		if ns.LogRows then
-			Shy.UI.ShowCopyBox("ShyQuest: quest log", ns.LogRows.Report())
-		else
-			T:Print("restart the game once to use this.")
-		end
-	elseif msg == "dev" then
-		-- Gathering quest data for the addon's own files: the server survey and givers' lists. Off for players.
-		T.db.dev = not T.db.dev
-		if not T.db.dev and ns.Survey and ns.Survey.Running() then ns.Survey.Stop() end
-		T:Print(T.db.dev and "gathering quest data: |cff888888/shyquest survey|r asks the server, and givers' lists are kept."
-			or "no longer gathering quest data.")
-	elseif msg == "survey" or msg:sub(1, 7) == "survey " then
-		-- Ask the server about every quest (Survey.lua). It may not be loaded: a file new to the TOC needs a
-		-- client restart.
-		if ns.Survey then
-			ns.Survey.Command(strtrim(msg:sub(7)))
-		else
-			T:Print("restart the game once to use this.")
-		end
-	elseif msg == "skip" then
-		local at, total = ns.Guide.Progress()
-		if at and ns.Guide.Skip() then
-			T:Print(("skipped step %d of %d. |cff888888/shyquest back|r undoes it."):format(at, total))
-		else
-			T:Print("no guide step to skip.")
-		end
-	elseif msg == "back" then
-		if ns.Guide.Back() then
-			local at, total = ns.Guide.Progress()
-			T:Print(("back on step %d of %d."):format(at, total))
-		else
-			T:Print("no earlier guide step to go back to.")
-		end
-	elseif msg == "where" then
-		local zones = ns.Zones.Best(3)
-		if #zones == 0 then
-			T:Print("no zone has enough quests for you right now.")
-			return
-		end
-		for _, zone in ipairs(zones) do
-			T:Print(("|cffffffff%s|r: %s%s"):format(zone.name, ns.Zones.Summary(zone),
-				zone.yards and (", " .. ns.World.Yards(zone.yards)) or ""))
-		end
-	elseif msg == "log" then
-		local L, G = ns.Log, ns.Guide
-		T:Print(("%d of %d quests in your log."):format(L.held or 0, L.most or 0))
-		local spare = L.Spare(G.current and G.Uses or nil)
-		if #spare == 0 then T:Print("nothing in it is an obvious one to drop.") end
-		for i = 1, math.min(5, #spare) do
-			T:Print(("could drop: |cffffffff%s|r (%s)"):format(spare[i].entry.title, spare[i].why))
-		end
-	elseif msg == "find" or msg:sub(1, 5) == "find " then
-		-- Find.lua may not be loaded: a file new to the TOC needs a client restart.
-		if ns.Find then
-			ns.Find.Toggle(msg ~= "find" or nil, strtrim(msg:sub(6)))
-		else
-			T:Print("restart the game once to use the finder.")
-		end
-	elseif msg == "card" then
-		T.db.card.shown = not T.db.card.shown
-		ns.Apply()
+T:Command("next", "your next step, said in chat", function()
+	local stop = ns.Route.stops[1]
+	if not stop then
+		T:Print("nothing to do nearby.")
+		return
+	end
+	local title, lines, where = ns.Route.Describe(stop)
+	local yards = stop.yards and (", " .. ns.World.Yards(stop.yards)) or ""
+	T:Print(("next: |cffffffff%s|r%s%s%s"):format(title, lines[1] and (", " .. lines[1]:lower()) or "", where and (" " .. where) or "", yards))
+end)
+
+T:Command("guide", "open or fold the whole guide", function() ns.ToggleGuideWindow() end)
+
+T:Command("skip", "skip your guide's current step", function()
+	local at, total = ns.Guide.Progress()
+	if at and ns.Guide.Skip() then
+		T:Print(("skipped step %d of %d. |cff888888/shy quest back|r undoes it."):format(at, total))
 	else
-		T:Print("/shyquest opens the options  |cff888888\194\183|r  guide: the whole guide  |cff888888\194\183|r  skip, back: move through guide steps  |cff888888\194\183|r  next: your next step  |cff888888\194\183|r  where: zones with quests for you  |cff888888\194\183|r  log: quests you could drop  |cff888888\194\183|r  card: show or hide the card  |cff888888\194\183|r  find <name>: search  |cff888888\194\183|r  talk: recent quest giver log  |cff888888\194\183|r  survey: ask the server about every quest")
+		T:Print("no guide step to skip.")
+	end
+end)
+
+T:Command("back", "go back a guide step", function()
+	if ns.Guide.Back() then
+		local at, total = ns.Guide.Progress()
+		T:Print(("back on step %d of %d."):format(at, total))
+	else
+		T:Print("no earlier guide step to go back to.")
+	end
+end)
+
+T:Command("where", "the zones with the most quests for you", function()
+	local zones = ns.Zones.Best(3)
+	if #zones == 0 then
+		T:Print("no zone has enough quests for you right now.")
+		return
+	end
+	for _, zone in ipairs(zones) do
+		T:Print(("|cffffffff%s|r: %s%s"):format(zone.name, ns.Zones.Summary(zone),
+			zone.yards and (", " .. ns.World.Yards(zone.yards)) or ""))
+	end
+end)
+
+T:Command("log", "quests you could drop to make room", function()
+	local L, G = ns.Log, ns.Guide
+	T:Print(("%d of %d quests in your log."):format(L.held or 0, L.most or 0))
+	local spare = L.Spare(G.current and G.Uses or nil)
+	if #spare == 0 then T:Print("nothing in it is an obvious one to drop.") end
+	for i = 1, math.min(5, #spare) do
+		T:Print(("could drop: |cffffffff%s|r (%s)"):format(spare[i].entry.title, spare[i].why))
+	end
+end)
+
+T:Command("find", "find a quest, creature, item or service: /shy quest find innkeeper", function(rest)
+	if ns.Find then ns.Find.Toggle(rest ~= "" or nil, rest) end
+end)
+
+T:Command("dungeon", "run a dungeon's quests: /shy quest dungeon deadmines, or stop", function(rest)
+	if ns.Run then ns.Run.Command(rest) end
+end)
+
+T:Command("window", "show or hide the quest window", function()
+	T.db.card.shown = not T.db.card.shown
+	ns.Apply()
+end)
+
+-- Gathering quest data for the addon's own files: the server survey and givers' lists. Off for players.
+T:Command("dev", nil, function()
+	T.db.dev = not T.db.dev
+	if not T.db.dev and ns.Survey and ns.Survey.Running() then ns.Survey.Stop() end
+	T:Print(T.db.dev and "gathering quest data: |cff888888/shy quest survey|r asks the server, and givers' lists are kept."
+		or "no longer gathering quest data.")
+end)
+
+T:Command("survey", nil, function(rest)
+	if ns.Survey then ns.Survey.Command(rest:lower()) end
+end)
+
+T:Command("talk", nil, function()
+	if ns.ShowTalks then ns.ShowTalks() end
+end)
+
+T:Command("death show", nil, function()
+	if ns.Death then T:Print(ns.Death.Show()) end
+end)
+
+do
+	-- word -> the report's title, and who writes it.
+	local REPORTS = {
+		areas = { "quest areas", function() return ns.Ground end },
+		talents = { "talents", function() return ns.Spec end },
+		legacy = { "Legacy", function() return ns.Legacy end },
+		death = { "death", function() return ns.Death end },
+		escort = { "escorts", function() return ns.Escort end },
+		bank = { "quest items and the bank", function() return ns.Stash end },
+		rows = { "quest log", function() return ns.LogRows end },
+	}
+	for word, report in pairs(REPORTS) do
+		T:Command(word, nil, function()
+			local from = report[2]()
+			if from and from.Report then Shy.UI.ShowCopyBox("ShyQuest: " .. report[1], from.Report()) end
+		end)
 	end
 end

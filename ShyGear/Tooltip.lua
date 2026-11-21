@@ -63,5 +63,5 @@ local function OnItem(tip, data)
 end
 
 function ns.SetupTooltip()
-	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, OnItem)
+	Shy.OnTip(Enum.TooltipDataType.Item, "is it better", OnItem)
 end

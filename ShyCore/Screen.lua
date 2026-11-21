@@ -160,7 +160,7 @@ end
 
 local WHY = {
 	combat = "You're in combat. Try again after combat.",
-	refused = "The game kept this to itself. Set it in the game's options, under Graphics.",
+	refused = "The game won't let addons change this. Set it in the game's options, under Graphics.",
 }
 
 -- The bus: one SHY_SCREEN a frame after the game's events (they come in twos, and frames take their
@@ -282,7 +282,7 @@ local function Strip(parent, width, state)
 	end, {
 		width = slideW,
 		format = function() return "" end,
-		desc = "Smaller fits more on screen; larger is easier to read. The game's options have the same setting.",
+		desc = "Smaller fits more on screen. Larger is easier to read. The game's options have the same setting.",
 		settle = function(v)
 			held = nil
 			if v == Wanted(state) then return end
@@ -324,7 +324,7 @@ local function Strip(parent, width, state)
 			words = size == 100 and "Normal: the size the game picks for your screen. Everything has room."
 				or "Everything has room at this size."
 		else
-			words = "At this size some pieces give way to fit. A smaller size gives them room."
+			words = "Some pieces move aside to fit at this size. Go smaller to give them room."
 		end
 		if lo >= 100 and size == 100 then words = words .. " The game can't go smaller on this screen." end
 		note:SetText(words)

@@ -5,7 +5,7 @@
 --
 -- The face: one frame that stands in the map window while it is open (Sides.lua: over everything under the
 -- window's header) and in a window of its own, the map window's size, while it is shut (a command, the run card
--- and the options open the journal there; its World half and its ways out open the map's window).
+-- and the settings open the journal there; its World half and its ways out open the map's window).
 --   the bar     as the map's, and its size: the side switch (World | Dungeons) leading it, the way down to where
 --               you are as crumbs (every dungeon, this one, the page), the search at its right end
 -- Under the bar everything is small and close, as what is laid over the map is (Shy.Maps.OVER there): as much as
@@ -39,7 +39,7 @@
 --                             bar's pieces beginning x in, what is under the bar at `scale`; told again when the
 --                             host is sized
 --   Journal.Row(key)          the list's line for a page (a boss's place, "trash", "quests"), while it shows
---   Journal.Toggle()          Journal.IsOpen()          Journal.Command(words)   /shymaps dungeons [name]
+--   Journal.Toggle()          Journal.IsOpen()          Journal.Command(words)   /shy dungeons [name]
 
 local ADDON, ns = ...
 local T = ns.T
@@ -88,9 +88,9 @@ local L = {
 local HEADER = UI.HEAD.window.line + UI.LINE
 local NONE = {}
 local STATE = { done = { "Handed in", "good" }, carried = { "In your log", "head" }, ahead = { "To pick up", "dim" } }
-local PAGES = { trash = { "The rest of the dungeon", "What only its other creatures drop.", short = "The rest" },
+local PAGES = { trash = { "The rest of the dungeon", "Drops from its other creatures only.", short = "The rest" },
 	quests = { "Quests" }, runs = { "Your runs", "How your runs here went.", short = "Your runs" },
-	sets = { "Sets", "The item sets with a piece that drops here.", short = "Sets" } }
+	sets = { "Sets", "Item sets with a piece that drops here.", short = "Sets" } }
 local Run = ns.DungeonRun
 
 local own = { cards = {}, captions = {}, results = {}, kicks = {}, notes = {}, quests = {}, pills = {}, floors = {},
@@ -1196,15 +1196,15 @@ local function BossPage(y, width, index)
 	if #spells > 0 then
 		y = Boss.Lay(own.body.content, under, width, spells) + 8
 	else
-		y = Note(under, width, boss.npc > 0 and "Nothing is known of what it does yet. It's noted as you fight it."
-			or "Nothing is known of this boss yet. It shows here once you've met it, and what it casts as you fight it.") + 6
+		y = Note(under, width, boss.npc > 0 and "No abilities known yet. You'll see them here after you fight it."
+			or "Nothing known about this boss yet. You'll see it here once you've met it, and its casts once you've fought it.") + 6
 	end
 	return LootSections(y, width, J.Loot(map, index), "No drops known yet. They show here once you've looted it.")
 end
 
 local function TrashPage(y, width)
 	local map = state.map
-	y = LootSections(y, width, J.Loot(map, "trash"), "Nothing is known of what drops anywhere in it.")
+	y = LootSections(y, width, J.Loot(map, "trash"), "No drops known anywhere in it yet.")
 	-- Its other creatures that players saw drop something, a list each; what "For me" left out of them is
 	-- said once, under the last.
 	local hidden = 0
@@ -1262,7 +1262,7 @@ local function RunsPage(y, width)
 				whole and (best == one.took and C.good or C.text) or C.dim)
 		end
 	elseif not run then
-		y = Note(y, width, "None yet. A run is kept from the moment you walk in.", C.dim)
+		y = Note(y, width, "None yet. A run is saved from the moment you walk in.", C.dim)
 	end
 	return y
 end
@@ -1327,7 +1327,7 @@ local function QuestsPage(y, width)
 		y = Kick(y + L.top, width, "On its quests", plan.phase and ("now: " .. plan.phase:lower()) or nil) + 2
 		y = Note(y, width, "Your card has every step, in order. The key below takes you back to your guide.", C.text) + 4
 	elseif left > 0 then
-		y = Note(y + L.top, width, "Get its quests puts every step on your card: what to do first, where to pick each one up, and where to hand it in.") + 4
+		y = Note(y + L.top, width, "Get its quests puts every step on your card, with what to do first, where to pick each one up and where to turn it in.") + 4
 	else
 		y = y + L.top
 	end
@@ -1414,7 +1414,7 @@ local function QuestsPage(y, width)
 	Section("carried", "In your log")
 	Section("ahead", "To pick up")
 	Section("done", "Handed in")
-	return Note(y + 6, width, "Rewards are as Classic had them until a quest is in your log; then they're the game's own.")
+	return Note(y + 6, width, "Rewards are from Classic until a quest is in your log. Then they're this game's.")
 end
 
 ---------------------------------------------------------------------------
@@ -1559,21 +1559,21 @@ end
 local function Sources(self)
 	local lines = UI.Lines()
 	lines:AddLine("Where this comes from")
-	lines:AddLine("Bosses and their order are the game's own.", C.text[1], C.text[2], C.text[3], true)
+	lines:AddLine("Bosses and their order come from the game.", C.text[1], C.text[2], C.text[3], true)
 	lines:AddLine(" ")
 	lines:AddLine("Drops in this game", C.head[1], C.head[2], C.head[3])
 	lines:AddLine("What players recorded here, with the kills they counted, and what you've looted yourself.", C.text[1], C.text[2], C.text[3], true)
 	lines:AddLine(J.CREDIT, C.dim[1], C.dim[2], C.dim[3], true)
 	lines:AddLine(" ")
 	lines:AddLine("Drops in Classic, and what bosses do", C.head[1], C.head[2], C.head[3])
-	lines:AddLine("As the Classic game had them. This game may differ.", C.text[1], C.text[2], C.text[3], true)
-	lines:AddLine("So with what a door asked of you, and where its rares stood.", C.text[1], C.text[2], C.text[3], true)
+	lines:AddLine("From Classic. This game may differ.", C.text[1], C.text[2], C.text[3], true)
+	lines:AddLine("Side entrances and rare spawns are from Classic too.", C.text[1], C.text[2], C.text[3], true)
 	lines:AddLine(" ")
 	lines:AddLine("The newest dungeons", C.head[1], C.head[2], C.head[3])
-	lines:AddLine("Where a boss stands and where you come in are learned as you play them.", C.text[1], C.text[2], C.text[3], true)
+	lines:AddLine("Boss positions and entrances are learned as you play them.", C.text[1], C.text[2], C.text[3], true)
 	-- (Another's work, shown under its credit: where the newest dungeons' bosses stand, and the way through.)
 	if ns.data.dungeonRoutesCredit then
-		lines:AddLine("Until then, placed by hand from guides and videos, with the way through. Rough places.", C.text[1], C.text[2], C.text[3], true)
+		lines:AddLine("Until then they're placed by hand from guides and videos, with the route through. They're rough.", C.text[1], C.text[2], C.text[3], true)
 		lines:AddLine(ns.data.dungeonRoutesCredit, C.dim[1], C.dim[2], C.dim[3], true)
 	end
 	UI.Tip(self, lines, { side = "TOP" })
@@ -2035,11 +2035,11 @@ function Journal.Yield()
 	return true
 end
 
--- /shymaps dungeons [name]: opens on a dungeon or a boss named in part; with no name, on every dungeon.
+-- /shy dungeons [name]: opens on a dungeon or a boss named in part. With no name it opens, or closes.
 function Journal.Command(words)
 	words = strtrim(words or "")
 	if words == "" then
-		if Journal.IsOpen() then Journal.Toggle(false) else Journal.Open(Here()) end
+		Journal.Toggle()
 		return
 	end
 	local found = J.Search(words)[1]
@@ -2050,7 +2050,7 @@ function Journal.Command(words)
 	end
 end
 
-if Shy.Command then Shy.Command("dungeons", "bosses and loot for every dungeon", function() Journal.Toggle() end) end
+if Shy.Command then Shy.Command("dungeons", "bosses and loot, on the dungeon or boss you name", Journal.Command) end
 
 -- What changes what a page says: a drop noted, a star, the gear, a run started or stopped.
 local function Changed()

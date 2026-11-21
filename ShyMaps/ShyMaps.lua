@@ -152,7 +152,7 @@ function T:WindowShown()
 	return ns.Window ~= nil and ns.Window.Shown()
 end
 
--- Each layer's switch, as written in the options and the map's menu.
+-- Each layer's switch, as written in the settings and the map's menu. needs: the addon it shows nothing without.
 ns.SWITCHES = {
 	{ key = "zones", label = "Place names" },
 	{ key = "flights", label = "Flight points" },
@@ -161,7 +161,7 @@ ns.SWITCHES = {
 	{ key = "dungeons", label = "Dungeon entrances" },
 	{ key = "spirits", label = "Spirit healers" },
 	{ key = "places", label = "Points of interest" },
-	{ key = "rares", label = "Rare creatures" },
+	{ key = "rares", label = "Rare creatures", needs = "Quest" },
 	{ key = "directions", label = "Guard directions" },
 	{ key = "links", label = "Ways to other maps" },
 	{ key = "friends", label = "Friends" },
@@ -185,10 +185,12 @@ function T:MapMenu(root)
 	for _, write in ipairs(tools) do write(root) end
 	if #tools > 0 then root:CreateDivider() end
 	for _, switch in ipairs(ns.SWITCHES) do
-		root:CreateCheckbox(switch.label, function() return T.db[switch.key] == true end, function()
-			T.db[switch.key] = not T.db[switch.key]
-			ns.Apply()
-		end)
+		if not switch.needs or Shy.addons[switch.needs] then
+			root:CreateCheckbox(switch.label, function() return T.db[switch.key] == true end, function()
+				T.db[switch.key] = not T.db[switch.key]
+				ns.Apply()
+			end)
+		end
 	end
 	root:CreateDivider()
 	root:CreateTitle("Unexplored areas")
@@ -296,13 +298,12 @@ function T:OnLoad()
 	end)
 	-- (The map's own window is the map now: the switch that chose between it and the game's is gone.)
 	self.db.window = nil
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 -- Inside a dungeon, raid or battleground with the map kept clear there: friends, your guild, boats, notes and every
--- addon's marks (Shy.Maps.Hush) are put away.
+-- addon's marks (Shy.Maps.Hush) are put away. Never while the map is off: the game's map is left as it is.
 function ns.Inside()
-	if not T.db.quietInside then return false end
+	if not (T.db.on and T.db.quietInside) then return false end
 	local inside, kind = IsInInstance()
 	return inside == true and (kind == "party" or kind == "raid" or kind == "pvp" or kind == "arena")
 end
@@ -319,7 +320,11 @@ inside:SetScript("OnEvent", function()
 		ns.Apply()
 	end
 end)
-ns.OnApply(function() Shy.Maps.Hush("ShyMaps", ns.Inside()) end)
+-- (Kept in step here too: the switch may change while you are inside.)
+ns.OnApply(function()
+	inside.was = ns.Inside()
+	Shy.Maps.Hush("ShyMaps", inside.was)
+end)
 
 function T:OnLogin()
 	ns.Apply()
@@ -354,36 +359,32 @@ function T:Drops(item)
 	return ns.Dungeons and ns.Dungeons.Drops and ns.Dungeons.Drops(item) or nil
 end
 
-SLASH_SHYMAPS1 = "/shymaps"
-SLASH_SHYMAPS2 = "/shym"
-SlashCmdList.SHYMAPS = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "on" or cmd == "off" then
-		T.db.on = cmd == "on"
-		ns.Apply()
-		T:Print(T.db.on and "on." or "off, the default map is back.")
-	elseif cmd == "overlay" then
-		ns.Overlay.Set(not T.db.overlay)
-	elseif cmd == "window" and ns.Window then
-		ns.Window.Set(not ns.Window.Shown())
-	elseif cmd == "forget" then
-		wipe(T.db.views)
-		wipe(T.db.last)
-		T:Print("saved views forgotten.")
-	elseif cmd == "friends" then
-		Shy.UI.ShowCopyBox("ShyMaps friends", ns.Friends.Report())
-	elseif cmd:match("^dungeons?") and ns.Journal and ns.Journal.Command then
-		ns.Journal.Command((cmd:gsub("^dungeons?%s*", "")))
-	else
-		T:Print("commands:")
-		print("  /shymaps  - open options")
-		print("  /shymaps on | off  - use this map or the default one")
-		print("  /shymaps overlay  - the map over the screen, or not")
-		print("  /shymaps window  - open or close the map")
-		print("  /shymaps dungeons [name]  - bosses and loot")
-		print("  /shymaps forget  - forget where every map was left")
-		print("  /shymaps friends  - who is on the list, asked, answering")
-	end
+-- Where every map was left, forgotten: each opens whole again.
+function ns.ForgetViews()
+	wipe(T.db.views)
+	wipe(T.db.last)
+	if ns.RefreshOptions then ns.RefreshOptions() end
 end
+
+local function Switch(on)
+	T.db.on = on
+	ns.Apply()
+	T:Print(on and "on." or "off, the default map is back.")
+end
+
+T:Command("on", "use this map", function() Switch(true) end)
+T:Command("off", "go back to the default map", function() Switch(false) end)
+T:Command("window", "open or close the map", function()
+	if ns.Window then ns.Window.Set(not ns.Window.Shown()) end
+end)
+T:Command("overlay", "the map faintly over the screen, or not", function()
+	if ns.Overlay then ns.Overlay.Set(not T.db.overlay) end
+end)
+T:Command("forget", "forget where you left every map", function()
+	ns.ForgetViews()
+	T:Print("saved views forgotten.")
+end)
+-- For finding faults: who your list says is where, to copy. Not listed.
+T:Command("friends", nil, function()
+	if ns.Friends then Shy.UI.ShowCopyBox("ShyMaps friends", ns.Friends.Report()) end
+end)

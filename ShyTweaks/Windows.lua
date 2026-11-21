@@ -1,5 +1,6 @@
 -- Move and scale Blizzard windows (every UIPanelWindows entry plus the world map), and move the bags.
 -- The panel manager re-anchors a window each time it opens; a post-hook on SetPoint re-applies the saved spot.
+-- Switched off, a window you moved goes back to the game's size and spot, and its title bar drags nothing.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -78,21 +79,6 @@ local function OnDragStop(frame)
 	Remember(frame)
 end
 
--- Ctrl + mouse wheel scales around the window's top-left corner.
-local function OnWheel(frame, delta)
-	if not windowsOn or not T.db.options.moveWindows.wheelScale or not IsControlKeyDown() or Locked(frame) then return end
-	local old = frame:GetScale()
-	local new = math.max(0.5, math.min(2, old + delta * 0.05))
-	local left, top = frame:GetLeft() * old, frame:GetTop() * old
-	frame.shyApplying = true
-	frame:SetScale(new)
-	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left / new, top / new)
-	frame.shyApplying = false
-	Remember(frame)
-	T.db.frames[frame:GetName()].scale = new
-end
-
 -- Every corner and side of an open window scales it (the core's grip), what lies opposite staying put.
 -- Made as a window first shows: most are never opened.
 local gripped = {}
@@ -163,16 +149,14 @@ local function Hook(frame)
 	handles[frame] = handle
 	PlaceHandle(frame)
 	frame:HookScript("OnShow", PlaceHandle)
-	handle:EnableMouse(true)
+	handle:EnableMouse(windowsOn == true)
 	handle:RegisterForDrag("LeftButton")
 	handle:SetScript("OnDragStart", function() OnDragStart(frame) end)
 	handle:SetScript("OnDragStop", function() OnDragStop(frame) end)
 	frame:HookScript("OnHide", OnDragStop)
-	frame:HookScript("OnMouseWheel", OnWheel)
 	frame:HookScript("OnShow", Apply)
 	frame:HookScript("OnShow", Grip)
 	hooksecurefunc(frame, "SetPoint", Apply)
-	if T.db.options.moveWindows.wheelScale then frame:EnableMouseWheel(true) end
 	Apply(frame)
 	if frame:IsShown() then Grip(frame) end
 end
@@ -187,21 +171,32 @@ local function HookAll()
 	end
 end
 
--- An open window moves to the default spot now; the panel manager places it properly on its next open.
-local function ResetFrame(name)
-	T.db.frames[name] = nil
-	local frame = _G[name]
-	if frame and frame:IsShown() and not Locked(frame) then
-		frame:SetScale(1)
+-- A window back as the game has it: its own size at once, and an open one at the default spot (the panel
+-- manager places it properly on its next open). In a fight a protected one waits for the end of it.
+local function Home(frame)
+	if Locked(frame) then
+		ns.OutOfCombat("home:" .. frame:GetName(), function()
+			if not (windowsOn and Saved(frame)) then Home(frame) end
+		end)
+		return
+	end
+	frame.shyApplying = true
+	frame:SetScale(1)
+	if frame:IsShown() then
 		frame:ClearAllPoints()
 		frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 16, -116)
 	end
+	frame.shyApplying = false
+end
+
+local function ResetFrame(name)
+	T.db.frames[name] = nil
+	local frame = _G[name]
+	if type(frame) == "table" and frame.SetScale then Home(frame) end
 end
 
 function ns.ResetWindows()
 	for name in pairs(T.db.frames) do ResetFrame(name) end
-	T.db.bagOffset = { x = 0, y = 0 }
-	ns.ApplyBags()
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
@@ -223,6 +218,11 @@ ns.ResetFrame = ResetFrame
 local function BagsTaken()
 	local bags = Shy.addons.Bags
 	return bags ~= nil and bags.owns.window == true
+end
+
+function ns.BagsMoved()
+	local o = T.db.bagOffset
+	return o.x ~= 0 or o.y ~= 0
 end
 
 local function HomeCombinedBag()
@@ -283,6 +283,13 @@ local function BagDragStop()
 	if not bagDrag then return end
 	bagDrag = nil
 	dragDriver:SetScript("OnUpdate", nil)
+	if ns.RefreshOptions then ns.RefreshOptions() end
+end
+
+function ns.ResetBags()
+	T.db.bagOffset = { x = 0, y = 0 }
+	if bagsOn ~= nil then ns.ApplyBags() end
+	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
 -- An unnamed Blizzard button over the bag's title (the bag menu) swallows drags; this handle goes above it.
@@ -321,15 +328,17 @@ end
 ns.Feature({
 	id = "moveWindows",
 	category = "Windows",
-	title = "Move and scale windows",
-	desc = "Drag any default window (map, character, spellbook, quest log, vendor, trainer) by its title bar, and resize it by a corner or an edge. It reopens where you left it.",
-	keywords = "drag position blizzmove map character spellbook talent frame window scale size resize corner edge grip",
+	title = "Move and resize windows",
+	desc = "Drag a game window by its title bar. It opens there next time.",
+	keywords = "drag position map character spellbook talent quest log vendor trainer frame window scale size resize corner edge grip",
 	default = true,
 	options = {
-		{ key = "cornerScale", kind = "checkbox", label = "Resize by corners and edges", default = true },
-		{ key = "wheelScale", kind = "checkbox", label = "Resize with Ctrl + mouse wheel", default = true },
-		{ kind = "windows" },
-		{ kind = "button", label = "Reset all windows", run = function() ns.ResetWindows() end },
+		{ key = "cornerScale", kind = "checkbox", label = "Resize by the edges", default = true,
+			desc = "Drag a corner or an edge of a window to make it bigger or smaller." },
+		{ kind = "windows", shown = function() return #ns.MovedWindows() > 0 end },
+		{ kind = "button", label = "Moved windows", button = "Reset", shown = function() return #ns.MovedWindows() > 0 end,
+			desc = "Every window you moved goes back to where the game opens it, at its own size.",
+			run = function() ns.ResetWindows() end },
 	},
 	events = {
 		ADDON_LOADED = function() HookAll() end,
@@ -343,37 +352,40 @@ ns.Feature({
 	Enable = function()
 		windowsOn = true
 		HookAll()
-		for frame in pairs(hooked) do
+		for frame, handle in pairs(handles) do
+			handle:EnableMouse(true)
 			Apply(frame)
 			if frame:IsShown() then Grip(frame) end
 		end
 	end,
 	Disable = function()
-		windowsOn = false
-	end,
-	OnOptionChanged = function(feature, key)
-		if key ~= "wheelScale" then return end
 		for frame in pairs(hooked) do
-			ns.OutOfCombat("wheel:" .. frame:GetName(), function() frame:EnableMouseWheel(feature.opt.wheelScale) end)
+			if frame.shyMoving then OnDragStop(frame) end
+		end
+		windowsOn = false
+		for frame, handle in pairs(handles) do
+			handle:EnableMouse(false)
+			if Saved(frame) then Home(frame) end
 		end
 	end,
 })
 
+-- (Left out while ShyBags' window stands in for the game's bags: there is nothing of the game's to move.)
 ns.Feature({
 	id = "moveBags",
 	category = "Windows",
 	title = "Move bags",
-	desc = "Drag any open bag by its title bar or background to move all bags together. They snap to the layout grid; hold Shift to place them freely.",
+	desc = "Drag an open bag by its title bar to move all your bags. Hold Shift to place them off the grid.",
 	keywords = "bags bag inventory backpack container position drag move",
 	default = true,
+	yields = BagsTaken,
 	events = {
 		GLOBAL_MOUSE_UP = function() BagDragStop() end,
 	},
 	options = {
-		{ kind = "button", label = "Reset bags", run = function()
-			T.db.bagOffset = { x = 0, y = 0 }
-			ns.ApplyBags()
-		end },
+		{ kind = "button", label = "Moved bags", button = "Put back", shown = ns.BagsMoved,
+			desc = "Your bags go back to where the game opens them.",
+			run = function() ns.ResetBags() end },
 	},
 	Enable = function()
 		bagsOn = true

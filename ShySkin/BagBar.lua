@@ -33,7 +33,9 @@ end
 ns.Module({
 	id = "bagbar",
 	title = "Bag bar",
-	desc = "Restyles the bag buttons as steel-framed slots that light up on hover and while that bag is open.",
+	desc = "Your bag buttons get steel frames and light up while their bag is open.",
+	group = "screen",
+	words = "backpack key ring",
 
 	Hook = function(m)
 		for _, button in MainMenuBarBagManager:EnumerateBagButtons() do

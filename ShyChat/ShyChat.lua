@@ -1,4 +1,4 @@
--- Registration, defaults, presets, the settings ShyChat takes over from the game, and slash commands.
+-- Registration, defaults, presets, the settings ShyChat takes over from the game, and its commands.
 
 local ADDON, ns = ...
 local MEDIA = "Interface\\AddOns\\ShyChat\\Media\\"
@@ -24,7 +24,6 @@ local T = Shy:NewAddon(ADDON, {
 		-- messages
 		compact = true,          -- "Thrall says:" -> "Thrall:"
 		compactLoot = true,      -- "You receive loot: [x]" -> "+ [x]"
-		urls = true,
 		hoverLinks = true,       -- item/spell tooltips when hovering links
 		timestamps = "24",       -- none | 24 | 24s | 12 | 12s
 		timeColor = { 0.55, 0.55, 0.58 },
@@ -42,7 +41,6 @@ local T = Shy:NewAddon(ADDON, {
 		fadeTime = 60,
 		toolbar = "hover",       -- ShyChat's own buttons: show | hover | hide
 		sidebar = "hide",        -- Blizzard's button column: show | hover | hide
-		wheel = true,            -- Shift+wheel: top/bottom, Ctrl+wheel: page
 		autoBottom = 0,          -- seconds before snapping back to the newest line; 0 = off
 		arrowKeys = true,
 		editSkin = true,         -- restyle the edit box
@@ -79,17 +77,17 @@ ns.FONTS = {
 
 ns.PRESETS = {
 	{
-		text = "Clean", desc = "Short tags, compact lines, timestamps. The default.",
+		text = "Clean", desc = "Short tags, compact lines and timestamps. How it comes.",
 		values = { channelStyle = "short", brackets = "square", nameBrackets = false, compact = true,
 			compactLoot = true, timestamps = "24", toolbar = "hover", sidebar = "hide", fade = true, fadeTime = 60, spacing = 1 },
 	},
 	{
-		text = "Minimal", desc = "No brackets, no timestamps, hidden buttons, quick fade.",
+		text = "Minimal", desc = "No brackets or timestamps, no buttons and a quick fade.",
 		values = { channelStyle = "short", brackets = "none", nameBrackets = false, compact = true,
 			compactLoot = true, timestamps = "none", toolbar = "hide", sidebar = "hide", fade = true, fadeTime = 20, spacing = 2 },
 	},
 	{
-		text = "Classic+", desc = "Channel numbers, bracketed names, default wording and button column.",
+		text = "Classic+", desc = "Channel numbers, names in brackets and the game's own wording and buttons.",
 		values = { channelStyle = "number", brackets = "square", nameBrackets = true, compact = false,
 			compactLoot = false, timestamps = "24s", toolbar = "hover", sidebar = "show", fade = false, spacing = 0 },
 	},
@@ -100,10 +98,10 @@ function T:ApplyPreset(preset)
 	self:Apply()
 end
 
--- Default timestamps would double ours: off while ours are on, restored after.
+-- Default timestamps would double ours: off while ours show, restored after.
 local function SyncTimestamps(db)
 	local theirs = GetCVar("showTimestamps")
-	if db.timestamps ~= "none" then
+	if db.enabled and db.timestamps ~= "none" then
 		if theirs ~= "none" then
 			db.savedBlizzardTimestamps = theirs
 			SetCVar("showTimestamps", "none")
@@ -114,18 +112,11 @@ local function SyncTimestamps(db)
 	end
 end
 
--- "0" makes the game color every sender name by class.
+-- The game colors every sender name by class at "0" and none at "1". Off is none, whatever it was before.
 local function SyncClassColors(db)
-	local current = GetCVar("chatClassColorOverride")
-	if db.classColors then
-		if current ~= "0" then
-			db.savedClassColors = current
-			SetCVar("chatClassColorOverride", "0")
-		end
-	elseif db.savedClassColors then
-		SetCVar("chatClassColorOverride", db.savedClassColors)
-		db.savedClassColors = nil
-	end
+	local want = db.classColors and "0" or "1"
+	if GetCVar("chatClassColorOverride") ~= want then SetCVar("chatClassColorOverride", want) end
+	db.savedClassColors = nil
 end
 
 local rerenderQueued
@@ -156,6 +147,18 @@ function T:Apply()
 	if ns.Whispers then ns.Whispers.Apply() end
 	QueueRerender()
 	if ns.RefreshOptions then ns.RefreshOptions() end
+end
+
+-- Parts of Apply, for a setting that touches nothing else: how lines are written, and whose names are colored.
+function ns.ApplyLines()
+	SyncTimestamps(T.db)
+	ns.Format.RebuildChannels()
+	ns.Format.RebuildMentions()
+	QueueRerender()
+end
+
+function ns.ApplyNames()
+	SyncClassColors(T.db)
 end
 
 -- Kit paint and formatted lines keep the colors they were made with.
@@ -193,7 +196,6 @@ function T:OnLoad()
 		end
 	end
 	if ns.Bubbles then ns.Bubbles.Init(self.db) end
-	self:RegisterOptions(ns.CreateOptions())
 
 	local events = CreateFrame("Frame")
 	events:RegisterEvent("CHANNEL_UI_UPDATE")
@@ -205,6 +207,8 @@ function T:OnLoad()
 			ns.Window.SaveHistory()
 		else
 			ns.Format.RebuildChannels()
+			-- (The settings list the channels you are in.)
+			if ns.RefreshOptions then ns.RefreshOptions() end
 		end
 	end)
 end
@@ -216,36 +220,28 @@ function T:OnLogin()
 	if ns.Whispers then ns.Whispers.Restore() end
 end
 
-SLASH_SHYCHAT1 = "/shychat"
-SLASH_SHYCHAT2 = "/schat"
-SlashCmdList.SHYCHAT = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "copy" then
-		-- The window whose tab was last selected, or the main one.
-		local id = CURRENT_CHAT_FRAME_ID
-		ns.Window.CopyFrame(id and _G["ChatFrame" .. id] or ChatFrame1)
-	elseif cmd == "clearhistory" then
-		ns.Window.ForgetHistory()
-		T:Print("saved chat history cleared.")
-	elseif cmd == "toggle" then
-		T.db.enabled = not T.db.enabled
-		T:Apply()
-		T:Print("chat formatting " .. (T.db.enabled and "|cff40ff40on|r" or "|cffff4040off|r"))
-	elseif cmd == "whispers" and ns.Whispers then
-		Shy.UI.ShowCopyBox("Whisper windows", ns.Whispers.Report())
-	elseif cmd == "" then
-		T:OpenOptions()
-	else
-		T:Print("commands:")
-		print("  /shychat  - open options")
-		print("  /shychat copy  - copy the current chat window")
-		print("  /shychat toggle  - turn chat formatting on or off")
-		print("  /shychat whispers  - the whisper windows as they stand, to copy")
-		print("  /shychat clearhistory  - clear saved chat history")
-		print("  /clear  - clear the current chat window (/clear all: every window)")
-		print("  /rl  - reload the UI")
-	end
+-- Saved chat, the lines you sent and every whisper conversation, gone.
+function ns.ForgetHistory()
+	ns.Window.ForgetHistory()
+	T:Print("saved chat and whispers cleared.")
 end
+
+T:Command("copy", "copy the chat window you're on", function()
+	-- The window whose tab was last selected, or the main one.
+	local id = CURRENT_CHAT_FRAME_ID
+	ns.Window.CopyFrame(id and _G["ChatFrame" .. id] or ChatFrame1)
+end)
+T:Command("toggle", "rewrite chat lines, or leave them as the game writes them", function()
+	T.db.enabled = not T.db.enabled
+	ns.ApplyLines()
+	if ns.RefreshOptions then ns.RefreshOptions() end
+	T:Print("rewriting chat lines is " .. (T.db.enabled and "|cff40ff40on|r" or "|cffff4040off|r"))
+end)
+T:Command("clearhistory", "forget saved chat and whispers", function() ns.ForgetHistory() end)
+-- (For finding faults: the whisper windows as they stand, to copy. Not listed.)
+T:Command("whispers", nil, function()
+	if ns.Whispers then Shy.UI.ShowCopyBox("Whisper windows", ns.Whispers.Report()) end
+end)
 
 SLASH_SHYCHAT_CLEAR1 = "/clear"
 SlashCmdList.SHYCHAT_CLEAR = function(input)

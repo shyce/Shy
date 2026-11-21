@@ -80,7 +80,7 @@ function Shy.WriteMenu(root, done)
 
 	-- The addons with something to open, under their categories, by name (as the /shy window lists them).
 	root:CreateDivider()
-	for _, group in ipairs(Shy.Listed(function(a) return a.options or a.OpenWindow end)) do
+	for _, group in ipairs(Shy.Listed(function(a) return Shy.Settings.told[a.suffix] or a.OpenWindow end)) do
 		root:CreateTitle(group.title)
 		for _, a in ipairs(group.addons) do
 			local entry = root:CreateButton(a.suffix, Then(function()

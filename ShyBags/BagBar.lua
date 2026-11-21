@@ -2,14 +2,17 @@
 -- ring, shown and hidden by the rail's bag switch. Hovering a bag lights its slots in the grid; a bag is
 -- changed by dragging one on or off its slot, and a click with something carried puts it in. Ordinary bags
 -- stand first; bags for one kind of thing (quiver, ammo pouch, soul, herb and enchanting bags) and the key
--- ring stand past a steel rule, framed in their kind's color. The default bag bar stands down (SetRolesets,
--- as the unit frames do) while the setting says so, or is restyled to match, or left alone.
+-- ring stand past a steel rule, framed in their kind's color. The reagent slot stands there too, empty or not,
+-- and lights while a reagent bag waits in your bags. A bag dropped on a worn one swaps in, even from inside
+-- it. The default bag bar stands down (SetRolesets, as the unit frames do) while the setting says so, or is
+-- restyled to match, or left alone.
 --   BagBar.Apply()      after a setting changes
 --   BagBar.Each(fn)     fn(entry) per slot: { button, kind = "bag" | "keys", inv, bag, filled, lit,
 --                       special (past the rule), color (its kind's) }
 --   BagBar.Frame()      the band, or nil when the window failed to build
 --   BagBar.NewSlot(parent, color, template)   a slot of the column's make, for the bank's bag slots too:
 --                       { button, icon, slot, light, count }; BagBar.KindColor(bag); BagBar.SIZE, BagBar.GAP
+--   BagBar.Kind(bag)    a special bag's color, its name and its name for several ("Herb bag", "Herb bags")
 -- The column or the default bar as one choice, for other addons: T:BagButtons(), T:SetBagButtons(where).
 
 local ADDON, ns = ...
@@ -31,24 +34,39 @@ BagBar.SIZE, BagBar.GAP = SIZE, GAP
 local SEAM = 13                        -- across the rule, between the ordinary bags and the rest
 local CROP = 0.08                      -- trims an icon's dark rim, as on action buttons
 local KEYS_ICON = "Interface\\Icons\\INV_Misc_Key_05"
+local swap                 -- a bag swap halfway: { inv, bag, slot, id, at }
 
 -- A bag's family (the bitfield the game answers with its free slots) and the color of its kind: meaning
 -- colors, not the accent. Leather for arrows and shot, shadow for souls, green for herbs, arcane for
--- enchanting, ink, copper and the like for the rest.
+-- enchanting, ink, copper and the like for the rest. name, many: what one such bag is called, and several.
 local FAMILY = {
-	{ bit = 1, color = { 0.78, 0.62, 0.38 } },      -- quiver
-	{ bit = 2, color = { 0.78, 0.62, 0.38 } },      -- ammo pouch
-	{ bit = 4, color = { 0.64, 0.42, 0.92 } },      -- soul bag
-	{ bit = 8, color = { 0.72, 0.50, 0.32 } },      -- leatherworking
-	{ bit = 16, color = { 0.56, 0.62, 0.80 } },     -- inscription
-	{ bit = 32, color = { 0.44, 0.78, 0.40 } },     -- herbs
-	{ bit = 64, color = { 0.52, 0.60, 0.96 } },     -- enchanting
-	{ bit = 128, color = { 0.86, 0.60, 0.30 } },    -- engineering
-	{ bit = 512, color = { 0.90, 0.48, 0.62 } },    -- gems
-	{ bit = 1024, color = { 0.80, 0.52, 0.30 } },   -- mining
+	{ bit = 1, color = { 0.78, 0.62, 0.38 }, name = "Quiver", many = "Quivers" },
+	{ bit = 2, color = { 0.78, 0.62, 0.38 }, name = "Ammo pouch", many = "Ammo pouches" },
+	{ bit = 4, color = { 0.64, 0.42, 0.92 }, name = "Soul bag", many = "Soul bags" },
+	{ bit = 8, color = { 0.72, 0.50, 0.32 }, name = "Leatherworking bag", many = "Leatherworking bags" },
+	{ bit = 16, color = { 0.56, 0.62, 0.80 }, name = "Inscription bag", many = "Inscription bags" },
+	{ bit = 32, color = { 0.44, 0.78, 0.40 }, name = "Herb bag", many = "Herb bags" },
+	{ bit = 64, color = { 0.52, 0.60, 0.96 }, name = "Enchanting bag", many = "Enchanting bags" },
+	{ bit = 128, color = { 0.86, 0.60, 0.30 }, name = "Engineering bag", many = "Engineering bags" },
+	{ bit = 512, color = { 0.90, 0.48, 0.62 }, name = "Gem bag", many = "Gem bags" },
+	{ bit = 1024, color = { 0.80, 0.52, 0.30 }, name = "Mining bag", many = "Mining bags" },
 }
-local OTHER = { 0.62, 0.66, 0.72 }       -- a kind not listed: steel, lighter
+-- A kind not listed: steel, lighter.
+local OTHER = { color = { 0.62, 0.66, 0.72 }, name = "Special bag", many = "Special bags" }
+-- The reagent bag has a slot of its own and may say no family: sea green. Its slot wears that color empty too,
+-- as no other bag fits there.
+local REAGENTS = Enum.BagIndex.ReagentBag
+local REAGENT = { color = { 0.42, 0.76, 0.70 }, name = "Reagent bag", many = "Reagent bags" }
 local KEYS_COLOR = { 0.84, 0.70, 0.40 }  -- brass
+-- The game's own reagent bag lesson. It waits for the game's bags to open, which never happens while ours
+-- stand in for them, so its tip would stay up. The column teaches it instead.
+local REAGENT_LESSON = "TutorialReagentBag"
+local CARRIED = { first = Enum.BagIndex.Backpack, last = Enum.BagIndex.Bag_4 }   -- the bags that hold items
+local SWAP_WAIT = 5        -- seconds a bag swap waits for its first move to land
+local SWAP_SAY = {
+	hover = "Drop to swap. What's in this bag moves into the new one.",
+	room = "make room outside the bag you're swapping out, then drop the new one again.",
+}
 
 local band, rule
 local entries = {}         -- our slots
@@ -175,16 +193,100 @@ local function Keys()
 	return n
 end
 
+-- A special bag's kind, or nil for an ordinary bag: by the family it says, and the reagent bag by its slot.
+local function Kind(bag)
+	local _, family = C_Container.GetContainerNumFreeSlots(bag)
+	if not issecretvalue(family) and type(family) == "number" and family ~= 0 then
+		for _, def in ipairs(FAMILY) do
+			if math.floor(family / def.bit) % 2 == 1 then return def end
+		end
+		return OTHER
+	end
+	if bag == REAGENTS then
+		local slots = C_Container.GetContainerNumSlots(bag)
+		if not issecretvalue(slots) and type(slots) == "number" and slots > 0 then return REAGENT end
+	end
+	return nil
+end
+
 -- The color of a bag's kind, or nil for an ordinary bag.
 local function KindColor(bag)
-	local _, family = C_Container.GetContainerNumFreeSlots(bag)
-	if type(family) ~= "number" or family == 0 then return nil end
-	for _, def in ipairs(FAMILY) do
-		if math.floor(family / def.bit) % 2 == 1 then return def.color end
-	end
-	return OTHER
+	local def = Kind(bag)
+	return def and def.color
 end
 BagBar.KindColor = KindColor
+
+-- The same with its name, and its name for several.
+function BagBar.Kind(bag)
+	local def = Kind(bag)
+	if def then return def.color, def.name, def.many end
+end
+
+-- Whether an item is a bag, and whether a reagent bag.
+local function BagItem(id)
+	if not id then return false, false end
+	local _, _, _, _, _, class, sub = C_Item.GetItemInfoInstant(id)
+	local bag = class == Enum.ItemClass.Container or class == Enum.ItemClass.Quiver
+	return bag, class == Enum.ItemClass.Container and sub == Enum.ItemContainerSubclass.Reagent
+end
+
+-- A reagent bag you carry and don't wear.
+local function CarriesReagentBag()
+	for bag = CARRIED.first, CARRIED.last do
+		for slot = 1, C_Container.GetContainerNumSlots(bag) do
+			local _, reagent = BagItem(C_Container.GetContainerItemID(bag, slot))
+			if reagent then return true end
+		end
+	end
+	return false
+end
+
+-- An empty slot an ordinary bag other than `skip` holds: bag, slot.
+local function FreeOutside(skip)
+	for bag = CARRIED.first, CARRIED.last do
+		local free, family = C_Container.GetContainerNumFreeSlots(bag)
+		if bag ~= skip and family == 0 and free > 0 then
+			for slot = 1, C_Container.GetContainerNumSlots(bag) do
+				if not C_Container.GetContainerItemID(bag, slot) then return bag, slot end
+			end
+		end
+	end
+end
+
+-- A bag dropped on a worn one swaps them, and the game moves what the old one holds into the new. It can't
+-- while the new bag sits in the old one, so that one is first set down in another bag (Settle takes it on).
+local function Drop(e)
+	local loc = CursorHasItem() and C_Cursor.GetCursorItem()
+	local from, at
+	if loc and loc:IsBagAndSlot() then from, at = loc:GetBagAndSlot() end
+	local id = from and C_Container.GetContainerItemID(from, at)
+	if not (e.filled and from == e.bag and BagItem(id)) then
+		PutItemInBag(e.inv)
+		return
+	end
+	local bag, slot = FreeOutside(e.bag)
+	if not bag then
+		T:Print(SWAP_SAY.room)
+		return
+	end
+	C_Container.PickupContainerItem(bag, slot)
+	swap = { inv = e.inv, bag = bag, slot = slot, id = id, at = GetTime() }
+end
+
+-- Once the new bag has landed outside the old one, it is put on.
+local function Settle()
+	if not swap then return end
+	if GetTime() - swap.at > SWAP_WAIT or CursorHasItem() then
+		swap = nil
+		return
+	end
+	local info = C_Container.GetContainerItemInfo(swap.bag, swap.slot)
+	if not info or info.itemID ~= swap.id or info.isLocked then return end
+	local s = swap
+	swap = nil
+	C_Container.PickupContainerItem(s.bag, s.slot)
+	PutItemInBag(s.inv)
+end
 
 local function KeysUp()
 	local _, keys = ns.Takeover.Visible()
@@ -193,7 +295,7 @@ end
 
 local function Relight()
 	for _, e in ipairs(entries) do
-		e.lit = e.kind == "keys" and KeysUp()
+		e.lit = (e.kind == "keys" and KeysUp()) or e.waiting == true
 		e.light:SetShown(e.lit)
 	end
 end
@@ -216,8 +318,10 @@ local function Paint(e)
 		e.icon:SetTexture(icon)
 		e.icon:SetShown(e.filled)
 		slot:Empty(not e.filled)
-		e.color = e.filled and KindColor(e.bag) or nil
+		e.color = e.filled and KindColor(e.bag) or (e.bag == REAGENTS and REAGENT.color) or nil
 		e.special = e.color ~= nil
+		-- An empty reagent slot lights while a reagent bag waits in your bags.
+		e.waiting = e.bag == REAGENTS and not e.filled and CarriesReagentBag()
 		slot:Steel(e.color)
 		-- An ordinary bag shows its quality; a kind's color says enough.
 		slot:Quality((e.filled and not e.special) and GetInventoryItemQuality("player", e.inv) or nil)
@@ -286,9 +390,19 @@ local function Enter(e)
 	elseif e.filled then
 		GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
 		GameTooltip:SetInventoryItem("player", e.inv)
+		-- Carrying a bag over a worn one: what a drop does.
+		local loc = CursorHasItem() and C_Cursor.GetCursorItem()
+		local from, at
+		if loc and loc:IsBagAndSlot() then from, at = loc:GetBagAndSlot() end
+		if from and BagItem(C_Container.GetContainerItemID(from, at)) then
+			GameTooltip:AddLine(SWAP_SAY.hover, C.alert[1], C.alert[2], C.alert[3], true)
+		end
 		GameTooltip:Show()
 		-- Its slots in the grid, empty ones too, stand out in its kind's color, or the accent's light.
 		ns.Window.Focus(e.bag, e.color or C.hot)
+	elseif e.bag == REAGENTS then
+		UI.Tip(button, "Reagent bag slot", e.waiting and "Drag your reagent bag here." or "Only a reagent bag fits here.",
+			{ side = "RIGHT" })
 	else
 		UI.Tip(button, "Bag slot", "Drag a bag here to carry it.", { side = "RIGHT" })
 	end
@@ -318,7 +432,7 @@ local function Click(e)
 	if e.kind == "keys" then
 		if CursorHasItem() then PutKeyInKeyRing() else ToggleKeys() end
 	elseif CursorHasItem() then
-		PutItemInBag(e.inv)
+		Drop(e)
 	end
 end
 
@@ -364,7 +478,7 @@ local function Make(source)
 		button:SetScript("OnDragStart", function()
 			if e.filled then PickupBagFromSlot(e.inv) end
 		end)
-		button:SetScript("OnReceiveDrag", function() PutItemInBag(e.inv) end)
+		button:SetScript("OnReceiveDrag", function() Drop(e) end)
 	else
 		button:SetScript("OnReceiveDrag", function()
 			if CursorHasItem() then PutKeyInKeyRing() end
@@ -498,6 +612,14 @@ function BagBar.Init()
 		Relight()
 		LightDefault()
 	end)
+	-- The game's reagent bag tip goes while our bags stand in for the game's.
+	local function Unteach()
+		if ns.Takeover.IsOn() then HelpTip:HideAllSystem(REAGENT_LESSON) end
+	end
+	hooksecurefunc(HelpTip, "Show", function(_, _, info)
+		if info and info.system == REAGENT_LESSON then Unteach() end
+	end)
+	ns.Takeover.OnSwitch(Unteach)
 	-- The default bags clear every bag light when the mouse leaves an item.
 	EventRegistry:RegisterCallback("ContainerFrameItemButton.ExitButton", function()
 		C_Timer.After(0, LightDefault)
@@ -522,6 +644,7 @@ function BagBar.Init()
 		elseif event == "CVAR_UPDATE" then
 			if arg == "showKeyring" then Repaint() end
 		else
+			Settle()
 			Repaint()
 		end
 	end)

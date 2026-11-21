@@ -189,7 +189,11 @@ local function Slide(d, p)
 		-- Out all the way the panel is the bay and its pad: how far in the frames stand then, on each side.
 		local ol, ob = holds[1] - max(0, bay[1] - pad), holds[2] - max(0, bay[2] - pad)
 		local orr, ot = min(W, bay[3] + pad) - holds[3], min(H, bay[4] + pad) - holds[4]
-		UI.LookContent(h, { max(holds[1] - pl, ol), max(pt - holds[4], ot), max(pr - holds[3], orr), max(holds[2] - pb, ob) })
+		-- (One table a drawer, written over each step: a slide is many steps.)
+		local keep = d.keepIn or {}
+		d.keepIn = keep
+		keep[1], keep[2], keep[3], keep[4] = max(holds[1] - pl, ol), max(pt - holds[4], ot), max(pr - holds[3], orr), max(holds[2] - pb, ob)
+		UI.LookContent(h, keep)
 	else
 		UI.LookContent(h, nil)
 	end

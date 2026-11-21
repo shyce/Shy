@@ -1,19 +1,20 @@
--- Secure buttons for the live guide step, in a strip under the card's lead: a tile per item,
--- spell or macro (view.uses) and a chip per creature to fight or to find (view.targets) that targets and
--- raid-marks it; a right click marks it and, if one is there, pings it for your group (Ping). Someone to
--- talk to has none: the card names them and their nameplate is marked.
+-- Secure buttons for the live guide step, in a strip under the card's lead:
+--   a tile per item, spell or macro (view.uses)
+--   a chip per creature to fight or to find (view.targets). It targets and raid-marks the creature.
+--     A right click marks it and, if one is there, pings it for your group (Ping).
+-- Someone to talk to has no chip: the card names them and their nameplate is marked.
 -- Quests' own items (the ones the game's tracker has a button for) get a tile too.
 --
 -- The strip holds secure children, so it can't be the card's child (the card shows, hides, moves and
 -- resizes in combat). It is its own frame over the room the card reserves (ns.SetCardDock), placed
 -- by screen coordinates out of combat (ns.CardBox) and shown by a state driver.
 --
--- A creature the leading step names for one task (view.targets' `of`: the kills attached to an objective)
--- has its chip under that task's count on the card, not in the block under the head: the count says what
--- to get, the chips under it who from, each said once. The card says which counts it shows (ns.CardClaims)
--- and where the room under each starts (ns.CardSlots); the strip says how much room each group takes
--- (ns.SetCardDock's rooms). Chips are only ever moved out of combat: in a fight the card lays its lines
--- round where they stand (Stood, Extent).
+-- A creature the leading step names for one task (view.targets' `of`: the kills attached to an
+-- objective) has its chip under that task's count on the card, not in the block under the head.
+-- The count says what to get and the chips under it say who from, each said once. The card says
+-- which counts it shows (ns.CardClaims) and where the room under each starts (ns.CardSlots). The
+-- strip says how much room each group takes (ns.SetCardDock's rooms). Chips are only ever moved out
+-- of combat. In a fight the card lays its lines round where they are (Stood, Extent).
 
 local ADDON, ns = ...
 local T = ns.T
@@ -213,7 +214,7 @@ local function Tip(self)
 		if use.kind == "item" then GameTooltip:SetHyperlink("item:" .. use.id) else GameTooltip:SetSpellByID(use.id) end
 		GameTooltip:Show()
 	elseif use and use.kind == "destroy" then
-		UI.Tip(self, "Destroy " .. (C_Item.GetItemNameByID(use.id) or "it"), "The guide has no more use for it.", { side = "LEFT",
+		UI.Tip(self, "Destroy " .. (C_Item.GetItemNameByID(use.id) or "it"), "Your guide doesn't need it anymore.", { side = "LEFT",
 			hints = { { "left", "Click twice to destroy" } } })
 	elseif use then
 		UI.Tip(self, use.name, "Macro for this step:", { side = "LEFT",
@@ -229,14 +230,14 @@ local function Tip(self)
 			local above = level - L.Level()
 			if above >= STEEP then
 				rows[#rows + 1] = { glyph = "up", tint = C.alert, color = C.alert,
-					text = ("%d levels above you: expect misses and resists."):format(above) }
+					text = ("%d levels above you. Expect misses and resists."):format(above) }
 			end
 		end
 		local says, click
 		if target.kind == "target" then
 			click = "Target"
 		elseif target.kind == "scan" then
-			says, click = "This step waits for it to spawn.", "Target when near"
+			says, click = "You're waiting for it to spawn.", "Target when near"
 		else
 			click = "Target nearest"
 		end
@@ -579,7 +580,7 @@ end
 
 Shy:On("SHY_LOGIN", function()
 	local events = CreateFrame("Frame")
-	for _, event in ipairs({ "PLAYER_REGEN_ENABLED", "BAG_UPDATE_DELAYED", "SPELLS_CHANGED", "GROUP_ROSTER_UPDATE",
+	for _, event in ipairs({ "PLAYER_REGEN_ENABLED", "BAG_UPDATE_DELAYED", "GROUP_ROSTER_UPDATE",
 		"NAME_PLATE_UNIT_ADDED", "UPDATE_MOUSEOVER_UNIT", "PLAYER_TARGET_CHANGED" }) do
 		events:RegisterEvent(event)
 	end
@@ -599,6 +600,8 @@ Shy:On("SHY_LOGIN", function()
 			Update()
 		end
 	end)
+	-- A spell learned or lost (ShyCore says only when the book really changed).
+	Shy:On("SHY_SPELLS", function() if box then Update() end end)
 	if not InCombatLockdown() then Create() end
 	ns.OnRoute(function(rebuilt)
 		if rebuilt and box then Update() end

@@ -84,6 +84,8 @@ end)
 
 function F.On(frame)
 	if frame.index == 0 and not ns.Grid() then return false end
+	-- A party member's pet stands in its owner's cell: without the party's frames it has nowhere to be.
+	if frame.kind == "partypet" and not T.db.units.party then return false end
 	return T.db.units[frame.kind] == true
 end
 

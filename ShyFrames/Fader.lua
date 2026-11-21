@@ -1,4 +1,4 @@
--- Fades the main frames (player, target, party) out of combat. Off by default.
+-- Fades your frame and your target's out of combat. Off by default.
 -- Alpha is the one property of a secure frame that may change in combat.
 -- Secret health or power counts as "hurt", so the frames stay visible.
 
@@ -37,8 +37,18 @@ local function Recalculate()
 	end
 end
 
+-- The whole HUD fading when idle takes your frame with it: this fade stands down while that one is on.
+function Fd.Yields()
+	local hud = Shy.Immersion
+	return hud ~= nil and hud.Fade ~= nil and hud.Fade() == true
+end
+
+function Fd.On()
+	return T.db.fade == true and not Fd.Yields()
+end
+
 function Fd.Final(frame)
-	if not T.db.fade or not L.LAYOUTS[L.UNITS[frame.kind].layout].fades then return 1 end
+	if not Fd.On() or not L.LAYOUTS[L.UNITS[frame.kind].layout].fades then return 1 end
 	return OPACITY[state]
 end
 
@@ -94,6 +104,12 @@ function Fd.Start()
 		events:RegisterUnitEvent(event, "player")
 	end
 	events:SetScript("OnEvent", function()
-		if T.db.fade then Soon() end
+		if Fd.On() then Soon() end
+	end)
+	-- The HUD's own fade switched: this one takes over or stands down, and its setting comes or goes.
+	Shy:On("SHY_IMMERSION", function(what)
+		if what ~= "fade" then return end
+		Fd.Apply()
+		Shy.Settings.Refresh()
 	end)
 end

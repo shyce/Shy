@@ -16,11 +16,11 @@ local K = {
 	STILL = 1,           -- seconds the count of listings must hold still before they are read
 	BUDGET = 4,          -- ms a frame the reading takes
 	LOOK = 50,           -- a search's results looked through for its lowest price
-	SOON = 1.5,          -- seconds after the house opens before a scan of it begins by itself
+	SOON = 1.5,          -- seconds after the auction house opens before a scan of it begins by itself
 }
 S.K = K
 
--- Whether this client has the whole-house scan: documented, but no game code here calls it, and a documented call
+-- Whether this client has the scan of the whole auction house: documented, but no game code here calls it, and a documented call
 -- has been missing before. Without it, prices come from searches and other players' scans.
 S.CAN = C_AuctionHouse.ReplicateItems ~= nil and C_AuctionHouse.GetNumReplicateItems ~= nil and C_AuctionHouse.GetReplicateItemInfo ~= nil
 
@@ -55,7 +55,7 @@ function S.Wait()
 end
 
 function S.Full()
-	if not S.CAN then return false, "this game has no whole-house scan: prices come from your searches." end
+	if not S.CAN then return false, "this game can't scan the whole auction house. Prices come from your searches." end
 	if not open then return false, "open the auction house first." end
 	if scan then return false, "a scan is already under way." end
 	local wait = S.Wait()
@@ -96,7 +96,7 @@ local function Read(results, index)
 	local unit = math.floor(buyout / count + 0.5)
 	local r = results[item]
 	if not r then
-		results[item] = { u = unit, q = count, n = 1, l = { { unit, count } } }
+		results[item] = { u = unit, q = count, n = 1, l = { ns.Book.Listing(unit, count) } }
 		scan.found = (scan.found or 0) + 1
 		local was = ns.Book.Price(item)
 		if not was then scan.fresh = (scan.fresh or 0) + 1
@@ -104,7 +104,7 @@ local function Read(results, index)
 	else
 		if unit < r.u then r.u = unit end
 		r.q, r.n = r.q + count, r.n + 1
-		r.l[r.n] = { unit, count }
+		r.l[r.n] = ns.Book.Listing(unit, count)
 	end
 end
 
@@ -135,7 +135,7 @@ local function Done(count)
 end
 
 -- Read and priced: into the price book a few hundred items a frame (Book.lua's B.Noting); with no budget, all that is
--- left at once. Begun, it is always finished, even as the house closes or the scan is stopped: all of it was read,
+-- left at once. Begun, it is always finished, even as the auction house closes or the scan is stopped: all of it was read,
 -- and the book never holds half a scan. True once it is in.
 function Noted(started, budget)
 	if scan.noting == nil then scan.noting = ns.Book.Scanning(scan.results, time()) or false end
@@ -149,7 +149,7 @@ function Noted(started, budget)
 end
 
 -- (The listings come in as the server sends them: read once their count has held still a moment.)
-driver:SetScript("OnUpdate", Shy.Clocked("auction: the house scanned", function()
+driver:SetScript("OnUpdate", Shy.Clocked("auction: scan", function()
 	if not scan then
 		driver:Hide()
 		return
@@ -192,7 +192,7 @@ local function Searched(item, key)
 		n = n or 1
 		if not least or unit < least then least = unit end
 		quantity, listings = quantity + n, listings + 1
-		all[listings] = { unit, n }
+		all[listings] = ns.Book.Listing(unit, n)
 	end
 	if key then
 		local n = C_AuctionHouse.GetNumItemSearchResults(key) or 0
@@ -251,7 +251,7 @@ function S.Start()
 		-- (No game code here registers the scan's own event: one refused is gone without, as the count is watched too.)
 		if event == "REPLICATE_ITEM_LIST_UPDATE" then pcall(events.RegisterEvent, events, event) else events:RegisterEvent(event) end
 	end
-	events:SetScript("OnEvent", Shy.Clocked("auction: the house heard", function(_, event, ...)
+	events:SetScript("OnEvent", Shy.Clocked("auction: events", function(_, event, ...)
 		local ok, err = pcall(handlers[event], ...)
 		if not ok then geterrorhandler()(err) end
 	end))

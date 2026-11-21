@@ -1,11 +1,11 @@
 -- Your auctions, in a window of their own beside the bags window: docked to its side and moving with it, or wherever
 -- it is dragged (dragged back near either side, it docks there again; Shy.HUD's `dock`). It shows the auctions of the
 -- character the bags window shows, as last seen at an auctioneer, and answers what you look at them for:
---   along its top, three figures: the gold sold and on its way to your mail, what your listings come to on the house,
+--   along its top, three figures: the gold sold and on its way to your mail, what your listings come to on the auction house,
 --   and how many are undercut (with the auction house's prices, ShyAuction's: yours only, as its prices are your
 --   market's);
 --   then each under the family's group heads, in the order you act on them: sold, undercut (cancel and post again:
---   an auction can't be reposted in place), on the house (how long each has left, a meter of it), and back in your
+--   an auction can't be reposted in place), on the auction house (how long each has left, a meter of it), and back in your
 --   mail (run out). A row: the item in its quality's color and count, its price each and all of it, and its time or
 --   what it sold for; an undercut one the cheapest now. Its card on hover, standing off the row's top right
 --   corner, clear of the row.
@@ -23,7 +23,8 @@ local AuctionWindow = {}
 ns.AuctionWindow = AuctionWindow
 
 local L = {
-	w = 372, edge = 8, top = 35,           -- the window's width, its margin, the list's top under the head
+	w = 320, edge = 8, top = 35,           -- the window's made width, its margin, the list's top under the head
+	least = { 300, 220 },                  -- the least you can size it to
 	figures = 48, figGap = 10,             -- the three figures' band: a word, the figure, a line under it
 	row = 36, slot = 26, most = 9,         -- a row, its picture, the most rows before the list scrolls
 	head = 26, between = 4,                -- a group's head, and the room after a group
@@ -33,11 +34,11 @@ local L = {
 local GROUPS = {
 	{ key = "sold", name = "Sold", say = "On its way to your mail" },
 	{ key = "under", name = "Undercut", say = "Cancel and post again" },
-	{ key = "up", name = "On the house" },
+	{ key = "up", name = "Listed" },
 	{ key = "back", name = "Back in your mail", say = "Ran out" },
 }
 local WORDS = {
-	title = "Auctions", theirs = "%s auctions", soldHead = "SOLD", upHead = "ON THE HOUSE", underHead = "UNDERCUT",
+	title = "Auctions", theirs = "%s auctions", soldHead = "SOLD", upHead = "LISTED", underHead = "UNDERCUT",
 	coming = "on its way to your mail", nothingSold = "nothing yet", listings = "%d listings", listing = "1 listing",
 	cancel = "cancel and post again", cheapest = "you're the cheapest", noPrices = "no prices yet",
 	inMail = "on its way to you", toCancel = "to cancel, post again", allCheapest = "you're the cheapest",
@@ -67,7 +68,7 @@ function AuctionWindow.IsShown()
 	return box ~= nil and box:IsShown()
 end
 
--- An auction as the window reads it: price each and all of it (the house gives a listing's price each and a sale's
+-- An auction as the window reads it: price each and all of it (the auction house gives a listing's price each and a sale's
 -- whole), and the auction house's cheapest where it is below yours.
 local function Read(c, isMe)
 	local now = ns.Now()
@@ -100,7 +101,7 @@ local function Read(c, isMe)
 			end
 		end
 	end
-	-- Sold newest first; on the house by the time left, the soonest first.
+	-- Sold newest first; on the auction house by the time left, the soonest first.
 	table.sort(groups.sold, function(x, y) return (x.a.soldAt or 0) > (y.a.soldAt or 0) end)
 	for _, key in ipairs({ "under", "up" }) do
 		table.sort(groups[key], function(x, y) return (x.a.exp or math.huge) < (y.a.exp or math.huge) end)
@@ -251,8 +252,8 @@ local function FillRow(row, r, key)
 	row:SetAlpha(key == "back" and 0.7 or 1)
 end
 
-local function Figures(sums, isMe)
-	local w = L.w - 2 * L.edge
+local function Figures(sums, width)
+	local w = width
 	local each = math.floor((w - 2 * L.figGap) / 3)
 	for i, f in ipairs(P.figures) do
 		f:ClearAllPoints()
@@ -281,11 +282,15 @@ local function Lay()
 	local name = Store.Name(c)
 	P.head.title:SetText(isMe and WORDS.title or WORDS.theirs:format(name .. (name:sub(-1) == "s" and "'" or "'s")))
 	local groups, sums = Read(c, isMe)
-	Figures(sums, isMe)
+	-- As wide as you made it, else its made width. Beside the bags as tall as they are; else as tall as you made it,
+	-- else as its list asks. The list flows to fill it.
+	local l, t, r, b = UI.BodyIn(win)
+	local bodyW = math.max(L.least[1], P.hand and P.hand[1] or L.w) - l - r
+	local width = bodyW - 2 * L.edge
+	Figures(sums, width)
 	local listTop = L.top + L.figures + 6
 	-- The groups, each under its head.
 	local y, rowAt, headAt = 0, 0, 0
-	local width = L.w - 2 * L.edge
 	for _, g in ipairs(GROUPS) do
 		local list = groups[g.key]
 		if #list > 0 then
@@ -328,7 +333,9 @@ local function Lay()
 	for i = rowAt + 1, #P.rows do P.rows[i]:Hide() end
 	P.none:SetShown(headAt == 0)
 	P.none:SetText(c.auctions and WORDS.none or WORDS.notSeen:format(name))
-	local tall = math.max(L.row * 2, math.min(y, L.most * L.row))
+	local below = 6 + L.foot + L.edge
+	local given = Shy.HUD.DockTall(box) or (P.hand and P.hand[2])
+	local tall = given and math.max(L.row, given - t - b - listTop - below) or math.max(L.row * 2, math.min(y, L.most * L.row))
 	P.list.content:SetSize(width, math.max(1, y))
 	P.list:ClearAllPoints()
 	P.list:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", L.edge, -listTop)
@@ -336,6 +343,7 @@ local function Lay()
 	P.list:Update()
 	P.none:ClearAllPoints()
 	P.none:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", L.edge + 4, -(listTop + 8))
+	P.none:SetPoint("RIGHT", UI.Body(win), "RIGHT", -(L.edge + 4), 0)
 	-- The foot.
 	local at = Shy.addons.Auction
 	local open = isMe and ns.Auctions.IsOpen() and at and at.Show
@@ -345,10 +353,9 @@ local function Lay()
 	P.seen:SetText(isMe and ns.Auctions.IsOpen() and WORDS.live or (c.auctions and c.auctions.at and WORDS.seen:format(ns.Ago(c.auctions.at)) or ""))
 	P.go:SetShown(open and true or false)
 	P.hint:SetShown(not open and isMe and c.auctions ~= nil)
-	local W, H = L.w, listTop + tall + 6 + L.foot + L.edge
 	-- Its content on its body (UI.Body), the window that much bigger than it.
-	UI.BodyFit(win, W, H)
-	Shy.HUD.Resize(box, win:GetWidth(), win:GetHeight())
+	local W, H = bodyW + l + r, listTop + tall + below + t + b
+	if math.abs(W - box:GetWidth()) > 0.5 or math.abs(H - box:GetHeight()) > 0.5 then Shy.HUD.Resize(box, W, H) end
 end
 
 -- The look keeps another clearance round the body (UI.Body): laid out again, the window that much bigger.
@@ -389,11 +396,10 @@ local function Build()
 		shown = function() return Showing() ~= nil end,
 		window = true,
 		hang = true,
-		dock = { to = "shybags", side = "RIGHT", label = "Beside the bags" },
+		dock = { to = "shybags", side = "RIGHT", label = "Beside the bags", tall = true },
 	})
 	win = CreateFrame("Frame", "ShyBagsAuctions", box)
-	win:SetPoint("TOPLEFT", box, "TOPLEFT", 0, 0)
-	win:SetSize(L.w, 240)
+	win:SetAllPoints(box)
 	win:SetToplevel(true)
 	win:EnableMouse(true)
 	P.head = UI.Head(win, { size = "window", title = WORDS.title, close = Close, panel = { glazed = true } })
@@ -402,7 +408,6 @@ local function Build()
 	P.list = UI.ScrollArea(win, L.w - 2 * L.edge, 200, { quiet = true, smooth = true })
 	P.rows, P.heads = {}, {}
 	P.none = Window.Rounded(win, 11, C.dim)
-	P.none:SetWidth(L.w - 2 * L.edge - 8)
 	P.none:SetWordWrap(true)
 	P.foot = Window.Plate(win)
 	P.seen = Window.Rounded(P.foot, 10.5, C.dim)
@@ -428,6 +433,14 @@ local function Build()
 		end
 	end)
 	P.go:Hide()
+	-- Sized by any corner or side, its list flowing to fill it. (Last: the grip flows it as it takes hold. A size
+	-- counts as yours once you sized it by hand.)
+	if Shy.HUD.Grip then
+		Shy.HUD.Grip(box, { over = win, min = L.least, tip = "Drag to make it wider or taller.", flow = function()
+			P.hand = Shy.HUD.HasSize(box) and { box:GetWidth(), box:GetHeight() } or nil
+			AuctionWindow.Refresh()
+		end })
+	end
 end
 
 function AuctionWindow.Init()

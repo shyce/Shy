@@ -78,7 +78,7 @@ local WORDS = {
 	note = "Note", officer = "Officer note", editNote = "Edit note", editOfficer = "Edit officer note",
 	rank = "Rank", remove = "Remove from guild", mobile = "On the mobile app",
 	guildChat = "Guild", officerChat = "Officers", say = "Say something to the guild", sayOfficers = "Say something to the officers",
-	mute = "Your rank can't speak here", locked = "Chat can't be sent right now. Your words are still in the box.",
+	mute = "Your rank can't speak here", locked = "Chat can't be sent right now. Your message is still in the box.",
 	gone = "This message was removed.", latest = "Newest", quiet = "Nothing has been said yet.",
 }
 local TONE = { good = C.good, bad = C.bad, alert = C.alert, hot = C.hot }
@@ -1669,7 +1669,9 @@ end
 M = ns.Module({
 	id = "guild",
 	title = "Guild",
-	desc = "Opens a guild window of your own in place of the game's: guild and officer chat with what was said before you opened it, the message of the day and the guild's info with their links ready to copy, who's online and where, and the whole roster to search and sort.",
+	desc = "Your guild gets a new window with its chat, who's online and where, and a roster you can search.",
+	group = "rebuilt",
+	words = "roster officer",
 	Ready = function() return Shop ~= nil end,
 	Hook = Hook,
 	Paint = Paint,

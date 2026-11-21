@@ -1,5 +1,4 @@
--- Error spam, nameplates, class-colored and NPC names, action bar text, camera,
--- screen effects, the beta issue reporter and map coordinates.
+-- Error spam, action bar text, player and NPC names, camera, screen effects and the beta issue reporter.
 
 local ADDON, ns = ...
 
@@ -24,11 +23,12 @@ ns.Feature({
 	id = "hideErrors",
 	category = "Combat",
 	title = "Hide error spam",
-	desc = "Hides the red \"Not enough rage\", \"Out of range\" and \"Not ready yet\" messages. Other errors, like full bags, still show.",
-	keywords = "error errors red text spam messages rage energy mana range cooldown uierrors hide",
+	desc = "The red \"Not enough rage\" and \"Out of range\" lines stay off your screen. Real errors, like full bags, still show.",
+	keywords = "error errors red text spam messages rage energy mana range cooldown uierrors hide not ready yet",
 	default = true,
 	options = {
-		{ key = "combatOnly", kind = "checkbox", label = "Only in combat", default = false },
+		{ key = "combatOnly", kind = "checkbox", label = "Only in combat", default = false,
+			desc = "Out of a fight, you see every error again." },
 	},
 	events = {
 		UI_ERROR_MESSAGE = function(f, _, messageType, message)
@@ -41,25 +41,6 @@ ns.Feature({
 	Disable = function() UIErrorsFrame:RegisterEvent("UI_ERROR_MESSAGE") end,
 })
 
-ns.Feature({
-	id = "combatPlates",
-	category = "Combat",
-	title = "Enemy nameplates only in combat",
-	desc = "Shows enemy nameplates when you enter combat and hides them when you leave it.",
-	keywords = "nameplates nameplate plates enemy combat toggle show hide",
-	default = false,
-	events = {
-		PLAYER_REGEN_DISABLED = function() SetCVar("nameplateShowEnemies", 1) end,
-		PLAYER_REGEN_ENABLED = function() SetCVar("nameplateShowEnemies", 0) end,
-	},
-	Enable = function(f)
-		if not InCombatLockdown() then TakeCVar(f, "nameplateShowEnemies", 0) end
-	end,
-	Disable = function(f)
-		ns.OutOfCombat("combatPlates", function() ReturnCVar(f, "nameplateShowEnemies") end)
-	end,
-})
-
 local BAR_PREFIXES = {
 	"ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton", "MultiBarRightButton",
 	"MultiBarLeftButton", "MultiBar5Button", "MultiBar6Button", "MultiBar7Button",
@@ -67,7 +48,7 @@ local BAR_PREFIXES = {
 
 local function BarText(feature)
 	ns.OutOfCombat("barText", function()
-		local on = feature:IsOn()
+		local on = feature.running
 		for _, prefix in ipairs(BAR_PREFIXES) do
 			for i = 1, 12 do
 				local button = _G[prefix .. i]
@@ -80,13 +61,18 @@ local function BarText(feature)
 	end)
 end
 
+-- (Left out while ShySkin's action bars are on: they have the same two switches.)
 ns.Feature({
 	id = "barText",
 	category = "Combat",
 	title = "Hide action bar text",
-	desc = "Hides keybinds and macro names on your action buttons.",
+	desc = "Your action buttons lose their keybinds and macro names.",
 	keywords = "action bar bars button keybind hotkey macro text name clean hide",
 	default = false,
+	yields = function()
+		local skin = Shy.addons.Skin
+		return skin ~= nil and skin.owns ~= nil and skin.owns.barText == true
+	end,
 	options = {
 		{ key = "keybinds", kind = "checkbox", label = "Keybinds", default = true },
 		{ key = "macros", kind = "checkbox", label = "Macro names", default = true },
@@ -96,13 +82,14 @@ ns.Feature({
 	OnOptionChanged = BarText,
 })
 
--- Class-colored names
+-- Player names
 
 -- Overhead names are engine-drawn and can't be recolored, so name-only
 -- nameplates replace them (Blizzard's CVars), with the name redrawn on top.
 -- Friendly plates in instances are forbidden to addons: only the CVars apply there.
 -- Nameplates are restricted (no measuring, no reading anchors): Blizzard's name
 -- is faded out and a new one drawn over it, never moved.
+-- Both names tweaks stand down while ShyPlates draws the nameplates: it writes the names itself.
 
 local FRIENDLY_NAMES = {
 	nameplateShowFriendlyPlayers = 1,
@@ -156,9 +143,6 @@ end
 -- "player", "npc", or nil to leave Blizzard's name.
 local function Kind(frame)
 	if not IsPlate(frame) then return nil end
-	-- ShyPlates draws the names when it is on; the CVars set here still apply.
-	local plates = Shy.addons.Plates
-	if plates and plates:IsOn() then return nil end
 	local feature = frame:IsPlayer() and classNames or npcNames
 	if not feature.running then return nil end
 	local wanted = feature.opt.enemy
@@ -389,7 +373,7 @@ end
 
 local function ApplyNames(f)
 	ns.OutOfCombat("classNames", function()
-		local on = f:IsOn()
+		local on = f.running
 		local friendly = on and f.opt.friendly
 		for cvar, value in pairs(FRIENDLY_NAMES) do
 			if friendly then TakeCVar(f, cvar, value) else ReturnCVar(f, cvar) end
@@ -405,36 +389,45 @@ end
 
 local function Restyled(f) return f.opt.friendly or f.opt.enemy end
 
+local function PlatesOn()
+	local plates = Shy.addons.Plates
+	return plates ~= nil and plates.IsOn ~= nil and plates:IsOn() == true
+end
+
+-- Which side is restyled is a game setting too. The rest only redraws the names.
+local HOLDS = { friendly = true, enemy = true }
+
 classNames = ns.Feature({
 	id = "classNames",
 	category = "Social",
-	title = "Class-colored names",
-	desc = "Player names over heads show in class color, in full, in an outlined font.",
-	keywords = "class color colour names name nameplates plates friendly enemy players pvp recent allies font size outline",
+	title = "Restyle player names",
+	desc = "Player names overhead take their class color and a font you pick. Off, the game's nameplate options decide.",
+	keywords = "class color colour colored names name nameplates plates friendly enemy players pvp recent allies font size outline",
 	default = false,
+	yields = PlatesOn,
 	options = {
 		{ key = "friendly", kind = "checkbox", label = "Friendly players", default = true,
-			desc = "Friendly players show only a class-colored name, with no health bar. In dungeons, raids and battlegrounds party names are class-colored but keep the default font." },
+			desc = "A friendly player shows a name alone, with no health bar." },
 		{ key = "enemy", kind = "checkbox", label = "Enemy players", default = true,
-			desc = "Enemy player nameplates get a class-colored name and health bar." },
+			desc = "An enemy player's name and health bar take their class color." },
 		{ key = "allies", kind = "checkbox", label = "Mark recent allies", default = true,
-			desc = "Players you grouped with recently get the recent ally badge after their name." },
+			desc = "Players you grouped with lately get a badge after their name." },
 		{ key = "font", kind = "dropdown", label = "Name font", default = "shy", items = FONTS, enabled = Restyled,
-			desc = "Both fonts show names in any language, including Cyrillic, Korean and Chinese." },
-		{ key = "size", kind = "slider", label = "Name size", min = 9, max = 18, step = 1, default = 15, enabled = Restyled,
-			format = function(v) return tostring(math.floor(v + 0.5)) end,
-			desc = "Font size of player names. Long names are never cut short." },
+			desc = "Both fonts can write a name in any alphabet." },
+		{ key = "size", kind = "slider", label = "Player name size", min = 9, max = 18, step = 1, default = 15, enabled = Restyled,
+			settle = true, format = function(v) return tostring(math.floor(v + 0.5)) end,
+			desc = "How big player names are. A long name is never cut short." },
 		{ key = "lift", kind = "slider", label = "Name height", min = -20, max = 40, step = 1, default = 0,
-			enabled = function(f) return f.opt.friendly end,
+			settle = true, enabled = function(f) return f.opt.friendly end,
 			format = function(v) return v == 0 and "Right above the head" or ((v > 0 and "+" or "") .. math.floor(v + 0.5)) end,
-			desc = "How far above the head friendly names sit." },
+			desc = "How far above the head a friendly name sits." },
 		{ key = "outline", kind = "dropdown", label = "Outline", default = "thin", enabled = Restyled,
 			items = {
 				{ value = "none", text = "Shadow only" },
 				{ value = "thin", text = "Thin outline" },
 				{ value = "thick", text = "Thick outline" },
 			},
-			desc = "A dark outline keeps names readable over bright ground and sky. All three keep a soft shadow." },
+			desc = "A dark outline keeps names readable over bright ground and sky." },
 	},
 	events = {
 		PLAYER_ENTERING_WORLD = ApplyNames,
@@ -446,7 +439,9 @@ classNames = ns.Feature({
 		ApplyNames(f)
 	end,
 	Disable = ApplyNames,
-	OnOptionChanged = ApplyNames,
+	OnOptionChanged = function(f, key)
+		if HOLDS[key] then ApplyNames(f) else RefreshNames() end
+	end,
 })
 
 -- NPC names
@@ -490,11 +485,6 @@ Shy:On("SHY_THEME", function()
 	if npcNames.running then RepaintNames() end
 end)
 
--- ShyPlates was switched on or off.
-Shy:On("SHY_NAMEPLATES", function()
-	if classNames.running or npcNames.running then RefreshNames() end
-end)
-
 local function RepaintUnit(_, _, unit)
 	if issecretvalue(unit) or type(unit) ~= "string" or not unit:find("^nameplate") then return end
 	local plate = C_NamePlate.GetNamePlateForUnit(unit)
@@ -504,7 +494,7 @@ end
 
 local function ApplyNPCNames(f)
 	ns.OutOfCombat("npcNames", function()
-		local on = f:IsOn()
+		local on = f.running
 		local function Want(cvar, wanted)
 			if wanted then TakeCVar(f, cvar, 1) else ReturnCVar(f, cvar) end
 		end
@@ -519,24 +509,25 @@ end
 npcNames = ns.Feature({
 	id = "npcNames",
 	category = "Social",
-	title = "NPC names",
-	desc = "Every NPC shows its name without mouseover, colored by reaction. The health bar shows only on your target or in combat.",
+	title = "Restyle NPC names",
+	desc = "An NPC you aren't fighting shows just its name, in its reaction color. Off, the game's nameplate options decide.",
 	keywords = "npc names name nameplates plates creatures mobs monsters vendors guards quest level elite innkeeper trainer hover mouseover reaction",
 	default = false,
+	yields = PlatesOn,
 	options = {
 		{ key = "friendly", kind = "checkbox", label = "Friendly NPCs", default = true,
-			desc = "Guards, vendors and trainers show their name in green. Outdoors only: instances keep the default nameplates." },
-		{ key = "jobs", kind = "checkbox", label = "Show NPC titles", default = true,
+			desc = "Guards, vendors and trainers show their name in green. Outdoors only." },
+		{ key = "jobs", kind = "checkbox", label = "NPC titles", default = true,
 			enabled = function(f) return f.opt.friendly end,
-			desc = "A second line under a friendly NPC's name: Innkeeper, Flight Master, Leatherworking Trainer." },
+			desc = "A friendly NPC's job goes under its name, like Innkeeper or Flight Master." },
 		{ key = "enemy", kind = "checkbox", label = "Enemies and creatures", default = true,
-			desc = "Hostile mobs show their name in red, neutral ones in yellow. The health bar shows when you target them or they are in combat." },
-		{ key = "level", kind = "checkbox", label = "Show level", default = true,
+			desc = "A hostile mob's name is red and a neutral one's yellow. Its health bar shows once you target or fight it." },
+		{ key = "level", kind = "checkbox", label = "Levels", default = true,
 			enabled = function(f) return f.opt.enemy end,
-			desc = "Adds the level after the name of anything you can attack, in difficulty color. A + marks an elite." },
-		{ key = "size", kind = "slider", label = "Name size", min = 9, max = 18, step = 1, default = 13,
-			format = function(v) return tostring(math.floor(v + 0.5)) end,
-			desc = "Font size of NPC names. Font, outline and height come from Class-colored names." },
+			desc = "Anything you can attack shows its level after its name. A + marks an elite." },
+		{ key = "size", kind = "slider", label = "NPC name size", min = 9, max = 18, step = 1, default = 13,
+			settle = true, format = function(v) return tostring(math.floor(v + 0.5)) end,
+			desc = "How big NPC names are. Their font and outline are the ones picked for player names." },
 	},
 	events = {
 		PLAYER_ENTERING_WORLD = ApplyNPCNames,
@@ -550,25 +541,29 @@ npcNames = ns.Feature({
 		ApplyNPCNames(f)
 	end,
 	Disable = ApplyNPCNames,
-	OnOptionChanged = ApplyNPCNames,
+	OnOptionChanged = function(f, key)
+		if HOLDS[key] then ApplyNPCNames(f) else RefreshNames() end
+	end,
 })
 
 -- System
 
+local FAR = 2.6           -- the furthest the game lets the camera go
+local SLIDER_END = 2.0    -- where the game's own Max Camera Distance slider stops
+
 ns.Feature({
 	id = "cameraDistance",
 	category = "System",
-	title = "Longer camera distance",
-	desc = "Lets the camera zoom out further than the default slider allows.",
+	title = "Zoom out further",
+	desc = "Your camera pulls back past the end of the game's Max Camera Distance slider.",
 	keywords = "camera zoom out distance far max",
 	default = false,
-	options = {
-		{ key = "factor", kind = "slider", label = "Max distance", min = 1, max = 2.6, step = 0.1, default = 2.6,
-			format = function(v) return ("%.1fx"):format(v) end },
-	},
-	Enable = function(f) TakeCVar(f, "cameraDistanceMaxZoomFactor", f.opt.factor) end,
+	says = function(f)
+		local now = tonumber(GetCVar("cameraDistanceMaxZoomFactor"))
+		if not f:IsOn() and now and now > SLIDER_END + 0.01 then return "already on in the game" end
+	end,
+	Enable = function(f) TakeCVar(f, "cameraDistanceMaxZoomFactor", FAR) end,
 	Disable = function(f) ReturnCVar(f, "cameraDistanceMaxZoomFactor") end,
-	OnOptionChanged = function(f) SetCVar("cameraDistanceMaxZoomFactor", f.opt.factor) end,
 })
 
 local function ScreenEffects(f)
@@ -586,11 +581,15 @@ ns.Feature({
 	id = "crispScreen",
 	category = "System",
 	title = "Remove screen glow",
-	desc = "Turns off the full-screen glow that washes out colors.",
+	desc = "The soft glow over the whole screen that washes out colors goes away.",
 	keywords = "glow bloom blur screen effect death ghost graphics crisp sharp",
 	default = false,
+	says = function(f)
+		if not f:IsOn() and GetCVar("ffxGlow") == "0" then return "already off in the game" end
+	end,
 	options = {
-		{ key = "death", kind = "checkbox", label = "Also remove the gray blur while dead", default = false },
+		{ key = "death", kind = "checkbox", label = "No blur while dead", default = false,
+			desc = "The gray haze over the world while you're a ghost goes too." },
 	},
 	Enable = ScreenEffects,
 	OnOptionChanged = ScreenEffects,
@@ -662,14 +661,14 @@ if reporter then
 		id = "hideReporter",
 		category = "System",
 		title = "Hide the issue reporter",
-		desc = "Hides the beta \"Issue Reporter\" label and bug button. The report key still works: mouse over something and press it (F6 by default, \"Open Issue Report\" under Key Bindings).",
-		keywords = "issue reporter bug report feedback button ptr beta test realm survey hide remove",
+		desc = "The beta's Issue Reporter label and bug button go away. Its key (F6) still reports what you point at.",
+		keywords = "issue reporter bug report feedback button ptr beta test realm survey hide remove key bindings",
 		default = false,
 		options = {
 			{ key = "tooltips", kind = "checkbox", label = "Hide its tooltip line", default = true,
-				desc = "Removes \"Press F6 to submit an issue\" from the bottom of tooltips. The key still works." },
+				desc = "Tooltips lose their \"Press F6 to submit an issue\" line. The key still works." },
 			{ key = "questions", kind = "checkbox", label = "Hide its quest survey", default = true,
-				desc = "Hides the survey box that opens under the quest window at each turn-in. Nothing is sent to Blizzard for that quest." },
+				desc = "The survey under the quest window stays shut at a turn-in. Nothing is sent for that quest." },
 		},
 		Enable = function()
 			if wanted == nil then

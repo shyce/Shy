@@ -70,14 +70,10 @@ function ns.Build()
 	return ok and type(build) == "table" and build or nil
 end
 
--- What gear is weighed for: a role picked in the options, else "build" (the talent build, when its
--- weights are known), else the build's role, else the class's first role.
-function ns.Focus()
+-- What gear is weighed for with no role picked: "build" (the talent build, when its weights are known),
+-- else the build's role, else the class's first role.
+function ns.Follows()
 	local list = ns.Focuses()
-	local picked = ShyGearCharDB and ShyGearCharDB.focus
-	for _, focus in ipairs(list) do
-		if focus == picked then return focus end
-	end
 	local build = ns.Build()
 	if build then
 		local known = ns.BUILDS and ns.BUILDS[ns.Class()]
@@ -87,6 +83,17 @@ function ns.Focus()
 		end
 	end
 	return list[1]
+end
+
+-- What gear is weighed for: a role picked in the settings, else what it follows.
+function ns.Focus()
+	local picked = ShyGearCharDB and ShyGearCharDB.focus
+	if picked then
+		for _, focus in ipairs(ns.Focuses()) do
+			if focus == picked then return focus end
+		end
+	end
+	return ns.Follows()
 end
 
 function ns.Money(copper)
@@ -145,7 +152,6 @@ function T:Mark(host, anchor, size) return ns.CreateMark(host, anchor, size) end
 
 function T:OnLoad()
 	ShyGearCharDB = ShyGearCharDB or {}
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -157,7 +163,12 @@ function T:OnLogin()
 	events:RegisterUnitEvent("UNIT_STATS", "player")   -- stats update a moment after the gear does
 	events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 	-- Talents change what a stat is worth (Model.lua reads them from the tree).
-	local TALENTS = { SPELLS_CHANGED = true, TRAIT_CONFIG_UPDATED = true, PLAYER_TALENT_UPDATE = true, ACTIVE_COMBAT_CONFIG_CHANGED = true }
+	local TALENTS = { TRAIT_CONFIG_UPDATED = true, PLAYER_TALENT_UPDATE = true, ACTIVE_COMBAT_CONFIG_CHANGED = true }
+	-- (The spellbook from ShyCore, said only when it really changed: a talent's spell learned.)
+	Shy:On("SHY_SPELLS", function()
+		if ns.ForgetTalents then ns.ForgetTalents() end
+		ns.Refresh()
+	end)
 	for event in pairs(TALENTS) do events:RegisterEvent(event) end
 	events:SetScript("OnEvent", function(_, event, id)
 		-- Item data arrives all the while (loot, chat links, tooltips): only an item a verdict waits on is news.
@@ -182,17 +193,14 @@ function T:OnLogin()
 	ns.SetupBags()
 end
 
-SLASH_SHYGEAR1 = "/shygear"
-SLASH_SHYGEAR2 = "/sgear"
-SlashCmdList.SHYGEAR = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "report" then
-		Shy.UI.ShowCopyBox("ShyGear: how your gear is weighed", ns.Report())
-	else
-		T:Print("commands:")
-		print("  /shygear  - open options")
-		print("  /shygear report  - copy how your gear is weighed")
+-- What a point of each stat gives you, then every number a verdict goes by, to read or copy.
+function ns.ShowReport()
+	local text, rates = ns.Report(), ns.Rates()
+	if rates then
+		text = "What your stats give, for your class at your level:\n" .. table.concat(rates, "\n") .. "\n\n" .. text
 	end
+	Shy.UI.ShowCopyBox("How your gear is weighed", text)
 end
+
+-- For finding faults: how your gear is weighed, to copy. Not listed.
+T:Command("report", nil, function() ns.ShowReport() end)

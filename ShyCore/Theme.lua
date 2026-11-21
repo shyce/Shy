@@ -2357,9 +2357,9 @@ end
 -- too.
 Theme.TEXT = "shadow"
 Theme.TEXTS = {
-	{ key = "plain", name = "Plain", desc = "Letters with nothing round them." },
-	{ key = "shadow", name = "Shadow", desc = "A shadow under the letters, for bright or busy ground." },
-	{ key = "outline", name = "Outline", desc = "Light words outlined in black, as comics letter them." },
+	{ key = "plain", name = "Plain", desc = "Plain letters." },
+	{ key = "shadow", name = "Shadow", desc = "A shadow under the letters, for bright or busy backgrounds." },
+	{ key = "outline", name = "Outline", desc = "Light letters outlined in black, like a comic." },
 }
 Effect.MAX = 256
 Effect.COPY_LEAST = 14   -- under this size four copies read as a blur, not an outline

@@ -113,7 +113,6 @@ function T:OnLoad()
 		if self.db.size == 26 then self.db.size = 32 end
 		self.db.grown = true
 	end
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -131,20 +130,7 @@ function T:OnLogin()
 	end)
 end
 
-SLASH_SHYBUFFS1 = "/shybuffs"
-SLASH_SHYBUFFS2 = "/sbuffs"
-SlashCmdList.SHYBUFFS = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "move" then
-		Shy.HUD.SetUnlocked(true)
-	elseif cmd == "who" then
-		Shy.UI.ShowCopyBox("ShyBuffs: who cast a buff", ns.Caster.Report())
-	else
-		T:Print("commands:")
-		print("  /shybuffs  - open options")
-		print("  /shybuffs move  - open layout mode")
-		print("  /shybuffs who  - which buff the tooltip last found (hover one first)")
-	end
-end
+-- What the tooltip last found on a buff, to copy when it names the wrong caster. Hover one first.
+T:Command("who", nil, function()
+	Shy.UI.ShowCopyBox("ShyBuffs: who cast a buff", ns.Caster.Report())
+end)

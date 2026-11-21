@@ -388,9 +388,11 @@ local function Rows(now, under)
 	HUD.Update(menu)
 	-- The rows in the box as it stands: their homes follow it; while it is dragged they hang on it.
 	local k = menu:GetScale()
+	wipe(A.rowFit)
 	for key, box in pairs(boxes) do
 		local rel = Rel(column[key])
 		local fit = column.scale[key] * k
+		A.rowFit[box] = math.abs(fit - 1) > 0.001 and fit or false
 		local scale = parked and PARKED or (math.abs(fit - 1) > 0.001 and fit or nil)
 		local _, _, r, t = A.Live(rel)
 		if not r then r, t = column[key][3] + half, column[key][4] end
@@ -417,6 +419,20 @@ local function Rows(now, under)
 	A.parked = parked
 	if A.menu.placed then return nil end
 	return column
+end
+
+-- The rows parked or brought back where they stand, as a fight begins or ends: their scale alone changes, so
+-- that is all that is set. Nothing else on the screen is arranged again. (Anything more: A.Apply.)
+A.rowFit = setmetatable({}, { __mode = "k" })   -- row box -> its scale in the column, unparked (false: none)
+function A.Park()
+	local menu = A.menu and A.menu.box
+	if not menu or HUD.IsDragging(menu) then return A.Apply() end
+	local parked = ns.Drawers ~= nil and ns.Drawers.Parked() == true
+	if parked == A.parked then return end
+	for box, fit in pairs(A.rowFit) do
+		if box.given then HUD.SetHome(box, box.given, parked and PARKED or fit or nil) end
+	end
+	A.parked = parked
 end
 
 function A.MenuPlaced()
@@ -568,6 +584,15 @@ local function Boxes(ids)
 		end
 	end
 	return list
+end
+
+-- Is there a box the deck could hold? Without one its switch changes nothing.
+function A.Decks()
+	for _, id in ipairs(DECK) do
+		local box = HUD.Find(id)
+		if box and box.toggle and not box.secure then return true end
+	end
+	return false
 end
 
 -- The chat wing's measured outer end (chat may have been resized in Edit Mode);
@@ -912,9 +937,11 @@ local function Pieces()
 	for _, fn in ipairs(also) do fn() end
 	if not On() then return A.Apply() end
 	if InCombatLockdown() then
-		waiting = true
+		-- (Only the pieces wait: after the fight they follow, and the rest stays as it stands.)
+		waiting = waiting or "pieces"
 		return
 	end
+	if waiting == "pieces" then waiting = nil end
 	local g, now = ns.Layout.Plan()
 	for _, def in ipairs(HOMES) do
 		local box = (def.piece or def.follows) and HUD.Find(def.id)
@@ -936,7 +963,7 @@ function A.Start()
 	events:RegisterEvent("DISPLAY_SIZE_CHANGED")
 	events:SetScript("OnEvent", function(_, event)
 		if event == "PLAYER_REGEN_ENABLED" then
-			if waiting then A.Apply() end
+			if waiting == "pieces" then Pieces() elseif waiting then A.Apply() end
 		else
 			A.Soon()
 		end

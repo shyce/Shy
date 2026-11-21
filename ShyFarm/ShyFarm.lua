@@ -78,8 +78,11 @@ local function Say()
 	whys = {}
 	for _, why in ipairs(said) do Shy:Fire("SHY_FARM", why) end
 	for _, fn in ipairs(appliers) do fn() end
+	if ns.RefreshOptions then ns.RefreshOptions() end   -- (the settings say how the session stands)
 end
 function ns.Changed(why)
+	-- (A price changed: what a kill is worth is reckoned again when next asked.)
+	if why == "price" and ns.Worth then ns.Worth.Stale() end
 	for _, each in ipairs(whys) do
 		if each == why then return end
 	end
@@ -180,7 +183,6 @@ function T:OnLoad()
 	ns.char = ShyFarmCharDB or {}
 	ShyFarmCharDB = ns.char
 	ns.char.history = ns.char.history or {}
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -193,16 +195,9 @@ function T:OpenWindow()
 	ns.Card.Reveal()
 end
 
-local function Help()
-	T:Print("commands:")
-	print("  /shyfarm  - open options")
-	print("  /shyfarm start  - start a session")
-	print("  /shyfarm reset  - save this session and start fresh (stop works too)")
-	print("  /shyfarm show  - show the window (starts a session if none is going)")
-	print("  /shyfarm pause  - pause or go on")
-	print("  /shyfarm farm <item>  - farm an item (its link, ID or name)")
-	print("  /shyfarm find  - find an item or a creature to farm")
-	print("  /shyfarm price <item> <price>  - set your own price, like 1g 20s")
+-- Start: a session if none goes on, else the one there counting from now (set up, paused or waiting at rest).
+function ns.Start()
+	if ns.Session.Current() then ns.Session.Clock() else ns.Session.Begin() end
 end
 
 -- An item from words: a link, an ID, or a name in your bags or the session.
@@ -214,36 +209,30 @@ local function ItemFrom(text)
 	return ns.Session.Named(text)
 end
 
-SLASH_SHYFARM1 = "/shyfarm"
-SlashCmdList.SHYFARM = function(input)
-	local cmd, rest = strtrim(input or ""):match("^(%S*)%s*(.-)$")
-	cmd = (cmd or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "start" then
-		ns.Session.Begin()
-	elseif cmd == "reset" or cmd == "stop" or cmd == "end" then
-		ns.Session.Stop()
-	elseif cmd == "show" then
-		ns.Card.Reveal()
-	elseif cmd == "pause" then
-		ns.Session.Pause()
-	elseif cmd == "farm" then
-		local item = ItemFrom(rest)
-		if item then T:Farm(item) else T:Print("which item? Shift-click it, or give its ID.") end
-	elseif cmd == "find" then
-		if not (ns.Card.Find and ns.Card.Find()) then T:Print("you need ShyQuest turned on for that.") end
-	elseif cmd == "price" then
-		local link, amount = rest:match("^(|c.-|r)%s*(.*)$")
-		if not link then link, amount = rest:match("^(%S+)%s*(.*)$") end
-		local item, copper = ItemFrom(link), ns.Prices.Parse(amount)
-		if item and copper then
-			ns.Prices.SetOwn(item, copper)
-			T:Print(("your price for %s is %s."):format(C_Item.GetItemNameByID(item) or "it", ns.Prices.Text(copper)))
-		else
-			T:Print("give the item and a price, like: /shyfarm price 2672 1g 20s")
-		end
+local function Reset() ns.Session.Stop() end
+
+T:Command("start", "start a farming session", function() ns.Start() end)
+T:Command("reset", "save your session and start fresh", Reset)
+T:Command("stop", nil, Reset)
+T:Command("end", nil, Reset)
+T:Command("show", "show the farm window", function() ns.Card.Reveal() end)
+T:Command("pause", "pause your session, or go on", function() ns.Session.Pause() end)
+T:Command("farm", "farm an item: its link, ID or name", function(rest)
+	local item = ItemFrom(rest)
+	if item then T:Farm(item) else T:Print("which item? Shift-click it, or give its ID.") end
+end)
+T:Command("find", "find something to farm", function()
+	if not (ns.Card.Find and ns.Card.Find()) then T:Print("you need ShyQuest turned on for that.") end
+end)
+-- (A link has spaces in it: the item is the link whole, or else the first word, and the price is the rest.)
+T:Command("price", "set your own price for an item, like 1g 20s", function(rest)
+	local link, amount = rest:match("^(|c.-|r)%s*(.*)$")
+	if not link then link, amount = rest:match("^(%S+)%s*(.*)$") end
+	local item, copper = ItemFrom(link), ns.Prices.Parse(amount)
+	if item and copper then
+		ns.Prices.SetOwn(item, copper)
+		T:Print(("your price for %s is %s."):format(C_Item.GetItemNameByID(item) or "it", ns.Prices.Text(copper)))
 	else
-		Help()
+		T:Print("give the item and a price, like: /shy farm price 2672 1g 20s")
 	end
-end
+end)

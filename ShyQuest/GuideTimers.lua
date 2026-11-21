@@ -25,7 +25,7 @@ end
 -- In the air on a flight there is a countdown for (asked to land early: to where it now lands), and the
 -- card counts flights.
 local function Flying()
-	return T.db.card.flying ~= false and Shy.Way.Flight.Left() ~= nil
+	return Shy.Way.Flight.Left() ~= nil
 end
 
 -- A ride's sign (ShyWay's: Shy.Way.RIDES): a boat's sail, the tram's car, a zeppelin; an airboat wears
@@ -38,7 +38,6 @@ end
 -- Aboard a boat, a zeppelin or an airboat, or in the tram (Shy.Way.Riding), and the card counts those as
 -- it does flights: the ride's sign (its mark and color on the card); nil when not.
 local function Sailing()
-	if T.db.card.flying == false then return nil end
 	local ride = Shy.Way.Riding()
 	if not ride or not Shy.Way.RideLeft() then return nil end
 	return Sign(ride.by)
@@ -91,11 +90,6 @@ ns.cardNotes = ns.cardNotes or {}
 table.insert(ns.cardNotes, OffAt)
 
 local function Watch()
-	if T.db.guide.timers == false then
-		wipe(armed)
-		wipe(running)
-		return
-	end
 	if armedFor ~= G.current then
 		wipe(armed)
 		armedFor = G.current

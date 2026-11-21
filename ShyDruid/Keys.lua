@@ -1,7 +1,7 @@
 -- A druid's keys (Shy.Keys lays them out): one job a key, each a macro that chooses the ability by the form
 -- you are in and by what you have learned, so an ability arrives on its key as you train it.
 --
---   ns.Keys.Run()     lays them out and says what was done (/shydruid keys)
+--   ns.Keys.Run()     lays them out and says what was done (/shy druid keys)
 --   ns.Keys.List()    every key and what it does, as text
 --
 -- A form is asked for by its spell ("[stance:{768}]"), written as its place on your own stance bar: the right
@@ -37,15 +37,15 @@ local MARK_FORMS = "/cast " .. BEAR .. " {99}; [stance:{768},known:{1822}] {1822
 
 -- Restoration heals first: out of a form its three heals stand where the others' three attacks do (Rejuvenation
 -- on Q, Healing Touch on R, Regrowth on E), the attacks where the heals were; a bear's keys are everyone's.
-local RENEW = { name = "Renew", role = "renew", what = "Rejuvenation; Demoralizing Roar as a bear, Rake as a cat",
+local RENEW = { name = "Renew", role = "renew", what = "Rejuvenation. Demoralizing Roar as a bear, Rake as a cat",
 	SHOW, MARK_FORMS .. FRIEND .. " {774}" }
 -- (Wrath until Regrowth comes at 12: before then Wrath is your strike, on R like every druid's.)
-local BIG = { name = "Big Heal", what = "Healing Touch, Wrath until 12; Maul as a bear, Claw as a cat",
+local BIG = { name = "Big Heal", what = "Healing Touch, Wrath until 12. Maul as a bear, Claw as a cat",
 	SHOW, "/cast " .. BEAR .. " {6807}; " .. CAT_STANCE .. " {1082}; [known:{8936},@mouseover,help,nodead][known:{8936},help,nodead][known:{8936},@player] {5185}; {5176}" }
 -- (Regrowth has no bear clause: pressed as a bear it shifts you out and heals.)
-local HEAL = { name = "Heal", role = "heal", what = "Regrowth, Healing Touch until 12; as a bear it shifts you out to heal",
+local HEAL = { name = "Heal", role = "heal", what = "Regrowth, Healing Touch until 12. As a bear it shifts you out to heal",
 	SHOW, Grows(8936, 5185) }
-local MARK = { name = "Mark", what = "Moonfire; Swipe as a bear, Ferocious Bite as a cat",
+local MARK = { name = "Mark", what = "Moonfire. Swipe as a bear, Ferocious Bite as a cat",
 	SHOW, "/cast " .. BEAR .. " {779}; [stance:{768},known:{1328618}] {1328618}; " .. CAT_STANCE .. " {1079}; {8921}" }
 local WRATH = { name = "Wrath", what = "Wrath", SHOW, "/cast {5176}" }
 local WILD_GROWTH = { name = "Wild Growth", what = "Wild Growth", SHOW, "/cast " .. FRIEND .. " {408120}" }
@@ -58,32 +58,32 @@ local GRASP = { name = "Escape", role = "escape", what = "Nature's Grasp once Ba
 local JOBS = {
 	-- The fight, under the fingers that are free while you move. The strike is R's in every form, from level 1.
 	-- From Prowl a cat's R Pounces and its E Ravages, as a rogue's attack keys open from Stealth.
-	{ name = "Strike", role = "strike", key = "R", asdf = "R", what = "Wrath; Maul as a bear, Claw as a cat (Pounce from Prowl)",
+	{ name = "Strike", role = "strike", key = "R", asdf = "R", what = "Wrath. Maul as a bear, Claw as a cat (Pounce from Prowl)",
 		SHOW, "/cast [stance:{768},stealth,known:{9005}] {9005}; " .. BEAR .. " {6807}; " .. CAT_STANCE .. " {1082}; {5176}",
 		by = { resto = BIG } },
-	{ name = "Heavy", key = "E", asdf = "E", what = "Starfire; Lacerate as a bear, Shred as a cat (Ravage from Prowl)",
+	{ name = "Heavy", key = "E", asdf = "E", what = "Starfire. Lacerate as a bear, Shred as a cat (Ravage from Prowl)",
 		SHOW, "/cast [stance:{768},stealth,known:{6785}] {6785}; " .. CAT_STANCE .. " {5221}; [stance:{9634|5487},known:{1328617}] {1328617}; "
 			.. BEAR .. " ; [known:{2912}] {2912}", by = { resto = HEAL } },
-	{ name = "Mark", key = "Q", asdf = "Q", what = "Moonfire; Demoralizing Roar as a bear, Rake as a cat",
+	{ name = "Mark", key = "Q", asdf = "Q", what = "Moonfire. Demoralizing Roar as a bear, Rake as a cat",
 		SHOW, MARK_FORMS .. "{8921}", by = { resto = RENEW } },
 	-- The bear's area and the cat's finisher; a cat's Rip waits here until Ferocious Bite comes at 24.
-	{ name = "Tear", key = "T", asdf = "T", what = "Swipe as a bear; Ferocious Bite as a cat, Rip until 24",
+	{ name = "Tear", key = "T", asdf = "T", what = "Swipe as a bear. Ferocious Bite as a cat, Rip until 24",
 		SHOW, "/cast " .. BEAR .. " {779}; [stance:{768},known:{1328618}] {1328618}; " .. CAT_STANCE .. " {1079}",
 		by = { resto = MARK, balance = HURRICANE } },
-	{ name = "Gore", key = "G", asdf = "W", what = "Rip as a cat, once Ferocious Bite has T; Primal Bite as a bear",
+	{ name = "Gore", key = "G", asdf = "W", what = "Rip as a cat, once Ferocious Bite has T. Primal Bite as a bear",
 		SHOW, "/cast [stance:{768},known:{1328618}] {1079}; [stance:{9634|5487},known:{407995}] {407995}",
 		by = { resto = WILD_GROWTH, balance = SWARM } },
 	-- (Prowl: a cat presses it before every pull, so it stands on an easy key.) A bear's Growl goes to what the
 	-- mouse is on first, as a tank picks up what breaks off.
-	{ name = "Hold", key = "Z", asdf = "Z", what = "Entangling Roots; Growl as a bear (what the mouse is on, else your target), Prowl as a cat",
+	{ name = "Hold", key = "Z", asdf = "Z", what = "Entangling Roots. Growl as a bear (what's under your mouse, or your target), Prowl as a cat",
 		SHOW, "/cast " .. CAT_STANCE .. " {5215}; [stance:{9634|5487},@mouseover,harm,nodead]" .. BEAR .. " {6795}; {339}" },
-	{ name = "Heal", role = "heal", key = "V", asdf = "V", what = "Regrowth, Healing Touch until 12; in a form it shifts you out to heal",
+	{ name = "Heal", role = "heal", key = "V", asdf = "V", what = "Regrowth, Healing Touch until 12. In a form it shifts you out to heal",
 		SHOW, Grows(8936, 5185), by = { resto = WRATH } },
 	-- What you pull with: Enrage as a bear, Tiger's Fury as a cat (free, so pressed every pull), Innervate out of form.
-	{ name = "Vigor", key = "X", asdf = "X", what = "Innervate; Enrage as a bear, Tiger's Fury as a cat",
+	{ name = "Vigor", key = "X", asdf = "X", what = "Innervate. Enrage as a bear, Tiger's Fury as a cat",
 		SHOW, "/cast " .. BEAR .. " {5229}; [stance:{768},known:{5217}] {5217}; " .. CAT_STANCE .. " ; [known:{29166}] {29166}" },
 	-- Feral Charge's leap behind your target as a cat in a fight, once you have it; Dash otherwise.
-	{ name = "Move", key = "C", asdf = "C", what = "Travel Form, Aquatic Form in water; Feral Charge as a bear; Dash as a cat (its leap in a fight once you have it)",
+	{ name = "Move", key = "C", asdf = "C", what = "Travel Form, Aquatic Form in water. Feral Charge as a bear. Dash as a cat (its leap in a fight once you have it)",
 		SHOW, "/cast [stance:{768},combat,known:{1238122}] {1238122}; " .. CAT_STANCE .. " {1850}; [stance:{9634|5487},known:{1238122}] {1238122}; "
 			.. BEAR .. " ; [swimming] {1066}; {783}" },
 	{ name = "Wild", key = "SHIFT-4", asdf = "SHIFT-4", stay = true, what = "Mark of the Wild",
@@ -92,10 +92,10 @@ local JOBS = {
 		SHOW, "/cast " .. FRIEND .. " {467}" },
 	-- The thumb: what you answer with. The stop is on F (G with ASDF), beside the index finger: Mouse 5 is
 	-- too far to reach in a hurry, so it keeps only what is never hurried.
-	{ name = "Guard", key = "BUTTON4", asdf = "BUTTON4", what = "Barkskin (Nature's Grasp until 44); Frenzied Regeneration as a bear from 36",
+	{ name = "Guard", key = "BUTTON4", asdf = "BUTTON4", what = "Barkskin (Nature's Grasp until 44). Frenzied Regeneration as a bear from 36",
 		SHOW, "/cast [stance:{9634|5487},known:{22842}] {22842}; [known:{22812}] {22812}; {16689}" },
 	-- A cat has no stop of its own: its F turns it into a bear, and F again Bashes.
-	{ name = "Stop", role = "stop", key = "F", asdf = "G", what = "Hibernate; Bash as a bear; as a cat it makes you a bear, so press it twice",
+	{ name = "Stop", role = "stop", key = "F", asdf = "G", what = "Hibernate. Bash as a bear. As a cat it makes you a bear, so press it twice",
 		SHOW, "/cast [stance:{768},known:{9634}] {9634}; " .. CAT_STANCE .. " {5487}; " .. BEAR .. " {5211}; {2637}" },
 	{ name = "Swiftness", key = "SHIFT-BUTTON4", asdf = "SHIFT-BUTTON4", stay = true, what = "Nature's Swiftness",
 		SHOW, "/cast {17116}" },
@@ -104,7 +104,7 @@ local JOBS = {
 	-- The number row.
 	{ name = "Uncurse", role = "uncurse", key = "4", asdf = "4", stay = true, spare = "MULTIACTIONBAR4BUTTON4", what = "Remove Curse",
 		SHOW, "/cast " .. FRIEND .. " {2782}" },
-	{ name = "Raise", role = "raise", key = "5", asdf = "5", stay = true, spare = "MULTIACTIONBAR4BUTTON5", what = "Revive, or Rebirth in a fight, on the dead friend the mouse is on or you have targeted, else the one you click next",
+	{ name = "Raise", role = "raise", key = "5", asdf = "5", stay = true, spare = "MULTIACTIONBAR4BUTTON5", what = "Revive, or Rebirth in a fight, on the dead friend under your mouse or your target, or the one you click next",
 		"#showtooltip {20484}", "/cast [combat,@mouseover,help,dead][combat,help,dead][combat,@none] {20484}; " .. Shy.Keys.DEAD .. " {437138}" },
 	-- With Shift: each key's rarer kin. A heal you cast between fights never stands in on an easy key: pressed in a
 	-- form it would shift you out.
@@ -121,9 +121,9 @@ local JOBS = {
 		SHOW, "/cast " .. FRIEND .. " {5185}", by = { resto = false } },   -- (Restoration's is on R)
 	{ name = "Roar", key = "SHIFT-G", asdf = "SHIFT-W", what = "Challenging Roar",
 		SHOW, "/cast {5209}", by = { balance = false, resto = false, cat = false, feralpvp = false } },   -- (a tank's; Balance's Moonkin Form is on 3)
-	{ name = "Escape", role = "escape", key = "B", asdf = "B", what = "Cower as a cat; Nature's Grasp once Barkskin has Mouse 4 (44)",
+	{ name = "Escape", role = "escape", key = "B", asdf = "B", what = "Cower as a cat. Nature's Grasp once Barkskin has Mouse 4 (44)",
 		SHOW, "/cast [stance:{768},known:{8998}] {8998}; [known:{22812}] {16689}", by = { bear = GRASP, balance = GRASP, resto = GRASP } },
-	{ name = "Poison", key = "SHIFT-D", asdf = "SHIFT-D", stay = true, what = "Abolish Poison; Cure Poison until 26",
+	{ name = "Poison", key = "SHIFT-D", asdf = "SHIFT-D", stay = true, what = "Abolish Poison. Cure Poison until 26",
 		SHOW, Grows(2893, 8946) },
 }
 -- With Shift on the bottom row: what your bags hold, the best of it you can use.
@@ -211,79 +211,79 @@ local MEND_LATE = { ENRAGE, { "Renew", "keep it up", as = "{99}" }, { "Big Heal"
 local MEND_PACK_LATE = { ENRAGE, { "Renew", "on 2+ enemies", as = "{99}" }, { "Mark", "on 2+ enemies", as = "{779}" },
 	{ "Big Heal", as = "{6807}" }, REGEN, { "Wild Growth", "after, out of bear" } }
 local PLAY = {
-	{ from = 1, tip = "You fight from range: pull with Wrath, keep Moonfire on it, and heal yourself between fights.",
+	{ from = 1, tip = "You fight from range. Pull with Wrath, keep Moonfire on it, and heal yourself between fights.",
 		single = { { "Thorns", "before you pull" }, { "Strike", "to pull, and in between", as = "{5176}" },
 			{ "Mark", "keep it up", as = "{8921}" }, { "Heal", "under half health" } },
 		cleave = { { "Hold", "on the second one", as = "{339}" }, { "Mark", "on each enemy", as = "{8921}" },
 			{ "Strike", as = "{5176}" }, { "Heal", "under half health" } } },
-	{ from = 10, tip = "Pull with Wrath, then go bear and Maul with Demoralizing Roar up; heal in caster form once it's dead.",
+	{ from = 10, tip = "Pull with Wrath, then go bear and Maul with Demoralizing Roar up. Heal in caster form once it's dead.",
 		single = { ENRAGE, { "Mark", "keep it up", as = "{99}" }, MAUL, BASH, AFTER },
 		cleave = { ENRAGE, DEMO, MAUL, AFTER } },
 	{ from = 16, tip = "As a bear, Swipe hits everything in front of you, so you can take two or three at once.",
 		single = { ENRAGE, { "Mark", "keep it up", as = "{99}" }, MAUL, BASH, AFTER },
 		cleave = BEAR_PACK },
-	{ from = 20, tip = "Go cat: sneak in with Prowl, Claw up to five combo points and spend them on Rip; go bear when several hit you.",
+	{ from = 20, tip = "Go cat. Sneak in with Prowl, Claw up to five combo points and spend them on Rip. Go bear when several hit you.",
 		single = CAT_FIRST, cleave = BEAR_PACK },
-	{ from = 24, tip = "Rake, Ferocious Bite and Tiger's Fury come now: keep Rake bleeding, and spend five points on a Bite, or on Rip if it's tough.",
+	{ from = 24, tip = "Rake, Ferocious Bite and Tiger's Fury come now. Keep Rake bleeding, and spend five points on a Bite, or on Rip if it's tough.",
 		single = CAT_SHRED, cleave = BEAR_PACK },
-	{ from = 30, tip = "Keep Rake bleeding and Shred from behind: your talents make a bleeding enemy take far more from both.",
+	{ from = 30, tip = "Keep Rake bleeding and Shred from behind. Your talents make a bleeding enemy take far more from both.",
 		single = CAT_BLEED, cleave = BEAR_PACK },
-	{ from = 32, tip = "Ravage is your opener now: Prowl up behind it, Ravage, then Rake and Claw to five points.",
+	{ from = 32, tip = "Ravage is your opener now. Prowl up behind it, Ravage, then Rake and Claw to five points.",
 		single = CAT_RAVAGE, cleave = BEAR_PACK },
-	{ from = 40, tip = "From Prowl your Claw key Pounces and your Shred key Ravages; Shifting Power refills your Energy from your mana.",
+	{ from = 40, tip = "From Prowl your Claw key Pounces and your Shred key Ravages. Shifting Power refills your Energy from your mana.",
 		single = CAT_LATE, cleave = BEAR_PACK_LATE },
-	{ from = 50, tip = "Fights are short now: Regrowth between them saves you from eating, and Innervate gives you mana back.",
+	{ from = 50, tip = "Fights are short now. Regrowth between them saves you from eating, and Innervate gives you mana back.",
 		single = CAT_LATE, cleave = BEAR_PACK_CHARGE },
 
 	-- Feral bear: a bear all the way, the group's tank.
-	{ from = 20, build = "bear", tip = "You stay a bear: Faerie Fire to pull, Feral Charge in, Enrage, Maul and Swipe, and Growl back what goes for a friend.",
+	{ from = 20, build = "bear", tip = "You stay a bear. Faerie Fire to pull, Feral Charge in, Enrage, Maul and Swipe, and Growl back what goes for a friend.",
 		single = { PULL, CHARGE, ENRAGE, { "Mark", "keep it up", as = "{99}" }, MAUL, BASH, AFTER },
 		cleave = { CHARGE, ENRAGE, SWIPE, { "Mark", "keep it up", as = "{99}" }, { "Hold", "on one that's off you", as = "{6795}" }, MAUL } },
-	{ from = 25, build = "bear", tip = "Lacerate bleeds and builds threat: stack it on what you're holding, and Maul with the rage left over.",
+	{ from = 25, build = "bear", tip = "Lacerate bleeds and builds threat. Stack it on what you're holding, and Maul with the rage left over.",
 		single = TANK, cleave = TANK_PACK },
 	{ from = 30, build = "bear", tip = "In a group, Swipe the pack, Growl what breaks off, and Challenging Roar if they all run for the healer.",
 		single = TANK, cleave = TANK_PACK_ROAR },
-	{ from = 40, build = "bear", tip = "Primal Bite is your big threat now; Frenzied Regeneration turns rage into health, so press it before you're low.",
+	{ from = 40, build = "bear", tip = "Primal Bite is your big threat now. Frenzied Regeneration turns rage into health, so press it before you're low.",
 		single = TANK_LATE, cleave = TANK_PACK_LATE },
-	{ from = 50, build = "bear", tip = "You can take whole camps: charge in, Swipe them down and keep Lacerate on the toughest one.",
+	{ from = 50, build = "bear", tip = "You can take whole camps. Charge in, Swipe them down and keep Lacerate on the toughest one.",
 		single = TANK_LATE, cleave = TANK_PACK_LATE },
 
 	-- Feral PvP: the cat's way, with Feral Charge and a longer Bash from the start.
-	{ from = 20, build = "feralpvp", tip = "Fight as a cat; when a pack or a caster comes at you, go bear, Feral Charge in and Bash.",
+	{ from = 20, build = "feralpvp", tip = "Fight as a cat. When a pack or a caster comes at you, go bear, Feral Charge in and Bash.",
 		single = CAT_FIRST, cleave = BASH_PACK },
-	{ from = 24, build = "feralpvp", tip = "Rake, Ferocious Bite and Tiger's Fury come now: keep Rake bleeding, and spend five points on a Bite, or on Rip if it's tough.",
+	{ from = 24, build = "feralpvp", tip = "Rake, Ferocious Bite and Tiger's Fury come now. Keep Rake bleeding, and spend five points on a Bite, or on Rip if it's tough.",
 		single = CAT_SHRED, cleave = BASH_PACK },
-	{ from = 30, build = "feralpvp", tip = "Keep Rake bleeding and Claw to five points; Feral Charge leaps you onto a runner, and Bash stops a caster.",
+	{ from = 30, build = "feralpvp", tip = "Keep Rake bleeding and Claw to five points. Feral Charge leaps you onto a runner, and Bash stops a caster.",
 		single = CAT_BLEED, cleave = BASH_PACK },
-	{ from = 32, build = "feralpvp", tip = "Ravage is your opener now: Prowl up behind it, Ravage, then Rake and Claw to five points.",
+	{ from = 32, build = "feralpvp", tip = "Ravage is your opener now. Prowl up behind it, Ravage, then Rake and Claw to five points.",
 		single = CAT_RAVAGE, cleave = BASH_PACK },
-	{ from = 40, build = "feralpvp", tip = "From Prowl your Claw key Pounces to stun them and your Shred key Ravages; in bear, Bash holds a caster still.",
+	{ from = 40, build = "feralpvp", tip = "From Prowl your Claw key Pounces to stun them and your Shred key Ravages. In bear, Bash holds a caster still.",
 		single = CAT_LATE, cleave = BASH_PACK_LATE },
-	{ from = 50, build = "feralpvp", tip = "Fights are short now: Regrowth between them saves you from eating, and Innervate gives you mana back.",
+	{ from = 50, build = "feralpvp", tip = "Fights are short now. Regrowth between them saves you from eating, and Innervate gives you mana back.",
 		single = CAT_LATE, cleave = BASH_PACK_LATE },
 
 	-- Balance: a caster all the way.
-	{ from = 10, build = "balance", tip = "Wrath from range, keep Moonfire on, and root it when it reaches you; you drink a lot, so pull one at a time.",
+	{ from = 10, build = "balance", tip = "Wrath from range, keep Moonfire on, and root it when it reaches you. You drink a lot, so pull one at a time.",
 		single = { { "Strike", "to pull, and in between", as = "{5176}" }, { "Mark", "keep it up", as = "{8921}" },
 			{ "Hold", "when it reaches you", as = "{339}" }, { "Heal", "under half health" } },
 		cleave = { { "Hold", "on the second one", as = "{339}" }, { "Mark", "on each enemy", as = "{8921}" },
 			{ "Strike", as = "{5176}" }, { "Heal", "under half health" } } },
-	{ from = 20, build = "balance", tip = "Open with Starfire from as far as you can, then Moonfire and Wrath; root it and step back if it gets close.",
+	{ from = 20, build = "balance", tip = "Open with Starfire from as far as you can, then Moonfire and Wrath. Root it and step back if it gets close.",
 		single = STARFIRE, cleave = CASTER_PACK },
-	{ from = 30, build = "balance", tip = "Moonfire and Insect Swarm hurt while you cast, so put both on early; a crit makes your next cast quicker.",
+	{ from = 30, build = "balance", tip = "Moonfire and Insect Swarm hurt while you cast, so put both on early. A crit makes your next cast quicker.",
 		single = { { "Heavy", "to pull", as = "{2912}" }, { "Insect Swarm", "keep it up" },
 			{ "Mark", "keep it up", as = "{8921}" }, { "Strike", "once it's close", as = "{5176}" },
 			{ "Hold", "when it reaches you", as = "{339}" }, { "Heal", "under half health" } },
 		cleave = SWARM_PACK },
-	{ from = 40, build = "balance", tip = "Fight in Moonkin Form and leave it only to heal; root a pack in place and Hurricane it.",
+	{ from = 40, build = "balance", tip = "Fight in Moonkin Form and leave it only to heal. Root a pack in place and Hurricane it.",
 		single = MOON, cleave = MOON_PACK },
 	{ from = 44, build = "balance", tip = "Barkskin takes the edge off what reaches you, and you keep casting through it.",
 		single = MOON_BARK, cleave = MOON_PACK },
-	{ from = 50, build = "balance", tip = "Most things die before they reach you now; Innervate when you're low and keep pulling.",
+	{ from = 50, build = "balance", tip = "Most things die before they reach you now. Innervate when you're low and keep pulling.",
 		single = MOON_BARK, cleave = MOON_PACK },
 
 	-- Restoration: a healer, who fights alone as a bear to save mana.
-	{ from = 1, build = "resto", tip = "Wrath and Moonfire do the killing; Rejuvenation keeps you up, and you drink between fights.",
+	{ from = 1, build = "resto", tip = "Wrath and Moonfire do the killing. Rejuvenation keeps you up, and you drink between fights.",
 		single = { { "Big Heal", "to pull, and in between", as = "{5176}" }, { "Mark", "keep it up", as = "{8921}" },
 			{ "Renew", "when you're hit", as = FRIEND_HEAL }, { "Heal", "under half health" } },
 		cleave = { { "Hold", "on the second one", as = "{339}" }, { "Mark", "on each enemy", as = "{8921}" },
@@ -292,7 +292,7 @@ local PLAY = {
 		single = MEND, cleave = MEND_BEAR },
 	{ from = 16, build = "resto", tip = "As a bear, Swipe hits everything in front of you, so you can take two at once and heal up after.",
 		single = MEND, cleave = MEND_PACK },
-	{ from = 20, build = "resto", tip = "In a group keep Rejuvenation on the tank and Regrowth whoever drops low; alone you still fight as a bear.",
+	{ from = 20, build = "resto", tip = "In a group keep Rejuvenation on the tank and Regrowth whoever drops low. Alone you still fight as a bear.",
 		single = MEND, cleave = MEND_PACK },
 	{ from = 30, build = "resto", tip = "Swiftmend turns a Rejuvenation into a big heal at once, and Nature's Swiftness makes your next heal instant.",
 		single = { ENRAGE, { "Renew", "keep it up", as = "{99}" }, { "Big Heal", as = "{6807}" }, BASH,
@@ -301,7 +301,7 @@ local PLAY = {
 			{ "Big Heal", as = "{6807}" }, { "Swiftness", "then a heal, if you're low" }, AFTER } },
 	{ from = 40, build = "resto", tip = "Wild Growth heals your whole group at once, and Innervate gives you mana back when you run dry.",
 		single = MEND_LATE, cleave = MEND_PACK_LATE },
-	{ from = 50, build = "resto", tip = "Alone you're still slow: pull one at a time, and let Rejuvenation and Regrowth tick while you drink.",
+	{ from = 50, build = "resto", tip = "Alone you're still slow. Pull one at a time, and let Rejuvenation and Regrowth tick while you drink.",
 		single = MEND_LATE, cleave = MEND_PACK_LATE },
 }
 K.PLAY = PLAY
@@ -316,7 +316,6 @@ local OPTS = {
 	keeps = "form",
 	-- A form a key only passes through (a cat's stop makes it a bear) is not what the key is for.
 	shifts = { [5487] = true, [9634] = true },
-	list = "/shydruid keys list",
 	build = Shy.Keys.Build,
 	play = PLAY,
 }
@@ -336,7 +335,7 @@ function K.Run()
 end
 
 function K.List()
-	return Shy.Keys.List(JOBS, OPTS, T) .. "\n\nA heal goes to the friend the mouse is on, else the friend you have targeted, else you."
+	return Shy.Keys.List(JOBS, OPTS, T) .. "\n\nA heal goes to the friend under your mouse, or your target, or you."
 end
 
 -- From login on, a job comes to its key when you learn it, the bags' keys follow the bags and the layout your build.

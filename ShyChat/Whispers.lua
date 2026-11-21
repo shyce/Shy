@@ -413,7 +413,7 @@ local function Shut(w)
 	Keys()
 end
 
--- What happened to the windows lately, for /shychat whispers.
+-- What happened to the windows lately, for /shy chat whispers.
 local log = {}
 local function Log(text)
 	log[#log + 1] = ("%.2f  %s"):format(GetTime(), text)
@@ -1125,12 +1125,12 @@ function Wh.Send(w, edit)
 		return
 	end
 	if text:find(COMMAND) then
-		T:Print(InCombatLockdown() and "commands typed in a whisper run once the fight is over. Your words are still in the box."
-			or "that command didn't run. Your words are still in the box.")
+		T:Print(InCombatLockdown() and "commands typed in a whisper run once the fight is over. Your message is still in the box."
+			or "that command didn't run. Your message is still in the box.")
 		return
 	end
 	if C_ChatInfo.InChatMessagingLockdown() then
-		T:Print("whispers can't be sent right now. Your words are still in the box.")
+		T:Print("whispers can't be sent right now. Your message is still in the box.")
 		return
 	end
 	text = ChatFrameUtil.SubstituteChatMessageBeforeSend(text)
@@ -1464,7 +1464,7 @@ function Wh.Restore()
 	Docked()
 end
 
--- /shychat whispers: the windows as they stand and what happened to them lately, to copy.
+-- /shy chat whispers: the windows as they stand and what happened to them lately, to copy.
 function Wh.Report()
 	local out = { ("whispers %s, open as %s, in a fight %s, UI shown %s"):format(tostring(db.whispers),
 		tostring(db.whisperOpen), tostring(InCombatLockdown()), tostring(UIParent:IsShown())) }
@@ -1491,6 +1491,6 @@ function Wh.Report()
 	return table.concat(out, "\n")
 end
 
--- For tests and /shychat: the windows, conversations and the dock as they stand, and the windows' set.
+-- For tests and /shy chat whispers: the windows, conversations and the dock as they stand, and the windows' set.
 function Wh.State() return set.wins, talks, dock, set, host end
 Wh.Minimize, Wh.Maximize = Minimize, Maximize

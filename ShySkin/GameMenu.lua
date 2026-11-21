@@ -1,5 +1,5 @@
 -- The game menu (Esc) as a Shy window: its buttons as plates, and a Shy button on a row of its own above
--- them. The Shy button's words open /shy; its caret, or a right click, opens the Shy menu (ShyCore's
+-- them. The Shy button's words open the settings; its caret, or a right click, opens the Shy menu (ShyCore's
 -- Shy.WriteMenu, as the minimap button's), and picking from it closes the game menu.
 -- The menu is a vertical layout frame that makes its buttons again on every show (InitButtons). The plate
 -- goes on its border, which the layout ignores, and grows up over the Shy row; the Shy button is ours, on
@@ -91,7 +91,7 @@ local function Build(owner)
 	b:SetScript("OnEnter", function(self)
 		self:SetScript("OnUpdate", Look)
 		Look(self)
-		UI.Tip(self, "Shy", nil, { side = "RIGHT", hints = { { "left", "Open /shy" }, { "right", "Menu" } } })
+		UI.Tip(self, "Shy", nil, { side = "RIGHT", hints = { { "left", "Settings" }, { "right", "Menu" } } })
 	end)
 	b:SetScript("OnLeave", function(self)
 		self:SetScript("OnUpdate", nil)
@@ -107,7 +107,7 @@ local function Build(owner)
 		end
 		PlaySound(SOUNDKIT.IG_MAINMENU_OPTION)
 		Leave()
-		Shy.Hub.Open()
+		Shy.Settings.Open()
 	end)
 	b:SetScript("OnHide", function(self)
 		self:SetScript("OnUpdate", nil)
@@ -146,7 +146,9 @@ end
 ns.Module({
 	id = "gamemenu",
 	title = "Game menu",
-	desc = "Restyles the Esc menu as a steel panel with plate buttons, and adds a Shy button that opens /shy, or its menu on a right click.",
+	desc = "The Esc menu becomes a steel panel, with a button on top that opens these settings.",
+	group = "window",
+	words = "escape main",
 
 	Ready = function() return GameMenuFrame ~= nil end,
 

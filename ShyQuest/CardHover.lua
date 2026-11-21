@@ -1012,7 +1012,7 @@ function CardHover.StepContent(view, state)
 	local rows = StepRows(view, state ~= "todo", content.title)
 	if state == "skipped" then
 		local index = view.step.index
-		rows[#rows + 1] = { glyph = "note", tint = C.alert, color = C.alert, text = view.absent and "Skipped: you can't take its quest"
+		rows[#rows + 1] = { glyph = "note", tint = C.alert, color = C.alert, text = view.absent and "Skipped because you can't take its quest"
 			or (view.skipped ~= index and ("Skipped with step " .. G.Number(view.skipped))) or "Skipped" }
 	end
 	content.sections[1] = { title = state == "todo" and "To do" or "Tasks", rows = rows }

@@ -369,7 +369,7 @@ function K.Maker(spec)
 		elseif spec.time == "in" then
 			local time = Label(over, math.max(9, math.floor(size * 0.42 + 0.5)))
 			time:SetPoint("BOTTOM", button, "BOTTOM", 0, 0)
-			button:SetDurationText(time)
+			button:SetDurationText(time, Timed(time))   -- "19m", not the game's "19 m"
 		end
 		local count = Label(over, Slot.CountSize(size))
 		count:SetPoint("TOPRIGHT", cell, "TOPRIGHT", 1, 1)
@@ -764,8 +764,21 @@ function K.ShellRoom()
 	return K.SHELL_ROOM
 end
 
+-- A length in whole screen pixels where `frame` stands (the nearest), so an edge and the room round it round the same
+-- way on every side; as it is where the screen can't be read.
+local function Whole(frame, length)
+	local scale = frame:GetEffectiveScale()
+	local factor = PixelUtil.GetPixelToUIUnitFactor()
+	if issecretvalue(scale) or not scale or scale <= 0 or not factor or factor <= 0 then return length end
+	local per = scale / factor
+	return math.floor(length * per + 0.5) / per
+end
+K.Whole = Whole
+
 -- Lays the housings out for a row of `cols` icons at most, in `rows` rows, and stands the container where its
 -- icons go. Again on a change of look (its border); only while auras can be read (the container is told).
+-- The room, the lift and the inset are each whole screen pixels: the room reads the same over the icons as at their
+-- sides.
 function K.FitShell(s, cols, rows)
 	s.cols, s.rows = cols, rows
 	local o = s.o
@@ -773,11 +786,12 @@ function K.FitShell(s, cols, rows)
 	local shapes = {}
 	for k = 1, cols do shapes[#shapes + 1] = { k, 1 } end
 	for j = 2, rows do shapes[#shapes + 1] = { cols, j } end
-	local around = K.ShellRoom()
-	local lift = o.lift or 0
+	local around = Whole(o.edge, K.ShellRoom())
+	local lift = Whole(o.edge, o.lift or 0)
+	local inset = Whole(o.edge, o.inset)
 	local drop = lift + around
 	local right = o.side == "RIGHT"
-	K.Place(s.c, o.edge, right and "TOPRIGHT" or "TOPLEFT", right and -o.inset or o.inset, drop)
+	K.Place(s.c, o.edge, right and "TOPRIGHT" or "TOPLEFT", right and -inset or inset, drop)
 	local widest = cols * pitch - o.gap + 2 * around + 6
 	-- Each bar's reach: an icon less (or the empty unit square) moves its fill end past the widest window.
 	local reachW, reachH = cols * pitch, rows * pitch
@@ -792,7 +806,7 @@ function K.FitShell(s, cols, rows)
 		local shape = Shape(s, i)
 		local w, h = at[1] * pitch - o.gap, at[2] * pitch - o.gap
 		local hw, hh = w + 2 * around, around + h + around
-		local left = o.side == "RIGHT" and edgeW - o.inset - w - around or o.inset - around
+		local left = o.side == "RIGHT" and edgeW - inset - w - around or inset - around
 		local housing = shape.housing
 		housing:ClearAllPoints()
 		housing:SetPoint("BOTTOMLEFT", o.edge, "TOPLEFT", left, lift)

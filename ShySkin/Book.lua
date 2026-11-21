@@ -85,7 +85,9 @@ local barColor   -- the game's color for the bar
 ns.Module({
 	id = "book",
 	title = "Books and letters",
-	desc = "Restyles the window you read books, letters and plaques in. Each page keeps its own paper.",
+	desc = "The window you read books, letters and plaques in wears your theme. Each page keeps its paper.",
+	group = "window",
+	words = "item text",
 
 	Ready = function() return ItemTextFrame ~= nil and ns.Window ~= nil end,
 

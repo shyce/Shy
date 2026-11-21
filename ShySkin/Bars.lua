@@ -107,16 +107,18 @@ end
 ns.Module({
 	id = "bars",
 	title = "Action bars",
-	desc = "Restyles every action button as a steel-framed slot in the icon shape set in /shy. Empty buttons are dim, with their key still showing, and the main bar's border is removed.",
+	desc = "Your action buttons get steel frames in your icon shape. Empty ones go dim but keep their key.",
+	group = "screen",
+	words = "buttons hotkeys keybinds gryphons stance pet",
 	options = {
 		{ key = "gloss", label = "Glossy buttons", default = true,
-			desc = "Adds a soft highlight across the top of every button." },
-		{ key = "endCaps", label = "Tint the gryphons", default = true,
-			desc = "Turns the gryphons at the ends of the main bar steel, with a hint of your accent color." },
-		{ key = "hotkeys", label = "Show key bindings", default = true,
-			desc = "Shows the key on each button, your stances and auras too. Hiding it also hides the red out-of-range key." },
-		{ key = "macros", label = "Show macro names", default = true,
-			desc = "Shows the name along the bottom of a macro's button." },
+			desc = "A soft highlight runs across the top of each button." },
+		{ key = "endCaps", label = "Steel gryphons", default = true,
+			desc = "The gryphons at the ends of your main bar turn steel, with a hint of your color." },
+		{ key = "hotkeys", label = "Key bindings", default = true,
+			desc = "Each button shows its key. Without it, the red out-of-range mark goes too." },
+		{ key = "macros", label = "Macro names", default = true,
+			desc = "A macro's name shows along the bottom of its button." },
 	},
 
 	Hook = function(m)
@@ -172,5 +174,10 @@ ns.Module({
 		end
 		PaintExtra(m, kit)
 		PaintMainBar(m, kit)
+		ns.Claim("barText", true)
+	end,
+
+	Clear = function(m)
+		if not m.on then ns.Claim("barText", false) end
 	end,
 })

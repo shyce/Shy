@@ -490,7 +490,7 @@ S.GAME = {
 		desc = "Your character stops saying \"Not enough energy\" and the like. The red text still shows. (Options > Audio > Error Speech)",
 		want = { Sound_EnableErrorSpeech = "0" } },
 	{ key = "errorWindow", group = "Fewer interruptions", title = "No error pop-ups", on = true, round = 8,
-		desc = "Addon errors are kept for /shy errors instead of opening a window in the middle of the screen.",
+		desc = "Addon errors go to /shy errors instead of opening a window in the middle of the screen.",
 		is = function() return not Shy.Errors.Popup() end,
 		take = function() Shy.Errors.SetPopup(false) return true end,
 		back = function() Shy.Errors.SetPopup(true) end },
@@ -539,25 +539,31 @@ S.GAME = {
 		desc = "Your health and power just under your character, where you're looking in a fight. ShyDock's layouts by role show them on your unit frame instead and keep this off. (Options > Combat)",
 		want = { nameplateShowSelf = "1" } },
 	{ key = "enemyPlates", group = "Nameplates", title = "Enemy nameplates", on = true, round = 2,
-		owner = Tweaks("combatPlates", "npcNames"),
-		desc = "Every enemy near you gets a nameplate with its health, casts and your debuffs. ShyTweaks' NPC names and combat-only nameplates control this while they're on. (Options > Nameplates)",
+		owner = Tweaks("npcNames"),
+		desc = "Every enemy near you gets a nameplate with its health, casts and your debuffs. ShyTweaks' Restyle NPC names controls this while it's on. (Options > Nameplates)",
 		want = { nameplateShowEnemies = "1" } },
 	{ key = "friendPlates", group = "Nameplates", title = "Friendly nameplates", on = true, round = 2,
-		desc = "Players on your side get a nameplate, so a group or a fight is easy to read. (Options > Nameplates)",
+		owner = Tweaks("classNames"),
+		desc = "Players on your side get a nameplate, so a group or a fight is easy to read. ShyTweaks' Restyle player names controls this while it's on. (Options > Nameplates)",
 		want = { nameplateShowFriendlyPlayers = "1" } },
 	{ key = "alwaysPlates", group = "Nameplates", title = "Nameplates out of combat", on = true, round = 2,
 		owner = Tweaks("npcNames"),
-		desc = "Nameplates show all the time, not only once a fight starts. ShyTweaks' NPC names controls this while it's on. (Options > Nameplates)",
+		desc = "Nameplates show all the time, not only once a fight starts. ShyTweaks' Restyle NPC names controls this while it's on. (Options > Nameplates)",
 		want = { nameplateShowAll = "1" } },
-	{ key = "plateAggro", group = "Nameplates", title = "Threat colors on nameplates", on = true, round = 9, owner = "Plates",
-		desc = "An enemy's health bar changes color as you lose threat on it as a tank, or pull it otherwise. (Options > Nameplates > Aggro Display > Health Bar Color)",
+	{ key = "plateAggro", group = "Nameplates", title = "Threat colors on nameplates", on = true, round = 9,
+		-- ShyPlates colors the bars by threat itself while it draws the plates.
+		owner = function()
+			local plates = Shy.addons.Plates
+			return plates ~= nil and plates.IsOn ~= nil and plates:IsOn() == true
+		end,
+		desc = "An enemy's health bar changes color when you lose threat as a tank, or pull threat as anyone else. (Options > Nameplates > Aggro Display > Health Bar Color)",
 		flags = { nameplateThreatDisplay = Enum.NamePlateThreatDisplay.HealthBarColor } },
 	{ key = "stackPlates", group = "Nameplates", title = "Stack enemy nameplates", on = true, round = 2,
 		desc = "Enemy nameplates stack instead of overlapping, so each stays readable. (Options > Nameplates)",
 		flags = { nameplateStackingTypes = Enum.NamePlateStackType.Enemy } },
 	{ key = "npcPlates", group = "Nameplates", title = "Friendly NPC nameplates", on = true, round = 11,
 		owner = Tweaks("npcNames"),
-		desc = "Guards, vendors and quest givers get a nameplate with their name, where ShyQuest marks the one your next step sends you to. ShyTweaks' NPC names controls this while it's on. (Options > Nameplates)",
+		desc = "Guards, vendors and quest givers get a nameplate with their name. ShyQuest marks the one for your next step there. ShyTweaks' Restyle NPC names controls this while it's on. (Options > Nameplates)",
 		want = { nameplateShowFriendlyNpcs = "1" } },
 	{ key = "minionPlates", group = "Nameplates", title = "Enemy pet nameplates", round = 2,
 		desc = "Pets, totems and other minions of your enemies get nameplates too. (Options > Nameplates)",
@@ -569,20 +575,20 @@ S.GAME = {
 	{ key = "lfgTab", group = "Chat", title = "Own tab for LookingForGroup", on = true, round = 3,
 		desc = "You join the LookingForGroup channel and it gets its own chat tab, so General stays readable. The tab appears after a reload. (Right-click a chat tab > Settings)",
 		is = LfgIs, take = LfgTake, back = LfgBack,
-		reload = "The LookingForGroup tab changes after a reload.", fail = "needs a free chat window; close one first." },
+		reload = "The LookingForGroup tab changes after a reload.", fail = "needs a free chat window. Close one first." },
 	{ key = "tellsTab", group = "Chat", title = "Own tab for whispers", on = true, round = 4,
 		desc = "Whispers get their own chat tab, named Tells, so they never scroll away. General still shows them too. The tab appears after a reload. (Right-click a chat tab > Settings)",
 		is = TellsIs, take = TellsTake, back = TellsBack,
-		reload = "The Tells tab changes after a reload.", fail = "needs a free chat window; close one first." },
+		reload = "The Tells tab changes after a reload.", fail = "needs a free chat window. Close one first." },
 	{ key = "guildTab", group = "Chat", title = "Own tab for guild chat", on = true, round = 10,
 		desc = "Guild and officer chat get their own chat tab, named Guild, so they never scroll away. General still shows what it showed. The tab appears after a reload. (Right-click a chat tab > Settings)",
 		is = GuildIs, take = GuildTake, back = GuildBack,
-		reload = "The Guild tab changes after a reload.", fail = "needs a free chat window; close one first." },
+		reload = "The Guild tab changes after a reload.", fail = "needs a free chat window. Close one first." },
 	{ key = "defenseTab", group = "Chat", title = "Own tab for LocalDefense", on = true, round = 7,
 		desc = "LocalDefense, which calls out attacks on the zone's towns, gets its own chat tab named LD, so General stays readable. The tab appears after a reload. (Right-click a chat tab > Settings)",
 		is = DefenseIs, take = DefenseTake, back = DefenseBack,
-		reload = "The LocalDefense tab changes after a reload.", fail = "needs a free chat window; close one first." },
-	{ key = "partyBubbles", group = "Chat", title = "Party chat bubbles", on = true, round = 5, owner = "Chat",
+		reload = "The LocalDefense tab changes after a reload.", fail = "needs a free chat window. Close one first." },
+	{ key = "partyBubbles", group = "Chat", title = "Party chat bubbles", on = true, round = 5,
 		desc = "Party chat shows in bubbles over their heads, like /say does. (Options > Interface > Chat Bubbles > Party Chat)",
 		want = { chatBubbles = "1", chatBubblesParty = "1" } },
 }
@@ -924,15 +930,15 @@ local function ProfileLines(plan)
 	if not act then return { { text = why, bad = true } } end
 	if act == "stay" then
 		return { { text = first .. " stays on " .. (name == P.GLOBAL and "Global" or name),
-			sub = name == P.GLOBAL and "the profile your characters share; nothing changes" or "nothing changes" } }
+			sub = name == P.GLOBAL and "the shared profile, so nothing changes" or "nothing changes" } }
 	elseif act == "use" then
 		return { { text = first .. " uses " .. (name == P.GLOBAL and "Global" or name),
-			sub = "shared with every character that uses it; the old profile keeps its settings" } }
+			sub = "shared with every character on it, and the old profile keeps its settings" } }
 	elseif name == P.GLOBAL then
 		return { { text = "Every addon on default settings", sub = "saved in Global, shared by every character that hasn't picked another" } }
 	elseif name == me then
 		return { { text = first .. " gets default settings in a profile of their own",
-			sub = ShyCoreDB.profiles[me] and "their own profile goes back to defaults; no other character is affected" or "your other characters keep theirs" } }
+			sub = ShyCoreDB.profiles[me] and "their profile goes back to defaults and no other character changes" or "your other characters keep theirs" } }
 	end
 	return { { text = "New profile " .. name .. " on default settings", sub = "other characters can pick it later" } }
 end
@@ -1388,7 +1394,7 @@ end
 
 -- With a plan, a plate over the list says whether setup changes the game's settings at all.
 local MASTER = { title = "Use the recommended game settings", say = "Untick this to leave every game setting as it is.",
-	desc = "The ones ticked below are changed when you press Finish. Green ones are already on. You can undo any of them later in /shy." }
+	desc = "Finish changes the ones ticked below. Green ones are already on. You can undo any of them later in /shy." }
 
 function S.GameList(parent, width, plan)
 	local f = CreateFrame("Frame", nil, parent)
@@ -1606,7 +1612,7 @@ local function QuestionLines(def, plan)
 			if want then on = on + 1 end
 		end
 		if next(answers) == nil then return { { text = noun .. " as the profile has them", sub = "none changed here" } } end
-		return { { text = noun .. " as you picked them", sub = on .. " switched on; applied after the reload" } }
+		return { { text = noun .. " as you picked them", sub = on .. " switched on after the reload" } }
 	end
 	local on, off, answers = {}, {}, Answers(def, plan)
 	for _, item in ipairs(def.items()) do
@@ -1616,7 +1622,7 @@ local function QuestionLines(def, plan)
 			list[#list + 1] = (item.title:gsub("^%u", string.lower))
 		end
 	end
-	if #on + #off == 0 then return { { text = noun .. " stay as they are", sub = #def.items() .. " in all; none changed" } } end
+	if #on + #off == 0 then return { { text = noun .. " stay as they are", sub = #def.items() .. " in all, none changed" } } end
 	local parts = {}
 	if #on > 0 then parts[#parts + 1] = #on .. " switched on (" .. Listed(on) .. ")" end
 	if #off > 0 then parts[#parts + 1] = #off .. " switched off (" .. Listed(off) .. ")" end
@@ -2643,7 +2649,7 @@ Shy:On("SHY_LOGIN", function()
 	end)
 end)
 
-Shy.Command("setup", "set up this character: profile, layout and game settings", function() S.Open() end)
+Shy.Command("setup", "set this character up", function() S.Open() end)
 
 -- The /shy window's Game room: the same list, each row switched as it is ticked.
 Shy.HubSection("game", function(page, top)

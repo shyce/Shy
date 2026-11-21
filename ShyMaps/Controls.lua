@@ -264,6 +264,7 @@ local function FindMe()
 	if not View.PlayerAt(View.Map()) and not View.Show(MapUtil.GetDisplayableMapForPlayer(), "here") then return end
 	View.Seek(math.max(View.Scale() / View.Fit(), 1.5))
 end
+ns.FindMe = FindMe
 
 -- Over the row, by the mouse: the plate stands in the map's bottom corner.
 local function Tip(self)
@@ -343,7 +344,7 @@ local function Build()
 		{ width = FOLLOW.wide, height = ROW, tips = {
 			"The map stays where you put it.",
 			"You stay in the middle of the map.",
-			"You stay in sight with a little of your way ahead." } })
+			"You stay in view, with some of the way ahead." } })
 	follow:ClearAllPoints()
 	follow:SetPoint("BOTTOMRIGHT", -PAD, PAD)
 

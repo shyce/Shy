@@ -1,18 +1,18 @@
 -- Bag space for quests.
---   Vendor errand: with bags nearly full (LOW_SHARE of the slots or LOW_LEAST free), the nearest
---     vendor is a stop before the guide's step when close by or on the way (R.Passing), else a
---     later row while within LISTED yards. With ShyBags the row makes room either way: a click
---     opens the bags with the cheapest things lit, each to drop, until there is room again, and it
---     says so; with no shop in reach (or nothing a shop would buy) it stands with no place to go
---     to, for that click alone. Nobody is sent across the land to make room. Not when ShyBags
---     finds nothing that could go.
---   Shops: who really buys and sells is noted from the game's own windows and kept for the
---     account. Nobody who showed no shop is a stop again.
+--   Vendor errand: when bags are nearly full (LOW_SHARE of the slots or LOW_LEAST free), the nearest
+--     vendor becomes a stop. It comes before the guide's step when close by or on the way
+--     (R.Passing), otherwise it is a later row while within LISTED yards. With ShyBags the row makes
+--     room either way: a click opens the bags with the cheapest things lit, each one droppable,
+--     until there is room again, and it says so. With no shop in reach (or nothing a shop would
+--     buy) the row has no place to go and only offers that click. Nobody is sent across the land
+--     to make room. No row when ShyBags finds nothing that could go.
+--   Shops: who really buys and sells is noted from the game's own windows and saved for the
+--     account. Someone who showed no shop is never a stop again.
 --   No room: when a quest's item or reward won't fit, or the game refuses a quest for bag space,
 --     one chat line names the cheapest item and ShyBags highlights what could go (MakeRoom).
 --   Card note: the leading step warns when it accepts or turns in a quest with no slot free.
--- ShyBags is optional: it supplies item values, and is told which items quests still need (Keep)
--- and which are left from finished quests (Leftover). Free slots count ordinary bags only.
+-- ShyBags is optional. It supplies item values, and is told which items quests still need (Keep)
+-- and which are left over from finished quests (Leftover). Free slots count ordinary bags only.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -212,12 +212,12 @@ local function Find(lead)
 		menuHint = shy and "Sort bags by worth" or nil,
 		menu = function(root)
 			if shy then root:CreateButton("Sort bags: least worth first", Sort) end
-			root:CreateButton("Not now: ask again when they fill up", function()
+			root:CreateButton("Ask me when they fill up", function()
 				put = true
 				ns.Refresh()
 			end)
 			if at then
-				root:CreateButton(("%s doesn't buy: find another"):format(at.npc.name), function()
+				root:CreateButton(("%s won't buy. Find another"):format(at.npc.name), function()
 					D.NoteShop(at.npc.id, D.NO_SHOP, true)
 					ns.Refresh()
 				end)
@@ -413,9 +413,10 @@ events:SetScript("OnEvent", function(_, event, _, message, _, questWarn)
 	end
 end)
 
+-- Room in the bags came or went (a sale, a loot): the vendor's row is an errand, fitted again, not the route.
 Shy:On("SHY_BAGS_ROOM", function()
 	stale = true
-	if ns.char then ns.Refresh() end
+	if ns.char then ns.RefreshErrands() end
 end)
 
 -- Registers with ShyBags once, on the first route build (every addon has loaded by then). How an item

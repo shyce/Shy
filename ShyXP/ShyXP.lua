@@ -95,11 +95,8 @@ function ns.Places()
 end
 
 function ns.SetPlace(place)
-	local moved = T.db.place ~= place
 	T.db.place = place
 	ns.Refresh()
-	if ns.ApplyBlizzardBar then ns.ApplyBlizzardBar() end
-	if moved then Shy:Fire("SHY_XP_PLACE") end
 end
 
 -- What the bar shows: "rep" (the faction you track, Rep.lua), "xp", or nil (nothing: the top level with
@@ -317,7 +314,6 @@ function T:OnLoad()
 	for _, def in ipairs(ns.REP_TILES or {}) do
 		if box.repTiles[def.key] == nil then box.repTiles[def.key] = true end
 	end
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -344,23 +340,12 @@ function ns.Share(source)
 	if editBox then editBox:Insert(text) else ChatFrameUtil.OpenChat(text) end
 end
 
-SLASH_SHYXP1 = "/shyxp"
-SlashCmdList.SHYXP = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "share" then
-		ns.Share()
-	elseif cmd == "reset" then
-		S.ResetLevel()
-		T:Print("this level's time, kills and quests were reset.")
-	elseif cmd == "splits" and ns.Splits then
-		Shy.UI.ShowCopyBox("ShyXP: levels", ns.Splits.Report())
-	elseif cmd == "" then
-		T:OpenOptions()
-	else
-		T:Print("commands:")
-		print("  /shyxp  - open options")
-		print("  /shyxp share  - put your progress in the chat box")
-		print("  /shyxp reset  - reset this level's time, kills and quests")
-		print("  /shyxp splits  - every level's time, against another character")
-	end
-end
+T:Command("share", "put your progress in the chat box", function() ns.Share() end)
+T:Command("reset", "start this level's time, kills and quests from nothing", function()
+	S.ResetLevel()
+	ns.Refresh()
+	T:Print("this level's time, kills and quests start from nothing.")
+end)
+T:Command("splits", "every level's time, against another character", function()
+	if ns.Splits then Shy.UI.ShowCopyBox("ShyXP: levels", ns.Splits.Report()) end
+end)

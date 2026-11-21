@@ -545,7 +545,7 @@ local function Stand()
 				db.voice.captions = (not on) and false or nil
 				Veil()
 			end,
-			hint = "The voice's words on screen as it speaks",
+			hint = "The words on screen as they're spoken",
 		},
 	})
 	local say = Shy.UI.Text(box, "Voice captions show here", 12, false, Shy.UI.colors.dim)

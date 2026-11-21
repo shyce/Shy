@@ -171,11 +171,11 @@ local function MeasureItems()
 	local fight = InCombatLockdown()
 	local why = fight and "After the fight" or nil
 	local items = {
-		{ text = "Collect", sub = "One full clean-up now; a short hitch", disabled = fight, tip = why,
+		{ text = "Collect", sub = "One full clean-up now. Expect a short hitch", disabled = fight, tip = why,
 			click = function() M.Collect(GetTime()) Refresh() end },
 		{ text = "Watch", sub = "A clean-up every " .. tostring(T.db and T.db.watch or 30) .. " s while open; stand still", on = M.watch,
 			click = function() M.SetWatch(not M.watch) Refresh() end },
-		{ text = "Measure churn", sub = "Holds off clean-up for ten seconds; memory climbs meanwhile", disabled = fight or M.churn.running, tip = why,
+		{ text = "Measure churn", sub = "Holds off clean-up for ten seconds. Memory climbs meanwhile", disabled = fight or M.churn.running, tip = why,
 			click = function() M.StartChurn() Refresh() end },
 	}
 	if Shy.Errors then

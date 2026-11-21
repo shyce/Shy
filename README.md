@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.2.0" src="https://img.shields.io/badge/version-5.2.0-29b3ff"></a>
+  <a href="CHANGELOG.md"><img alt="version 5.2.2" src="https://img.shields.io/badge/version-5.2.2-29b3ff"></a>
   <img alt="released 21 Nov 2026" src="https://img.shields.io/badge/released-21_Nov_2026-4a5568">
-  <img alt="tests 35,572 passed" src="https://img.shields.io/badge/tests-35%2C572_passed-4ade80">
+  <img alt="tests 37,691 passed" src="https://img.shields.io/badge/tests-37%2C691_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,50 +93,22 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.2.0
+## What's new in 5.2.2
 
 ### Added
-- **ShyAuction:** Other parts of the family can open the auction house on an item you pick, with what is listed of it already asked for
-- **ShyMaps:** The dungeon journal shows what its players recorded dropping, with the kills they counted. The newest dungeons show roughly where each boss stands and where you come in, marked as rough
-- **ShyMaps:** The land between the zones on the drawn map is painted in now, so the world map no longer has bare gaps between its zones
-- **ShyQuest:** When a vendor is out of what a quest needs, the card offers the auction house, coming back later, or skipping the quest. The route stops sending you to that vendor, and the guide sets the quest's steps aside until you choose
-- **ShyQuest:** Levelling guides now carry you from 1 to 60, for both sides, not only to 30. Where the quests run out the guide sends you to a camp to fight, and a guide that needs a level waits for it at a camp of creatures, never inside a capital city
-- **ShyQuest:** Click a quest on your route card and the map opens with that quest's page beside it, flown to where it is done. Click an objective and the map goes to that objective. What you opened stays lit on the card
+- **ShyBags:** Hover the gold button to see every character's gold on your realm. It also shows who has gold waiting in the mail
+- **ShyBags:** The bag bar has a reagent bag slot. Dropping a bag on a worn one swaps them, even from inside it
+- **ShyCore:** Any window docks to any other, on any side. Windows docked to one host line up past each other
 
 ### Changed
-- **ShyDock:** The menu and bag rows under the map keep the size your layout gives them, instead of being shrunk or stretched to fit the map as it is now
-- **ShyGroup:** Your group post and your asks now say which roles you already have, like "(2/5, have healer, DPS)". When others write "have tank, need dps", the role after "have" is no longer read as one they want
-- **ShyMaps:** The map window opens in the middle of the screen with your quests beside it, as tall as the space over your bars allows and as wide as the map needs. The minimap is the same width at every login
-- **ShyMaps:** The map is its own window whenever the drawn map is on. The game's map no longer opens behind it, and the choice between the two is gone
-- **ShyQuest:** When your bags are nearly full, the row now lets you make room as well as sell. A click opens your bags with the cheapest things lit, each to drop, even with no shop near
-- **ShyQuest:** Newer level data for places, so the route knows better what level the land around a quest is
-- **ShyQuest:** Levelling guides count on a mount from level 40, so the long ways between places are shorter. From there they also fight at a camp sooner than cross the world for a quest that pays little
-- **ShyQuest:** You are no longer sent to fight what is three or more levels above you while anything in reach gives the same item, and such a fight waits behind the rest of your route. A quest three levels above you counts as too high for now, and a creature seen dropping an item counts as a source of it
-- **ShyQuest:** A trip to the bank now waits until you have done what you can right where you stand. You hand in the quest in front of you before you are sent across town
-- **ShyQuest:** When an item drops from a few spawns or a rare, the route weighs the work of getting it, not only the walk. You aren't sent for a one-in-a-hundred drop when a nearby camp gives it far more often
-- **ShyQuest:** Newer drop chances from what players recorded in this game, so the quests that ask for items point you at the creatures that really drop them. Where nothing is known for an item, the route goes where the quest was seen to advance
-- **ShyQuest:** What the addon says in your party chat now starts with <Shy>, so nobody takes it for words you typed
-- **ShyQuest:** Newer quest data, with the latest game update, quest experience and fixed quest chains. The guides are planned again from it
-- **ShyWay:** Ways now keep to the roads where what lives off them is five or more levels above you, and go straight where it is not. "Roads in higher zones" is the new setting for it, and what you have is kept
-- **ShyWay:** Once you ride a mount, ways and routes count its speed. A long walk is ridden and a flight is only taken where it beats the ride
-- **ShyXP:** The experience bar under your bars wears your theme's frame, slimmer than a window's, and the bars sit inside it
+- **ShyBags:** Your character list and gold show only the characters on your realm. On a PvP realm that means your side too
+- **ShyBags:** Your other characters are listed highest level first, then by gold. The one you're playing stays on top
+- **ShyBags:** A character's hover on the bag rail opens to the left, clear of your bags
+- **ShyBags:** You can size the mail, auction and gold windows. Mail letters show what they hold. Hovering the footer buttons says what they open
+- **ShyQuest:** The guide asks you to talk to a flight master once so it learns your flight paths. It no longer says you may need ones you have
 
 ### Fixed
-- **ShyCore:** The page behind a window's text covered the window's frame at the sides and the bottom. It now stops at the frame, and follows when you change the look or its weight
-- **ShyCore:** The grey used for captions and counts was too dim to read on the panel. It is brighter now
-- **ShyFarm:** The farming card's captions, figures, stats line and clock were hidden under the card and hard to see. They show clearly now
-- **ShyKeys:** The How to play pullout's level line, tip and captions were hard to read. They are clear now
-- **ShyMaps:** Showing a place on another map left that map as you last had it, and the view often framed nothing. It now opens the whole map and frames the place at once
-- **ShyQuest:** The line on the minimap stopped short when your way doubled back close to you. It now carries on while the end of the way would be in sight
-- **ShyQuest:** A vendor whose list had dropped what a quest needs was treated as never selling it. They now count as having none for a little while, and the quests that wait on that item wait with it
-- **ShyQuest:** During a dungeon run, a place you sent yourself to, a quest you picked or the one you pointed the way to was left off the card until the run ended. They lead the run's steps now, and the arrow points there
-- **ShyQuest:** After you learned a flight path, your guide still told you to get it until you reloaded. It goes away by itself now
-- **ShyQuest:** Dungeon quests far away, like the Wailing Caverns for an Alliance warrior, came into your guide because another class's errand stood near them. Only what you are ever given counts now
-- **ShyQuest:** The words in the Quests your guide skips window were hard to read. They are clear now
-- **ShyQuest:** A ride whose walks were still being worked out could be picked over a walk you could already count on. The route now waits for them and is built again once they are known
-- **ShyQuest:** The hearthstone was offered as a saving when the way from home was too long to work out. It is only offered now where the way from home is known
-- **ShyWay:** The guide thought you knew every flight path, the other side's too. It now learns only the ones you find at a flight master, so yours are learned again the next time you talk to one
-- **ShyWay:** Swimming round Orgrimmar's west side could take you through its walls, onto the ground under the city. Walls standing in the water now stop you, and the ways and levels are worked out again
+- **ShyBags:** The gold list could pick the wrong side on a PvP realm before the game named it. It keeps to your character's own realm now
 
 [Every release](CHANGELOG.md)
 

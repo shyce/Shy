@@ -63,7 +63,7 @@ function Win.Init()
 		head = {
 			brand = T.suffix, icon = T.mark, tabs = { TABS, SelectTab },
 			-- The Who list stays the game's own.
-			buttons = { { "Options", 76, function() T:OpenOptions() end }, { "Who", 54, function() ns.Listing.OpenWho() end } },
+			buttons = { { "Settings", 76, function() T:OpenOptions() end }, { "Who", 54, function() ns.Listing.OpenWho() end } },
 		},
 	})
 	tabs = box.head.tabs

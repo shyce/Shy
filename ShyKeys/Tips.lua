@@ -96,14 +96,14 @@ function Keys.Tip(tooltip)
 	if lead.next then tooltip:AddLine(lead.next, C.dim[1], C.dim[2], C.dim[3], true) end
 	tooltip:Show()
 end
-TooltipDataProcessor.AddTooltipPostCall(TooltipDataProcessor.AllTypes, Keys.Tip)
+Shy.OnTip(TooltipDataProcessor.AllTypes, "a key's job", Keys.Tip)
 
 Shy:On("SHY_LOGIN", function()
 	C_Timer.After(SOON, Hot.Follow)
 	C_Timer.After(SOON, function()
 		local mine = watched[1]
 		if mine and Keys.Old(mine.addon) then
-			mine.addon:Print("your keys have a new layout. Look at it in /shy keys: yours stay as they are until you take it.")
+			mine.addon:Print("there's a new key layout. Look at it in /shy keys. Your keys stay as they are until you take it.")
 		end
 	end)
 	local keyboard = CreateFrame("Frame")
@@ -134,11 +134,11 @@ Shy:On("SHY_LOGIN", function()
 	-- (and what you can afford at your trainer: your gold, and what you've learned there)
 	local watch, soon = CreateFrame("Frame"), false
 	-- (and your aura, stance or form going on or off)
-	for _, event in ipairs({ "PLAYER_LEVEL_UP", "PLAYER_MONEY", "LEARNED_SPELL_IN_SKILL_LINE", "TRAINER_CLOSED",
+	for _, event in ipairs({ "PLAYER_LEVEL_UP", "LEARNED_SPELL_IN_SKILL_LINE", "TRAINER_CLOSED",
 		"UPDATE_SHAPESHIFT_FORM", "UPDATE_SHAPESHIFT_FORMS" }) do
 		watch:RegisterEvent(event)
 	end
-	watch:SetScript("OnEvent", function()
+	local function Soon()
 		if soon then return end
 		soon = true
 		C_Timer.After(0.2, function()
@@ -146,6 +146,13 @@ Shy:On("SHY_LOGIN", function()
 			ns.cardBox:Fill()
 			Shy:Fire("SHY_KEYS_STANCE")
 		end)
+	end
+	watch:SetScript("OnEvent", Soon)
+	-- Gold only while the training is weighed against it: at or past the most it costs, coins change no words.
+	Shy:On("SHY_MONEY", function(now, was)
+		local most = Keys.goldMost
+		if not most or (now >= most and (was or 0) >= most) then return end
+		Soon()
 	end)
 	for _, event in ipairs({ "SHY_BUILD", "SHY_TALENTS", "SHY_KEYS_SCHEME" }) do
 		Shy:On(event, function() ns.cardBox:Fill() end)
@@ -266,7 +273,8 @@ do
 	end)
 end
 
-Shy.Command("bindings", "every change to your key bindings lately, and who made it", function()
+-- (For finding faults: every change to your key bindings lately, and who made it. Not listed.)
+Shy.Command("bindings", nil, function()
 	local log = DB() and DB().keysLog
 	UI.ShowCopyBox("Your key bindings, as they changed", log and #log > 0 and table.concat(log, "\n") or "No change to your key bindings yet.")
 end)

@@ -1,5 +1,6 @@
--- Down a cliff with a slowed fall, over water walked on: where the way to a place goes so (Shy.Way's
--- way.drop, way.fall and way.water), the word to cast before it, and the time it saves.
+-- Dropping down a cliff with a slowed fall, and walking across water. Where the way to a place does
+-- either (Shy.Way's way.drop, way.fall and way.water), this gives the spell to cast first and the
+-- time it saves.
 --   Glide.Ahead(continent, north, west [, level, up]) -> the first drop or water still ahead on the trail the
 --     maps draw to that place (level, up: W.Prefer's for its stop, as they ask): { kind = "fall" | "water",
 --     spell, yards (to where it begins) }, or nil
@@ -9,8 +10,9 @@
 --     name, icon, text, saves }
 --   Glide.Saves(continent, north, west) -> seconds the way saves over one with neither, or nil
 -- The card's leading row says it (ns.cardNotes), and so do the arrow and the row's hover.
--- A spell known whose reagent is in no bag can't be counted on: the auction house is an errand when on the
--- way (no vendor in the data sells either reagent), unless the bank holds some, which the bank says.
+-- A known spell with no reagent in any bag can't be counted on. Then the auction house is an errand
+-- when it is on the way (no vendor in the data sells either reagent), unless the bank holds some,
+-- in which case the bank's row says so.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -364,8 +366,8 @@ ns.cardNotes = ns.cardNotes or {}
 table.insert(ns.cardNotes, Note)
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "BAG_UPDATE_DELAYED", "SPELLS_CHANGED", "BANKFRAME_OPENED" }) do events:RegisterEvent(event) end
-events:SetScript("OnEvent", function(_, event)
+for _, event in ipairs({ "BAG_UPDATE_DELAYED", "BANKFRAME_OPENED" }) do events:RegisterEvent(event) end
+local function Seen(_, event)
 	if not ns.char then return end
 	local lack = Glide.Lacking()
 	if event == "BANKFRAME_OPENED" then
@@ -379,5 +381,8 @@ events:SetScript("OnEvent", function(_, event)
 	if put and (not lack or lack.reagent ~= put) then put = nil end
 	-- (A change in the bags builds the route again already, ShyQuest.lua: the guide is asked only when it reads them.)
 	if event == "BAG_UPDATE_DELAYED" then return end
-	ns.Refresh()
-end)
+	-- (A spell learned: the reagent errand's alone. The errands are fitted again, not the route.)
+	ns.RefreshErrands()
+end
+events:SetScript("OnEvent", Seen)
+Shy:On("SHY_SPELLS", function() Seen(nil, "SHY_SPELLS") end)

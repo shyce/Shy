@@ -342,10 +342,12 @@ local function Lay()
 	P.live:SetShown(live)
 	P.mem:SetShown(not live)
 	grid.prefer = Prefer()
+	grid.apart = T.db.apart == true   -- special bags' slots apart or in with the rest, as in your bags
 	if live then grid:SetBags(Bank.Tabs()) else grid:SetLists(Lists(c), guid, "bank") end
 	grid:Filter(ns.Views.test)
 	local columns, rows = grid:Shape()
 	if columns == 0 then columns, rows = 4, 4 end
+	local gridH = rows * STEP + grid.gap   -- with the room the names over the runs apart take
 	local gridW = columns * STEP - Tile.GAP
 	local colW, colH = 0, 0
 	if live then
@@ -354,11 +356,11 @@ local function Lay()
 	else
 		HideSockets()
 	end
-	local tall = math.max(rows * STEP, colH + Tile.GAP)
+	local tall = math.max(gridH, colH + Tile.GAP)
 	P.vault:SetShown(true)
 	P.vault.plate:ClearAllPoints()
 	P.vault.plate:SetPoint("TOPLEFT", UI.Body(win), "TOPLEFT", EDGE - Window.VAULT_PAD, -(TOP - Window.VAULT_PAD))
-	P.vault.plate:SetSize(gridW + 2 * Window.VAULT_PAD, rows * STEP - Tile.GAP + 2 * Window.VAULT_PAD)
+	P.vault.plate:SetSize(gridW + 2 * Window.VAULT_PAD, gridH - Tile.GAP + 2 * Window.VAULT_PAD)
 	P.foot:Show()
 	local free, slots = grid:Room()
 	local seen = (not live and c.bank and c.bank.at) and ("seen " .. ns.Ago(c.bank.at)) or nil

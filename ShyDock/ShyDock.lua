@@ -110,7 +110,6 @@ function T:OnLoad()
 	if (look == "clear" or look == "eclipse") and not Shy.Theme.LookChosen() then Shy.Theme.SetLook(look) end
 	-- The cooldown manager's layout is no setting: one saved in a profile is dropped.
 	self.db.cockpitLayout = nil
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -140,11 +139,15 @@ function T:OnLogin()
 	end)
 end
 
--- The /shy window's Screen room: the console as it is and as it could be, under layout mode's button.
+-- The /shy window's Screen room: the console's layout and size, under layout mode's button.
 Shy.HubSection("screen", function(page, top)
 	local head = Shy.HubHead(page, top, "Console")
+	local words = Shy.UI.Text(page, "How your bars, chat and meter are laid out. With the console in use, a pick shows right away.", 12, false, Shy.UI.colors.dim)
+	words:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -10)
+	words:SetWidth(page.width)
+	words:SetWordWrap(false)
 	local section = ns.Preview.Section(page, page.width)
-	section:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -12)
+	section:SetPoint("TOPLEFT", words, "BOTTOMLEFT", 0, -10)
 	return section, function() if section.Refresh then section:Refresh() end end
 end, 30)
 
@@ -192,35 +195,27 @@ Shy:On("SHY_WINGS", function()
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end)
 
-SLASH_SHYDOCK1 = "/shydock"
-SLASH_SHYDOCK2 = "/sdock"
-SlashCmdList.SHYDOCK = function(input)
-	local cmd = strtrim(input or ""):lower()
-	-- "setup", then a layout, a size, or both, in either order. "reset" is the same, said of a console in
-	-- use: every piece back in its place and at its size.
-	local verb = cmd:match("^%a+")
-	local size, style, known = nil, nil, verb == "setup" or verb == "reset"
-	for word in cmd:gsub("^%a+", "", 1):gmatch("%a+") do
+-- /shy dock setup, then a layout, a size, or both, in either order. "reset" is the same, said of a console in
+-- use: every piece back in its place and at its size. A word that is neither sets nothing up.
+local function SetUp(rest)
+	local size, style
+	for word in rest:lower():gmatch("%a+") do
 		if ns.Console.SIZES[word] then
 			size = word
 		elseif ns.Console.STYLES[word] then
 			style = word
 		else
-			known = false
+			T:Print(("\"%s\" isn't a layout or a size. Layouts: %s. Sizes: %s."):format(word,
+				table.concat(ns.Console.STYLE_ORDER, ", "), table.concat(ns.Console.SIZE_ORDER, ", ")))
+			return
 		end
 	end
-	if cmd == "" then
-		T:OpenOptions()
-	elseif known then
-		ns.Layout.Report(ns.Layout.SetUp(size, style))
-	elseif cmd == "back" then
-		ns.Layout.Report(ns.Layout.GoBack())
-	else
-		T:Print("commands:")
-		print("  /shydock  - open options")
-		print("  /shydock setup  - set up the console (needs a reload)")
-		print("  /shydock setup console | open  - set it up as that layout")
-		print("  /shydock setup compact | roomy | grand  - set it up at that size")
-		print("  /shydock back  - go back to your previous layout")
-	end
+	ns.Layout.Report(ns.Layout.SetUp(size, style))
+	if ns.RefreshOptions then ns.RefreshOptions() end
 end
+T:Command("setup", "set the console up again, or as another layout or size (open grand)", SetUp)
+T:Command("reset", nil, SetUp)
+T:Command("back", "go back to the layout you had before", function()
+	ns.Layout.Report(ns.Layout.GoBack())
+	if ns.RefreshOptions then ns.RefreshOptions() end
+end)

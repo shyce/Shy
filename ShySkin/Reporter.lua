@@ -70,9 +70,13 @@ function R.Button() return button end
 ns.Module({
 	id = "reporter",
 	title = "Issue reporter",
-	desc = "Turns the game's bug reporter into a small button by the minimap, so it fits every layout.",
+	desc = "The game's bug reporter becomes a small button by your minimap.",
+	group = "screen",
+	words = "bug report",
+	-- (The reporter comes with test builds of the game alone.)
+	shown = function() return PTR_IssueReporter ~= nil end,
 
-	Ready = function() return PTR_IssueReporter ~= nil and PTR_IssueReporter.ReportBug ~= nil end,
+	Ready =function() return PTR_IssueReporter ~= nil and PTR_IssueReporter.ReportBug ~= nil end,
 
 	Hook = function() Build() end,
 

@@ -1,5 +1,5 @@
 -- ShyGroup: recruiting tool for a group leader. Registration, shared helpers,
--- lifecycle and slash commands.
+-- lifecycle and its /shy group commands.
 
 local ADDON, ns = ...
 local MEDIA = "Interface\\AddOns\\ShyGroup\\Media\\"
@@ -114,7 +114,6 @@ function T:OnLoad()
 	ShyGroupCharDB = ShyGroupCharDB or {}
 	-- kind: the Group Finder category in view (dungeon | raid | zone | custom)
 	ns.char = Shy.MergeDefaults(ShyGroupCharDB, { people = {}, open = false, tab = 1, kind = "dungeon" })
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -155,26 +154,25 @@ Shy:On("SHY_GROUP_WANTED", function(map, want)
 	ns.Window.SetOpen(true, 1)
 end)
 
--- The key binding and the slash command: both hardware events.
+-- The key binding and the command: both hardware events.
 function ShyGroup_Toggle()
 	ns.Window.SetOpen(not ns.char.open, nil, true)
 end
 
-SLASH_SHYGROUP1 = "/shygroup"
-SLASH_SHYGROUP2 = "/sg"
-SlashCmdList.SHYGROUP = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
+-- /shy group: the window. Anything else typed after it is looked for in the settings.
+T:Command("", "open or close your group window", function(rest)
+	if rest == "" then
 		ShyGroup_Toggle()
-	elseif cmd == "options" or cmd == "config" then
-		T:OpenOptions()
-	elseif cmd == "stop" or cmd == "done" then
-		ns.Run.Stop()
-		T:Print("run finished.")
+	elseif Shy.Settings.Find then
+		Shy.Settings.Find(rest)
 	else
-		T:Print("commands:")
-		print("  /shygroup  - open or close the window")
-		print("  /shygroup options  - open the options")
-		print("  /shygroup done  - finish the current run")
+		T:OpenOptions()
 	end
+end)
+
+local function Done()
+	ns.Run.Stop()
+	T:Print("run finished.")
 end
+T:Command("done", "finish your run", Done)
+T:Command("stop", nil, Done)

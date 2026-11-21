@@ -59,7 +59,6 @@ end
 function T:OnLoad()
 	-- The engine reads this global once at login, so a change applies from the next login.
 	if self.db.gameFont then DAMAGE_TEXT_FONT = Shy.FONT_ROUNDED end
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -68,22 +67,13 @@ function T:OnLogin()
 	if ns.Gains then ns.Gains.Start() end
 end
 
-SLASH_SHYHITS1 = "/shyhits"
-SLASH_SHYHITS2 = "/shyh"
-SlashCmdList.SHYHITS = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "on" or cmd == "off" then
-		T.db.on = cmd == "on"
-		ns.Apply()
-		T:Print(T.db.on and "on." or "off, default combat text is back.")
-	elseif cmd == "test" then
-		T:Test()
-	else
-		T:Print("commands:")
-		print("  /shyhits  - open options")
-		print("  /shyhits on | off  - these numbers, or the default combat text")
-		print("  /shyhits test  - play sample hits on your target and on you")
-	end
+local function Switch(on)
+	T.db.on = on
+	ns.Apply()
+	T:Print(on and "on." or "off, default combat text is back.")
 end
+
+T:Command("on", "turn the numbers on", function() Switch(true) end)
+T:Command("off", "go back to the default combat text", function() Switch(false) end)
+-- For finding faults: sample hits. Not listed.
+T:Command("test", nil, function() T:Test() end)

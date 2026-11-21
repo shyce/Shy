@@ -4,6 +4,7 @@
 -- turn, oldest first), then the dungeon's steps as the guides have them: pick up, the run, hand in. It
 -- starts at its first step, passes whatever you have done already, and when nothing is left (or you
 -- stop it) your guide is back where you left it. Guide.lua keeps the run current (ns.char.guide.run).
+-- The first time a dungeon's step leads your guide, you're asked before you travel ("Asking first", below).
 
 local _, ns = ...
 local T = ns.T
@@ -128,6 +129,37 @@ end
 
 local function IdOf(guide, index)
 	return guide.ids and guide.ids[index] or (guide.name .. "#" .. index)
+end
+
+-- Where a dungeon is: the zone of its first way in (Data/Dungeons.lua's fifth field, "map:xy;..."), or nil.
+local function ZoneOf(dungeon)
+	local info = ns.data.dungeonInfo and ns.data.dungeonInfo[dungeon.area]
+	local door = info and tonumber(info:match("^[^%^]*%^[^%^]*%^[^%^]*%^[^%^]*%^(%d+)"))
+	return door and ns.World.MapName(door) or nil
+end
+
+-- How risky a dungeon's way in is for you: "city" (by the other side's capital) or "land" (in their land), with
+-- that zone's map and whose it is. nil when any way in is in your land or contested land (Data/Lands.lua).
+local THEIRS = { A = "Alliance", H = "Horde" }
+local function Danger(dungeon)
+	local lands, capitals = ns.data.lands, ns.data.capitals or NONE
+	local mine = L.Side()
+	if not lands or not THEIRS[mine] then return nil end
+	local doors = {}
+	local info = ns.data.dungeonInfo and ns.data.dungeonInfo[dungeon.area]
+	local places = info and info:match("^[^%^]*%^[^%^]*%^[^%^]*%^[^%^]*%^(.*)$")
+	for map in (places or ""):gmatch("(%d+)[^:;]*:") do doors[#doors + 1] = tonumber(map) end
+	local noted = dungeon.map and T.db.doors and T.db.doors[dungeon.map]
+	if #doors == 0 and noted then doors[1] = noted[1] end
+	local worst, at
+	for _, map in ipairs(doors) do
+		local whose = lands[map]
+		if not whose or whose == mine then return nil end
+		local how = capitals[map] and "city" or "land"
+		-- (The safest way in is the one that counts.)
+		if not worst or (worst == "city" and how == "land") then worst, at = how, map end
+	end
+	return worst, at, at and lands[at]
 end
 
 -- Where a quest's giver or taker stands (an NPC or an object, out in the world), as a step's place.
@@ -309,12 +341,9 @@ local function Make(dungeon, prefer)
 		phases[#raws] = phase
 	end
 	local low, high = ns.DungeonRange(dungeon)
-	-- Where it is: the zone of its first way in (Data/Dungeons.lua's fifth field, "map:xy;...").
-	local info = ns.data.dungeonInfo and ns.data.dungeonInfo[dungeon.area]
-	local door = info and tonumber(info:match("^[^%^]*%^[^%^]*%^[^%^]*%^[^%^]*%^(%d+)"))
 	return { name = dungeon.name .. " quests", group = GROUP, cond = "", raw = raws, ids = ids, steps = {}, next = {},
 		internal = true, run = dungeon.short, low = low, high = high, title = dungeon.name, map = dungeon.map,
-		quests = block.quests, where = door and ns.World.MapName(door) or nil, phases = phases }
+		quests = block.quests, where = ZoneOf(dungeon), phases = phases }
 end
 
 -- Whether any of a dungeon's own quests is still to hand in.
@@ -940,7 +969,184 @@ function Run.Caption(guide, index)
 	return (phase and phase[1] or "DUNGEON RUN") .. "  \194\183  " .. (guide.title or guide.name):upper()
 end
 
--- /shyquest dungeon [name]: starts the run of a dungeon named in part ("dead", "dm"); "stop" ends one; no
+-- Asking first. A dungeon's first step can be across the world. The first time one leads the guide, a small
+-- window asks before you travel:
+--   Do it now        starts the run (Dungeon mode)
+--   As I get there   its steps stay in the guide and lead only when you're near them (Guide.lua's Away)
+--   Later            puts it off for two hours, then asks again
+--   Skip it          drops its quests for good
+-- Closing it is Later. The answer is kept per dungeon and character (ns.char.asked: "along" or "skip").
+-- Never asked in combat, on a flight, dead, in an instance or during a run.
+local ASK = { width = 360, pad = 14, row = 26, says = 118, top = 40, later = 2, sign = 20 }
+local ask                    -- the window, made on first use
+local asking                 -- the dungeon being asked about
+local pending = false        -- waiting for a quiet moment
+
+local function Asked()
+	ns.char.asked = ns.char.asked or {}
+	return ns.char.asked
+end
+
+-- Whether a dungeon's steps wait until you're near them (Guide.lua asks).
+function ns.DungeonAlong(short)
+	local asked = ns.char and ns.char.asked
+	return asked ~= nil and asked[short] == "along"
+end
+
+-- The dungeon the guide's leading step is for, or nil. Never during a run.
+local function Leading()
+	local guide = G.current
+	if not guide or guide.run or not ns.Following() then return nil end
+	local entry = G.active[1]
+	return entry and ns.Detour(G.Dungeon(entry.step.index, entry.guide)) or nil
+end
+
+-- how: "now", "along", "skip", or "later" (also when closed).
+local function Answer(how)
+	local dungeon = asking
+	if not dungeon then return end
+	asking = nil
+	ask:Hide()
+	if how == "now" then
+		-- (If the run is stopped early, what's left waits until you're near it.)
+		Asked()[dungeon.short] = "along"
+		Run.Start(dungeon.short)
+	elseif how == "along" then
+		Asked()[dungeon.short] = "along"
+		T:Print(("|cffffffff%s|r is in your guide. Its steps come up when you're near them."):format(dungeon.name))
+		ns.Apply()
+	elseif how == "skip" then
+		Asked()[dungeon.short] = "skip"
+		ns.Snooze(dungeon, "off")
+	else
+		ns.Snooze(dungeon, "hours")
+	end
+end
+
+local function CreateAsk()
+	ask = CreateFrame("Frame", "ShyQuestDungeonAsk", UIParent)
+	ask:SetWidth(ASK.width)
+	ask:SetPoint("TOP", UIParent, "TOP", 0, -150)
+	ask:SetFrameStrata("HIGH")
+	ask:SetToplevel(true)
+	ask:EnableMouse(true)
+	ask:Hide()
+	ask.head = UI.Head(ask, { size = "window", title = "", close = function() Answer("later") end })
+	-- (The text sits on a frame above the body. The body's sheet would cover it.)
+	local face = CreateFrame("Frame", nil, ask)
+	face:SetAllPoints(ask)
+	local inner = ASK.width - ASK.pad * 2
+	ask.facts = UI.Text(face, "", 10, false, C.dim)
+	-- A warning when the way in is in the other side's land: red by their capital, gold elsewhere in their land.
+	ask.warnSign = face:CreateTexture(nil, "OVERLAY")
+	UI.GlyphArt(ask.warnSign, "kill")
+	ask.warn = UI.Text(face, "", 12, false, C.alert)
+	ask.warn:SetWidth(inner - ASK.sign)
+	ask.warn:SetJustifyH("LEFT")
+	ask.warn:SetWordWrap(true)
+	ask.warnSign:SetPoint("TOPRIGHT", ask.warn, "TOPLEFT", -6, 0)
+	ask.say = UI.Text(face, "Want to do this dungeon?", 12, false, C.text)
+	-- Four lines to pick from, each lit under the mouse: what it's called, then what it does.
+	local function Choice(label, says, how)
+		local row = CreateFrame("Button", nil, ask)
+		row:SetSize(inner, ASK.row)
+		row.light = UI.RowLight(row)
+		row.label = UI.Text(row, label, 13, true, C.head)
+		row.label:SetPoint("LEFT", UI.ROW_INSET, 0)
+		row.says = UI.Text(row, says, 11, false, C.dim)
+		row.says:SetPoint("LEFT", ASK.says, 0)
+		row:SetScript("OnEnter", function(self) self.light:Set(true) end)
+		row:SetScript("OnLeave", function(self) self.light:Set(false) end)
+		row:SetScript("OnClick", function()
+			PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+			Answer(how)
+		end)
+		return row
+	end
+	ask.now = Choice("Do it now", "Drop what you're doing and go.", "now")
+	ask.along = Choice("As I get there", "Its steps come up when you're near.", "along")
+	ask.later = Choice("Later", "Ask again in 2 hours.", "later")
+	ask.skip = Choice("Skip it", "Leave it out of your guide.", "skip")
+end
+
+local function ShowAsk(dungeon)
+	if not ask then CreateAsk() end
+	asking = dungeon
+	ask.head.title:SetText(dungeon.name)
+	-- Levels, zone (if known) and quests left.
+	local low, high = ns.DungeonRange(dungeon)
+	local facts = { high > 0 and high ~= low and ("LEVELS %d-%d"):format(low, high) or ("LEVEL %d"):format(low) }
+	local where = ZoneOf(dungeon)
+	if where then facts[#facts + 1] = where:upper() end
+	local block, left = Block(dungeon.short, Sources(G.current)), 0
+	for _, id in ipairs(block and block.quests or NONE) do
+		if not L.Done(id) then left = left + 1 end
+	end
+	if left > 0 then facts[#facts + 1] = left == 1 and "1 QUEST" or (left .. " QUESTS") end
+	ask.facts:SetText(table.concat(facts, "  \194\183  "))
+	local body, y = UI.Body(ask), ASK.top
+	local function Put(text, gap, indent)
+		text:ClearAllPoints()
+		text:SetPoint("TOPLEFT", body, "TOPLEFT", ASK.pad + (indent or 0), -y)
+		y = y + math.max(12, text:GetStringHeight()) + gap
+	end
+	Put(ask.facts, 6)
+	local danger, _, whose = Danger(dungeon)
+	ask.warn:SetShown(danger ~= nil)
+	ask.warnSign:SetShown(danger ~= nil)
+	ask.danger = danger
+	if danger then
+		-- (Its zone is on the line above.)
+		local side = THEIRS[whose]
+		local color = danger == "city" and C.bad or C.alert
+		ask.warn:SetText(danger == "city"
+			and ("The way in is by the %s capital. Its guards will attack you."):format(side)
+			or ("It's in %s land. Watch out for their guards and players."):format(side))
+		UI.Ink(ask.warn, color)
+		Shy.Theme.Tint(ask.warnSign, color, 1)
+		Put(ask.warn, 8, ASK.sign)
+	end
+	Put(ask.say, 10)
+	for _, row in ipairs({ ask.now, ask.along, ask.later, ask.skip }) do
+		row:ClearAllPoints()
+		row:SetPoint("TOPLEFT", body, "TOPLEFT", ASK.pad, -y)
+		row.light:Set(false)
+		y = y + ASK.row
+	end
+	UI.BodyFit(ask, ASK.width, y + ASK.pad - 4)
+	ask:Show()
+end
+
+-- Asks about the leading dungeon if it hasn't been asked yet. Waits for a quiet moment.
+local function Ask()
+	pending = false
+	local dungeon = Leading()
+	if not dungeon or asking or IsInInstance() then return end
+	-- (One you skipped leads again only if you put it back yourself. Then it's a new question.)
+	local was = Asked()[dungeon.short]
+	if was == "skip" then Asked()[dungeon.short] = nil elseif was then return end
+	local other = _G.ShyQuestOffGuide   -- (the other guide question opens in the same spot)
+	if InCombatLockdown() or UnitOnTaxi("player") or UnitIsDeadOrGhost("player") or (other and other:IsShown()) then
+		pending = true
+		return C_Timer.After(ASK.later, Ask)
+	end
+	ShowAsk(dungeon)
+end
+
+ns.OnRoute(function(rebuilt)
+	if not rebuilt then return end
+	if asking then
+		-- (It no longer leads: put off from the menu, done, or the guide changed.)
+		local dungeon = Leading()
+		if not dungeon or dungeon.short ~= asking.short then
+			asking = nil
+			ask:Hide()
+		end
+	end
+	if not asking and not pending then Ask() end
+end, true)
+
+-- /shy quest dungeon [name]: starts the run of a dungeon named in part ("dead", "dm"); "stop" ends one; no
 -- name lists them.
 function Run.Command(words)
 	words = strtrim(words or ""):lower()
@@ -959,6 +1165,6 @@ function Run.Command(words)
 	end
 	local names = {}
 	for _, dungeon in ipairs(dungeons) do names[#names + 1] = dungeon.name end
-	T:Print(#names > 0 and ("dungeons with quests in your guides: %s. Type |cff888888/shyquest dungeon <name>|r."):format(table.concat(names, ", "))
+	T:Print(#names > 0 and ("dungeons with quests in your guides: %s. Type |cff888888/shy quest dungeon <name>|r."):format(table.concat(names, ", "))
 		or "your guides have no dungeon quests.")
 end

@@ -628,7 +628,6 @@ local Pen, Begin, Finish, Segment = Maps.Pen, Maps.Begin, Maps.Finish, Maps.Segm
 --   lit: a lit leg's extra thickness; fine: its thickness where it arrives, less that; glow: its halo,
 --   times a plain stroke's.
 --   stub: screen pixels; a point of a leg's way this near either of its ends is left out (LEGS.Draw).
---   hair: the share a zoom moves before the pins are told their size again (laid.Follow).
 --   bend: screen pixels; a leg's way is drawn with as few points as keep it within this of itself, so
 --   a map zoomed out has few lines to carry when it pans.
 --   close: yards; places nearer than this are joined by a bow.
@@ -636,14 +635,14 @@ local Pen, Begin, Finish, Segment = Maps.Pen, Maps.Begin, Maps.Finish, Maps.Segm
 --   round: screen pixels; a way's turn is rounded off this far either side of it. arc: radians; the most
 --   of a turn one piece of its curve takes.
 --   loose: how many times too broad or too fine on screen the map's lines may be while a zoom moves, the
---   pins alone following it (LayMap); settle: seconds a zoom is still before all is laid as it should be.
+--   pins hanging from their places meanwhile (LayMap); settle: seconds a zoom is still before all is laid as it should be.
 --   budget: milliseconds of a frame spent laying legs; the rest are laid in the frames after (LayLegs).
 --   again: seconds before a leg not found within reach is asked again (Path).
 --   ahead: the legs that stand on the world map, the route's first with a line on it. (A leg is hundreds
 --   of pieces for the game to show at every opening and to draw at every frame: a long route's were most
 --   of both.)
 ns.LEGS = { reach = 6, near = 0.92, far = 0.62, wide = 3.6, fine = 2.4, later = 1.2, lit = 1.2, glow = 1.8, bend = 0.8, close = 30,
-	round = 8, arc = 0.2, loose = 2, settle = 0.15, budget = 4, ahead = 3, stub = 2, hair = 0.04, again = 3,
+	round = 8, arc = 0.2, loose = 2, settle = 0.5, budget = 4, ahead = 3, stub = 2, again = 3,
 	-- (afar: on a continent's map a zone's ground is lit only while the zone is at least this share of the
 	-- window across: Near, Shade.)
 	afar = 0.45,
@@ -2262,6 +2261,23 @@ local function LayLegs(shown, walk, spots, scale, unit, began)
 end
 
 -- Town service marks (ServicesOn), each kept clear of everything in `taken`.
+-- A pin hung at cx, cy of the layer (its units, from its top left, y down), `weight` of a pin's size: from a point
+-- on the layer, so the zoom carries it there, on the pin layer at laid.size (a pin's size on screen against the
+-- map's window). Its hook is a region of the layer's own, made once a pin.
+function laid.Hang(pin, cx, cy, weight)
+	local at = pin.at
+	if not at then
+		at = layer:CreateTexture()
+		at:SetSize(1, 1)
+		pin.at = at
+		pin:ClearAllPoints()
+		pin:SetPoint("CENTER", at, "CENTER")
+	end
+	at:ClearAllPoints()
+	at:SetPoint("CENTER", layer, "TOPLEFT", cx, -cy)
+	pin.cx, pin.cy, pin.weight = cx, cy, weight
+end
+
 local function LayServices(taken, width, height, scale)
 	servicePins.used = 0
 	local small = SERVICE.size * PIN.room
@@ -2279,10 +2295,8 @@ local function LayServices(taken, width, height, scale)
 			pin.picture:SetVertexColor(steel[1], steel[2], steel[3])
 		end
 		local px, py = Clear(taken, service.x / UNITS * width / scale, service.y / UNITS * height / scale, small)
-		pin:SetScale(scale)
-		pin:ClearAllPoints()
-		pin:SetPoint("CENTER", layer, "TOPLEFT", px, -py)
-		pin.cx, pin.cy, pin.weight = px * scale, py * scale, 1
+		pin:SetScale(laid.size)
+		laid.Hang(pin, px * scale, py * scale, 1)
 		pin:Show()
 	end
 	for i = servicePins.used + 1, #servicePins do
@@ -2352,49 +2366,12 @@ local function Inside(stop)
 	return false
 end
 
--- A step of a zoom: every pin where it stands on the map, at its size on screen (laid.Follow). What a
--- pin was laid at (Place, LayServices): .cx, .cy its place in the layer's units, .weight its share of a
--- pin's size.
--- A pin told its scale is laid out again by the game with all its pictures, a hundred pins some 5 ms a
--- step: so only once the zoom has moved LEGS.hair of the way since they were last told (a pin stays on its
--- place meanwhile, its size that share off), and only the pins in the map's window (laid.View): the rest
--- are told as they come into it, or when the zoom is still.
-function laid.Follow(scale)
-	local was = laid.followed or laid.scale
-	if was and math.abs(scale / was - 1) < ns.LEGS.hair then return end
-	laid.followed = scale
-	local left, right, top, bottom = laid.View()
-	for _, pool in ipairs(laid.pools) do
-		for _, pin in ipairs(pool) do
-			local weight = pin.weight
-			if weight and pin:IsShown() and (not left or (pin.cx > left and pin.cx < right and pin.cy > top and pin.cy < bottom)) then
-				pin:SetScale(scale * weight)
-				pin:SetPoint("CENTER", layer, "TOPLEFT", pin.cx / scale / weight, -pin.cy / scale / weight)
-			end
-		end
-	end
-end
-
--- What the map's window shows of the layer, in the layer's units from its top left, y down, with a little
--- room round it: left, right, top, bottom. Nothing where the game can't say (all of it is taken as shown).
-function laid.View()
-	local window = Maps.Canvas():GetCanvasContainer()
-	local own, its = layer:GetEffectiveScale(), window:GetEffectiveScale()
-	local x, y = layer:GetLeft(), layer:GetTop()
-	local l, r, t, b = window:GetLeft(), window:GetRight(), window:GetTop(), window:GetBottom()
-	if not (x and y and l and r and t and b and own and its and own > 0) then return nil end
-	local k = its / own
-	local left, right, top, bottom = l * k - x, r * k - x, y - t * k, y - b * k
-	if not (right > left and bottom > top) then return nil end
-	local room = (right - left) * 0.06
-	return left - room, right + room, top - room, bottom + room
-end
-
 -- zooming: told by a step of a zoom. All the map lays (which pins merge, the legs, the trail, the lit
 -- ground: thousands of pieces, each told where its corners are) laid anew at every step, a zoom stuttered
--- and left megabytes to collect. A step moves the pins alone (laid.Follow) while the lines' width on screen
--- is within LEGS.loose times what it should be; all of it is laid as it should be once the zoom has been
--- still LEGS.settle seconds (LEGS.relay).
+-- and left megabytes to collect. A step lays nothing while the lines' width on screen is within LEGS.loose
+-- times what it should be: the pins hang from their places (laid.Hang), so the zoom carries them, at their
+-- size on screen. All of it is laid as it should be once the zoom has been still LEGS.settle seconds
+-- (LEGS.relay), the pins' growth with the zoom too.
 local function LayMap(zooming)
 	if not layer or not layer:IsVisible() or not shownMap then return end
 	local lap = ns.LapStart()
@@ -2412,12 +2389,12 @@ local function LayMap(zooming)
 	local LEGS = ns.LEGS
 	if zooming and laid.map == shownMap and laid.width == width and laid.height == height and laid.unit
 		and unit / laid.unit < LEGS.loose and laid.unit / unit < LEGS.loose then
-		laid.Follow(scale)
 		LEGS.relay = GetTime() + LEGS.settle
-		Shy.Clock("world map: a zoom's step, the pins alone"):Lap(debugprofilestop() - lap)
 		return
 	end
-	laid.width, laid.height, laid.followed = width, height, nil
+	laid.width, laid.height = width, height
+	-- (The pins' layer isn't zoomed: their scale there is the pins' own, with the zoom's growth as it now stands.)
+	laid.size = scale * layer:GetEffectiveScale() / laid.pins:GetEffectiveScale()
 	local start = lap
 	local taken, room = {}, PIN.mapSize * PIN.room
 	for i, spot in ipairs(theirs) do
@@ -2440,7 +2417,7 @@ local function LayMap(zooming)
 		local level = stop.urgent and Maps.PinLevel("PIN_FRAME_LEVEL_CORPSE") + 1 or pin.level
 		if pin:GetFrameLevel() ~= level then pin:SetFrameLevel(level) end
 		-- Scale before Set: a mark picks its sheet by on-screen size.
-		pin:SetScale(scale * weight)
+		pin:SetScale(laid.size * weight)
 		-- A party member's objective stands back from our own.
 		pin:SetAlpha(stop.party and 0.75 or 1)
 		-- A quest stop at a vendor wears the buy sign (stop.mark).
@@ -2458,10 +2435,7 @@ local function LayMap(zooming)
 		pin:SetPicked(pin.picked)
 		if pin.picked then pickedStop = stop end
 		Walkers(stop, lit, walkers)
-		pin:ClearAllPoints()
-		-- SetPoint offsets are in the pin's own scale.
-		pin:SetPoint("CENTER", layer, "TOPLEFT", px / weight, -py / weight)
-		pin.cx, pin.cy, pin.weight = px * scale, py * scale, weight
+		laid.Hang(pin, px * scale, py * scale, weight)
 		pin:Show()
 		local pointed = kind == "step" or kind == "zone"
 		return { px, py, weight, pointed and 0 or PIN.mapSize * LEG.rim * weight, pin = pin }
@@ -2913,7 +2887,11 @@ local function SetupMap()
 	-- At the level of the active-quest pins: over quest areas and quest givers, under the player. On the
 	-- game's canvas or ShyMaps' view, whichever draws the map (Shy.Maps moves it between them).
 	layer = Maps.MapLayer(0)
-	mapPins = Pool(layer, PIN.mapSize, false)
+	-- The pins stand on a layer the zoom never scales, each hung from its place on this one (laid.Hang): a zoom
+	-- carries them to their places, at their size on screen, and no pin is told anything of its steps.
+	laid.pins = Maps.PinLayer(0)
+	ns.pinLayer = laid.pins
+	mapPins = Pool(laid.pins, PIN.mapSize, false)
 	laid.pools = { mapPins, servicePins }
 	if Ground then Ground.SetupMap(layer) end
 	-- The hovered route has a frame of its own, so it fades as one.

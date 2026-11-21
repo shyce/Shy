@@ -19,7 +19,7 @@ local GLIDE = 3              -- how fast the light follows (per second)
 local TROUBLE = 0.5          -- a tank's margin under this is threat trouble: it takes the light over
 local DPS_FROM = 0.6         -- anyone else's
 local LOST = { 0.95, 0.24, 0.32 }
-local TRY = {                -- /shywarrior light: a second each (rage as the gate would let it through)
+local TRY = {                -- /shy warrior light: a second each (rage as the gate would let it through)
 	{ gate = 0.45 }, { gate = 1 }, { margin = 0.4 }, { margin = 0.2 }, { margin = 0 },
 }
 

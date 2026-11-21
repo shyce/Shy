@@ -334,7 +334,7 @@ ns.Feature({
 	id = "toasts",
 	category = "System",
 	title = "Alerts as notices",
-	desc = "Loot, boss kills, achievements, level ups and new spells, recipes, mounts and pets wait as notices at the top of the screen instead of popping up in the middle.",
+	desc = "Loot, boss kills, achievements and level ups wait as notices up top instead of popping up mid-screen.",
 	keywords = "alert alerts toast toasts popup banner boss loot achievement level up recipe mount pet notice notices",
 	default = true,
 	events = {

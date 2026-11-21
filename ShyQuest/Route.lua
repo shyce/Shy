@@ -3033,6 +3033,17 @@ R.ERRAND_FLY = 800   -- yards (straight): a leading errand farther than this is 
 R.journeyKept = {}   -- by stop (Key): { journey, the place it is to, its level and height, where it was from }
 R.journeysOpen = nil -- true while a journey of the route as last built was still being worked out (ShyQuest.lua builds it again)
 R.JOURNEY_SLACK = 100 -- yards farther from the stop than when its journey was worked out before it is again
+R.JUMP = 60          -- yards between two pulses that nobody runs: a hearthstone, a portal
+
+-- Told where you are at every pulse (ShyQuest.lua). A kept journey sets out from where you walked. Carried by
+-- a flight or a boat, or moved further than anyone runs, you're somewhere else, and each is worked out again.
+-- Being flown nearer to the stop isn't walking along its journey. ("Fly to Ironforge" stayed after landing there.)
+function R.Moved(carried, north, west)
+	local wasNorth, wasWest = R.movedNorth, R.movedWest
+	R.movedNorth, R.movedWest = north, west
+	local jumped = north and wasNorth and (north - wasNorth) ^ 2 + (west - wasWest) ^ 2 > R.JUMP * R.JUMP
+	if (carried or jumped) and next(R.journeyKept) then wipe(R.journeyKept) end
+end
 local function WithJourneys(route)
 	R.journeysOpen = nil
 	if not W.Known() or UnitOnTaxi("player") then
@@ -3351,7 +3362,7 @@ local function Errands(lead)
 	local was, held = ranFirst, R.held and ranFirst ~= nil
 	local levelling = ns.Levelling()
 	for _, id in ipairs(errandIds) do
-		-- pcall: one finder's error must not break the route. (Each timed on its own: /shymon names the slow one.)
+		-- pcall: one finder's error must not break the route. (Each timed on its own: the task manager names the slow one.)
 		local tick = debugprofilestop()
 		local ok, stop = true, nil
 		if not R.Hushed(id) and not R.errandAside[tostring(id)] and (levelling or ALWAYS[id]) then ok, stop = pcall(errands[id], lead) end

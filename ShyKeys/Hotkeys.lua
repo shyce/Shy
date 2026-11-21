@@ -589,7 +589,7 @@ function Hot.Take(opts, quiet)
 			end
 		end
 		if #made > 0 then
-			Shy.core:Print(("nothing of yours is lost. On new keys now: %s. /shy keys lists every key that changed."):format(Hot.Homes(made)))
+			Shy.core:Print(("you haven't lost anything. On new keys now: %s. /shy keys lists every key that changed."):format(Hot.Homes(made)))
 		end
 		if result.strafe then
 			Shy.core:Print(("%s strafe now, since the keys you strafed with hold abilities. Hold the right mouse button to turn, or keep them turning in /shy keys."):format(result.strafe))

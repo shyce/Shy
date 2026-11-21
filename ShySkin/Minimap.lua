@@ -698,11 +698,13 @@ end
 ns.Module({
 	id = "minimap",
 	title = "Minimap",
-	desc = "Restyles the minimap with a steel frame, the zone name on a title strip, a lens for tracking and flat buttons for the calendar and zoom.",
+	desc = "Your minimap gets a steel frame, the zone's name on a strip and flat buttons for the calendar and zoom.",
+	group = "screen",
+	words = "tracking clock",
 
 	options = {
 		{ key = "square", label = "Square map", default = true,
-			desc = "Makes the minimap square, on a panel with the zone name as its title and your coordinates in the corner; a rotating minimap stays round. Off keeps it round with a steel ring." },
+			desc = "The minimap is square, with your coordinates in its corner. A rotating minimap stays round." },
 	},
 
 	Hook = function(m)

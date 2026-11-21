@@ -4,7 +4,7 @@
 -- one, so the two never stand together.
 --
 -- It opens from the game's map key (the key's binding stood in for by ours, Bind), its own key (Key Bindings,
--- ShyMaps: "Map window"), the journal's world side or /shymaps window; the quest log's key opens it with your
+-- ShyMaps: "Map window"), the journal's world side or /shy maps window; the quest log's key opens it with your
 -- quests docked beside it (ShyQuest's, T:QuestList), where ShyQuest is. Those keys run through secure buttons
 -- (ShyMapsWindowKey, ShyMapsQuestKey), which click the game window's own close button first (the game's map is never closed from
 -- addon code), so a key closes the game's map where it is open and this window opens after. It is made over the

@@ -1,16 +1,17 @@
--- Weapon skills as part of the route: a weapon master near by, or on the way, who can teach a
--- weapon the character's class may use and has not learned is a stop. A weapon asked for by name
--- (the card's "Take me to" menu) is a stop wherever on the continent it is taught.
+-- Weapon skills as part of the route. A weapon master nearby or on the way is a stop when they can
+-- teach a weapon the character's class may use and hasn't learned. A weapon asked for by name (the
+-- card's "Take me to" menu) is a stop wherever on the continent it is taught.
 --   What a class of a race can be taught: Data/Supplies.lua (ns.data.weapons). What the character
 --     has: the game's skills window (C_SkillInfo).
---   Who teaches what: the old world's masters by Data/Supplies.lua (ns.data.masters); the game's
---     own word, read from a master's window and kept for the class (T.db.masters), goes over that
---     and has the prices. One with neither may teach any of it, and is worth a look.
---   A master's list names a weapon its own way ("One-Handed Swords" for the skill "Swords"): an
+--   Who teaches what: the old world's masters come from Data/Supplies.lua (ns.data.masters). The
+--     game's own word, read from a master's window and saved for the class (T.db.masters),
+--     overrides that and has the prices. A master with neither may teach any of it, and is worth
+--     a look.
+--   A master's list names a weapon its own way ("One-Handed Swords" for the skill "Swords"). An
 --     entry stands for the skill whose name it ends in (Line).
---   Masters standing together are one stop: each one it takes to learn all they teach between
---     them has a line and a nameplate mark; one standing there who is not needed is named
---     ("Sayoc, not Hanashi").
+--   Masters standing together are one stop. Each one needed to learn all they teach between them
+--     has a line and a nameplate mark. One standing there who isn't needed is named ("Sayoc, not
+--     Hanashi").
 -- Nothing is bought for you.
 
 local ADDON, ns = ...
@@ -181,6 +182,7 @@ end
 
 -- The weapon master as a route errand (R.AddErrand), or nil.
 local function Find(lead)
+	local weighs = ns.Weighed("weapons")
 	if not T.db.weapons.on or not ns.char or not W.Known() then return nil end
 	local level = UnitLevel("player")
 	local lacks, has, all, class = Skills()
@@ -193,7 +195,10 @@ local function Find(lead)
 	end
 	if #lacks == 0 or (not asked and (Mine().skip or 0) >= level) then return nil end
 	-- (The gold to spare: what the class trainer will want soon is kept for it, Train.Reserve.)
-	local lists, money = T.db.masters[class] or {}, math.max(0, GetMoney() - (ns.Train and ns.Train.Reserve and ns.Train.Reserve() or 0))
+	local keep = ns.Train and ns.Train.Reserve and ns.Train.Reserve() or 0
+	local lists, money = T.db.masters[class] or {}, math.max(0, Shy.Money() - keep)
+	-- (Each price held against the gold to spare: crossing one is what changes this row.)
+	local function Weigh(price) weighs[#weighs + 1] = keep + price end
 	local told, ids = ns.data.masters or {}, {}
 	for _, id in ipairs(D.Town(nil, TITLE)) do ids[id] = true end
 	for id in pairs(lists) do ids[id] = true end
@@ -214,8 +219,10 @@ local function Find(lead)
 			local worth
 			if lists[id] then
 				worth = #teaches > 0 and price <= money
+				if #teaches > 0 then Weigh(price) end
 			else
 				worth = (not teaches or #teaches > 0) and money >= UNSEEN
+				Weigh(UNSEEN)
 			end
 			local map, x, y, yards, dungeon = W.Nearest(npc.places)
 			local place = map and yards and not dungeon and { npc = npc, map = map, x = x, y = y, yards = yards } or nil
@@ -260,6 +267,7 @@ local function Find(lead)
 		cost = 0
 		for _, skill in ipairs(due) do
 			local price = skill.cost > 0 and skill.cost or UNSEEN
+			Weigh(spent + price)
 			if spent + price <= money then
 				kept[#kept + 1] = skill
 				spent, cost = spent + price, cost + skill.cost
@@ -317,7 +325,7 @@ local function Find(lead)
 			for _, each in ipairs(due or {}) do tip:AddLine(each.name, 1, 1, 1) end
 		end,
 		menu = function(root)
-			root:CreateButton("Not now: ask again next level", function()
+			root:CreateButton("Ask me next level", function()
 				Mine().skip = UnitLevel("player")
 				if R.Asked("weapons") then R.Ask("weapons", nil) else ns.Refresh() end
 			end)
@@ -361,7 +369,7 @@ local function Read()
 end
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "PLAYER_MONEY", "SKILL_LINES_CHANGED", "TRAINER_SHOW", "TRAINER_UPDATE" }) do
+for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED", "TRAINER_SHOW", "TRAINER_UPDATE" }) do
 	events:RegisterEvent(event)
 end
 events:SetScript("OnEvent", function(_, event)

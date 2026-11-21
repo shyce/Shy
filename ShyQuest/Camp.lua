@@ -1,12 +1,13 @@
--- Forever's camp as route errands: a campfire's benefits while one burns near, and cooking aboard a ship.
+-- Forever's camp as route errands: campfire benefits while a fire burns nearby, and cooking aboard a ship.
 --   By the fire: a campfire someone built nearby puts an aura on you (Data/Kit.lua, ns.data.camp.near).
---     While it is there, out of a fight, without the camp's benefits, the row asks you to sit by it: a
---     minute sitting by a welcoming fire gives them for an hour (the tent's rested experience among them,
---     once an hour). Gone while you sit (the game's own aura counts the minute) and while they last.
---   Cooking aboard: on a boat, a zeppelin or the tram (Shy.Way.Riding), with Cooking, a way to build a fire (a
---     campfire kit in the bags, or the wood for the first one) and raw food a known recipe still raises
---     the skill with, the row names what to cook and the points it should bring; its click opens the
---     recipe.
+--     While you have it, are out of a fight and lack the camp's benefits, the row asks you to sit.
+--     A minute by a welcoming fire gives the benefits for an hour (including the tent's rested XP,
+--     once an hour). The row is gone while you sit (the game's own aura counts the minute) and
+--     while the benefits last.
+--   Cooking aboard: on a boat, a zeppelin or the tram (Shy.Way.Riding). You need Cooking, a way to
+--     build a fire (a campfire kit in your bags, or the wood for the first one) and raw food that a
+--     known recipe can still gain skill from. The row names what to cook and the points it should
+--     bring. Clicking it opens the recipe.
 -- Auras are read only out of a fight (they are secret in one). Nothing is cooked or built for you.
 
 local ADDON, ns = ...

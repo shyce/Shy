@@ -124,7 +124,12 @@ function Keys.Watch(addon, jobs, opts)
 	Keys.gen = Keys.gen + 1   -- (whose keys are drawn has changed)
 	if watch then return end
 	watch = CreateFrame("Frame")
-	for _, event in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP", "PLAYER_REGEN_ENABLED", "SPELLS_CHANGED", "LEARNED_SPELL_IN_SKILL_LINE",
+	-- (The spellbook from ShyCore, said only when it really changed: what the keys show is worked out again.)
+	Shy:On("SHY_SPELLS", function()
+		Keys.gen = Keys.gen + 1
+		Later()
+	end)
+	for _, event in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP", "PLAYER_REGEN_ENABLED", "LEARNED_SPELL_IN_SKILL_LINE",
 		"ITEM_DATA_LOAD_RESULT", "NEW_MOUNT_ADDED" }) do
 		watch:RegisterEvent(event)
 	end

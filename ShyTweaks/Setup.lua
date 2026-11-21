@@ -12,11 +12,10 @@ ns.ASKED = {
 	{ "barText",            false,      "No keybinds or macro names on buttons" },
 	{ "skipGossip",         true,       "Straight to the vendor or flight map" },
 	{ "lootConfirm",        false,      "No \"this will bind to you\" popups" },
-	{ "autoRepair",         true,       "Auto-repair at any repair vendor" },
-	{ "partyInvites",       true,       "Auto-accept friend and guild invites" },
+	{ "autoRepair",         true,       "Repair at any vendor who can" },
+	{ "partyInvites",       true,       "Join when a friend or guildmate invites" },
 	{ "declineDuels",       true,       "Decline duel requests" },
-	{ "declineGuild",       true,       "Decline guild invites" },
-	{ "acceptRes",          false,      "Auto-accept resurrections" },
+	{ "acceptRes",          false,      "Take a resurrection out of combat" },
 	{ "acceptSummon",       false,      "Accept summons out of combat" },
 }
 
@@ -28,12 +27,15 @@ local function Items()
 	local items = {}
 	for _, f in ipairs(ns.features) do
 		local a = asked[f.id]
-		items[#items + 1] = {
-			key = f.id, group = f.category, title = f.title, desc = f.desc, default = f.default or false,
-			ask = a ~= nil, order = a and a.order, suggest = a and a.suggest, say = a and a.say,
-			get = function() return f:IsOn() and true or false end,
-			set = function(on) f:SetOn(on) end,
-		}
+		-- (One another addon does for now isn't asked about.)
+		if not f:Away() then
+			items[#items + 1] = {
+				key = f.id, group = f.category, title = f.title, desc = f.desc, default = f.default or false,
+				ask = a ~= nil, order = a and a.order, suggest = a and a.suggest, say = a and a.say,
+				get = function() return f:IsOn() and true or false end,
+				set = function(on) f:SetOn(on) end,
+			}
+		end
 	end
 	return items
 end

@@ -90,34 +90,6 @@ function ns.Guard(fn, ...)
 	return ok
 end
 
--- Slash commands
-
-local commands, order = {}, {}
-
-function ns.Command(word, help, fn)
-	if not commands[word] then order[#order + 1] = word end
-	commands[word] = { help = help, fn = fn }
-end
-
-SLASH_SHYBAGS1 = "/shybags"
-SLASH_SHYBAGS2 = "/sbags"
-SlashCmdList.SHYBAGS = function(input)
-	local word, rest = strtrim(input or ""):match("^(%S*)%s*(.-)$")
-	word = word:lower()
-	if word == "" then
-		T:OpenOptions()
-	elseif commands[word] then
-		commands[word].fn(rest)
-	else
-		T:Print("commands:")
-		print("  /shybags  - open options")
-		for _, name in ipairs(order) do
-			-- A command with no help line is a diagnostic: it runs, but isn't listed.
-			if commands[name].help then print("  /shybags " .. name .. "  - " .. commands[name].help) end
-		end
-	end
-end
-
 -- Lifecycle
 
 local PARTS = { "Scan", "Mail", "Auctions", "Ledger", "Index", "Search", "Marks", "Room", "Order", "Takeover",
@@ -129,7 +101,6 @@ function T:OnLoad()
 	self.db.shape = nil
 	if shape and shape ~= "now" then Shy.Slot.Set(shape) end
 	ns.Store.Open()
-	if ns.CreateOptions then self:RegisterOptions(ns.CreateOptions()) end
 end
 
 function T:OnLogin()

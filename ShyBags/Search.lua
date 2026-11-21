@@ -180,9 +180,9 @@ function Search.Help()
 end
 
 local PLACE = { bags = "bags", keys = "key ring", bank = "bank", mail = "mailbox", auction = "auction house" }
-ns.Command("find", "search every character: /shybags find linen", function(text)
+ns.T:Command("find", "search every character: /shy bags find linen", function(text)
 	if strtrim(text) == "" then
-		ns.T:Print("search terms for /shybags find:")
+		ns.T:Print("search terms for /shy bags find:")
 		for _, line in ipairs(Search.Help()) do print("  " .. line) end
 		return
 	end

@@ -84,6 +84,7 @@ local function LayCapsule(parts, tag, h, inset, unit)
 	middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
 end
 local MAP_EVERY = 0.2        -- seconds between re-lays of the world map's line
+local MAP_SETTLE = 0.5       -- seconds a zoom is still before the line is laid again for it
 local TAPER = 150            -- yards over which the player's offset from the line is shed (spec.aboard)
 
 -- Points of the line on the screen, filled anew for each one laid (one trip at a time lays).
@@ -523,13 +524,24 @@ function Trip:SetupMap()
 	map.pen = Maps.Pen(map.frame, "TOPLEFT", map.frame, true, true)
 	map.mark = self:NewMark(map.frame, MAP_SIZE)
 	map.mark:Hide()
-	Maps.OnMap(function() self:Safe(self.LayMap) end)
+	-- A zoom's steps: the line stands on the map, which carries it, a little too broad or fine meanwhile. It is laid
+	-- as it should be once the zoom has been still a moment, and nothing is laid while it moves.
+	Maps.OnMap(function(why)
+		if why == "scale" then
+			map.settle = GetTime() + MAP_SETTLE
+			return
+		end
+		self:Safe(self.LayMap)
+	end)
 	-- (Kept out of sight while ShyMaps' view opens: laid as it comes into sight.)
 	map.frame:SetScript("OnShow", function() self:Safe(self.LayMap) end)
 	local since, ticks = 0, 0
 	map.frame:SetScript("OnUpdate", Shy.Clocked("trip: " .. tostring(self.strip) .. " on the world map", function(_, elapsed)
 		since = since + elapsed
-		if since >= MAP_EVERY then
+		-- (A zoom still moving: nothing laid. Still a moment: laid at once.)
+		local zooming = map.settle ~= nil and GetTime() < map.settle
+		if map.settle and not zooming then map.settle, since = nil, MAP_EVERY end
+		if since >= MAP_EVERY and not zooming then
 			since = 0
 			ticks = ticks + 1
 			self:Safe(function()

@@ -3,9 +3,11 @@
 --
 -- The game says nothing of being aboard. Two things do: standing (not swimming) where the ground is open
 -- water, as on a ship's deck at the dock; and being carried, the character's place moving much faster than
--- the character moves itself. Either, near a ride's line (Data\Transit.lua's, the client's own), makes the
+-- the character moves itself. (The game hides your own speed in a fight. Then carried means moving while you
+-- stand still.) Either, near a ride's line (Data\Transit.lua's, the client's own), makes the
 -- ride being taken the one that line leads to soonest: the next stop, not one past it, and never one that
--- ends here. The ride is followed along its line until the character is off it for a few seconds (landed
+-- ends here. Roads run under these lines. Away from a stop, a ride must go faster than anyone runs or rides.
+-- The ride is followed along its line until the character is off it for a few seconds (landed
 -- and walked off, or jumped). The tram has no world map and no place the game tells: being in its own map
 -- is the ride, from the door the character was last seen at (else the one the journey they follow goes
 -- by: Shy.Way.Following) to the other city's.
@@ -51,6 +53,8 @@ local SETTLE = 20            -- seconds after coming out of the tram in which th
 local AT_DECK = 25           -- yards from where a boat halts within which standing on open water is its deck
 local AT_DOCK = 60           -- yards from a ride's stop where the wait for it begins
 local LEFT_DOCK = 250        -- yards from it beyond which that wait is over (gone off elsewhere)
+local HALT = 150             -- yards from a stop where a ride may still be slow
+local FASTER = 16            -- yards a second a ride must carry you anywhere else: a fast mount runs 14
 
 -- Each way of riding: what it is called, its sign (Shy.Maps.SIGNS; an airboat flies, and wears the flight's
 -- wing; a portal has none), its color (Shy.Theme.TRAVEL).
@@ -130,9 +134,23 @@ local function Carried(now, world, north, west)
 		trail[1] = { now, world, north, west }
 		return 0, 0, 0
 	end
-	local own = GetUnitSpeed("player") or 0
-	if issecretvalue(own) then own = 0 end
-	return speed - own, dn, dw
+	local own = GetUnitSpeed("player")
+	if issecretvalue(own) then
+		-- (Hidden in a fight. While they move themselves we can't tell what carries them.)
+		if IsPlayerMoving() then return 0, dn, dw end
+		own = 0
+	end
+	return speed - (own or 0), dn, dw
+end
+
+-- The speed a ride must carry you at here. CARRIED near any ride's stop, FASTER anywhere else.
+local function Pace(world, north, west)
+	for _, other in ipairs(T.Rides()) do
+		local from, to = other.from, other.to
+		if from and from.world == world and (from.north - north) ^ 2 + (from.west - west) ^ 2 <= HALT * HALT then return CARRIED end
+		if to and to.world == world and (to.north - north) ^ 2 + (to.west - west) ^ 2 <= HALT * HALT then return CARRIED end
+	end
+	return FASTER
 end
 
 local function Told()
@@ -300,7 +318,7 @@ local function Follow(now, world, north, west, carried)
 	aboard.off = nil
 	if not aboard.sure then
 		-- (Noticed carried: a ride once carried CONFIRM yards along its line; a step at a dock's end is dropped.)
-		if carried < CARRIED then return End(now, "not carried on: no ride", world, north, west, carried) end
+		if carried < Pace(world, north, west) then return End(now, "not carried on: no ride", world, north, west, carried) end
 		local gone = aboard.k > aboard.beganOn and math.huge or stretch.along[aboard.at] - stretch.along[aboard.began]
 		if gone < CONFIRM then return end
 		aboard.sure = true
@@ -456,7 +474,7 @@ local function Watch()
 	local decked = not moving and not IsSwimming() and T.Water(world, north, west) == true
 	if not moving and not decked then return end
 	local ride, k, at = Which(world, north, west, moving and dn or 0, moving and dw or 0, decked)
-	if ride then Start(ride, k, at, now, moving, world, north, west, carried) end
+	if ride and (decked or carried >= Pace(world, north, west)) then Start(ride, k, at, now, moving, world, north, west, carried) end
 end
 
 function T.Riding()

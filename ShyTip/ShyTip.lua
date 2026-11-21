@@ -61,6 +61,7 @@ ns.POINTS = {
 	"LEFT", "CENTER", "RIGHT",
 	"BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT",
 }
+ns.OFFSET = 100   -- the furthest a tooltip stands from the cursor, either way
 
 -- font: the Latin file. cyrillic: the file for Cyrillic names, where the font has a cut for them.
 ns.FONTS = {
@@ -213,7 +214,6 @@ end
 
 local SPECIAL = { elite = true, rare = true, rareelite = true, worldboss = true }
 
--- `tip` is a tooltip or the options sample: anything with a NineSlice, TextLeft1 and StatusBar.
 local function StyleUnit(tip, unit)
 	local l = Look(tip)  -- capture before recoloring
 	l.unit = true
@@ -417,15 +417,6 @@ function ns.Hushed(tip)
 	return (db.hideInCombat and InCombatLockdown()) or OverTarget(tip)
 end
 
--- Options preview: a hostile border with the mark of that grade. Returns the grade's color.
-function ns.Warn(tip, grade)
-	ResetLook(tip)
-	local l = Look(tip)
-	l.unit, l.dressed = true, true
-	SetBorder(tip, Color("hostile"))
-	return Arm(tip, grade)
-end
-
 -- What another addon says of the unit in a tooltip, for its plate (Unit.lua). Forgotten when the
 -- tooltip is cleared.
 --   about = { tag = { ... } }   the mark its nameplate carries, in ShyPlates' tag form
@@ -450,12 +441,6 @@ local function OnTooltipUnit(tip)
 	if db.danger then pcall(Warn, tip, unit) end
 end
 
--- Options preview: the base look, plus unit colors when a unit is given.
-function ns.Dress(tip, unit)
-	ResetLook(tip)
-	if unit and db.theme then StyleUnit(tip, unit) end
-end
-
 -- Fonts and scale
 
 -- The tooltip's font objects are families: one file per alphabet, so a name in Cyrillic, Korean or
@@ -472,7 +457,8 @@ local function Family(choice, original)
 	return UI.NameFont(math.floor(height + 0.5), flags, files, "tip_" .. choice.value)
 end
 
-function T:Apply()
+-- The font you picked, on the game's tooltip text.
+function ns.Fonts()
 	local choice
 	for _, f in ipairs(ns.FONTS) do
 		if f.value == db.font then choice = f end
@@ -496,11 +482,27 @@ function T:Apply()
 			end
 		end
 	end
-	GameTooltip:SetScale(db.scale)
+end
+
+-- Every tooltip back to its base look. A unit's colors come again with its next tooltip.
+function ns.Looks()
 	for tip in pairs(looks) do ResetLook(tip) end
 	-- Wing.lua may be missing until the client restarts.
 	if ns.Wing then ns.Wing.Apply() end
+end
+
+function T:Apply()
+	ns.Fonts()
+	GameTooltip:SetScale(db.scale)
+	ns.Looks()
 	if ns.Strip then ns.Strip.Apply() end
+end
+
+-- Every setting as it shipped. (stripFound stays, or the next login would turn pings and markers off again.)
+function ns.Reset()
+	T:ResetDB()
+	db.stripFound = true
+	T:Apply()
 end
 
 -- Accent changed: recolor open tooltips, except a unit's, which is rebuilt on the next hover.
@@ -509,7 +511,6 @@ Shy:On("SHY_THEME", function()
 	for tip, l in pairs(looks) do
 		if not l.unit then ResetLook(tip) end
 	end
-	if ns.RefreshOptions then ns.RefreshOptions() end
 end)
 
 -- Hooks
@@ -577,7 +578,7 @@ function T:OnLoad()
 		ResetLook(tip)
 	end)
 
-	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, OnTooltipUnit)
+	Shy.OnTip(Enum.TooltipDataType.Unit, "a unit", OnTooltipUnit)
 	GameTooltip:HookScript("OnTooltipCleared", ResetLook)
 	GameTooltip:HookScript("OnTooltipCleared", function(tip) glances[tip] = nil end)
 	-- Blizzard recolors the health bar as it updates; keep ours.
@@ -593,7 +594,6 @@ function T:OnLoad()
 	if ns.Unit then ns.Unit.Start() end
 	if ns.Strip then ns.Strip.Start() end
 	self:Apply()
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 -- The danger mark is made as you log in, not on the hover of the first mob that needs it.
@@ -601,67 +601,58 @@ function T:OnLogin()
 	if db.danger then pcall(Mark, GameTooltip) end
 end
 
--- Slash commands
+-- Commands: /shy tip <word>. Each tells the settings, so a row on show follows.
 
-local VALID_POINT = {}
-for _, p in ipairs(ns.POINTS) do VALID_POINT[p] = true end
+local CORNER = {}
+for _, p in ipairs(ns.POINTS) do CORNER[p] = true end
 
 local function OnOff(v) return v and "|cff40ff40on|r" or "|cffff4040off|r" end
 
-local function Help()
-	T:Print("commands:")
-	print("  /shytip  - open options")
-	print("  /shytip on | off | toggle")
-	print("  /shytip follow  - toggle following the cursor")
-	print("  /shytip fade  - toggle instant hide")
-	print("  /shytip replace  - toggle hover cards in place of default tooltips")
-	print("  /shytip look  - toggle the dark tooltip style")
-	print("  /shytip theme  - toggle unit colors")
-	print("  /shytip danger  - toggle the mark on dangerous mobs")
-	print("  /shytip anchor <TOPLEFT|TOP|TOPRIGHT|LEFT|CENTER|RIGHT|BOTTOMLEFT|BOTTOM|BOTTOMRIGHT>")
-	print("  /shytip offset <x> <y>")
-	print("  /shytip reset")
+-- Flips a switch, or sets it to `to`, and says so. after: what shows the change at once.
+local function Switch(key, name, after, to)
+	if to == nil then to = not db[key] end
+	db[key] = to
+	if after then after() end
+	T:Print(name .. " " .. OnOff(to))
+	Shy.Settings.Refresh()
 end
 
-SLASH_SHYTIP1 = "/shytip"
-SLASH_SHYTIP2 = "/stip"
-SlashCmdList.SHYTIP = function(input)
-	local cmd, a, b = strsplit(" ", strtrim(input or ""):lower())
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "on" or cmd == "off" or cmd == "toggle" then
-		if cmd == "toggle" then db.enabled = not db.enabled else db.enabled = (cmd == "on") end
-		T:Print("cursor tooltips " .. OnOff(db.enabled))
-	elseif cmd == "follow" then
-		db.follow = not db.follow
-		T:Print("follow cursor " .. OnOff(db.follow))
-	elseif cmd == "fade" then
-		db.instantHide = not db.instantHide
-		T:Print("instant hide " .. OnOff(db.instantHide))
-	elseif cmd == "replace" then
-		db.replace = not db.replace
-		T:Print("hover cards " .. OnOff(db.replace))
-	elseif cmd == "look" then
-		db.shyLook = not db.shyLook
-		T:Print("dark tooltip style " .. OnOff(db.shyLook))
-	elseif cmd == "theme" then
-		db.theme = not db.theme
-		T:Print("unit colors " .. OnOff(db.theme))
-	elseif cmd == "danger" then
-		db.danger = not db.danger
-		T:Print("danger mark " .. OnOff(db.danger))
-	elseif cmd == "anchor" and a and VALID_POINT[a:upper()] then
-		db.point = a:upper()
-		T:Print("anchor set to " .. db.point)
-	elseif cmd == "offset" and tonumber(a) and tonumber(b) then
-		db.x, db.y = tonumber(a), tonumber(b)
-		T:Print(("offset set to %d, %d"):format(db.x, db.y))
-	elseif cmd == "reset" then
-		T:ResetDB()
-		T:Print("settings reset.")
-	else
-		Help()
-	end
-	T:Apply()
-	if ns.RefreshOptions then ns.RefreshOptions() end
+local function Reach(v)
+	return math.max(-ns.OFFSET, math.min(ns.OFFSET, math.floor(v + 0.5)))
 end
+
+T:Command("on", "tooltips show at your cursor", function() Switch("enabled", "cursor tooltips", nil, true) end)
+T:Command("off", "tooltips show in the screen corner", function() Switch("enabled", "cursor tooltips", nil, false) end)
+T:Command("toggle", nil, function() Switch("enabled", "cursor tooltips") end)
+T:Command("follow", "the tooltip follows your cursor, or stays put", function() Switch("follow", "follow cursor") end)
+T:Command("fade", "tooltips go at once, or fade out", function() Switch("instantHide", "instant hide") end)
+T:Command("replace", "cards, or the default tooltips", function() Switch("replace", "cards", ns.Looks) end)
+T:Command("look", "dark default tooltips, on or off", function() Switch("shyLook", "dark tooltips", ns.Looks) end)
+T:Command("theme", "unit colors, on or off", function() Switch("theme", "unit colors", ns.Looks) end)
+T:Command("danger", "the mark on dangerous mobs, on or off", function() Switch("danger", "danger mark", ns.Looks) end)
+T:Command("anchor", "the corner that sits on your cursor, like: anchor topleft", function(rest)
+	local point = rest:upper()
+	if not CORNER[point] then
+		T:Print("corners: " .. table.concat(ns.POINTS, ", "):lower())
+		return
+	end
+	db.point = point
+	T:Print("anchor set to " .. point:lower())
+	Shy.Settings.Refresh()
+end)
+T:Command("offset", "how far from your cursor, across and up, like: offset 16 8", function(rest)
+	local x, y = rest:match("^(%S+)%s+(%S+)$")
+	x, y = tonumber(x), tonumber(y)
+	if not (x and y) then
+		T:Print("give two numbers, across and up: /shy tip offset 16 8")
+		return
+	end
+	db.x, db.y = Reach(x), Reach(y)
+	T:Print(("offset set to %d, %d"):format(db.x, db.y))
+	Shy.Settings.Refresh()
+end)
+T:Command("reset", "every tooltip setting back to default", function()
+	ns.Reset()
+	T:Print("settings reset.")
+	Shy.Settings.Refresh()
+end)

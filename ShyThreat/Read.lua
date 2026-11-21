@@ -16,7 +16,7 @@
 --   Rd.Look()     reads the game: Rd.mob, Rd.key, Rd.name (may be secret), Rd.rows (shown order), Rd.sorted
 --                 (false: in group order), Rd.margin (Shy.Threat's for you on the mob: what the header's light says)
 --   Rd.Key(unit)  which mob a unit is, as a plain string, or nil
---   Rd.Sample()   a made-up fight's rows, for layout mode, the test and the options' preview
+--   Rd.Sample()   a made-up fight's rows, for layout mode and the settings' made-up fight
 --   Rd.Report()   what the game answers, for a copy box
 
 local ADDON, ns = ...
@@ -214,15 +214,18 @@ function Rd.Sample()
 	local _, class = UnitClass("player")
 	local rows = {}
 	for i, s in ipairs(SAMPLE) do
-		local row = {}
-		for k, v in pairs(s) do row[k] = v end
-		if row.me then
-			row.class = not Secret(class) and class or "PALADIN"
-			local name = UnitName("player")
-			if Readable(name) then row.name = name end
+		-- (Pets switched off: none here either, so the switch shows on it.)
+		if T.db.pets or not s.pet then
+			local row = {}
+			for k, v in pairs(s) do row[k] = v end
+			if row.me then
+				row.class = not Secret(class) and class or "PALADIN"
+				local name = UnitName("player")
+				if Readable(name) then row.name = name end
+			end
+			row.readable, row.order, row.holder = true, i, row.tanking == true
+			rows[#rows + 1] = row
 		end
-		row.readable, row.order, row.holder = true, i, row.tanking == true
-		rows[i] = row
 	end
 	return rows, "Defias Overseer"
 end
@@ -238,7 +241,7 @@ function Rd.Report()
 	end
 	local mob = Rd.Mob()
 	local lines = { "ShyThreat", "reading: " .. tostring(mob) .. "; in a group: " .. tostring(IsInGroup())
-		.. "; raid: " .. tostring(IsInRaid()) .. "; tank: " .. tostring(T:IsTank()) .. " (setting " .. tostring(T.db.role) .. ")" }
+		.. "; raid: " .. tostring(IsInRaid()) .. "; tank: " .. tostring(T:IsTank()) .. " (setting " .. Shy.ThreatRolePick() .. ")" }
 	if mob then
 		lines[#lines + 1] = "you, Shy.Threat: " .. Say(Shy.Threat(mob, T:IsTank() and "tank" or "dps"))
 		for i, m in ipairs(Members()) do

@@ -192,7 +192,9 @@ end
 local m = ns.Module({
 	id = "castbars",
 	title = "Cast bars",
-	desc = "Restyles your cast bar, your pet's and the ones under your target and focus, filled in your accent color. An uninterruptible cast is grey and an interrupted one red.",
+	desc = "The game's cast bars fill in your color. A cast you can't interrupt is grey, an interrupted one red.",
+	group = "screen",
+	words = "casting spell",
 
 	Paint = function(m, kit)
 		for _, bar in ipairs(Bars()) do PaintBar(m, kit, bar) end
@@ -210,6 +212,14 @@ local m = ns.Module({
 	end,
 })
 
+-- The cockpit moved or changed shape: the bars are dressed again only if it took the cast bar in or let it go,
+-- or the icon's size there changed. Its moving alone changes nothing they wear.
+local held
 Shy:On("SHY_COCKPIT", function()
-	if m.on then m:Refresh() end
+	if not m.on then return end
+	local size, gap = Docked(PlayerCastingBarFrame)
+	local now = size and (size .. ":" .. tostring(gap)) or false
+	if now == held then return end
+	held = now
+	m:Refresh()
 end)

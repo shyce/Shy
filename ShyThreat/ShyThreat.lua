@@ -24,7 +24,6 @@ local T = Shy:NewAddon(ADDON, {
 		rows = 6,             -- the rows it is planned at (its height until you size it); more scroll
 		pets = true,          -- pets' rows
 		hover = true,         -- a nameplate under the mouse in a fight: the meter reads that mob
-		linger = 8,           -- seconds the last fight's table stays after the fight
 		warn = true,          -- the header lights as you near the pull (or, tanking, as the next player catches up)
 		-- (How you are read and the warning sound are the family's: Shy.ThreatRole, Shy.ThreatSound.)
 	},
@@ -34,7 +33,7 @@ ns.T = T
 local appliers = {}
 ns.appliers = appliers
 
--- When the meter shows (T.db.when), as the options and the meter's menu offer it.
+-- When the meter shows (T.db.when), as the settings and the meter's menu offer it.
 ns.WHEN = {
 	{ value = "combat", text = "In combat" },
 	{ value = "always", text = "Always" },
@@ -56,27 +55,17 @@ function T:OnLoad()
 	-- near the pull, gave way to the family's, when aggro changes hands.)
 	Shy.AdoptThreatRole(self.db.role)
 	self.db.role, self.db.sound = nil, nil
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
 	ns.Meter.Start()
 end
 
-SLASH_SHYTHREAT1 = "/shythreat"
-SlashCmdList.SHYTHREAT = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "test" then
-		ns.Meter.Try()
-		T:Print("a made-up fight for ten seconds, so you can see and place the meter.")
-	elseif cmd == "report" then
-		Shy.UI.ShowCopyBox("ShyThreat", ns.Read.Report())
-	else
-		T:Print("commands:")
-		print("  /shythreat  - open options")
-		print("  /shythreat test  - a made-up fight for ten seconds")
-		print("  /shythreat report  - what the game says about the threat on your target, to copy")
-	end
-end
+-- For finding faults: a made-up fight, and what the game says of the threat on your target. Not listed.
+T:Command("test", nil, function()
+	ns.Meter.Try()
+	T:Print("a made-up fight for ten seconds, so you can see and place the meter.")
+end)
+T:Command("report", nil, function()
+	Shy.UI.ShowCopyBox("ShyThreat", ns.Read.Report())
+end)

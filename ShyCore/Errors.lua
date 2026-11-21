@@ -802,7 +802,7 @@ end
 -- /shy's commands are the hub's, which loads after this file.
 Shy:On("SHY_ADDON_LOADED", function(a)
 	if a ~= core or not Shy.Command then return end
-	Shy.Command("errors", "the errors caught", function() E.Open() end)
+	Shy.Command("errors", "the addon errors caught so far", function() E.Open() end)
 	Shy.Command("errors clear", nil, function()
 		E.Clear()
 		core:Print("errors cleared.")

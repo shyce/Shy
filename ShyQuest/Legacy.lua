@@ -1,14 +1,14 @@
--- Legacy points as a route errand: with a Legacy point to spend, a card row names the next Legacy
--- talent of an order made for leveling (Data/Specs.lua, ns.data.legacy), read through C_Traits as
--- the game's Legacy window reads it: one pool of points for the whole account, three trees, a config
--- a tree.
+-- Legacy points as a route errand. With a Legacy point to spend, a card row names the next Legacy
+-- talent in an order made for leveling (Data/Specs.lua, ns.data.legacy). It is read through C_Traits
+-- the way the game's Legacy window reads it: one pool of points for the whole account, three trees,
+-- one config per tree.
 --   Talented comes first in the order. Each of its ranks starts a character's class talent points a
 --     level sooner (level 5 at five ranks), and it needs Well Rested in full. Spec.lua asks here when
 --     talents start (TalentsFrom) and, while Talented has ranks left, how to get them (Sooner).
 --   A point comes from a challenge (an achievement). While the account has fewer than it can hold,
 --     the challenges nearest done on this character are listed.
---   Nothing is spent automatically. A click on the row opens the Legacy window, by the secure click
---     Spec.lua lays over a row (Spec.KeyOver) on LegacyMicroButton.
+--   Nothing is spent automatically. A click on the row opens the Legacy window, through the secure
+--     click Spec.lua lays over a row (Spec.KeyOver) on LegacyMicroButton.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -208,7 +208,7 @@ local function Find()
 		caption = "LEGACY  \194\183  FOR EVERY CHARACTER",
 		mark = "talent",
 		menu = function(root)
-			root:CreateButton("Not now: ask again at the next point", function()
+			root:CreateButton("Ask me at the next point", function()
 				Mine().skip = now.earned
 				ns.Refresh()
 			end)
@@ -264,19 +264,22 @@ local function Soon()
 	looking = true
 	C_Timer.After(0.3, function()
 		looking = false
-		if ready and ns.char then ns.Refresh() end
+		-- (Legacy points are an errand's: the errands are fitted again, not the route.)
+		if ready and ns.char then ns.RefreshErrands() end
 	end)
 end
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "SPELLS_CHANGED", "TRAIT_CONFIG_LIST_UPDATED", "TRAIT_CONFIG_UPDATED", "TRAIT_TREE_CURRENCY_INFO_UPDATED",
+for _, event in ipairs({ "TRAIT_CONFIG_LIST_UPDATED", "TRAIT_CONFIG_UPDATED", "TRAIT_TREE_CURRENCY_INFO_UPDATED",
 	"TRAIT_NODE_CHANGED", "ACHIEVEMENT_EARNED" }) do
 	events:RegisterEvent(event)
 end
-events:SetScript("OnEvent", function()
+local function Changed()
 	ready, stale = true, true
 	Soon()
-end)
+end
+events:SetScript("OnEvent", Changed)
+Shy:On("SHY_SPELLS", Changed)
 
 ns.CardSwitch("suggestions", function(root)
 	root:CreateCheckbox("Legacy suggestions", function() return T.db.legacy.on end, function()

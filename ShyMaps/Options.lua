@@ -1,254 +1,175 @@
--- Options page. The preview is your zone as the map draws it, by the map's own painters: its look and
--- what unexplored ground looks like change it as they are picked.
+-- Settings: the map and how it follows you, the overlay, what shows on the map, sharing, then the dungeons.
 
 local ADDON, ns = ...
 local T = ns.T
-local UI = Shy.UI
 
-local LEFT, RIGHT, COL = 24, 330, 270
-local STRIP_W, STRIP_H = 622, 150
+ns.RefreshOptions = Shy.Settings.Refresh
 
-local function Get(key) return function() return T.db[key] end end
-local function Set(key) return function(v) T.db[key] = v end end
+-- Dimmed, and why: the row says it under the mouse.
+local function On()
+	if T.db.on then return true end
+	return false, "The world map is off."
+end
+local function Drawn()
+	if not T.db.on then return On() end
+	if T.db.style == "drawn" then return true end
+	return false, "The terrain shows all the ground, explored or not."
+end
+local function Laid()
+	if not T.db.on then return On() end
+	if T.db.overlay then return true end
+	return false, "Needs the map over the screen."
+end
+local function Guild()
+	if T.db.guild then return true end
+	return false, "Needs guild members on the map."
+end
+local function Suggested()
+	if Shy.Way.Share.On() then return true end
+	return false, "Needs suggested routes."
+end
+local function Routed() return not Shy.Way.missing end
+local function Percent(v) return math.floor(v * 100 + 0.5) .. "%" end
 
-local function At(w, page, x, y)
-	w:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
-	return w
+-- Read when it is next used: nothing on screen to lay again.
+local function Kept() end
+-- The overlay alone: the map's pins stay as they lie while a knob is dragged.
+local function Faint() ns.View.Faint() end
+
+local function Views()
+	local count = 0
+	for _ in pairs(T.db.views) do count = count + 1 end
+	return count
 end
 
--- Preview
+local LAYER = {
+	zones = { words = "names levels seas",
+		desc = "Each zone's name and levels on a continent, colored by your level. The terrain names the seas too." },
+	flights = { words = "flight master taxi", desc = "Flight masters. The ones you haven't found yet are faded." },
+	routes = { words = "flight paths lines", desc = "Faint lines along the flight paths between the flight points you know." },
+	travel = { words = "tram ships docks", desc = "Where to catch boats, zeppelins and the tram, and where each goes." },
+	dungeons = { words = "instance raid", desc = "Each dungeon's entrance and levels. Click one for its floors, bosses and loot." },
+	spirits = { words = "graveyard dead", desc = "Spirit healers in each zone. When you're dead, the nearest one lights up." },
+	places = { words = "towns landmarks", desc = "Towns, landmarks and other marked places." },
+	rares = { words = "rare elite spawn", desc = "Where rare creatures turn up in a zone, with their names and levels." },
+	directions = { words = "guard gossip",
+		desc = "The place a guard points you to. The map opens on it, and a click has the arrow lead you there." },
+	links = { words = "doors caves entrances", desc = "Doors and paths into other maps. Click one to open that map." },
+	notesOn = { words = "notes drawings pins", desc = "Your notes and drawings. Add them from Notes in the map's menu." },
+	coords = { words = "position x y", desc = "Your coordinates, and the mouse's while it's over the map." },
+}
+-- Who shows on the map stands with who sees you, under a caption of its own.
+local PEOPLE = {
+	friends = "Friends who share where they are show on the map. The others wait at its edge, Battle.net friends too.",
+	guild = "Guild members who share where they are show as a dot, the rest by zone.",
+}
 
-local strip, inner, art, ground, travel
+local list = {
+	apply = function() ns.Apply() end,
+	reset = function()
+		T:ResetDB()   -- saved views, notes and what you saw drop are kept
+		if Routed() then Shy.Way.Share.SetOn(true) end
+		ns.Apply()
+	end,
 
-local function BuildPreview(panel)
-	strip = CreateFrame("Frame", nil, panel)
-	strip:SetSize(STRIP_W, STRIP_H)
-	strip:SetPoint("TOPLEFT", LEFT, -112)
-	UI.Panel(strip, { brackets = false, line = false })
-	strip:SetClipsChildren(true)
-	inner = CreateFrame("Frame", nil, strip)
-	inner:SetFrameLevel(strip:GetFrameLevel() + 1)
-	ground = ns.Terrain.New(inner, strip:GetFrameLevel() + 1)
-	art = ns.Art.New(inner, strip:GetFrameLevel() + 2)
-	if ns.Travel then
-		local over = CreateFrame("Frame", nil, inner)
-		over:SetAllPoints()
-		over:SetFrameLevel(strip:GetFrameLevel() + 4)
-		travel = ns.Travel.Painter(over)
-	end
-	-- A lid over the art: the strip's edge, and you on the map.
-	local lid = CreateFrame("Frame", nil, strip)
-	lid:SetAllPoints()
-	lid:SetFrameLevel(strip:GetFrameLevel() + 6)
-	UI.Panel(lid, { brackets = false, line = false, fill = { 0, 0, 0, 0 } })
-	strip.me = lid:CreateTexture(nil, "OVERLAY")
-	strip.me:SetAtlas("UI-WorldMapArrow")
-	strip.me:SetSize(22, 22)
-end
+	{ key = "on", label = "World map", words = "default off",
+		desc = "Your map key opens this map. Turn it off to get the default map back." },
 
-local function RefreshPreview()
-	if not strip then return end
-	local map = MapUtil.GetDisplayableMapForPlayer()
-	local terrain = ns.Terrain.Covers(map)
-	local w, h = ns.Art.Paint(art, map, T.db.fog, terrain)
-	if not w then return end
-	ns.Art.Detail(art, 1)
-	local scale = STRIP_W / w
-	local x, y = ns.View.PlayerAt(map)
-	local top = math.max(0, math.min(h * scale - STRIP_H, (y or 0.5) * h * scale - STRIP_H / 2))
-	inner:SetSize(w, h)
-	inner:SetScale(scale)
-	inner:ClearAllPoints()
-	inner:SetPoint("TOPLEFT", strip, "TOPLEFT", 0, top / scale)
-	if terrain then
-		ns.Terrain.Lay(ground, map, 0, 1, top / (h * scale), (top + STRIP_H) / (h * scale), w, h)
-	else
-		ns.Terrain.Clear(ground)
-	end
-	if travel then ns.Travel.Paint(travel, map, w, h, scale) end
-	strip.me:SetShown(x ~= nil)
-	if x then
-		strip.me:ClearAllPoints()
-		strip.me:SetPoint("CENTER", strip, "TOPLEFT", x * STRIP_W, -(y * h * scale - top))
-		strip.me:SetRotation(GetPlayerFacing() or 0)
-	end
-end
-
-function ns.CreateOptions()
-	local panel = CreateFrame("Frame")
-	local group = UI.Group(function() ns.Apply() end)
-	local function On() return T.db.on end
-	local function Friends() return T.db.on and T.db.friends end
-	local function Guild() return T.db.on and T.db.guild end
-
-	local function Build()
-		UI.PageHeader(panel, T)
-		BuildPreview(panel)
-
-		local switchLabel = UI.Text(panel, "World map", 15, true)
-		switchLabel:SetPoint("TOPLEFT", LEFT, -274)
-		local switch = group:Switch(panel, "World map", Get("on"), Set("on"),
-			{ desc = "Turn off to go back to the default map. Your settings and saved views are kept." })
-		switch:SetPoint("LEFT", switchLabel, "RIGHT", 12, 0)
-
-		At(UI.Header(panel, "The map", COL), panel, LEFT, -306)
-		At(group:Dropdown(panel, "Look of a zone", {
-			{ value = "drawn", text = "Drawn map" },
-			{ value = "terrain", text = "Terrain from above" },
-		}, Get("style"), Set("style"), { width = COL, enabled = On,
-			desc = "Terrain shows the actual ground, like the minimap, and lets you pan into the zones around it." }), panel, LEFT, -334)
-		At(group:Dropdown(panel, "Unexplored areas", {
+	{ section = "The map" },
+	{ key = "style", label = "Zone look", enabled = On, words = "terrain drawn ground satellite",
+		items = { { value = "drawn", text = "Drawn map" }, { value = "terrain", text = "Terrain from above" } },
+		desc = "Terrain is the real ground from above, and you can pan into the zones around you." },
+	{ key = "fog", label = "Unexplored areas", enabled = Drawn, words = "fog explored",
+		items = {
 			{ value = "faded", text = "Shown faded" },
 			{ value = "clear", text = "Shown as explored" },
 			{ value = "hidden", text = "Hidden" },
-		}, Get("fog"), Set("fog"), { width = COL, enabled = On,
-			desc = "How a drawn map shows the places you haven't been yet." }), panel, LEFT, -390)
-		At(group:Checkbox(panel, "Reopen where you left it", Get("remember"), Set("remember"), { enabled = On,
-			desc = "The map opens on the place and zoom you left it at, until you move to another zone." }), panel, LEFT, -446)
-		At(group:Dropdown(panel, "Following you", {
-			{ value = "off", text = "Off" },
-			{ value = "me", text = "You in the middle" },
-			{ value = "smart", text = "Smart" },
-		}, function() return not T.db.follow and "off" or T.db.followSmart and "smart" or "me" end, function(v)
-			T.db.follow, T.db.followSmart = v ~= "off", v == "smart"
-		end, { width = COL, enabled = On,
-			desc = "Smart keeps you in sight with a little of your way ahead. Drag the map away and it offers to stay put." }), panel, LEFT, -472)
-		local forget = UI.Button(panel, "Forget saved views", 180, function()
-			wipe(T.db.views)
-			wipe(T.db.last)
-		end)
-		At(forget, panel, LEFT, -528)
+		},
+		desc = "How the drawn map shows places you haven't been." },
+	{ label = "Follow you", default = "smart", enabled = On, words = "center middle track",
+		items = { { value = "off", text = "Off" }, { value = "me", text = "Center" }, { value = "smart", text = "Smart" } },
+		get = function() return not T.db.follow and "off" or T.db.followSmart and "smart" or "me" end,
+		set = function(v) T.db.follow, T.db.followSmart = v ~= "off", v == "smart" end,
+		-- (As the switch in the map's corner: following, an open map comes to you at once.)
+		apply = function(v)
+			ns.Apply()
+			if v ~= "off" and ns.Window.Shown() then ns.FindMe() end
+		end,
+		desc = "Smart keeps you in view with the way ahead. Drag the map and it offers to stay put." },
+	{ key = "remember", label = "Remember your view", enabled = On, apply = Kept,
+		desc = "The map reopens on the place and zoom you left, until you move to another zone." },
+	{ label = "Saved views", button = "Forget", confirm = true, words = "reset zoom",
+		says = function()
+			local count = Views()
+			return count == 0 and "None" or tostring(count)
+		end,
+		run = function() ns.ForgetViews() end,
+		desc = "Every map opens whole again, not where you left it." },
+	{ key = "windowScale", label = "Window scale", min = 0.6, max = 1.5, step = 0.05, format = Percent, settle = true,
+		enabled = On, words = "size bigger smaller",
+		desc = "How big everything in the map window is. Drag a corner to resize the window itself." },
 
-		At(UI.Header(panel, "Window", COL), panel, LEFT, -574)
-		local function Percent(v) return v .. "%" end
-		-- (Taken once the knob rests: the window scaled at every step would jump about under it.)
-		local scale = math.floor((T.db.windowScale or 1) * 100 + 0.5)
-		At(group:Slider(panel, "Scale", 60, 150, 5,
-			function() return scale end,
-			function(v) scale = v end,
-			{ width = COL, enabled = On, format = Percent,
-				settle = function(v)
-					scale = v
-					T.db.windowScale = v / 100
-					ns.Apply()
-				end,
-				desc = "How large everything in the map's window is drawn. Its size is yours to drag." }), panel, LEFT, -602)
+	{ section = "Overlay" },
+	{ key = "overlay", label = "Map over the screen", enabled = On, words = "transparent hud",
+		desc = "With the map closed, it shows faintly over the game and clicks go through it. Key Bindings has a key for it." },
+	{ key = "overlayOpacity", label = "Opacity by day", sub = true, min = 0.05, max = 0.7, step = 0.01, format = Percent,
+		enabled = Laid, apply = Faint, desc = "How solid the map is in daylight." },
+	{ key = "overlayNight", label = "Opacity at night", sub = true, min = 0.05, max = 0.7, step = 0.01, format = Percent,
+		enabled = Laid, apply = Faint,
+		desc = "The map stands out in the dark, so it can be fainter. Dawn and dusk blend the two." },
+	{ key = "overlayMarks", label = "Trail and pins", sub = true, min = 0.2, max = 1, step = 0.01, format = Percent,
+		enabled = Laid, apply = Faint, desc = "How solid you, your trail and the pins stay on the faint map." },
 
-		At(UI.Header(panel, "Overlay", COL), panel, LEFT, -662)
-		At(group:Checkbox(panel, "Map over the screen", Get("overlay"), Set("overlay"), { enabled = On,
-			desc = "While the map is closed, it lies faintly over the whole game and clicks go through it; Key Bindings has a key to switch it." }),
-			panel, LEFT, -690)
-		local function Laid() return T.db.on and T.db.overlay end
-		At(group:Slider(panel, "Opacity by day", 5, 70, 1,
-			function() return math.floor(T.db.overlayOpacity * 100 + 0.5) end,
-			function(v) T.db.overlayOpacity = v / 100 end,
-			{ width = COL, enabled = Laid, format = Percent,
-				desc = "How solid the map is over the game in daylight; lower lets more of the game show through." }), panel, LEFT, -722)
-		At(group:Slider(panel, "Opacity at night", 5, 70, 1,
-			function() return math.floor(T.db.overlayNight * 100 + 0.5) end,
-			function(v) T.db.overlayNight = v / 100 end,
-			{ width = COL, enabled = Laid, format = Percent,
-				desc = "The dark makes the map stand out, so it can be fainter at night; dawn and dusk blend the two." }), panel, LEFT, -770)
-		At(group:Slider(panel, "Trail and pins", 20, 100, 1,
-			function() return math.floor(T.db.overlayMarks * 100 + 0.5) end,
-			function(v) T.db.overlayMarks = v / 100 end,
-			{ width = COL, enabled = Laid, format = Percent,
-				desc = "How solid you, your trail and the pins stay on the faint map." }), panel, LEFT, -818)
-
-		At(UI.Header(panel, "On the map", COL), panel, RIGHT, -306)
-		local y = -338
-		local DESC = {
-			zones = "Each zone's name and levels on a continent, colored against your level; the seas too on the terrain.",
-			flights = "Flight masters, with the ones you haven't found yet faded.",
-			routes = "Faint lines along the flight paths between flight points you know.",
-			travel = "Where to catch boats, zeppelins and the tram, and where each goes.",
-			dungeons = "Each dungeon's entrance and levels. Click one to go in: its floor, bosses and loot.",
-			spirits = "Spirit healers in each zone; when you're dead, the nearest one lights up.",
-			places = "Towns, landmarks and other marked places.",
-			rares = "Where rare creatures turn up in a zone, with their names and levels. Needs ShyQuest.",
-			directions = "Where a guard points you when you ask for directions. The map opens on it; click it to have the arrow lead you there.",
-			links = "Doors and paths into other maps; click one to open that map.",
-			friends = "Friends who use ShyMaps, even outside your group. Friends off the map wait at its edge, on the side they're on. Battle.net friends too.",
-			guild = "Your guild: those who share where they are as a dot, the rest by the zone they're in.",
-			notesOn = "Notes you put on the map, and what you drew on it. Notes, in the map's menu, adds them.",
-			coords = "Your coordinates, and the mouse's while it's on the map.",
-		}
-		for _, item in ipairs(ns.SWITCHES) do
-			At(group:Checkbox(panel, item.label, Get(item.key), Set(item.key), { enabled = On, desc = DESC[item.key] }),
-				panel, RIGHT, y)
-			y = y - 26
-		end
-		At(group:Checkbox(panel, "Share where you are", Get("share"), Set("share"), { enabled = Friends,
-			desc = "Friends who use ShyMaps see you on their map while they look at it. Only friends on your list." }),
-			panel, RIGHT + 16, y)
-		y = y - 26
-		At(group:Checkbox(panel, "Share with your guild", Get("shareGuild"), Set("shareGuild"), { enabled = Guild,
-			desc = "Your guild sees you on their map while they look at it, if they use ShyMaps too." }),
-			panel, RIGHT + 16, y)
-		y = y - 26
-		At(group:Checkbox(panel, "Clear in instances", Get("quietInside"), Set("quietInside"), { enabled = On,
-			desc = "In a dungeon, raid or battleground, the map leaves out friends, your guild, boats, notes and quest marks." }),
-			panel, RIGHT, y)
-		-- (The game's own setting, which its settings don't offer here: the map's window fades by it.)
-		y = y - 26
-		At(group:Checkbox(panel, "Fade while moving", function() return GetCVarBool("mapFade") end,
-			function(on) SetCVar("mapFade", on and "1" or "0") end,
-			{ desc = "The map fades while you move, and comes back when you stop or point at it." }),
-			panel, RIGHT, y)
-		-- Routes friends and your group suggest (ShyWay's): not offered without it.
-		local share = Shy.Way.Share
-		if not Shy.Way.missing and share and share.SetOn then
-			y = y - 26
-			At(group:Checkbox(panel, "Suggested routes", function() return share.On() end, function(on) share.SetOn(on) end, { enabled = On,
-				desc = "When a friend or someone in your group shares a pin with you, you can accept it as a route or decline it." }),
-				panel, RIGHT, y)
-		end
-		-- The dungeon journal: its way in, and the credit its recorded drops are shown under (as their license asks).
-		if ns.Journal and ns.Journal.Toggle and ns.Dungeons then
-			y = y - 44
-			At(UI.Header(panel, "Dungeons", COL), panel, RIGHT, y)
-			y = y - 32
-			At(UI.Button(panel, "Bosses and loot", 150, function() ns.Journal.Toggle(true) end), panel, RIGHT, y)
-			y = y - 34
-			At(group:Checkbox(panel, "Where items drop", Get("drops"), Set("drops"),
-				{ desc = "An item's hover says which boss drops it, and how often." }), panel, RIGHT, y)
-			y = y - 30
-			local credit = UI.Text(panel, ns.Dungeons.CREDIT, 11, false, UI.colors.dim)
-			credit:SetJustifyH("LEFT")
-			credit:SetWidth(COL)
-			At(credit, panel, RIGHT, y)
-			y = y - math.ceil(credit:GetStringHeight())
-		end
-		-- The painted land between the zones on the drawn map: the credit its license asks for.
-		if ns.data and ns.data.gapFillsCredit then
-			y = y - 6
-			local credit = UI.Text(panel, ns.data.gapFillsCredit, 11, false, UI.colors.dim)
-			credit:SetJustifyH("LEFT")
-			credit:SetWidth(COL)
-			At(credit, panel, RIGHT, y)
-		end
-	end
-
-	ns.RefreshOptions = function()
-		if panel.built and panel:IsVisible() then
-			group:Refresh()
-			RefreshPreview()
-		end
-	end
-
-	panel:SetScript("OnShow", function(self)
-		if not self.built then
-			Build()
-			self.built = true
-		end
-		group:Refresh()
-		RefreshPreview()
-	end)
-
-	function panel:OnDefault()
-		T:ResetDB()   -- saved views are kept
-		ns.Apply()
-	end
-
-	return panel
+	{ section = "On the map" },
+}
+local function Add(entries)
+	for _, entry in ipairs(entries) do list[#list + 1] = entry end
 end
+
+local people = {}
+for _, item in ipairs(ns.SWITCHES) do
+	local layer = LAYER[item.key]
+	if layer then
+		Add({ { key = item.key, label = item.label, needs = item.needs, enabled = On, words = layer.words, desc = layer.desc } })
+	else
+		people[item.key] = { key = item.key, label = item.label, enabled = On, desc = PEOPLE[item.key] }
+	end
+end
+Add({
+	{ key = "quietInside", label = "Clear in instances", enabled = On, words = "dungeon raid battleground",
+		desc = "In a dungeon, raid or battleground the map leaves out friends, your guild, boats, notes and quest marks." },
+
+	{ section = "Friends and guild" },
+	{ key = "share", label = "Share where you are", words = "location privacy",
+		desc = "Friends with this map see you on theirs. Your group sees which room of a dungeon you're in." },
+	people.friends,
+	people.guild,
+	{ key = "shareGuild", label = "Share with your guild", sub = true, enabled = Guild,
+		words = "location privacy", desc = "Guild members with this map see you on theirs." },
+	{ label = "Suggested routes", default = true, shown = Routed, apply = Kept, words = "shared pin offer",
+		get = function() return Shy.Way.Share.On() end, set = function(v) Shy.Way.Share.SetOn(v) end,
+		desc = "When a friend or someone in your group shares a pin, you can take it as a route or pass." },
+	{ key = "notesFromGroup", label = "Group pins as notes", sub = true, shown = Routed, apply = Kept,
+		enabled = Suggested,
+		desc = "A pin someone in your group shares is saved as a note too." },
+})
+
+if ns.Dungeons then
+	Add({
+		{ section = "Dungeons" },
+		{ label = "Bosses and loot", button = "Open", words = "journal dungeon raid drops",
+			run = function()
+				Shy.Hub.Close()
+				ns.Journal.Toggle(true)
+			end,
+			desc = "Every dungeon's floors, its bosses, what they do and what they drop." },
+		{ key = "drops", label = "Where items drop", apply = Kept, words = "tooltip boss loot chance",
+			desc = "An item's tooltip says which boss drops it, and how often." },
+		-- The recorded drops are shown under their credit, as their license asks.
+		{ note = ns.Dungeons.CREDIT },
+	})
+end
+-- The painted land between the zones on the drawn map: the credit its license asks for.
+if ns.data and ns.data.gapFillsCredit then Add({ { note = ns.data.gapFillsCredit } }) end
+
+T:Settings(list)

@@ -498,12 +498,15 @@ end
 ns.Module({
 	id = "units",
 	title = "Unit frames",
-	desc = "Restyles the default unit frames for you, your target, focus, pet and party: dark panels, square portraits and class-colored names. Elite and rare targets get a gold or silver edge instead of the dragon.",
+	desc = "The game's unit frames get dark panels, square portraits and class-colored names.",
+	group = "screen",
+	words = "player target focus pet party",
+	shown = function() return ns.Theirs(PlayerFrame, PetFrame, TargetFrame, FocusFrame, PartyFrame) end,
 	options = {
-		{ key = "portraits", label = "Show portraits", default = true,
-			desc = "Shows the portrait beside each frame's bars. Off leaves a slim frame with the name and bars." },
+		{ key = "portraits", label = "Portraits", default = true,
+			desc = "Each frame shows its portrait. Off, you get a slim frame with the name and bars." },
 		{ key = "classHealth", label = "Class-colored health", default = false,
-			desc = "Colors players' health bars by class, yours included. NPCs stay green." },
+			desc = "Players' health bars take their class color, yours too. NPCs stay green." },
 	},
 
 	Hook = function(m)

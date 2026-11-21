@@ -15,7 +15,7 @@ local Shop = Shy.Shop
 local P = {}
 ns.Parts = P
 
--- With the house's item key, as the house names it (its own name and quality; gear with its item level).
+-- With the auction house's item key, as the auction house names it (its own name and quality; gear with its item level).
 function P.Name(item, key)
 	if key then
 		local info = C_AuctionHouse.GetItemKeyInfo(key)

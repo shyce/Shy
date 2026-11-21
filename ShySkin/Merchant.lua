@@ -93,9 +93,9 @@ local WORDS = {
 	sellKey = "Sell", goodsKey = "Back to the goods", sellIt = "Sell", selling = "Selling %d of %d",
 	sellNone = "Nothing in your bags a vendor should have.",
 	sellGroups = { junk = "Junk", outgrown = "Outgrown gear", plain = "Not worth listing", house = "Better at the auction house" },
-	sellSays = { junk = "Grey things, and what's left of quests you're done with.", outgrown = "Bound gear worse than what you wear, or that you can't use.",
-		plain = "The auction house pays no more for these than a vendor.", house = "The auction house pays more: tick one to sell it here anyway." },
-	houseSays = "house %s", sellTip = "Untick what you keep: it isn't offered again for ten levels.",
+	sellSays = { junk = "Grey items and leftovers from finished quests.", outgrown = "Bound gear worse than what you wear, or that you can't use.",
+		plain = "The auction house pays no more for these than a vendor.", house = "The auction house pays more. Tick one to sell it here anyway." },
+	houseSays = "auction house %s", sellTip = "Untick what you want to keep. You won't be asked about it again for ten levels.",
 }
 local SELL = "sell"   -- the sheet as what to sell
 
@@ -1065,7 +1065,7 @@ local function SellHead(i)
 end
 
 -- A thing to sell: its tick, its picture (its count on it), its name in its quality's color and under it why; at the
--- right, what a vendor pays, and under it what the house would. A click anywhere on it ticks it.
+-- right, what a vendor pays, and under it what the auction house would. A click anywhere on it ticks it.
 local function SellRow(i)
 	local row = own.sellRows[i]
 	if row then return row end
@@ -1621,7 +1621,9 @@ end
 M = ns.Module({
 	id = "merchant",
 	title = "Vendors",
-	desc = "Replaces the vendor window with a counter you can size: Repair all and Sell junk on top, what quests and your supplies need (with ShyQuest) one press away, upgrades and recipes you can learn marked, and any amount bought from the foot.",
+	desc = "Vendors get a window you can resize, with repair and sell junk on top and upgrades marked.",
+	group = "rebuilt",
+	words = "merchant shop buy sell repair",
 	Ready = function() return MerchantFrame ~= nil and Shop ~= nil and WIN ~= nil end,
 	Hook = Hook,
 	Paint = Paint,

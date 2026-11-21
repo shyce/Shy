@@ -663,7 +663,7 @@ function ns.ForName()
 	return m and m.buildName or nil
 end
 
--- Lines for the options page: what one point of each stat gives.
+-- What one point of each stat gives, a line each.
 function ns.Rates()
 	local m = Me()
 	if not m then return end
@@ -695,7 +695,7 @@ function ns.Stale()
 	wipe(verdicts)
 end
 
--- Every input to a verdict as text, for /shygear report.
+-- Every input to a verdict as text, for /shy gear report.
 function ns.Report()
 	local m = Me()
 	if not m then return "Your stats are hidden right now (some fights do this). Try again out of combat." end

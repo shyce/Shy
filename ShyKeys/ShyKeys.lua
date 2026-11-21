@@ -49,20 +49,3 @@ end
 function T:OpenWindow()
 	Shy.Hub.Open("keys")
 end
-
-SLASH_SHYKEYS1 = "/shykeys"
-SlashCmdList.SHYKEYS = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		Shy.Hub.Open("keys")
-	elseif cmd == "guide" then
-		Shy.Keys.ShowGuide(not Shy.Keys.GuideShown())
-	elseif cmd == "why" then
-		Shy.UI.ShowCopyBox("Your keys", Shy.Keys.Report())
-	else
-		T:Print("commands:")
-		print("  /shykeys  - your keys, and what comes to them as you level")
-		print("  /shykeys guide  - how to play at your level, on screen or put away")
-		print("  /shykeys why  - why each of your keys is where it is")
-	end
-end

@@ -105,9 +105,18 @@ function Z.Best(count)
 	return list
 end
 
--- One zone regardless of rank.
+-- One zone regardless of rank: that zone alone weighed, if the log has changed since (a hover on the map asks for
+-- the zone under the mouse; weighing every zone for it was a quarter of a second).
+Z.weighedAt = {}   -- map -> the log's version it was last weighed at, one by one
 function Z.Get(map)
-	WeighAll()
+	if weighed ~= L.version and Z.weighedAt[map] ~= L.version then
+		if not Z.starts then
+			Z.starts = {}
+			for _, each in ipairs(D.StartMaps()) do Z.starts[each] = true end
+		end
+		Z.weighedAt[map] = L.version
+		zones[map] = Z.starts[map] and Weigh(map) or nil
+	end
 	return zones[map] or nil
 end
 
@@ -123,6 +132,7 @@ end
 -- A setting changed what counts: weigh again.
 function Z.Forget()
 	weighed = nil
+	wipe(Z.weighedAt)
 end
 
 -- The first weighing reads every quest that starts anywhere, some thousands of records: all at once it was

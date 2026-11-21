@@ -23,7 +23,6 @@ local T = Shy:NewAddon(ADDON, {
 		},
 		combo = { shown = true, when = "target" },   -- target | combat | always
 		lockboxes = { shown = true },
-		pickpocket = { report = false },
 	},
 })
 ns.T = T
@@ -61,7 +60,6 @@ end
 function T:OnLoad()
 	ShyRogueCharDB = ShyRogueCharDB or {}
 	Shy.MergeDefaults(ShyRogueCharDB, { money = 0, items = 0, value = 0 })
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -73,20 +71,10 @@ function T:OnLogin()
 	if ns.SetupSwing then ns.SetupSwing() end   -- guarded: a newly added file isn't loaded until the client restarts
 end
 
-SLASH_SHYROGUE1 = "/shyrogue"
-SlashCmdList.SHYROGUE = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "keys" and ns.Keys then
-		ns.Keys.Run()
-	elseif cmd == "keys list" and ns.Keys then
-		Shy.Hub.Open("keys")
-	elseif cmd == "loot" then
-		ns.PrintLoot()
-	elseif cmd == "" then
-		T:OpenOptions()
-	else
-		T:Print("commands:")
-		print("  /shyrogue  - open options")
-		print("  /shyrogue loot  - pick pocket totals")
+if ns.isRogue then
+	-- For finding faults: pick pocket totals. Not listed.
+	T:Command("loot", nil, function() ns.PrintLoot() end)
+	if Shy.Keys then
+		T:Command("keys", "lay out your keys and macros, for every level", function() ns.Keys.Run() end)
 	end
 end

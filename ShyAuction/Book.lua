@@ -35,16 +35,12 @@ local side                   -- the side of the auction house open now (nil: you
 local shared, sharedKey      -- other players' prices on that market: [item] = { u, q, n, at, m }
 local views, stamp = {}, 0   -- T:Price's answers, kept until anything changes (stamp)
 
--- Your ruleset: Hardcore by the game's rules, else as your shard's name says it ("... Realm 4 PvP").
+-- Your ruleset (Shy.Ruleset): Hardcore by the game's rules, else as your shard's name says it ("... Realm 4 PvP").
 function B.Ruleset()
-	if C_GameRules.IsHardcoreActive() then return "Hardcore" end
-	local realm = (GetRealmName() or ""):lower()
-	if realm:find("pvp", 1, true) then return "PvP" end
-	if realm:find("%f[%a]rp%f[%A]") then return "RP" end
-	return "Normal"
+	return Shy.Ruleset() or "Normal"
 end
 
--- The market you trade in now: region, ruleset and the side of the house open (your faction's while none is).
+-- The market you trade in now: region, ruleset and the side of the auction house open (your faction's while none is).
 function B.Key()
 	local region = GetCurrentRegionName()
 	local s = side or UnitFactionGroup("player")
@@ -52,13 +48,13 @@ function B.Key()
 	return region .. "-" .. B.Ruleset() .. "-" .. s
 end
 
--- The share of a sale the house keeps on this market: a goblin's house 15%, a faction's 5%.
+-- The share of a sale the auction house keeps on this market: a goblin's house 15%, a faction's 5%.
 function B.Cut()
 	local key = B.Key() or ""
 	return key:match("%-Neutral$") and 0.15 or 0.05
 end
 
--- The house opened is this auctioneer's side: a faction's, or a goblin's (Neutral). nil: none open.
+-- The auction house opened is this auctioneer's side: a faction's, or a goblin's (Neutral). nil: none open.
 function B.House(open, faction)
 	if not open then side = nil
 	elseif faction == "Alliance" or faction == "Horde" then side = faction
@@ -109,20 +105,26 @@ function B.Stamp() return stamp end
 
 local function Today(at) return math.floor((at or time()) / K.DAY) end
 
--- A sighting's going price, from its listings { { unit, quantity }, ... } (sorted here, cheapest first): the price at
+-- A sighting's going price, from its listings (each a B.Listing, sorted here, cheapest first): the price at
 -- which the cheapest K.GOING of what is listed is gone. nil: no listings.
+-- A listing as one number, its price and how many packed together (B.Listing): a whole scan reads tens of thousands,
+-- and a table each was most of its memory. Packed so, they sort by price as they are.
+B.PACK = 1048576   -- 2^20: the most a listing may hold, kept under it
+function B.Listing(unit, count)
+	return unit * B.PACK + math.min(count, B.PACK - 1)
+end
 function B.Going(listings)
-	local n = #listings
+	local n, pack = #listings, B.PACK
 	if n == 0 then return nil end
-	table.sort(listings, function(a, b) return a[1] < b[1] end)
+	table.sort(listings)
 	local total = 0
-	for i = 1, n do total = total + listings[i][2] end
+	for i = 1, n do total = total + listings[i] % pack end
 	local reach, gone = math.max(1, total * K.GOING), 0
 	for i = 1, n do
-		gone = gone + listings[i][2]
-		if gone >= reach then return listings[i][1] end
+		gone = gone + listings[i] % pack
+		if gone >= reach then return math.floor(listings[i] / pack) end
 	end
-	return listings[n][1]
+	return math.floor(listings[n] / pack)
 end
 
 -- An item's days, oldest first, only the last K.DAYS: four lists (the day, its price, how many sightings it had, the
@@ -294,7 +296,7 @@ function B.Seen(item, unit, quantity, listings, going)
 	ns.Fire("price", item)
 end
 
--- When the whole house was last scanned on your market, by you or anyone whose prices came.
+-- When the whole auction house was last scanned on your market, by you or anyone whose prices came.
 function B.ScannedAt()
 	local market = Market()
 	local own = market and market.at

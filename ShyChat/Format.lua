@@ -18,13 +18,6 @@ end
 
 -- Chat type tags ([Guild] -> [G]). Labels come from the client's global strings, so any locale works.
 
-F.TYPE_ORDER = {
-	{ "GUILD", "Guild" }, { "OFFICER", "Officer" }, { "PARTY", "Party" }, { "PARTY_LEADER", "Party lead" },
-	{ "RAID", "Raid" }, { "RAID_LEADER", "Raid lead" }, { "RAID_WARNING", "Raid warn" },
-	{ "INSTANCE_CHAT", "Instance" }, { "INSTANCE_CHAT_LEADER", "Inst. lead" },
-	{ "WHISPER", "Whisper" }, { "WHISPER_INFORM", "Whisper to" },
-}
-
 F.TYPE_DEFAULTS = {
 	GUILD = "G", OFFICER = "O", PARTY = "P", PARTY_LEADER = "PL", PARTY_GUIDE = "DG",
 	RAID = "R", RAID_LEADER = "RL", RAID_WARNING = "RW", INSTANCE_CHAT = "I",
@@ -142,7 +135,8 @@ local function Channels(msg, event)
 		return "|Hchannel:" .. kind .. "|h" .. Tag(label) .. "|h"
 	end, 1)
 	if event == "CHAT_MSG_RAID_WARNING" and find(msg, RAID_WARNING_LABEL, 1, true) == 1 then
-		msg = Tag(F.TypeShort("RAID_WARNING")) .. sub(msg, #RAID_WARNING_LABEL + 1)
+		local label = db.channelStyle == "name" and sub(RAID_WARNING_LABEL, 2, -2) or F.TypeShort("RAID_WARNING")
+		msg = Tag(label) .. sub(msg, #RAID_WARNING_LABEL + 1)
 	end
 	return msg
 end
@@ -279,7 +273,7 @@ end
 
 -- What someone said, as chat would show it (web links made clickable).
 function F.Words(msg)
-	if db.enabled and db.urls then return URLs(msg) end
+	if db.enabled then return URLs(msg) end
 	return msg
 end
 
@@ -290,7 +284,7 @@ function F.Format(msg, event, t, id, author)
 	if db.compact then msg = CompactSpeech(msg, event) end
 	if db.compactLoot and LOOT_EVENTS[event] then msg = CompactLoot(msg) end
 	msg = Names(msg)
-	if db.urls then msg = URLs(msg) end
+	msg = URLs(msg)
 
 	local mentioned = false
 	if author and #mentionPatterns > 0 and not Shy.IsMe(author) then

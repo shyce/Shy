@@ -531,7 +531,7 @@ local function Tip(owner)
 	local age = at and GetTime() - at.at
 	if age and age > FADE then rows[#rows + 1] = { glyph = "clock", text = "Last heard " .. Ago(age) .. " ago", quiet = true } end
 	if not at and not UnitInParty(name) then
-		rows[#rows + 1] = { text = "Somewhere in their zone: they don't use ShyMaps, or don't share where they are", quiet = true }
+		rows[#rows + 1] = { text = "Somewhere in their zone. They don't use ShyMaps or don't share where they are", quiet = true }
 	end
 	if #rows > 0 then content.sections = { { rows = rows } } end
 	content.hints = { { "left", owner.rim and "Show them" or "Whisper" }, { "right", "More" } }
@@ -579,7 +579,7 @@ local function ShareRows(items, name)
 		disabled = not pin, detail = not pin and "no pin" or nil,
 		click = function() share.Send(share.Pin(), to) end }
 	items[#items + 1] = { text = "Ask them to meet me here", icon = UI.MenuGlyph("share"),
-		tip = "They get where you stand now as a route they can accept or decline.",
+		tip = "They get your current spot as a route they can accept or decline.",
 		click = function() share.Send(share.Here(), to) end }
 	items[#items + 1] = { divider = true }
 end
@@ -884,7 +884,7 @@ Wake = function()
 	if not ticker then ticker = C_Timer.NewTicker(PACE, Beat) end
 end
 
--- What is going on, for the copy box (/shymaps friends).
+-- What is going on, for the copy box (/shy maps friends).
 function Friends.Report()
 	local now = GetTime()
 	local lines = { "ShyMaps friends", "" }

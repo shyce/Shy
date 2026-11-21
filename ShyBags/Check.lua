@@ -1,4 +1,4 @@
--- /shybags check: in-game compatibility checks. Results go to chat and to ShyBagsStore.checks.
+-- /shy bags check: in-game compatibility checks. Results go to chat and to ShyBagsStore.checks.
 --   ns.Check.Add({ id, title, ready = function() return true (or false, "what to do first") end,
 --       run = function() return ok, note end })      ok nil: no result yet
 --   ns.Check.Say(id, ok, note)                       for checks that record as you play
@@ -56,7 +56,7 @@ function Check.Run()
 	end
 end
 
-ns.Command("check", nil, Check.Run)
+T:Command("check", nil, Check.Run)
 
 local function Kept(id, waiting)
 	return function()
@@ -286,7 +286,7 @@ function Check.Init()
 end
 
 local function Ours()
-	if not Takeover.IsOn() then return false, "the bag window is off: /shybags blizzard turns it on" end
+	if not Takeover.IsOn() then return false, "the bag window is off: /shy bags blizzard turns it on" end
 	return true
 end
 

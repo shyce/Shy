@@ -295,6 +295,7 @@ local function Tell(text, input)
 		panel:Told(text, input)
 		if panel.changed then panel.changed() end   -- whoever stands the panel draws what it shows of them again
 	end
+	Shy.Settings.Refresh()   -- the settings say how many are bound
 end
 
 -- Binds an input (nil lets it go). Every panel says so, and the change can be taken back (C.Undo).
@@ -408,7 +409,7 @@ end
 ---------------------------------------------------------------------------
 -- Every binding as a row: the spell's picture, its name, and the click or key that casts it in gold. It is the
 -- right column of the spellbook's click casting page (T:ClickPanel, ShySkin's book) and the body of the window
--- that stands alone (C.Open): one make, wherever it is.
+-- that stands alone where there is no such page (C.Window): one make, wherever it is.
 --   a row      the mouse on it shows a cross at its end: that, or a right click on the row, lets the binding go.
 --              A left and a right click with nothing bound stand first, quiet: what they do anyway.
 --   the wheel  scrolls the list when it is longer than its room
@@ -418,7 +419,7 @@ end
 --              Undo beside it
 -- A new binding's row is lit for a moment, and the list scrolls to it.
 
-local P = { row = 36, icon = 28, head = 22, line = 36, check = 24, flash = 0.8, quiet = 0.55 }
+local P = { row = 36, icon = 28, head = 22, line = 36, flash = 0.8, quiet = 0.55 }
 C.PANEL = P
 
 local function Row(panel, i)
@@ -486,7 +487,7 @@ local function Row(panel, i)
 end
 
 -- A panel on `parent`. It is laid out by the room it is given (panel:Fit), top to bottom, each piece under the
--- one before: its name, as many rows as the room holds (one at the least), the line with Undo, the check. With
+-- one before: its name, as many rows as the room holds (one at the least), the line with Undo. With
 -- nothing bound the start's button stands in the first free row's place, so nothing ever lies over anything.
 --   panel:Fit(width, height)   its room; lays it out and draws it
 --   panel:Refresh()
@@ -519,15 +520,10 @@ function C.Panel(parent)
 		self.said = text
 		Line()
 	end
-	local press = UI.Checkbox(panel, "Cast on press", function() return T.db.press end, function(v)
-		T.db.press = v
-		C.Apply()
-	end, { desc = "Casts as the mouse button goes down instead of when you let go. A button that can open the menu still waits for the release." })
-
 	function panel:Fit(width, height)
 		self.width = width
-		self.count = math.max(1, math.floor((height - P.head - 4 - P.line - 6 - P.check) / P.row))
-		self.height = P.head + self.count * P.row + 4 + P.line + 6 + P.check
+		self.count = math.max(1, math.floor((height - P.head - 4 - P.line) / P.row))
+		self.height = P.head + self.count * P.row + 4 + P.line
 		self:SetSize(width, self.height)
 		for i = #self.rows + 1, self.count do self.rows[i] = Row(self, i) end
 		for i, row in ipairs(self.rows) do
@@ -541,8 +537,6 @@ function C.Panel(parent)
 		self.line:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -foot)
 		self.undo:ClearAllPoints()
 		self.undo:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0, -(foot + 6))
-		press:ClearAllPoints()
-		press:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -(foot + P.line + 6))
 		self.start:SetWidth(width)
 		self:Refresh()
 	end
@@ -584,7 +578,6 @@ function C.Panel(parent)
 			self.start:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -(P.head + shown * P.row + 4))
 		end
 		self.idle = bound == 0 and (self.how or "Nothing bound yet. Open your spellbook and press the click casting tab on its right edge.") or nil
-		press:Refresh()
 		Line()
 	end
 	-- A change: its words on the line, its row lit and in sight.
@@ -620,11 +613,47 @@ function C.Panel(parent)
 end
 
 ---------------------------------------------------------------------------
--- The window: the panel on its own
+-- Where click casting is set up
 ---------------------------------------------------------------------------
+-- One place: the spellbook's click casting page (ShySkin's book), where a spell is picked and given a click.
+-- C.Open goes there. Without that book there is no page to go to: the list then stands alone in a small window,
+-- which says what it is and where spells are bound.
 
-local WIN = { pad = 16, width = 300, rows = 8 }
+local WIN = { pad = 16, width = 300, rows = 8, note = 44 }
 local win, open
+C.SAYS = {
+	what = "What your clicks and keys cast on the frame under your mouse. Right-click one to let it go.",
+	-- Why there is no page: the spellbook isn't the restyled one, or the addon that restyles it is off.
+	off = "To bind a spell, switch on Spellbook and talents under Skin. Its book has a click casting tab.",
+	none = "Binding a spell needs the Skin addon. Its spellbook has a click casting tab.",
+	fight = "you can set up click casting once the fight is over.",
+}
+
+-- Whether the spellbook has a click casting page: ShySkin with its spellbook on.
+function C.Paged()
+	local skin = Shy.addons.Skin
+	if not skin then return false end
+	if skin.ClickCasting then return true end
+	local modules = skin.db and skin.db.modules
+	return modules ~= nil and modules.spells ~= false and PlayerSpellsUtil ~= nil and PlayerSpellsUtil.OpenToSpellBookTab ~= nil
+end
+
+-- The page is up: the list stands in it (the book asked for one: T:ClickPanel).
+local function Seated()
+	for _, panel in ipairs(panels) do
+		if not (win and panel == win.panel) and panel:IsVisible() then return true end
+	end
+	return false
+end
+
+-- Turns the open book to its click casting page, by its tab. False while the book has no such tab.
+local function Turn()
+	if Seated() then return true end
+	local tab = ShySkinSpellClicks
+	if not (tab and tab:IsVisible()) then return false end
+	tab:Click()
+	return true
+end
 
 local function Create()
 	local top = UI.HEAD.window.line + UI.LINE
@@ -639,18 +668,48 @@ local function Create()
 		head = { size = "window", icon = C.ICON, title = "Click casting" },
 	})
 	-- On the window's body: clear of the look's work round the edge (UI.Body), the window that much bigger.
-	win.panel = C.Panel(UI.Body(win))
-	win.panel:SetPoint("TOPLEFT", WIN.pad, -(top + WIN.pad))
-	win.panel:Fit(WIN.width - 2 * WIN.pad, P.head + WIN.rows * P.row + 4 + P.line + 6 + P.check)
-	Shy.HUD.Made(win, WIN.width, top + WIN.pad + win.panel.height + WIN.pad)
+	local body = UI.Body(win)
+	win.note = UI.Text(body, "", 11, false, UI.colors.dim)
+	win.note:SetPoint("TOPLEFT", WIN.pad, -(top + WIN.pad))
+	win.note:SetSize(WIN.width - 2 * WIN.pad, WIN.note)
+	win.note:SetJustifyH("LEFT")
+	win.note:SetJustifyV("TOP")
+	win.note:SetWordWrap(true)
+	win.panel = C.Panel(body)
+	win.panel.how = "Nothing bound yet."
+	win.panel:SetPoint("TOPLEFT", WIN.pad, -(top + WIN.pad + WIN.note + 6))
+	win.panel:Fit(WIN.width - 2 * WIN.pad, P.head + WIN.rows * P.row + 4 + P.line)
+	Shy.HUD.Made(win, WIN.width, top + WIN.pad + WIN.note + 6 + win.panel.height + WIN.pad)
 end
 
-function C.Open()
+-- The list on its own, where there is no page: it says what it is, and where a spell is bound.
+function C.Window()
 	if not win then Create() end
+	win.note:SetText(C.SAYS.what .. " " .. (Shy.addons.Skin and C.SAYS.off or C.SAYS.none))
 	open = true
 	Shy.HUD.Update(win)
 	win:Raise()
 	win.panel:Refresh()
+end
+
+-- Click casting's setup: the spellbook at its click casting page, or the list's own window where there is none.
+-- The /shy window is put away, so what opens isn't behind it.
+function C.Open()
+	if InCombatLockdown() then
+		T:Print(C.SAYS.fight)
+		return
+	end
+	if Shy.Hub and Shy.Hub.Close then Shy.Hub.Close() end
+	if not C.Paged() then return C.Window() end
+	C.Close()
+	local skin = Shy.addons.Skin
+	if skin.ClickCasting then return skin:ClickCasting() end
+	PlayerSpellsUtil.OpenToSpellBookTab()
+	if Turn() then return end
+	-- The book draws its tabs as it shows: asked again once it has.
+	C_Timer.After(0, function()
+		if not Turn() then C.Window() end
+	end)
 end
 
 function C.Close()
@@ -659,10 +718,9 @@ function C.Close()
 end
 
 function C.Listen()
-	-- A spell learned or lost: a panel's pictures and what a start would offer may have changed.
-	local events = CreateFrame("Frame")
-	events:RegisterEvent("SPELLS_CHANGED")
-	events:SetScript("OnEvent", function()
+	-- A spell learned or lost (ShyCore says only a real change): a panel's pictures and what a start would offer
+	-- may have changed.
+	Shy:On("SHY_SPELLS", function()
 		for _, panel in ipairs(panels) do
 			if panel:IsVisible() then panel:Refresh() end
 		end

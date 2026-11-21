@@ -1,7 +1,8 @@
--- The ways as they are found: while the ground is still working out the way of any of the route's legs
--- on the world map (each drawn as a bow meanwhile), a small plate at the map's top turns its spinner and
--- names the place whose way is being found, the next as each comes in, with how many are found; once the
--- last is in it shows a check a moment and goes. A map opened with every way already known shows none.
+-- Shows ways as they are found. While the ground is still working out any of the route's legs on
+-- the world map (each drawn as a bow meanwhile), a small plate at the map's top turns its spinner.
+-- It names the place whose way is being found, then the next as each comes in, with how many are
+-- found. Once the last is in it shows a check for a moment and goes. A map opened with every way
+-- already known shows no plate.
 --
 --   ns.Ways.Update(status)   the legs as LayLegs left them (ns.LEGS.status)
 

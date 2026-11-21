@@ -138,7 +138,7 @@ function ns.Plate.Create(owner, kind)
 end
 
 -- Said for one friend at a time: only the frames showing them (or that can't be told apart) are drawn again.
-Shy:On("SHY_HOTS", function(guid)
+local function Told(guid)
 	local all = guid == nil or Secret(guid)
 	for _, frame in ipairs(ns.Frames.list) do
 		local plate = frame.plate
@@ -151,4 +151,10 @@ Shy:On("SHY_HOTS", function(guid)
 			end
 		end
 	end
-end)
+end
+Shy:On("SHY_HOTS", Told)
+
+-- The switch was flipped: every frame that can carry the marks reads again.
+function ns.Mend()
+	Told()
+end

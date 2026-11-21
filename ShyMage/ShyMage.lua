@@ -17,28 +17,11 @@ ns.T = T
 
 ns.isMage = select(2, UnitClass("player")) == "MAGE"
 
-function T:OnLoad()
-	self:RegisterOptions(ns.CreateOptions())
-end
-
 function T:OnLogin()
 	if not ns.isMage then return end
 	if ns.SetupKeys then ns.SetupKeys() end   -- (nothing to lay out without ShyKeys)
 end
 
-SLASH_SHYMAGE1 = "/shymage"
-SlashCmdList.SHYMAGE = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "keys" and ns.Keys then
-		ns.Keys.Run()
-	elseif cmd == "keys list" and ns.Keys then
-		Shy.Hub.Open("keys")
-	else
-		T:Print("commands:")
-		print("  /shymage  - open options")
-		print("  /shymage keys  - lay out your keys and macros, for every level")
-		print("  /shymage keys list  - every key and what it does")
-	end
+if ns.isMage and Shy.Keys then
+	T:Command("keys", "lay out your keys and macros, for every level", function() ns.Keys.Run() end)
 end

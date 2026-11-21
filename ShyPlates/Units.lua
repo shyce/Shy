@@ -1,4 +1,4 @@
--- Unit reads for a plate. A plate reads through a "reader": this table for real units, the options preview's for samples.
+-- Unit reads for a plate. A plate reads through a "reader": this table.
 --
 -- Secret values (per UnitDocumentation.lua): health, name, class, threat, raid mark, casts and UnitIsUnit
 -- can be secret; level, classification, attackability, reaction, tapped and UnitIsPlayer cannot.

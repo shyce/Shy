@@ -53,14 +53,17 @@ function L.Overhang(icons, class)
 	return math.max(combo, L.Rise())
 end
 
--- Room for the panel's edge, and for the accent line inside its top edge.
-local PAD = { top = 5, side = 3, bottom = 3 }
+-- Room for the panel's edge round the bars, where a plate can't say better (Plate:Pad: the look's own border and a
+-- gap of whole screen pixels, `L.GAP` units rounded, the same on every side).
+local PAD = { top = 3, side = 3, bottom = 3 }
+L.GAP = 1
 
 L.LAYOUTS = {
 	-- Player and target.
 	main = {
 		width = 248, height = 51,
 		fades = true,
+		portrait = true,
 		nameLimit = 18,   -- letters before a long name is abbreviated
 		bars = {
 			{ id = "health", size = 28 },
@@ -87,7 +90,7 @@ L.LAYOUTS = {
 	squad = {
 		width = 121, height = 36,
 		pad = { top = 3, side = 3, bottom = 3 },
-		line = false,        -- no accent line: four in a row would be a fence
+		portrait = true,
 		nameLimit = 10,
 		first = true,        -- first name only
 		short = true,        -- health says what is missing and no more
@@ -119,7 +122,6 @@ L.LAYOUTS = {
 	grid = {
 		width = 88, height = 50,
 		pad = { top = 3, side = 3, bottom = 3 },
-		line = false,
 		nameLimit = 5,
 		first = true,
 		short = true,
@@ -149,6 +151,7 @@ L.LAYOUTS = {
 	-- Pet, focus.
 	small = {
 		width = 135, height = 40,
+		portrait = true,
 		nameLimit = 12,
 		bars = {
 			{ id = "health", size = 20 },
@@ -161,10 +164,12 @@ L.LAYOUTS = {
 		},
 		marks = {},
 	},
-	-- Target's target: health alone.
+	-- Target's target: health alone, as small as the game's, saying only what is missing.
 	tot = {
-		width = 218, height = 30,
-		nameLimit = 18,
+		width = 120, height = 30,
+		nameLimit = 10,
+		first = true,
+		short = true,
 		bars = {
 			{ id = "health", size = 22 },
 		},
@@ -175,6 +180,45 @@ L.LAYOUTS = {
 		marks = {},
 	},
 }
+
+-- A portrait at one end of the frame, `seam` from the bars: set into the frame, a square as tall as the bars' room;
+-- or like the game's, a circle as tall as the frame at its very end, as the game's frames of old stood theirs.
+L.COLUMN = { seam = 2 }
+-- The round portrait's dial (Media\PortraitFace<circle>, PortraitRing<circle>): the circles it is drawn for, the
+-- room round each for its shadow, a dark line's half width, the steel's width (or that share of the circle when
+-- more). Its picture reaches the middle of the ring's inner line.
+-- Like the game's frames of old, the housing is shorter than the circle and runs in behind it, on the circle's
+-- middle: its top and its foot each `inset` of the circle in from the frame's (the old frames' bars stood 70% as tall
+-- as their portrait), its end at the circle's middle (`house`). Each bar
+-- starts where the ring's edge crosses its row farthest from the circle's middle, `tuck` under it, so the ring lies
+-- over its end with no gap and its fill grows out from the curve. A bar's words keep `clear` past the ring.
+L.RING = { circles = { 28, 32, 36, 40, 45, 51, 58, 66, 75, 85 }, pad = 4, half = 0.41, band = 2.54, share = 0.075,
+	inset = 0.15, house = 0.5, tuck = 1, clear = 2, media = "Interface\\AddOns\\ShyFrames\\Media\\" }
+
+-- The circle drawn nearest `across` (by ratio), and the radii of its ring's lines at that size: the picture's edge
+-- (the inner line's middle) and the ring's outer edge.
+function L.Ring(across)
+	local best, off = nil, math.huge
+	for _, circle in ipairs(L.RING.circles) do
+		local d = math.abs(math.log(across / circle))
+		if d < off then best, off = circle, d end
+	end
+	local k = across / best
+	local out = best / 2 - L.RING.half
+	local inner = out - math.max(L.RING.band, L.RING.share * best)
+	return best, inner * k, (out + L.RING.half) * k
+end
+-- Which setting (Portrait.lua) a kind's column follows, and the kinds whose column stands at the right end.
+L.PORTRAITS = { player = "pair", target = "pair", pet = "small", focus = "small", party = "party" }
+L.MIRRORED = { target = true }
+
+-- How tall your frame and your target's are (T.db.height): as the console was cut for, or as tall as the game's own
+-- (its portrait is 60 across). The console plans round whichever (T:Sizes); set out of combat only (Place.Apply).
+L.HEIGHTS = { compact = 51, game = 64 }
+
+function L.MainHeight(pick)
+	L.LAYOUTS.main.height = L.HEIGHTS[pick] or L.HEIGHTS.game
+end
 
 -- Which layout a unit uses, and a width multiplier.
 L.UNITS = {
@@ -232,11 +276,55 @@ function L.Party(grid)
 	L.Cell()
 end
 
+-- Room for the panel's edge round a layout's bars (`pad`: a plate's own, Plate:Pad).
+function L.Pad(layout, pad)
+	return pad or layout.pad or PAD
+end
+
+-- The side of the square a layout's portrait set into the frame is: as tall as its bars' room. 0 for a layout with
+-- none.
+function L.Column(layout, pad)
+	if not layout.portrait then return 0 end
+	pad = L.Pad(layout, pad)
+	return layout.height - pad.top - pad.bottom
+end
+
+-- Where a layout's portrait stands, and what it takes from the bars: its box's side; how far in its box starts from
+-- the frame's end and down from its top; the width the bars give up (set into the frame); how far the housing stands
+-- in from the frame's top and foot; how far in from the frame's end the housing starts; and the ring's radius
+-- (round: the bars start on its curve, L.Bars). Round (`ringed`): the circle as tall as the frame, at its very end,
+-- the housing shorter, behind it and on its middle (L.RING). All 0 for a layout with none.
+function L.Portrait(layout, ringed, pad)
+	if not layout.portrait then return 0, 0, 0, 0, 0, 0, 0 end
+	pad = L.Pad(layout, pad)
+	if ringed then
+		local side, ring = layout.height, L.RING
+		return side, 0, 0, 0, math.floor(side * ring.inset + 0.5), side * ring.house, side / 2
+	end
+	local side = L.Column(layout, pad)
+	return side, pad.side, pad.top, side + L.COLUMN.seam, 0, 0, 0
+end
+
+-- Where a bar from `top` to `bottom` starts beside a ring of radius `r` standing at the frame's end, its top on the
+-- frame's: on the ring's edge at the bar's row farthest from the ring's middle, tucked under it. And how far in from
+-- that its words keep, past the ring.
+function L.OnCurve(r, top, bottom, side)
+	local dy = math.max(math.abs(top - r), math.abs(bottom - r))
+	local edge = dy < r and r + math.sqrt(r * r - dy * dy) or side
+	local left = math.max(side, edge - L.RING.tuck)
+	return left, math.max(0, 2 * r + L.RING.clear - left)
+end
+
 -- The bars in `present` (by id) share the height in proportion to their `size`.
 -- `trim` is taken off the health bar's right end (a pet's bar stands there).
---   -> { [id] = { left, top, width, height } }, from the frame's top left, y downward
-function L.Bars(layout, width, present, trim)
-	local pad = layout.pad or PAD
+-- `give` (a portrait's room) is taken off every bar's width, at the left end, or at the right end when `mirrored`;
+-- `inset` off the top and the bottom of their room (the housing stood in). With `ring` (a round portrait's radius) each bar
+-- instead starts on the ring's curve (L.OnCurve), and says how far its words keep in (`clear`).
+--   -> { [id] = { left, top, width, height, clear = n } }, from the frame's top left, y downward
+function L.Bars(layout, width, present, trim, give, mirrored, inset, ring, pad)
+	pad = L.Pad(layout, pad)
+	give = give or 0
+	local start = mirrored and 0 or give
 	local shown, points = {}, 0
 	for _, bar in ipairs(layout.bars) do
 		if present[bar.id] then
@@ -244,12 +332,18 @@ function L.Bars(layout, width, present, trim)
 			points = points + bar.size
 		end
 	end
-	local room = layout.height - pad.top - pad.bottom - L.SPACING * (#shown - 1)
+	inset = inset or 0
+	local room = layout.height - 2 * inset - pad.top - pad.bottom - L.SPACING * (#shown - 1)
 	local perPoint = room / points
-	local rects, y = {}, pad.top
+	local rects, y = {}, inset + pad.top
 	for _, bar in ipairs(shown) do
 		local height = bar.size * perPoint
-		rects[bar.id] = { pad.side, y, width - pad.side * 2, height }
+		if ring and ring > 0 then
+			local into, clear = L.OnCurve(ring, y, y + height, pad.side)
+			rects[bar.id] = { mirrored and pad.side or into, y, width - pad.side - into, height, clear = clear }
+		else
+			rects[bar.id] = { pad.side + start, y, width - pad.side * 2 - give, height, clear = 0 }
+		end
 		y = y + height + L.SPACING
 	end
 	if trim and rects.health then rects.health[3] = rects.health[3] - trim end

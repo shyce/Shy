@@ -170,9 +170,9 @@ function Card.Answer(key)
 		local quest = Shy.addons.Quest
 		local place = quest and quest.Nearest and quest:Nearest("auction")
 		if place and quest:Go(place.map, place.x, place.y, place.name) then
-			T:Print("the way to the nearest auctioneer is on your map. Its price is checked as you open the auction house.")
+			T:Print("the nearest auctioneer is on your map. You'll get its price when you open the auction house.")
 		else
-			T:Print("its price is checked as you next open the auction house.")
+			T:Print("you'll get its price the next time you open the auction house.")
 		end
 		Paint()
 	elseif key == "own" then
@@ -238,7 +238,7 @@ local function GoToSource(target, quiet)
 	-- (Led as where you farm it: its ground lit in the finder's color, the stop kept while you are there.)
 	if spot and quest.FarmAt and quest:FarmAt(target.item, spot.map, spot.x, spot.y, spot.name, target.npc) then return true end
 	if spot and quest:Go(spot.map, spot.x, spot.y, title) then return true end
-	if not quiet then T:Print("no place is known where you could farm it.") end
+	if not quiet then T:Print("no known place to farm it.") end
 	return false
 end
 Card.GoToSource = GoToSource
@@ -274,7 +274,7 @@ function Card.Typed(text)
 	if not item then return end
 	local copper = P.Parse(text)
 	if not copper then
-		if strtrim(text or "") ~= "" then T:Print("that's no price. Type it like 1g 20s, 35s or 80c.") end
+		if strtrim(text or "") ~= "" then T:Print("that isn't a price. Type it like 1g 20s, 35s or 80c.") end
 		return
 	end
 	card.typing = nil
@@ -286,7 +286,7 @@ local function PriceMenu(root, item)
 	local using = P.Using(item)
 	local ah, at = P.Auction(item)
 	local own, sell = P.Own(item), P.Vendor(item)
-	if T.db.auction and P.Sellable(item) then
+	if P.Auctions() and P.Sellable(item) then
 		local entry = root:CreateRadio("Auction price", function() return using == "auction" end, function() P.Use(item, "auction") end)
 		entry:SetDetail(ah and P.Text(ah) or "not known")
 		if ah then entry:SetSub(P.Age(at)) end
@@ -408,7 +408,7 @@ function Card.Menu(root)
 		root:CreateTitle(S.Kind(s) == "fishing" and "Fishing" or "Grinding")
 		WantMenu(root, s)
 		local quest = Shy.addons.Quest
-		if T.db.auction and quest and quest.Nearest then
+		if P.Auctions() and quest and quest.Nearest then
 			root:CreateButton("Nearest auction house", function()
 				local place = quest:Nearest("auction")
 				if not (place and quest:Go(place.map, place.x, place.y, place.name)) then T:Print("no auction house is known near you.") end
@@ -423,7 +423,7 @@ function Card.Menu(root)
 	end
 	HistoryMenu(root)
 	root:CreateDivider()
-	root:CreateButton("Options", function() T:OpenOptions() end):SetIcon(UI.MenuGlyph("options"))
+	root:CreateButton("Settings", function() T:OpenOptions() end):SetIcon(UI.MenuGlyph("options"))
 end
 
 -- Hovers and clicks
@@ -437,7 +437,7 @@ function Card.RowTip(row)
 	local worth, from = P.Value(item)
 	local ah, at = P.Auction(item)
 	local own, sell = P.Own(item), P.Vendor(item)
-	if T.db.auction and P.Sellable(item) then
+	if P.Auctions() and P.Sellable(item) then
 		rows[#rows + 1] = { glyph = "coin", text = "Auction" .. (at and (", " .. P.Age(at)) or ""), right = ah and P.Text(ah) or "not known",
 			color = from == "auction" and C.text or C.dim, rightColor = from == "auction" and C.hot or C.dim }
 	end
@@ -544,7 +544,7 @@ function Card.CardTip(frame)
 	if not S.Used(s) then
 		words = "Nothing yet. The clock starts when you loot something."
 	elseif s.state == "ready" then
-		words = "Not started yet: nothing counts until you start."
+		words = "Not started yet. Nothing counts until you start."
 	elseif s.state == "paused" then
 		words = words .. ", paused."
 	elseif not S.Running(s) then
@@ -699,10 +699,16 @@ function T:Piece()
 		passing = true }
 end
 
--- Shows the piece where it stands now (the hub's Open, /shyfarm show): with none going on, a session waits for you.
+-- Shows the piece where it stands now (the hub's Open, /shy farm show): with none going on, a session waits for
+-- you. Asked for while it is switched off, it is switched on.
 function Card.Reveal()
 	S.Wait()
-	Paint()
+	if T.db.on then
+		Paint()
+	else
+		T.db.on = true
+		ns.Apply()
+	end
 end
 
 -- Its ×: the farm ends for good, kept with your past ones, and nothing counts until you choose to farm again. Asked
@@ -718,7 +724,7 @@ function Card.Close()
 		S.Drop()
 		return
 	end
-	UI.Confirm(box, "End this farm? It's kept with your past ones, and nothing counts until you farm again.", "End farm", End)
+	UI.Confirm(box, "End this farm? It's saved with your past ones, and nothing counts until you farm again.", "End farm", End)
 end
 
 -- A look a second while the window shows a running clock, and none at all otherwise.
@@ -758,7 +764,7 @@ function Card.Start()
 		-- The top left's corner, where how to play stands (ShyDock puts that under it while a session shows).
 		point = { "TOPLEFT", "TOPLEFT", 16, -16 },
 		shown = Shown,
-		-- Its options' "On screen while you farm".
+		-- Its setting, "Show while you farm".
 		switch = {
 			get = function() return T.db.on ~= false end,
 			set = function(on)

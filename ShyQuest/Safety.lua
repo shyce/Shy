@@ -1,17 +1,18 @@
 -- Staying alive: what is dangerous where the route leads, what to drink when health runs low, and air.
---   Danger: hostile elites, rares and creatures well above the player whose spawns lie within REACH of the
---     leading stop (the data's spawns; hostile: no title, no quests and no side, or the other side's)
---     are named under it on the card (ns.cardNotes), as tooltips flag them (Hover.lua, H.Danger). Careful
---     play only, and off with tooltips' "Warn about dangerous creatures".
---   Low health: ShyCore's alert (Shy.Alarm) under the character with the best healing the bags hold (a
---     healthstone, a potion, a bandage), off cooldown first. Health is secret to addons, so the game
---     evaluates it on a curve and the alert's strength is set from that: it fades in under LOW of full
---     health with nothing read.
---   Air and fatigue: the game's mirror timers. Under COMING seconds of breath, or whenever fatigue drains,
---     the alert warns over the head in amber; under AIR it turns red and flies down under the character.
---     It counts the seconds down, its weave full as it first shows.
--- Careful play (the hardcore route, or a hardcore realm) is stricter, never louder: more creatures count,
--- the reach is wider, the alert comes sooner. Nothing here plays a sound or writes in chat.
+--   Danger: hostile elites, rares and creatures well above the player whose spawns lie within REACH
+--     of the leading stop are named under it on the card (ns.cardNotes), the same ones tooltips flag
+--     (Hover.lua, H.Danger). Spawns come from the data. Hostile means no title, no quests and no
+--     side, or the other side's. Careful play only, and off with tooltips' "Warn about dangerous
+--     creatures".
+--   Low health: ShyCore's alert (Shy.Alarm) under the character, with the best healing in the bags
+--     (a healthstone, a potion, a bandage), off cooldown first. Health is secret to addons, so the
+--     game evaluates it on a curve and the alert's strength is set from that. It fades in under LOW
+--     of full health with nothing read.
+--   Air and fatigue: the game's mirror timers. Under COMING seconds of breath, or whenever fatigue
+--     drains, the alert warns over the head in amber. Under AIR it turns red and flies down under
+--     the character. It counts the seconds down, with its weave full when it first shows.
+-- Careful play (the hardcore route, or a hardcore realm) is stricter, never louder: more creatures
+-- count, the reach is wider and the alert comes sooner. Nothing here plays a sound or writes in chat.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -374,38 +375,44 @@ ns.OnApply(function() Safety.Apply() end)
 ns.cardNotes = ns.cardNotes or {}
 table.insert(ns.cardNotes, Note)
 
--- Options: a section under Supplies.lua's (whose own ends 260 under its top, 492 under `y`): what the road
--- offers, and what a window can do by itself (off unless asked for).
-local before = ns.MoreOptions
-function ns.MoreOptions(page, group, y)
-	local top = y
-	if before then
-		before(page, group, y)
-		top = y - 492 - 260
-	end
-	local LEFT, RIGHT, COL = 24, 330, 270
-	local function Box(x, at, label, get, set, desc)
-		local box = group:Checkbox(page, label, get, set, { desc = desc })
-		box:SetPoint("TOPLEFT", page, "TOPLEFT", x, top - at)
-		return box
-	end
-	UI.Header(page, "On the road", COL):SetPoint("TOPLEFT", page, "TOPLEFT", LEFT, top)
-	Box(LEFT, 32, "Health and breath alerts", function() return T.db.safety.on end, function(v) T.db.safety.on = v end,
-		"When your health is low, shows your healthstone, potion or bandage under your character, and counts down your breath at the top of the screen.")
-	Box(LEFT, 58, "Campfires and cooking", function() return T.db.camp.on end, function(v) T.db.camp.on = v end,
-		"Reminds you to sit by campfires, and to cook on boat rides for Cooking skill.")
-	Box(LEFT, 84, "Your pet", function() return T.db.pets.on end, function(v) T.db.pets.on = v end,
-		"Hunters and warlocks: reminds you of new pet skills, Beast Training and your class's pet quests.")
-	UI.Header(page, "Done for you", COL):SetPoint("TOPLEFT", page, "TOPLEFT", RIGHT, top)
-	Box(RIGHT, 32, "Buy what you need", function() return T.db.supplies.auto end, function(v) T.db.supplies.auto = v end,
-		"Opening a vendor buys what your quests still need and the food, water and reagents you're short on, up to the gold set aside. Hold Shift to skip it.")
-	Box(RIGHT, 58, "Train at your trainer", function() return T.db.train.auto end, function(v) T.db.train.auto = v end,
-		"Opening your class trainer learns every spell you can afford. Hold Shift to skip it.")
-	-- (Stash.lua's, where it is loaded: a file new to the TOC needs a client restart.)
-	if T.db.stash then
-		Box(RIGHT, 84, "Take quest items out of your bank", function() return T.db.stash.auto end, function(v) T.db.stash.auto = v end,
-			"Opening your bank takes out what your quests need before you're next at one. Hold Shift to skip it.")
-		Box(RIGHT, 110, "Put away what can wait", function() return T.db.stash.autoAway end, function(v) T.db.stash.autoAway = v end,
-			"Opening your bank also puts away what no quest needs for a while. Off, the bank window has a button for it. Hold Shift to skip it.")
-	end
+-- Settings: the alerts, the stops the route adds by itself, and what a window can do by itself (off unless asked for).
+local function Petted()
+	local _, class = UnitClass("player")
+	return class == "HUNTER" or class == "WARLOCK"
 end
+-- Read when it is used: nothing on screen to draw again.
+local function AtUse() end
+
+T:Settings({
+	{ section = "On the road" },
+	{ key = "safety.on", label = "Health and breath alerts", words = "healthstone potion bandage drowning",
+		desc = "Low on health, your healthstone, potion or bandage shows under your character. Low on breath, a warning counts it down." },
+
+	{ section = "Stops added for you" },
+	{ key = "flights.on", label = "Flight paths", words = "errand flight master",
+		desc = "A flight master you haven't met becomes a stop when it's on your way." },
+	{ key = "hearth.on", label = "Hearthstone", words = "errand inn",
+		desc = "Hearthing becomes a step when it saves you time." },
+	{ key = "train.on", label = "Class trainer", words = "errand spells",
+		desc = "Your trainer becomes a stop when you have spells to learn." },
+	{ key = "weapons.on", label = "Weapon master", words = "errand skill",
+		desc = "A weapon master becomes a stop when there's a weapon to learn." },
+	{ key = "stash.take", label = "Bank and mailbox", words = "errand quest items",
+		desc = "Your bank or mailbox becomes a stop when it holds something a quest needs." },
+	{ key = "camp.on", label = "Campfires and cooking", words = "errand boat",
+		desc = "Reminds you to sit by campfires, and to cook on boat rides." },
+	{ key = "pets.on", label = "Your pet", words = "errand hunter warlock beast training", shown = Petted,
+		desc = "Your pet's trainer, its new skills and your class's pet quests become stops." },
+	{ key = "legacy.on", label = "Legacy points", words = "suggestion",
+		desc = "The quest window tells you when you have Legacy points to spend." },
+
+	{ section = "Done for you" },
+	{ key = "supplies.auto", label = "Buy what you need", words = "vendor auto buy food water reagents", apply = AtUse,
+		desc = "Opening a vendor buys what your quests need and the food, water and reagents you're short on. Hold Shift to skip it." },
+	{ key = "train.auto", label = "Train at your trainer", words = "auto learn spells", apply = AtUse,
+		desc = "Opening your class trainer learns every spell you can afford. Hold Shift to skip it." },
+	{ key = "stash.auto", label = "Take quest items out", words = "bank withdraw",
+		desc = "Opening your bank takes out what your quests need. Hold Shift to skip it." },
+	{ key = "stash.autoAway", label = "Store what can wait", words = "bank deposit",
+		desc = "Opening your bank also puts away what no quest needs for a while. Hold Shift to skip it." },
+})

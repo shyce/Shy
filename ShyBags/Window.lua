@@ -1,8 +1,8 @@
--- The bag window: a rail of characters on the left, the search box as the title, the bags, an optional wing to
--- their right (mail, auctions, gold, results, room, keys) and a footer of counts that open those wings and the
--- bank and your auctions, each a window of its own docked beside this one (BankWindow.lua, AuctionWindow.lua).
+-- The bag window: a rail of characters on the left, the search box as the title, the bags, and a footer of counts
+-- that open the wing (mail, auctions, gold, results, room, keys), the bank and your auctions, each a window of its
+-- own docked beside this one (BankWindow.lua, AuctionWindow.lua): on its right, or wherever the screen has room.
 -- Your own bags are live slots (Blizzard's item buttons, Tile.lua); other characters are drawn from the store.
--- The window is a Shy.HUD box anchored by its top left, so it grows right and down.
+-- The window is a Shy.HUD box hung by its top left corner: it grows right and down, kept on the screen.
 -- It follows Takeover.lua; if it fails to build, the default bags stay.
 --   Window.Look(guid)         show a character (nil: yourself); Window.Looked() returns c, guid, isMe
 --   Window.Open(wing)         "mail", "auctions", "gold", "results", "room", "keys" or nil
@@ -20,6 +20,7 @@ ns.Window = Window
 
 T.defaults.window = true
 T.defaults.columns = 0   -- slots across, as dragged by the window's corner; 0: the bags fit themselves
+T.defaults.apart = true  -- a special bag's slots stand apart under its name (the bank's too); off: in with the rest
 
 local STEP = Tile.SIZE + Tile.GAP
 local TOP, RIGHT = 35, 8                  -- slot grid's top offset and right margin
@@ -31,6 +32,8 @@ local RAIL_BUTTON = 20                   -- the rail's buttons over the menu (so
 local RAIL = 2 * (RAIL_BUTTON + 4)        -- the room they take above the menu's rule
 local BOX_W, BOX_H = SPINE + 10 * STEP - Tile.GAP + RIGHT, TOP + 5 * STEP + 24
 local LOW = 3   -- free slots at which the count turns gold
+local WING_EDGE = 8                       -- the wing window's margin round its content
+local WING_MIN = { 2 * 8 + 220, 180 }     -- the least you can size the wing to
 
 local box, win
 local P = {}                       -- the window's parts, by name
@@ -163,6 +166,32 @@ local function DoorOpen(wing)
 	return view.wing == wing
 end
 
+-- What a door opens, said under the mouse: what it is and where it opens. Its count is on the door itself.
+local DOOR_SAYS = {
+	bank = { "Bank", "Your bank as last seen, in a window beside the bags." },
+	mail = { "Mail", "Your mailbox as last seen, beside the bags." },
+	auctions = { "Auctions", "Your auctions as last seen, beside the bags." },
+}
+
+-- The gold door's hover, the one door that shows more than a line: every character of this realm and their gold,
+-- then, under it, who has gold waiting in the mail or from sold auctions, and how much.
+local function GoldTip(door)
+	local gold = ns.Views.Gold()
+	local rows, owed = {}, {}
+	for _, row in ipairs(gold.rows) do
+		local c = row.char
+		local class = c.class and C_ClassColor.GetClassColor(c.class)
+		local color = class and { class.r, class.g, class.b } or C.text
+		rows[#rows + 1] = { text = Store.Name(c), color = color, right = Coins(row.hand), rightColor = C.text }
+		local waiting = row.mail + row.sold
+		if waiting > 0 then owed[#owed + 1] = { text = Store.Name(c), color = color, right = Coins(waiting), rightColor = C.alert } end
+	end
+	local sections = { { title = "On this realm", rows = rows } }
+	if #owed > 0 then sections[2] = { title = "Waiting in the mail", rows = owed } end
+	UI.Tip(door, "Gold", nil, { side = "TOP", note = Coins(gold.hand), sections = sections,
+		hints = { { "left", "Open beside the bags" } } })
+end
+
 -- A door: a footer button that opens a wing (the bank's, the bank window).
 local function Door(parent, glyph, wing)
 	local d = CreateFrame("Button", nil, parent)
@@ -196,15 +225,17 @@ local function Door(parent, glyph, wing)
 	d:SetScript("OnEnter", function(self)
 		self.fill:Show()
 		if self.glyph then UI.Tint(self.glyph, C.head) end
-		Window.Peek(self)
+		if self.wing == "gold" then return GoldTip(self) end
+		local say = DOOR_SAYS[self.wing]
+		if say then UI.Tip(self, say[1], say[2], { side = "TOP" }) end
 	end)
 	d:SetScript("OnLeave", function(self)
 		self.fill:SetShown(DoorOpen(self.wing))
-		if self.glyph then UI.Tint(self.glyph, C.dim) end
-		Window.Peek(nil)
+		if self.glyph then UI.Tint(self.glyph, self.urgent and C.alert or C.dim) end
+		UI.TipHide(self)
 	end)
 	d:SetScript("OnClick", function(self)
-		Window.Peek(nil)
+		UI.TipHide(self, true)
 		if self.wing == "bank" then
 			if ns.BankWindow then ns.BankWindow.Toggle() end
 		elseif self.wing == "auctions" and ns.AuctionWindow then
@@ -213,10 +244,12 @@ local function Door(parent, glyph, wing)
 			Window.Open(view.wing ~= self.wing and self.wing or nil)
 		end
 	end)
-	-- Sets the text and sizes the door to it.
-	function d:Say(text, color)
+	-- Sets the text and sizes the door to it. With no text, a glyph alone, gold when it says something urgent.
+	function d:Say(text, color, urgent)
 		self.text:SetText(text)
 		UI.Ink(self.text, color or C.text)
+		self.urgent = urgent and text == "" or nil
+		if self.glyph then UI.Tint(self.glyph, self.urgent and C.alert or C.dim) end
 		self:SetWidth((self.glyph and 21 or 6) + (text ~= "" and self.text:GetStringWidth() or -4) + 6)
 	end
 	return d
@@ -226,10 +259,11 @@ end
 -- mark stands on that door of your own, so the bags say where to go for it.
 local holds = {}
 local function DoorPins(isMe)
+	local marked = ns.Marks.On("quest")   -- the quest's mark switched off is off here too
 	for _, name in ipairs({ "bank", "mail" }) do
 		local door = doors[name]
 		local held = false
-		for _, test in ipairs(isMe and door and door:IsShown() and holds or {}) do
+		for _, test in ipairs(marked and isMe and door and door:IsShown() and holds or {}) do
 			local ok, yes = pcall(test, name)
 			if ok and yes then held = true end
 		end
@@ -292,6 +326,7 @@ local function AuctionFact(c)
 	return long, tostring(up + sold), false
 end
 
+-- Returns true when the foot needs the window wider (P.footNeed): the caller lays it out again.
 local function Foot(isMe, c)
 	local grid = isMe and P.live or P.mem
 	local free, slots = grid:Room()
@@ -303,9 +338,12 @@ local function Foot(isMe, c)
 		bank = { BankFact(c) }, mail = { MailFact(c) }, auctions = { AuctionFact(c) },
 	}
 	local coins = c.money and Coins(c.money) or ""
+	-- Tight: the largest coin alone (25g), never a run of coins under the slots.
+	local tight = (c.money and c.money >= 10000) and Coins(math.floor(c.money / 10000) * 10000) or coins
 
-	-- The longest wording that fits: long count and doors, then a short count, then short doors.
-	local function Try(longCount, longDoors)
+	-- The longest wording that fits: long count and doors, then a short count, then short doors, then doors as
+	-- glyphs alone and the gold as its largest coin. Even that too wide, the window widens to it (Layout).
+	local function Try(longCount, longDoors, glyphs, tightGold)
 		local count, of = "", ""
 		if slots == 0 then
 			count = "no bags saved"
@@ -323,14 +361,22 @@ local function Foot(isMe, c)
 			local fact, door = facts[name], doors[name]
 			door:SetShown(fact[1] ~= nil)
 			if fact[1] then
-				door:Say(longDoors and fact[1] or fact[2], fact[3] and C.alert or C.text)
+				door:Say(glyphs and "" or (longDoors and fact[1] or fact[2]), fact[3] and C.alert or C.text, fact[3])
 				used = used + door:GetWidth()
 			end
 		end
-		doors.gold:Say(coins)
-		return used + doors.gold:GetWidth() <= width
+		doors.gold:Say(tightGold and tight or coins)
+		return used + doors.gold:GetWidth() <= width, used + doors.gold:GetWidth()
 	end
-	local _ = Try(true, true) or Try(false, true) or Try(false, false)
+	local fits = Try(true, true) or Try(false, true) or Try(false, false) or Try(false, false, true)
+	if not fits then
+		local ok, need = Try(false, false, true, true)
+		-- (Asked once: the window is laid out again that much wider, and the foot said again.)
+		if not ok and not P.footWide then
+			P.footNeed = need
+			return true
+		end
+	end
 
 	UI.Ink(P.free, (not isMe and C.text) or (free == 0 and C.bad) or (free <= LOW and C.alert) or C.text)
 
@@ -353,156 +399,6 @@ local function Foot(isMe, c)
 	doors.gold.fill:SetShown(view.wing == "gold")
 	doors.gold.lit:SetShown(view.wing == "gold")
 	DoorPins(isMe)
-end
-
--- Peek: hovering a door previews its wing
-
-local function Pic(id, count)
-	local _, _, _, _, icon = C_Item.GetItemInfoInstant(id or 0)
-	return "|T" .. tostring(icon or 134400) .. ":14:14|t" .. ((count and count > 1) and (" " .. count) or "")
-end
-
-local function Named(c)
-	local color = c.class and C_ClassColor.GetClassColor(c.class)
-	local name = Store.Name(c)
-	return color and Shy.Theme.Wrap({ color.r, color.g, color.b }, name) or name
-end
-
--- Each returns head, detail, left lines, right lines, last line.
-local PEEK = {}
-
-function PEEK.bank(c)
-	local stacks, free, slots = {}, 0, 0
-	for key, list in pairs(c.bank) do
-		if type(key) == "number" then
-			for _, slot in ipairs(list) do
-				slots = slots + 1
-				local item, count = Store.Unpack(slot)
-				if item then stacks[#stacks + 1] = Pic(Store.ItemID(item), count) else free = free + 1 end
-			end
-		end
-	end
-	local detail = free .. " free of " .. slots .. (c.bank.at and (" \194\183 seen " .. ns.Ago(c.bank.at)) or "")
-	return "Bank", detail, { table.concat(stacks, "  ") }, {}, "Click to open the bank."
-end
-
-function PEEK.mail(c)
-	local lefts, rights = {}, {}
-	for index, row in ipairs(c.mail.rows) do
-		if index > 3 then break end
-		local left = row.sent and "sent by you" or ns.Views.Left(row.exp)
-		local pics = {}
-		for _, slot in ipairs(row.items) do
-			local item, count = Store.Unpack(slot)
-			if item and #pics < 4 then pics[#pics + 1] = Pic(Store.ItemID(item), count) end
-		end
-		if row.money > 0 then pics[#pics + 1] = Coins(row.money) end
-		lefts[#lefts + 1] = (row.from ~= "" and row.from or "The game")
-		rights[#rights + 1] = Shy.Theme.Wrap(C.dim, left)
-		-- Truncated on a UTF-8 character boundary.
-		local subject = row.subj
-		if #subject > 26 then subject = subject:sub(1, 26):gsub("[\192-\255]?[\128-\191]*$", "") .. "..." end
-		lefts[#lefts + 1] = Shy.Theme.Wrap(C.dim, subject)
-		rights[#rights + 1] = table.concat(pics, " ")
-	end
-	return "Mail", c.mail.at and ("seen " .. ns.Ago(c.mail.at)) or "", lefts, rights, "Click to open beside the bags."
-end
-
-function PEEK.auctions(c)
-	local lefts, rights = {}, {}
-	for index, auction in ipairs(c.auctions) do
-		if index > 5 then break end
-		local id = Store.ItemID(auction.item)
-		local _, _, _, name = Store.Fact(id or 0)
-		local price = auction.buyout or auction.bid or 0
-		lefts[#lefts + 1] = Pic(id, auction.n) .. " " .. (name or "")
-		if auction.sold then
-			rights[#rights + 1] = Shy.Theme.Wrap(C.alert, "sold, " .. Coins(price) .. " on its way")
-		elseif auction.exp and auction.exp <= ns.Now() then
-			rights[#rights + 1] = Shy.Theme.Wrap(C.dim, "expired, in the mailbox")
-		else
-			rights[#rights + 1] = Coins(price)
-		end
-	end
-	return "Auctions", c.auctions.at and ("seen " .. ns.Ago(c.auctions.at)) or "", lefts, rights, "Click to open beside the bags."
-end
-
-function PEEK.gold()
-	local gold = ns.Views.Gold()
-	local lefts, rights = {}, {}
-	for _, row in ipairs(gold.rows) do
-		local waiting = row.mail + row.sold
-		lefts[#lefts + 1] = Named(row.char)
-		rights[#rights + 1] = (waiting > 0 and (Shy.Theme.Wrap(C.alert, "+ " .. Coins(waiting)) .. "   ") or "") .. Coins(row.hand)
-	end
-	local waiting = gold.mail + gold.sold
-	local detail = Coins(gold.hand) .. (waiting > 0 and ("  " .. Shy.Theme.Wrap(C.alert, "+ " .. Coins(waiting))) or "")
-	return "On this realm", detail, lefts, rights, "Click to open beside the bags."
-end
-
-local peekOf   -- the door whose peek is pending or shown
-
-function Window.Peek(door)
-	peekOf = door
-	if not door then
-		if P.peek then P.peek:Hide() end
-		return
-	end
-	-- A short delay, so crossing the footer shows nothing.
-	C_Timer.After(0.15, function()
-		if peekOf ~= door or DoorOpen(door.wing) then return end
-		local c = Who()
-		local build = c and PEEK[door.wing]
-		if not build then return end
-		local head, detail, lefts, rights, last = build(c)
-		local peek = P.peek
-		peek.head:SetText(head)
-		peek.detail:SetText(detail)
-		peek.left:SetText(table.concat(lefts, "\n"))
-		peek.right:SetText(table.concat(rights, "\n"))
-		peek.last:SetText(last)
-		peek:SetHeight(26 + math.max(peek.left:GetStringHeight(), peek.right:GetStringHeight()) + 24)
-		peek:ClearAllPoints()
-		-- Left-aligned to the door where it fits, else right-aligned; gold is always right-aligned.
-		if door.wing ~= "gold" and P.foot:GetWidth() >= 330 then
-			peek:SetPoint("BOTTOMLEFT", door, "TOPLEFT", -3, -1)
-		else
-			peek:SetPoint("BOTTOMRIGHT", door, "TOPRIGHT", 3, -1)
-		end
-		peek:Show()
-	end)
-end
-
-local function BuildPeek()
-	local peek = CreateFrame("Frame", nil, win)
-	peek:SetFrameStrata("TOOLTIP")
-	peek:SetWidth(250)
-	UI.Skin(peek, C.tip, SC.metal)
-	peek:Hide()
-	peek.head = UI.Text(peek, "", 12, true, C.head)
-	peek.head:SetPoint("TOPLEFT", 6, -6)
-	peek.detail = Rounded(peek, 10.5, C.dim)
-	peek.detail:SetPoint("TOPRIGHT", -6, -7)
-	local top = Rule(peek)
-	top:SetPoint("TOPLEFT", 6, -22)
-	top:SetPoint("TOPRIGHT", -6, -22)
-	top:SetHeight(1)
-	peek.left = Rounded(peek, 10.5)
-	peek.left:SetPoint("TOPLEFT", 6, -27)
-	peek.left:SetWidth(238)
-	peek.left:SetJustifyH("LEFT")
-	peek.left:SetSpacing(3)
-	peek.right = Rounded(peek, 10.5)
-	peek.right:SetPoint("TOPRIGHT", -6, -27)
-	peek.right:SetJustifyH("RIGHT")
-	peek.right:SetSpacing(3)
-	local bottom = Rule(peek)
-	bottom:SetPoint("BOTTOMLEFT", 6, 19)
-	bottom:SetPoint("BOTTOMRIGHT", -6, 19)
-	bottom:SetHeight(1)
-	peek.last = UI.Text(peek, "", 9.5, false, C.dim)
-	peek.last:SetPoint("BOTTOMLEFT", 6, 5)
-	P.peek = peek
 end
 
 -- Character rail
@@ -558,7 +454,7 @@ local function SeatMenu(seat)
 			{ heading = Store.Name(c) },
 			{
 				text = sure and "Sure? Remove" or "Remove character", color = sure and C.bad or nil, keep = not sure,
-				tip = "For a character you've deleted: forgets its bags, bank, mail, auctions and gold.",
+				tip = "For a character you've deleted. Forgets its bags, bank, mail, auctions and gold.",
 				click = function()
 					if sure then Window.Forget(guid) else sure = true end
 				end,
@@ -624,7 +520,8 @@ local function Seat(index)
 			rows[#rows + 1] = { glyph = "clock", text = "Bags seen", right = ns.Ago(c.bags.at), color = C.dim, rightColor = C.dim }
 		end
 		local class = c.class and C_ClassColor.GetClassColor(c.class)
-		UI.Tip(self, Store.Name(c), nil, { side = "RIGHT", note = c.class and LOCALIZED_CLASS_NAMES_MALE[c.class] or nil,
+		-- Out to the left of the rail, clear of the bags (on the right where the screen's edge leaves no room).
+		UI.Tip(self, Store.Name(c), nil, { side = "LEFT", note = c.class and LOCALIZED_CLASS_NAMES_MALE[c.class] or nil,
 			color = class and { class.r, class.g, class.b } or nil,
 			sections = #rows > 0 and { { rows = rows } } or nil,
 			hints = self.guid ~= Me() and { { "left", "Show bags" }, { "right", "Remove" } } or { { "left", "Show bags" } } })
@@ -708,7 +605,7 @@ local function Room()
 	local scale = box:GetEffectiveScale()
 	local l, t, r, b = UI.BodyIn(win)   -- (the look's clearance round the body: UI.Body)
 	local across = math.floor((GetScreenWidth() / scale - SPINE - RIGHT - l - r + Tile.GAP) / STEP)
-	local down = math.floor((GetScreenHeight() / scale - TOP - 24 - t - b) / STEP)
+	local down = math.floor((GetScreenHeight() / scale - TOP - 24 - t - b - P.live.gap) / STEP)
 	return math.max(1, across), math.max(1, down)
 end
 
@@ -748,12 +645,13 @@ local function BagShape(c, isMe)
 end
 
 -- The shapes `slots` can take, narrowest first: for each number of rows, the fewest columns that make it,
--- so each is wider and lower than the one before and none has a row it doesn't need.
-local function Shapes(slots)
+-- so each is wider and lower than the one before and none has a row it doesn't need. grid: the one that
+-- holds them, asked for its rows (a run that stands apart starts a row of its own).
+local function Shapes(slots, grid)
 	local least, most = Span(slots)
 	local list = {}
 	for columns = least, most do
-		local rows = math.ceil(slots / columns)
+		local rows = grid and grid:Down(columns) or math.ceil(slots / columns)
 		if #list == 0 or list[#list].rows ~= rows then list[#list + 1] = { columns = columns, rows = rows } end
 	end
 	return list
@@ -794,6 +692,61 @@ local function Rail(mine)
 	if P.band then P.bandToggle:Lit(BandOpen()) end
 end
 
+-- The wing is a window of its own, docked to the bags. Beside them it is as tall as they are, its rows level with
+-- theirs, and its width is yours; anywhere else its height is yours too. It is never narrower than its list asks.
+-- Its list fills what room it has: it flows as you size it.
+local WING_FOOT = 24                       -- of the wing's body under its list: its foot, as the bags' is
+local function LayWing(wingWidth)
+	P.wing:SetShown(wingWidth ~= nil)
+	P.wingFoot:SetShown(wingWidth ~= nil)
+	Shy.HUD.Update(P.wingBox)
+	if not wingWidth then return end
+	local l, t, r, b = UI.BodyIn(P.wingWin)
+	-- As wide as you made it, else as its list asks; a wider list (gold's) widens it while it shows. With a grip,
+	-- the list's width is the size the wing is made at (HUD.Made), and the grip keeps yours over it.
+	local want = WING_EDGE + wingWidth + WING_EDGE + l + r
+	local grip = Shy.HUD.Grip and Shy.HUD.Grip(P.wingBox)
+	if grip and Shy.HUD.Made then
+		if not P.flowing then Shy.HUD.Made(P.wingBox, want, box:GetHeight()) end
+	else
+		local w = math.max(P.wingHand or 0, want)
+		local h = Shy.HUD.DockTall(P.wingBox) or P.wingBox:GetHeight()
+		-- (Sized by its grip, the grip has the say: it is only laid out.)
+		if not P.flowing and (math.abs(w - P.wingBox:GetWidth()) > 0.5 or math.abs(h - P.wingBox:GetHeight()) > 0.5) then
+			Shy.HUD.Resize(P.wingBox, w, h)
+		end
+	end
+	local body = UI.Body(P.wingWin)
+	P.wing:ClearAllPoints()
+	P.wing:SetPoint("TOPLEFT", body, "TOPLEFT", WING_EDGE, -TOP)
+	P.wing:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -WING_EDGE, WING_FOOT + Tile.GAP)
+	P.wingFoot:ClearAllPoints()
+	P.wingFoot:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", WING_EDGE, WING_FOOT - FOOT)
+	P.wingFoot:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -WING_EDGE, WING_FOOT - FOOT)
+	P.wingFoot:SetHeight(FOOT)
+end
+
+-- How many rows of slots tall the wing's list is, from the height the wing has: beside a window (the bags, the
+-- bank), as tall as that one is now; else as tall as you made it.
+local function WingRows()
+	local _, t, _, b = UI.BodyIn(P.wingWin)
+	local h = Shy.HUD.DockTall(P.wingBox) or P.wingBox:GetHeight()
+	return math.max(1, (h - t - b - TOP - WING_FOOT) / STEP)
+end
+
+-- The wing's list shown for the room the wing has, and the wing laid out round it.
+local function FillWing()
+	local s = P.shown
+	local wing = s and s.wing and wings[s.wing]
+	if not wing then return LayWing(nil) end
+	local wingWidth, title, detail, right = wing.Show(s.c, s.guid, s.isMe, WingRows())
+	P.wingTitle:SetText(title)
+	P.wingDetail:SetText(detail or "")
+	P.wingRight:SetText(right or "")
+	s.wingWidth = wingWidth
+	LayWing(wingWidth)
+end
+
 -- Everything stands on the window's body (UI.Body): clear of the look's work round the edge, the window that much
 -- bigger (UI.BodyFit). Returns the window's whole width.
 local function Layout(columns, rows, wingWidth)
@@ -803,16 +756,18 @@ local function Layout(columns, rows, wingWidth)
 	local bagW = columns * STEP - Tile.GAP
 	-- The bag column stands beside the grid, a seam off, so opening it widens the window and nothing on
 	-- the left moves; a column taller than the grid makes the window taller.
-	local tall, colW = rows * STEP, 0
+	-- (The names over the runs that stand apart take room of their own, over the rows'.)
+	local tall, colW = rows * STEP + (P.live:IsShown() and P.live.gap or 0), 0
 	if band then
 		colW = SEAM + P.band:GetWidth()
 		tall = math.max(tall, P.band:GetHeight() + Tile.GAP)
 	end
 	local gridH = tall - Tile.GAP
 	local gx = left
-	local wx = gx + bagW + colW + SEAM
 	local fy = top + tall
-	local W, H = gx + bagW + colW + (wingWidth and (SEAM + wingWidth) or 0) + RIGHT, fy + 24
+	-- The foot is never narrower than its shortest wording needs (Foot): the window widens to it.
+	local footW = math.max(bagW + colW, P.footNeed or 0)
+	local W, H = gx + footW + RIGHT, fy + 24
 	UI.BodyFit(win, W, H)
 	-- HUD.Resize keeps the top left corner in place.
 	Shy.HUD.Resize(box, win:GetWidth(), win:GetHeight())
@@ -828,7 +783,7 @@ local function Layout(columns, rows, wingWidth)
 	end
 	P.foot:ClearAllPoints()
 	P.foot:SetPoint("TOPLEFT", body, "TOPLEFT", gx, -fy)
-	P.foot:SetSize(bagW + colW, FOOT)
+	P.foot:SetSize(footW, FOOT)
 
 	P.spineRule:SetPoint("TOPLEFT", body, "TOPLEFT", 32, -30)
 	P.spineRule:SetSize(1, H - 35)
@@ -843,20 +798,6 @@ local function Layout(columns, rows, wingWidth)
 	end
 	for index, seat in pairs(seats) do PlaceSeat(seat, index) end
 
-	P.seam:SetShown(wingWidth ~= nil)
-	P.wing:SetShown(wingWidth ~= nil)
-	P.wingFoot:SetShown(wingWidth ~= nil)
-	if wingWidth then
-		P.seam:ClearAllPoints()
-		P.seam:SetPoint("TOPLEFT", body, "TOPLEFT", wx - 7, -32)
-		P.seam:SetSize(1, fy + FOOT - 32)
-		P.wing:ClearAllPoints()
-		P.wing:SetPoint("TOPLEFT", body, "TOPLEFT", wx, -top)
-		P.wing:SetSize(wingWidth, gridH)
-		P.wingFoot:ClearAllPoints()
-		P.wingFoot:SetPoint("TOPLEFT", body, "TOPLEFT", wx, -fy)
-		P.wingFoot:SetSize(wingWidth, FOOT)
-	end
 	return win:GetWidth()
 end
 
@@ -990,6 +931,7 @@ local function Carry()
 	P.live.prefer = Prefer()
 	P.live.sort = order and order.Key() or nil
 	P.live.order = P.live.sort and order.Places or nil
+	P.live.apart = T.db.apart == true
 	P.live:SetBags(bags)
 end
 
@@ -1025,31 +967,48 @@ function Window.Refresh()
 	local _, keysUp = Takeover.Visible()
 	if isMe and keysUp then name = "keys" end
 	local wing = name and wings[name]
-	local wingWidth, title, detail, right, closable
-	-- Shown before it is filled: a live grid only reads the bags once visible.
+	local wingWidth
+	-- Shown before it is filled: a live grid only reads the bags once visible. (Filled once the bags are laid out:
+	-- docked beside them, it takes their height.)
+	P.wingWanted = wing ~= nil
+	Shy.HUD.Update(P.wingBox)
 	P.wing:SetShown(wing ~= nil)
 	for other, w in pairs(wings) do
 		if w.frame then w.frame:SetShown(other == name) end
-	end
-	if wing then
-		wingWidth, title, detail, right, closable = wing.Show(c, guid, isMe, rows)
-		P.wingTitle:SetText(title)
-		P.wingDetail:SetText(detail or "")
-		P.wingRight:SetText(right or "")
-		P.wingClose:SetShown(closable ~= false)
 	end
 
 	P.mine = isMe
 	-- What the strip and the rail are drawn from, for when an edge is dragged (and the shape, for Facts).
 	P.shown = { c = c, guid = guid, isMe = isMe, bank = bankUp, wingWidth = wingWidth,
-		wing = name, columns = columns, rows = rows }
+		wing = name, columns = columns, rows = rows, gap = isMe and P.live.gap or 0 }
+	P.footNeed = nil
 	local W = Settle(columns, rows, wingWidth)
 	local width = Title(W, c, bankUp)
 	Also(isMe, bankUp, width)
 	Spine(guid, rows)
-	Foot(isMe, c)
+	if Foot(isMe, c) then
+		-- The foot needs more room than the bags give it: laid out that much wider, and said again.
+		P.footWide = true
+		W = Settle(columns, rows, wingWidth)
+		width = Title(W, c, bankUp)
+		Also(isMe, bankUp, width)
+		Foot(isMe, c)
+		P.footWide = nil
+	end
 	Rail(P.mine)
 	if P.band and P.band.OnRefresh then P.band.OnRefresh(P.mine) end
+	FillWing()
+end
+
+-- The wing sized again: by hand, or by the window it stands beside growing or shrinking (the bags, the bank). Its
+-- list is shown again for the room it has now, and laid out. The bags stay as they are.
+function Window.FlowWing()
+	-- (A width counts as yours once you sized it by hand; one it took from a wider list doesn't.)
+	P.wingHand = Shy.HUD.HasSize(P.wingBox) and P.wingBox:GetWidth() or nil
+	if P.building or P.flowing or not (P.wing and P.wingFoot) then return end
+	P.flowing = true
+	FillWing()
+	P.flowing = nil
 end
 
 -- The bag column (BagBar.lua) registers itself: a frame that sizes itself, shown beside the grid while
@@ -1104,6 +1063,15 @@ end
 function Window.Point(bag, slot)
 	pointed = bag and { bag, slot } or nil
 	if P.live and P.live:IsVisible() then P.live:Filter(Sift()) end
+end
+
+-- An item's tooltip from a list beside the bags: off the top right corner of its own slot, so the bags stay in sight
+-- (UI.GameTipAt: the top left where the screen's edge is too near). The row owns it, not the slot: a slot redraws a
+-- tooltip it owns every frame, by its own rule, and the two would take turns. Off the row while the slot is away.
+function Window.TipAt(row, bag, slot)
+	local tile = P.live and P.live:IsVisible() and P.live.where and P.live.where[bag * 1000 + slot]
+	UI.GameTipAt(row, (tile and tile:IsVisible()) and tile or nil):SetBagItem(bag, slot)
+	GameTooltip:Show()
 end
 
 -- Rows for UI.Menu: every wing with a summary beside it. Clicking the open one closes it.
@@ -1163,7 +1131,7 @@ function Window.Menu()
 	}
 	items[#items + 1] = { divider = true }
 	items[#items + 1] = {
-		text = "Options", icon = { { Skin.GLYPH.gear, C.dim } },
+		text = "Settings", icon = { { Skin.GLYPH.gear, C.dim } },
 		click = function() T:OpenOptions() end,
 	}
 	return items
@@ -1327,7 +1295,7 @@ local function Reshape(wider, taller, phase, point)
 		local c, _, isMe = Who()
 		local slots = c and BagSlots(c, isMe) or 0
 		if slots == 0 then return end
-		local list = Shapes(slots)
+		local list = Shapes(slots, isMe and P.live.count > 0 and P.live or nil)
 		-- Taken hold of again before it came to rest: from where it is.
 		local at = morph and morph.slots == slots and morph.at
 		if not at then
@@ -1376,6 +1344,7 @@ function Window.SetAutoShape(on)
 	easing = true
 	Window.Refresh()
 	easing = nil
+	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
 -- Your own slots changed while they are shown (loot, a sale, an item picked up): the slots have painted
@@ -1386,8 +1355,8 @@ local function Facts()
 	if not (box:IsShown() and now and now.isMe and not now.wing) then return Window.Refresh() end
 	local columns, rows = P.live:Shape()
 	if columns == 0 then columns, rows = 4, 4 end
-	if columns ~= now.columns or rows ~= now.rows then return Window.Refresh() end
-	Foot(true, now.c)
+	if columns ~= now.columns or rows ~= now.rows or P.live.gap ~= now.gap then return Window.Refresh() end
+	if Foot(true, now.c) then return Window.Refresh() end
 	Rail(P.mine)
 	if P.band and P.band.OnRefresh then P.band.OnRefresh(P.mine) end
 end
@@ -1438,7 +1407,7 @@ local function Build()
 	Shy.Theme.Tint(icon, Shy.Theme.icon)
 	emblem:SetScript("OnClick", function() T:OpenOptions() end)
 	emblem:SetScript("OnEnter", function(self)
-		UI.Tip(self, "ShyBags", nil, { side = "TOP", hints = { { "left", "Options" } } })
+		UI.Tip(self, "ShyBags", nil, { side = "TOP", hints = { { "left", "Settings" } } })
 	end)
 	emblem:SetScript("OnLeave", function(self) UI.TipHide(self) end)
 
@@ -1558,6 +1527,7 @@ local function Build()
 		P.bandSet(not BandOpen())
 		if BandOpen() and P.band.Reveal then P.band.Reveal() end
 		Window.Refresh()
+		if ns.RefreshOptions then ns.RefreshOptions() end
 	end)
 	P.bandToggle:HookScript("OnEnter", function(self)
 		UI.Tip(self, "Bag slots", "The bags you carry, in a column beside your items. Hover one to see what's in it, or drag a bag to swap it.",
@@ -1632,7 +1602,6 @@ local function Build()
 	-- (A click on the lens or anywhere on the box puts the cursor in: the cover lies over all of it.)
 
 	P.spineRule = Rule(win)
-	P.seam = Rule(win)
 
 	P.live = Grid.New(win, true)
 	P.mem = Grid.New(win, false)
@@ -1691,23 +1660,42 @@ local function Build()
 	doors.gold = Door(P.foot, nil, "gold")
 	doors.gold:SetPoint("RIGHT", P.foot, "RIGHT", -1, 0)
 
-	P.wing = CreateFrame("Frame", nil, win)
-	P.wingFoot = Plate(win)
-	P.wingTitle = UI.Text(P.wingFoot, "", 12, true, C.head)
-	P.wingTitle:SetPoint("LEFT", 6, 0)
-	P.wingDetail = Rounded(P.wingFoot, 10.5, C.dim)
-	P.wingDetail:SetPoint("LEFT", P.wingTitle, "RIGHT", 6, 0)
-	P.wingClose = CreateFrame("Button", nil, P.wingFoot)
-	P.wingClose:SetSize(15, 15)
-	P.wingClose:SetPoint("RIGHT", -2, 0)
-	local wx = UI.Text(P.wingClose, "\195\151", 13, true, C.dim)
-	wx:SetPoint("CENTER", 0, 0)
-	P.wingClose:SetScript("OnClick", function()
+	-- The wing: a window of its own docked to the bags, as the bank's is. It opens on their right, or wherever the
+	-- screen has room, and can be dragged to any side of any window.
+	local function CloseWing()
 		local _, keysUp = Takeover.Visible()
 		if keysUp then Takeover.CloseKeys() else Window.Open(nil) end
-	end)
+	end
+	P.wingBox = Shy.HUD.Create({
+		id = "shybags.wing",
+		title = "ShyBags side window",
+		width = WING_EDGE + 256 + WING_EDGE,   -- the lists' own width
+		height = BOX_H,
+		-- Where it stands once dragged away from the bags with no place kept: the screen's middle.
+		point = { "TOP", "CENTER", 0, 200 },
+		shown = function() return P.wingWanted == true and box:IsShown() end,
+		window = true,
+		hang = true,
+		dock = { to = "shybags", side = "RIGHT", label = "Beside the bags", tall = true },
+	})
+	P.wingWin = CreateFrame("Frame", "ShyBagsWing", P.wingBox)
+	P.wingWin:SetAllPoints(P.wingBox)
+	P.wingWin:SetToplevel(true)
+	P.wingWin:EnableMouse(true)
+	local head = UI.Head(P.wingWin, { size = "window", title = "", close = CloseWing, panel = { glazed = true } })
+	Shy.HUD.DragHandle(P.wingBox, P.wingWin)
+	P.wing = CreateFrame("Frame", nil, P.wingWin)
+	P.wingFoot = Plate(P.wingWin)
+	P.wingTitle = head.title
+	P.wingDetail = Rounded(P.wingFoot, 10.5, C.dim)
+	P.wingDetail:SetPoint("LEFT", 6, 0)
 	P.wingRight = Rounded(P.wingFoot, 10.5, C.dim)
-	P.wingRight:SetPoint("RIGHT", P.wingClose, "LEFT", -4, 0)
+	P.wingRight:SetPoint("RIGHT", -6, 0)
+	-- Sized by any corner or side, its list flowing to fill it. (Last: the grip flows it as it takes hold.)
+	if Shy.HUD.Grip then
+		Shy.HUD.Grip(P.wingBox, { over = P.wingWin, flow = function() Window.FlowWing() end, min = WING_MIN,
+			tip = "Drag to make it wider or taller." })
+	end
 
 	P.keys = Grid.New(P.wing, true)
 	P.keys:SetPoint("TOPLEFT")
@@ -1716,7 +1704,6 @@ local function Build()
 		Window.Refresh()
 	end
 	wings.keys.frame = P.keys
-	BuildPeek()
 
 	for name, wing in pairs(wings) do
 		if wing.Build then wing.Build(P.wing, name) end
@@ -1761,7 +1748,6 @@ function Window.Init()
 	end, Window)
 
 	Takeover.OnChange(function(visible, keysUp)
-		Window.Peek(nil)
 		if not visible and not keysUp then
 			P.live:Seen()
 			-- Closing resets to your own bags with no search and no room mode.
@@ -1777,9 +1763,13 @@ function Window.Init()
 			end
 		end
 		Shy.HUD.Update(box)
+		Shy.HUD.Update(P.wingBox)
 		Window.Refresh()
 	end)
-	Takeover.OnSwitch(function() Shy.HUD.Update(box) end)
+	Takeover.OnSwitch(function()
+		Shy.HUD.Update(box)
+		Shy.HUD.Update(P.wingBox)
+	end)
 	ns.Bank.OnChange(function() Window.Refresh() end)
 	ns.Marks.OnRefresh(function(only)
 		if not box:IsShown() then return end
@@ -1820,13 +1810,13 @@ function Window.Apply()
 	if win then Window.Refresh() end   -- the bags' shape, after a reset
 end
 
-ns.Command("blizzard", "switch between one bag window and the default bags", function()
+T:Command("blizzard", "switch between one bag window and the default bags", function()
 	T.db.window = not T.db.window
 	Window.Apply()
 	if T.db.window then
 		T:Print("one window for all your bags again, the next time they open.")
 	else
-		T:Print("default bags are back the next time they open. /shybags blizzard switches again.")
+		T:Print("default bags are back the next time they open. /shy bags blizzard switches again.")
 	end
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end)

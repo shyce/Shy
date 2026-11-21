@@ -1,4 +1,4 @@
--- ShyPlates: replacement nameplates. Registration, defaults and slash command.
+-- ShyPlates: replacement nameplates. Registration, defaults and commands.
 --
 -- API (Shy.addons.Plates):
 --   :IsOn()                true while ShyPlates draws the nameplates
@@ -85,26 +85,17 @@ function T:OnLoad()
 		UNIT_NAME_FONT_ROMAN = Shy.FONT_ROUNDED
 		UNIT_NAME_FONT_CYRILLIC = Shy.FONT_ROUNDED
 	end
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
 	ns.Driver.Start()
 end
 
-SLASH_SHYPLATES1 = "/shyplates"
-SLASH_SHYPLATES2 = "/spl"
-SlashCmdList.SHYPLATES = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "on" or cmd == "off" then
-		T.db.on = cmd == "on"
-		ns.Apply()
-		T:Print(T.db.on and "nameplates on." or "default nameplates are back.")
-	else
-		T:Print("commands:")
-		print("  /shyplates  - open options")
-		print("  /shyplates on | off  - these nameplates, or the default ones")
-	end
+local function Switch(on)
+	T.db.on = on
+	ns.Apply()
+	T:Print(on and "nameplates on." or "default nameplates are back.")
 end
+
+T:Command("on", "use these nameplates", function() Switch(true) end)
+T:Command("off", "go back to the default nameplates", function() Switch(false) end)

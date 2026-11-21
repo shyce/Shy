@@ -245,6 +245,7 @@ function L.Report()
 	return table.concat(out, "\n")
 end
 
-Shy.Command("cooldowns", "What the cooldown manager holds", function()
+-- (For finding faults: what the cooldown manager holds. Not listed.)
+Shy.Command("cooldowns", nil, function()
 	Shy.UI.ShowCopyBox("The cooldown manager", L.Report())
 end)

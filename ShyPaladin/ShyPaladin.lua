@@ -26,10 +26,6 @@ function T:Apply()
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
-function T:OnLoad()
-	self:RegisterOptions(ns.CreateOptions())
-end
-
 function T:OnLogin()
 	if not ns.isPaladin then return end
 	ns.Twist.Start()
@@ -37,22 +33,12 @@ function T:OnLogin()
 	if ns.SetupKeys then ns.SetupKeys() end
 end
 
-SLASH_SHYPALADIN1 = "/shypaladin"
-SlashCmdList.SHYPALADIN = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "seal" or cmd == "twist" then
-		Shy.UI.ShowCopyBox("Your seal", ns.Twist.Report())
-	elseif cmd == "keys" and ns.Keys then
-		ns.Keys.Run()
-	elseif cmd == "keys list" and ns.Keys then
-		Shy.Hub.Open("keys")
-	else
-		T:Print("commands:")
-		print("  /shypaladin  - open options")
-		print("  /shypaladin keys  - lay out your keys and macros, for every level")
-		print("  /shypaladin keys list  - every key and what it does")
-		print("  /shypaladin seal  - how your seal and twist are being tracked")
+if ns.isPaladin then
+	local function Report() Shy.UI.ShowCopyBox("Your seal", ns.Twist.Report()) end
+	-- For finding faults: how the seal and twist are tracked, to copy. Not listed.
+	T:Command("seal", nil, Report)
+	T:Command("twist", nil, Report)
+	if Shy.Keys then
+		T:Command("keys", "lay out your keys and macros, for every level", function() ns.Keys.Run() end)
 	end
 end

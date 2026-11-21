@@ -243,7 +243,6 @@ function T:OnLoad()
 	ShyRecapCharDB = ShyRecapCharDB or {}
 	ns.char = ShyRecapCharDB
 	if type(ns.char.deaths) ~= "table" then ns.char.deaths = {} end
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -253,23 +252,12 @@ function T:OnLogin()
 	ns.Death.Start()
 end
 
-SLASH_SHYRECAP1 = "/shyrecap"
-SLASH_SHYRECAP2 = "/srecap"
-SlashCmdList.SHYRECAP = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		if not ns.Open() then T:OpenOptions() end
-	elseif cmd == "options" then
-		T:OpenOptions()
-	elseif cmd == "test" then
-		ns.Test()
-	elseif cmd == "raw" then
-		UI.ShowCopyBox("ShyRecap: raw data for your last death", ns.Death.RawText())
-	else
-		T:Print("commands:")
-		print("  /shyrecap  - show your last death again")
-		print("  /shyrecap options  - open options")
-		print("  /shyrecap test  - show a sample death")
-		print("  /shyrecap raw  - raw data for your last death, to copy")
-	end
-end
+-- Alone: your last death again. With none to show, or a word it doesn't know: its settings.
+T:Command("", "show your last death again", function(rest)
+	if rest ~= "" or not ns.Open() then T:OpenOptions() end
+end)
+-- For finding faults: a sample death, and what the game said of the last one. Not listed.
+T:Command("test", nil, function() ns.Test() end)
+T:Command("raw", nil, function()
+	UI.ShowCopyBox("ShyRecap: raw data for your last death", ns.Death.RawText())
+end)

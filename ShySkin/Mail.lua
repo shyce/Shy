@@ -1321,7 +1321,9 @@ end
 M = ns.Module({
 	id = "mail",
 	title = "Mailbox",
-	desc = "Replaces the mailbox with a window of your own you can size: your letters at a glance, take all, and sending to your other characters.",
+	desc = "Your mailbox becomes a window you can resize, with take all and quick sending to your other characters.",
+	group = "rebuilt",
+	words = "inbox letters send",
 	Ready = function() return MailFrame ~= nil and Shop ~= nil end,
 	Hook = Hook,
 	Paint = Paint,

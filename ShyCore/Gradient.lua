@@ -333,26 +333,26 @@ function UI.GradientEditor(parent, width, opts)
 	end
 	local sat = UI.Slider(f, "Saturation", 0, 100, 1, function() return g and floor(Picked().s * 100 + 0.5) or 0 end,
 		Edit(function(v, stop) stop.s = v / 100 end),
-		{ width = col, color = Color, enabled = Has, format = Percent, desc = "How strong the picked color is: all the way down is grey." })
+		{ width = col, color = Color, enabled = Has, format = Percent, desc = "How strong the picked color is. All the way down is grey." })
 	sat:SetPoint("TOPLEFT", 0, -y - ROW)
 	local light = UI.Slider(f, "Lightness", 0, 100, 1, function() return g and floor(Picked().l * 100 + 0.5) or 0 end,
 		Edit(function(v, stop) stop.l = v / 100 end),
-		{ width = col, color = Color, enabled = Has, format = Percent, desc = "How light the picked color is: all the way down is black, all the way up white." })
+		{ width = col, color = Color, enabled = Has, format = Percent, desc = "How light the picked color is. All the way down is black, all the way up is white." })
 	light:SetPoint("TOPLEFT", 0, -y - 2 * ROW)
 	local x = col + COL_GAP
 	local location = UI.Slider(f, "Location", 0, 100, 1, function() return g and floor(Picked().at * 100 + 0.5) or 0 end,
 		Edit(function(v) picked = Grad.Move(g, picked, v / 100) end),
-		{ width = col, enabled = Has, format = Percent, desc = "Where the picked color stands along the bar." })
+		{ width = col, enabled = Has, format = Percent, desc = "Where the picked color sits on the bar." })
 	location:SetPoint("TOPLEFT", x, -y)
 	local spread = UI.Dropdown(f, "Spread", { { value = "across", text = "Across the screen" }, { value = "along", text = "Along each piece" } },
 		function() return g and g.spread or "across" end,
 		Edit(function(v) g.spread = v end),
-		{ width = col, enabled = Has, desc = "Across the screen makes your whole UI one gradient; along each piece runs it across every window and bar." })
+		{ width = col, enabled = Has, desc = "Across the screen makes your whole UI one gradient. Along each piece runs it across every window and bar." })
 	spread:SetPoint("TOPLEFT", x, -y - ROW + 8)
 	local flow = UI.Slider(f, "Flow", 0, Grad.FLOW, 1, function() return g and g.flow or 0 end,
 		Edit(function(v) g.flow = v end),
 		{ width = col, enabled = Has, format = function(v) return v == 0 and "Off" or tostring(v) end,
-			desc = "How fast the colors drift slowly along; off holds them still." })
+			desc = "How fast the colors drift. Off keeps them still." })
 	flow:SetPoint("TOPLEFT", x, -y - 2 * ROW)
 	local reverse = UI.Button(f, "Reverse", 90, function()
 		if not g then return end
@@ -362,7 +362,7 @@ function UI.GradientEditor(parent, width, opts)
 		Draw()
 	end)
 	reverse:SetPoint("TOPLEFT", x, -y - 3 * ROW)
-	UI.Help(reverse, "Reverse", "Turn the gradient end for end.")
+	UI.Help(reverse, "Reverse", "Flip the gradient.")
 	local remove = UI.Button(f, "Remove", 90, function()
 		if g and Grad.Remove(g, picked) then
 			picked = min(picked, #g.stops)
@@ -371,7 +371,7 @@ function UI.GradientEditor(parent, width, opts)
 		end
 	end)
 	remove:SetPoint("LEFT", reverse, "RIGHT", 10, 0)
-	UI.Help(remove, "Remove", "Take the picked color out of the gradient.")
+	UI.Help(remove, "Remove", "Remove the picked color from the gradient.")
 
 	-- Everything drawn again from the ramp being made.
 	function Draw()
@@ -391,7 +391,7 @@ function UI.GradientEditor(parent, width, opts)
 		end
 		if key == "own" then
 			name:SetText("Your own")
-			said:SetText("A gradient you made. Pick a chip to start again from one of ours.")
+			said:SetText("A gradient you made. Pick a chip to start over from a ready-made one.")
 		else
 			name:SetText(shown.name)
 			said:SetText(shown.desc)
@@ -430,7 +430,7 @@ function UI.GradientEditor(parent, width, opts)
 				mid:Hide()
 			end
 		end
-		hint:SetText(g and "Click the bar to add a color, or drag one off it to take it out."
+		hint:SetText(g and "Click the bar to add a color, or drag one off to remove it."
 			or "Pick a gradient above, or click the bar to make your own.")
 		-- The controls: the hue's strip at the picked stop's strength and lightness (held to show its hues).
 		local stop = Picked()
@@ -439,7 +439,7 @@ function UI.GradientEditor(parent, width, opts)
 		strip:SetAlpha(g and 1 or 0.4)
 		for _, control in ipairs({ hue, sat, light, location, spread, flow }) do control:Refresh() end
 		reverse:SetUsable(g ~= nil)
-		remove:SetUsable(g ~= nil and #g.stops > Grad.MIN, g and "A gradient keeps at least two colors." or nil)
+		remove:SetUsable(g ~= nil and #g.stops > Grad.MIN, g and "A gradient needs at least two colors." or nil)
 	end
 
 	-- From the owner again, unless a change made here may not have reached it yet (or a drag is on).

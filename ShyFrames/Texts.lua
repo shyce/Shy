@@ -105,15 +105,26 @@ function T.WriteSample(name, segs, s, limit)
 	T.WriteSampleHealth(segs, s)
 end
 
--- Health: "current/max" on your own frame, "missing | percent" on a friend, "current | percent" on anything else.
--- What you have is bone, warm when low; the most is dimmed; what is missing is soft red.
+-- Health, as T.db.healthText asks (`mode`): "smart" says the one number you'd read (your own health, what a friend is
+-- missing, an enemy's percent); "percent", "current", "both" (current and most), "missing" and "none" say what they
+-- name; "full" (or none told) all of it: "current/max" on your own frame, "missing | percent" on a friend,
+-- "current | percent" on anything else. What you have is bone, warm when low; the most is dimmed; what is missing is
+-- soft red.
 
 local BONE, DIM, LOST, LOW = "ece8de", "b7b3a8", "ff6b61", "ffb08a"
 local LOW_AT = 0.35   -- under this share of health the number turns warm
 local DEAD, OFFLINE, RAISED = Paint("ff7a5c", "Dead"), Paint("9b9b9b", "Offline"), Paint("ffcf61", "Being raised")
 local BAR = Paint(DIM, "||")
 
--- s: { hp, max, dead, offline, friend, own, rez, short }. Not a friend includes neutral.
+-- The mode a frame says its health in: "smart" made one of the others for who they are.
+local function Mode(mode, own, friend)
+	if mode ~= "smart" then return mode or "full" end
+	if own then return "current" end
+	return friend and "missing" or "percent"
+end
+T.HealthMode = Mode
+
+-- s: { hp, max, dead, offline, friend, own, rez, short, mode }. Not a friend includes neutral.
 -- `short` says only what is missing; `rez`: someone is raising them.
 function T.HealthText(s)
 	local hp, max = s.hp, s.max
@@ -125,6 +136,17 @@ function T.HealthText(s)
 	if s.offline then parts[#parts + 1] = OFFLINE end
 	if s.short then
 		if not s.dead and not s.offline and missing ~= 0 then parts[#parts + 1] = Paint(LOST, Short(-missing)) end
+		return table.concat(parts, " ")
+	end
+	local mode = Mode(s.mode, s.own, s.friend)
+	if mode ~= "full" then
+		if s.dead or mode == "none" then return table.concat(parts, " ") end
+		local said
+		if mode == "percent" then said = Paint(ink, percent)
+		elseif mode == "current" then said = Paint(ink, Short(hp))
+		elseif mode == "both" then said = Paint(ink, Short(hp)) .. Paint(DIM, " / " .. Short(max))
+		elseif missing ~= 0 then said = Paint(LOST, Short(-missing)) end
+		if said then table.insert(parts, 1, said) end
 		return table.concat(parts, " ")
 	end
 	if not s.dead and s.friend and missing ~= 0 then
@@ -218,8 +240,8 @@ function T.WriteSampleHealth(segs, s)
 end
 
 -- segs: font strings in a row, [1] at the right end. One string when readable, one piece each when secret.
--- `short`: only what is missing (see T.HealthText).
-function T.WriteHealth(segs, unit, short)
+-- `short`: only what is missing; `mode`: T.db.healthText (see T.HealthText).
+function T.WriteHealth(segs, unit, short, mode)
 	local hp, max, secret = Units.Health(unit)
 	local dead, offline, friend = UnitIsDeadOrGhost(unit), Units.Offline(unit), Units.IsFriend(unit)
 	local own = unit == "player"
@@ -229,6 +251,7 @@ function T.WriteHealth(segs, unit, short)
 	if not secret then
 		local s = reading
 		s.hp, s.max, s.dead, s.offline, s.friend, s.own, s.rez, s.short = hp, max, dead, offline, friend, own, rez, short
+		s.mode = mode
 		Segment(segs[1], 1, 1, 1, 1, T.HealthText(s))
 		return
 	end
@@ -256,6 +279,22 @@ function T.WriteHealth(segs, unit, short)
 		end
 		return
 	end
+	local said = Mode(mode, own, friend)
+	if said ~= "full" then
+		if said == "percent" then
+			Next(r, g, b, 1, "%.0f%%", UnitHealthPercent(unit, true, CurveConstants.ScaleTo100))
+		elseif said == "current" then
+			Next(r, g, b, 1, AbbreviateNumbers(hp))
+		elseif said == "both" then
+			Next(dr, dg, db, 1, AbbreviateNumbers(max))
+			Next(dr, dg, db, 1, " / ")
+			Next(r, g, b, 1, AbbreviateNumbers(hp))
+		elseif said == "missing" then
+			Next(lr, lg, lb, UnitHealthPercent(unit, true, c.hurt), "-%s", AbbreviateNumbers(UnitHealthMissing(unit, true)))
+		end
+		if offline then Next(1, 1, 1, 1, OFFLINE .. " ") end
+		return
+	end
 	local percent = UnitHealthPercent(unit, true, CurveConstants.ScaleTo100)
 	if own then
 		Next(dr, dg, db, 1, AbbreviateNumbers(max))
@@ -280,16 +319,18 @@ T.SEGMENTS = 6   -- the most pieces WriteHealth ever uses
 
 -- Class line: classification, level, druid form, race or creature type
 
+-- (`level` nil: the level stands apart, in the portrait's own circle.)
 function T.ClassText(classification, level, r, g, b, form, race)
-	local text = (classification and classification .. " " or "") .. Paint(Hex(r, g, b), level) .. " "
+	local text = (classification and classification .. " " or "") .. (level and Paint(Hex(r, g, b), level) .. " " or "")
 		.. (form and "(" .. form .. ") " or "") .. (race or "")
 	return (text:gsub("%s$", ""))
 end
 
-function T.WriteClass(fs, unit)
+function T.WriteClass(fs, unit, apart)
 	local level, r, g, b = Units.Level(unit)
 	local race, secret = Units.Race(unit)
-	local text = T.ClassText(Units.Classification(unit), level, r, g, b, Units.DruidForm(unit), not secret and race or nil)
+	local text = T.ClassText(Units.Classification(unit), not apart and level or nil, r, g, b, Units.DruidForm(unit),
+		not secret and race or nil)
 	if secret then
 		fs:SetFormattedText(text:gsub("%%", "%%%%") .. " %s", race)
 	else

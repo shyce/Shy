@@ -1,4 +1,4 @@
--- ShyDots: what your damage over time still has to deal, mob by mob. Registration, defaults, API, slash command.
+-- ShyDots: what your damage over time still has to deal, mob by mob. Registration, defaults, API, commands.
 --
 -- API (Shy.addons.Dots):
 --   :IsOn()              true while casts are being followed
@@ -29,10 +29,6 @@ ns.T = T
 
 function T:IsOn()
 	return self.db ~= nil and self.db.on == true
-end
-
-function T:OnLoad()
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -70,32 +66,28 @@ function T:Report()
 	return ns.Track.Report()
 end
 
+function T:Forget()
+	wipe(self.db.ticks)
+	wipe(self.db.spans)
+end
+
 function T:Apply()
 	ns.Track.Apply()
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
-SLASH_SHYDOTS1 = "/shydots"
-SLASH_SHYDOTS2 = "/sdo"
-SlashCmdList.SHYDOTS = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "on" or cmd == "off" then
-		T.db.on = cmd == "on"
-		T:Apply()
-		T:Print(T.db.on and "tracking your DoTs." or "off.")
-	elseif cmd == "report" then
-		Shy.UI.ShowCopyBox("ShyDots", T:Report())
-	elseif cmd == "forget" then
-		wipe(T.db.ticks)
-		wipe(T.db.spans)
-		T:Print("learned tick sizes forgotten.")
-	else
-		T:Print("commands:")
-		print("  /shydots  - open options")
-		print("  /shydots on | off")
-		print("  /shydots report  - what's being tracked, to copy")
-		print("  /shydots forget  - forget the tick sizes learned so far")
-	end
+local function Switch(on)
+	T.db.on = on
+	T:Apply()
+	T:Print(on and "tracking your DoTs." or "off.")
 end
+
+T:Command("on", "track your DoTs", function() Switch(true) end)
+T:Command("off", "stop tracking your DoTs", function() Switch(false) end)
+-- For finding faults: what is tracked, to copy. Not listed.
+T:Command("report", nil, function() Shy.UI.ShowCopyBox("ShyDots", T:Report()) end)
+T:Command("forget", "forget the tick sizes learned so far", function()
+	T:Forget()
+	Shy.Settings.Refresh()
+	T:Print("learned tick sizes forgotten.")
+end)

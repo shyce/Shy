@@ -34,6 +34,10 @@
 --                                                      says (one at a time; nil: none)
 --   T.Flights() -> { [node] = true }                   the flight points the character knows
 --   T.KnowsFlight(name) -> bool                        ... one by its name or a part of it ("Crossroads")
+--   T.FlightsRead([world]) -> bool                     whether those are known at all in that world (default: here):
+--                                                      a flight master's map opened there, or they began at level 1
+--   T.FlightNew(node) -> bool                          a point they lack is surely new: a known point flies to it
+--                                                      straight, so it would have shown (a map shows only what it reaches)
 --   T.CanFly(from, to) -> bool or nil                  whether the character can take a flight to the point named
 --        `to` (its name or a part of it): one of their side they know, reached over points they know from the
 --        point at the place `from` (the one beside it, theirs by talking to its master); from nil: from anywhere.
@@ -103,7 +107,9 @@ function T.Here()
 	if UnitOnTaxi("player") and Flight then
 		local world, north, west = Flight.Landing()
 		if world then
-			local place = T.Place(world, north, west)
+			-- You'll land beside the flight master, at his height.
+			local up = T.Tier.LandedAt(world, north, west)
+			local place = T.Place(world, north, west, { up = type(up) == "number" and up or nil })
 			place.aboard = "flight"
 			return place
 		end
@@ -189,6 +195,46 @@ end
 
 function T.Flights()
 	return Known()
+end
+
+-- Where this character's flight points have been read (ShyWayDB.flightsRead[guid]: { [world] = true, seen =
+-- { [node] = true }: the points a map showed }, or born = true: met at level 1, so nothing was missed). A flight
+-- master's map reads its own world only. Until then an empty list means "not known yet", not "none".
+local function Read()
+	local saved = T.Saved()
+	saved.flightsRead = saved.flightsRead or {}
+	local who = UnitGUID("player") or "?"
+	local mine = saved.flightsRead[who]
+	if type(mine) ~= "table" then
+		mine = {}
+		saved.flightsRead[who] = mine
+	end
+	return mine
+end
+
+function T.FlightsRead(world)
+	local read = Read()
+	if read.born then return true end
+	if world == nil then
+		local here = T.Here()
+		world = here and here.world
+	end
+	return world ~= nil and read[world] == true
+end
+
+-- Whether a flight point the character lacks is surely theirs to find. A map shows every point you know that it
+-- can reach from where you stand, and only those, so one cut off from them may be known all the same. One that a
+-- point a map showed flies to straight would have shown too: that one is surely new. (A point learned with no map
+-- open says nothing of its neighbours.)
+function T.FlightNew(node)
+	if Known()[node] then return false end
+	local read = Read()
+	if read.born then return true end
+	local paths, shown = T.data.flightPaths or {}, read.seen or {}
+	for other in pairs(shown) do
+		if (paths[node] and paths[node][other]) or (paths[other] and paths[other][node]) then return true end
+	end
+	return false
 end
 
 -- Whether the character knows a flight point by its name or a part of it, any case ("Crossroads" is
@@ -402,8 +448,13 @@ end
 -- seconds; or nil and "working"; or the least it can be and "far"; or nil (no way).
 local function Walk(from, to, now)
 	if from.world ~= to.world then return nil end
-	local ask = now and T.Seconds or T.Ask
-	local seconds, state, least = ask(from.world, from.north, from.west, to.north, to.west, to.level, to.up)
+	-- A walk from a stop starts at the stop's height (from.up). Where you stand has none.
+	local seconds, state, least
+	if now then
+		seconds, state, least = T.Seconds(from.world, from.north, from.west, to.north, to.west, to.level, to.up, from.up)
+	else
+		seconds, state, least = T.Ask(from.world, from.north, from.west, to.north, to.west, to.level, to.up, nil, from.up)
+	end
 	if seconds then return T.Paced(seconds) end
 	if state == "far" then return least and T.Paced(least) or Straight(from, to) / RUN, "far" end
 	if state == "working" then return nil, "working" end
@@ -779,13 +830,34 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("TAXIMAP_OPENED")
 events:RegisterEvent("UI_INFO_MESSAGE")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:SetScript("OnEvent", function(_, event, _, message)
+	if event == "PLAYER_ENTERING_WORLD" then
+		-- A character met at level 1 knows only what they start with: nothing is missing.
+		local read = Read()
+		if UnitLevel("player") == 1 and not read.born and next(Known()) == nil then
+			read.born = true
+			Shy:Fire("SHY_TERRAIN", "flights")
+		end
+		return
+	end
 	if event == "TAXIMAP_OPENED" then
+		-- The map reads the world of the master you stand at.
+		local here = T.Here()
+		local read, first = Read(), false
+		if here and here.world ~= nil and not read[here.world] then
+			read[here.world], first = true, true
+		end
 		local nodes = C_TaxiMap.GetAllTaxiNodes(GetTaxiMapID())
 		for _, node in ipairs(nodes or {}) do
-			if node.nodeID and node.state ~= Enum.FlightPathState.Unreachable then T.Learn(node.nodeID) end
+			if node.nodeID and node.state ~= Enum.FlightPathState.Unreachable then
+				T.Learn(node.nodeID)
+				read.seen = read.seen or {}
+				read.seen[node.nodeID] = true
+			end
 		end
 		LearnBeside()
+		if first then Shy:Fire("SHY_TERRAIN", "flights") end
 		return
 	end
 	if issecretvalue(message) or message ~= ERR_NEWTAXIPATH then return end

@@ -59,6 +59,11 @@ local function Market(item)
 end
 P.Auction = Market
 
+-- Whether auction prices are offered at all: the auction addon keeps them, or you let this one read them.
+function P.Auctions()
+	return Shy.addons.Auction ~= nil or T.db.auction
+end
+
 function P.Own(item)
 	local entry = Book(item)
 	return entry and entry.own

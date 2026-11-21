@@ -1,7 +1,7 @@
 -- A warrior's keys (Shy.Keys lays them out): one job a key, each a macro that chooses the ability by your
 -- stance and by what you have learned, so an ability arrives on its key as you train it.
 --
---   ns.Keys.Run()     lays them out and says what was done (/shywarrior keys)
+--   ns.Keys.Run()     lays them out and says what was done (/shy warrior keys)
 --   ns.Keys.List()    every key and what it does, as text
 --
 -- The rule on every key: an ability that needs another stance takes you there on the first press and is used
@@ -43,47 +43,47 @@ end
 local MORTAL_STRIKE = Strike(12294, "Mortal Strike")
 -- Two weapons never Slam (without its talent Slam stops both swings): Heroic Strike, what Fury presses most, until
 -- Bloodthirst.
-local BLOODTHIRST = { name = "Strike", role = "strike", what = "Bloodthirst; Heroic Strike until then",
+local BLOODTHIRST = { name = "Strike", role = "strike", what = "Bloodthirst, or Heroic Strike until you have it",
 	SHOW, ATTACK, "/cast [known:{23881}] {23881}; !{78}" }
 -- A shield's: Shield Slam once its talent comes, Rend until then, never Slam. Slam's cast stops your swings, and with a
 -- fast one-hander it hits for too little to be worth it.
-local SHIELD_SLAM = { name = "Strike", role = "strike", what = "Shield Slam; Rend until then",
+local SHIELD_SLAM = { name = "Strike", role = "strike", what = "Shield Slam, or Rend until you have it",
 	SHOW, ATTACK, "/cast [known:{23922}] {23922}; {772}" }
 
 local JOBS = {
 	-- The fight, under the fingers that are free while you move. The strike comes first: until Slam it is Rend,
 	-- and an ability stands on the first key that casts it, so a two-hander's Rend is on R too, not on Q.
-	{ name = "Strike", role = "strike", key = "R", asdf = "R", what = "Shield Slam, Mortal Strike or Bloodthirst; Slam until 40, Rend until 20",
+	{ name = "Strike", role = "strike", key = "R", asdf = "R", what = "Shield Slam, Mortal Strike or Bloodthirst. Slam until 40, Rend until 20",
 		SHOW, ATTACK, "/cast [known:{23922}] {23922}; [known:{12294}] {12294}; [known:{23881}] {23881}; [known:{1240193}] {1240193}; {772}",
 		by = { protsolo = SHIELD_SLAM, prot = SHIELD_SLAM, arms = MORTAL_STRIKE, armspvp = MORTAL_STRIKE, fury = BLOODTHIRST } },
 	{ name = "Sunder", key = "Q", asdf = "Q", what = "Sunder Armor",
 		SHOW, ATTACK, "/cast {7386}",
 		by = Damage({ name = "Rend", what = "Rend", SHOW, ATTACK, "/cast [stance:3] {2457}; {772}" }) },
-	{ name = "Counter", role = "counter", key = "E", asdf = "E", what = "Revenge; Overpower in Battle Stance, Whirlwind in Berserker",
+	{ name = "Counter", role = "counter", key = "E", asdf = "E", what = "Revenge. Overpower in Battle Stance, Whirlwind in Berserker",
 		SHOW, ATTACK, "/cast [stance:1] {7384}; [stance:3] {1680}; {6572}",
 		-- Fury lives in Berserker Stance: its key shows Whirlwind first. A stance's own ability counts only once it
 		-- is learned (Revenge at 14, Whirlwind at 36): until then the key shows Overpower, not a blank.
-		by = { fury = { name = "Counter", role = "counter", what = "Whirlwind in Berserker Stance; Overpower in Battle, Revenge in Defensive",
+		by = { fury = { name = "Counter", role = "counter", what = "Whirlwind in Berserker Stance. Overpower in Battle, Revenge in Defensive",
 				SHOW, ATTACK, "/cast [stance:3,known:{1680}] {1680}; [nostance:2] {7384}; {6572}" },
-			protsolo = { name = "Counter", role = "counter", what = "Revenge; Overpower in Battle Stance, Whirlwind in Berserker",
+			protsolo = { name = "Counter", role = "counter", what = "Revenge. Overpower in Battle Stance, Whirlwind in Berserker",
 				SHOW, ATTACK, "/cast [stance:2,known:{6572}] {6572}; [stance:3,known:{1680}] {1680}; {7384}" },
-			prot = { name = "Counter", role = "counter", what = "Revenge; Overpower in Battle Stance, Whirlwind in Berserker",
+			prot = { name = "Counter", role = "counter", what = "Revenge. Overpower in Battle Stance, Whirlwind in Berserker",
 				SHOW, ATTACK, "/cast [stance:2,known:{6572}] {6572}; [stance:3,known:{1680}] {1680}; {7384}" } } },
 	{ name = "Heroic", key = "G", asdf = "W", early = "F", asdfEarly = "G", what = "Heroic Strike",
 		SHOW, ATTACK, "/cast !{78}" },
 	{ name = "Clap", key = "T", asdf = "T", what = "Thunder Clap",
 		SHOW, "/cast [stance:3] {2457}; {6343}" },
-	{ name = "Taunt", role = "taunt", key = "Z", asdf = "Z", what = "Taunt what the mouse is on, else your target; Mocking Blow in Battle Stance",
+	{ name = "Taunt", role = "taunt", key = "Z", asdf = "Z", what = "Taunt what's under your mouse, or your target. Mocking Blow in Battle Stance",
 		SHOW, "/cast [stance:1] {694}; [stance:2,@mouseover,harm,nodead][stance:2] {355}; {71}",
-		by = Shield({ name = "Taunt", role = "taunt", what = "Taunt what the mouse is on, else your target; Mocking Blow in Battle Stance",
+		by = Shield({ name = "Taunt", role = "taunt", what = "Taunt what's under your mouse, or your target. Mocking Blow in Battle Stance",
 			SHOW, "/cast [stance:2,@mouseover,harm,nodead][stance:2] {355}; [stance:1] {694}; {71}" }) },
-	{ name = "Charge", role = "charge", key = "C", asdf = "C", what = "Charge, then back to Defensive Stance with Bloodrage; Intercept in a fight from 30",
+	{ name = "Charge", role = "charge", key = "C", asdf = "C", what = "Charge, then back to Defensive Stance with Bloodrage. Intercept in a fight from 30",
 		SHOW,
 		"/cast [nocombat,stance:1][nocombat,stance:2,known:{1310317}] {100}; [nocombat] {2457}; [stance:3] {20252}; [stance:2,known:{20252}] {2458}",
 		"/cast [combat,nostance:2] {71}",
 		"/cast [combat] {2687}",
 		-- No shield to go back to: Charge from Battle Stance, Intercept from Berserker, and stay.
-		by = Damage({ name = "Charge", role = "charge", what = "Charge, with Bloodrage; Intercept in a fight from 30",
+		by = Damage({ name = "Charge", role = "charge", what = "Charge, with Bloodrage. Intercept in a fight from 30",
 			SHOW, "/cast [nocombat,stance:1] {100}; [nocombat] {2457}; [stance:3] {20252}; [known:{20252}] {2458}", "/cast [combat] {2687}" }) },
 	{ name = "Victory", key = "V", asdf = "V", what = "Victory Rush",
 		SHOW, ATTACK, "/cast {402927}" },
@@ -92,7 +92,7 @@ local JOBS = {
 	{ name = "Shout", key = "SHIFT-4", asdf = "SHIFT-4", stay = true, what = "Battle Shout",
 		SHOW, "/cast {6673}" },
 	-- Every fleeing mob wants Hamstring, so it has a plain key.
-	{ name = "Slow", role = "slow", key = "B", asdf = "B", what = "Hamstring; Piercing Howl in Defensive Stance once you have it",
+	{ name = "Slow", role = "slow", key = "B", asdf = "B", what = "Hamstring. Piercing Howl in Defensive Stance once you have it",
 		SHOW, ATTACK, "/cast [stance:1/3] {1715}; [known:{12323}] {12323}; {2457}",
 		by = Damage({ name = "Slow", role = "slow", what = "Hamstring", SHOW, ATTACK, "/cast [stance:1/3] {1715}; {2457}" }) },
 	-- The thumb: what you answer with. The stop is on F (G with ASDF), beside the index finger: Mouse 5 is
@@ -102,7 +102,7 @@ local JOBS = {
 		by = { arms = { name = "Sweeping Strikes", what = "Sweeping Strikes", SHOW, "/cast {12292}" },
 			armspvp = { name = "Sweeping Strikes", what = "Sweeping Strikes", SHOW, "/cast {12292}" },
 			fury = { name = "Death Wish", what = "Death Wish", SHOW, "/cast {12328}" } } },
-	{ name = "Stop", role = "stop", key = "F", asdf = "G", what = "Shield Bash; Pummel in Berserker Stance",
+	{ name = "Stop", role = "stop", key = "F", asdf = "G", what = "Shield Bash. Pummel in Berserker Stance",
 		SHOW, "/cast [nostance:3] {72}; [known:{6552}] {6552}; {2457}",
 		-- No shield to bash with: Pummel, from Berserker Stance, once you have it.
 		by = Damage({ name = "Stop", role = "stop", what = "Pummel", SHOW, "/cast [stance:3] {6552}; [known:{6552}] {2458}" }) },
@@ -114,17 +114,17 @@ local JOBS = {
 		SHOW, ATTACK, "/cast {12809}",
 		by = Damage({ name = "Piercing Howl", what = "Piercing Howl", SHOW, "/cast {12323}" }) },
 	-- The number row.
-	{ name = "Wall", role = "wall", key = "4", asdf = "4", spare = "MULTIACTIONBAR4BUTTON4", stay = true, what = "Shield Wall; Retaliation in Battle Stance, Recklessness in Berserker",
+	{ name = "Wall", role = "wall", key = "4", asdf = "4", spare = "MULTIACTIONBAR4BUTTON4", stay = true, what = "Shield Wall. Retaliation in Battle Stance, Recklessness in Berserker",
 		SHOW, "/cast [stance:1] {20230}; [stance:3] {1719}; {871}",
 		-- A shield's wall is Shield Wall, from 28: Defensive Stance's own, so the first press takes you there. A
 		-- two-hander's or two weapons' is Retaliation, Recklessness in Berserker Stance once learned.
 		by = { protsolo = { name = "Wall", role = "wall", what = "Shield Wall", SHOW, "/cast [stance:2] {871}; {71}" },
 			prot = { name = "Wall", role = "wall", what = "Shield Wall", SHOW, "/cast [stance:2] {871}; {71}" },
-			arms = { name = "Wall", role = "wall", what = "Retaliation; Recklessness in Berserker Stance",
+			arms = { name = "Wall", role = "wall", what = "Retaliation. Recklessness in Berserker Stance",
 				SHOW, "/cast [stance:3,known:{1719}] {1719}; [stance:1] {20230}; {2457}" },
-			armspvp = { name = "Wall", role = "wall", what = "Retaliation; Recklessness in Berserker Stance",
+			armspvp = { name = "Wall", role = "wall", what = "Retaliation. Recklessness in Berserker Stance",
 				SHOW, "/cast [stance:3,known:{1719}] {1719}; [stance:1] {20230}; {2457}" },
-			fury = { name = "Wall", role = "wall", what = "Retaliation; Recklessness in Berserker Stance",
+			fury = { name = "Wall", role = "wall", what = "Retaliation. Recklessness in Berserker Stance",
 				SHOW, "/cast [stance:3,known:{1719}] {1719}; [stance:1] {20230}; {2457}" } } },
 	{ name = "Pull", key = "5", asdf = "5", spare = "MULTIACTIONBAR4BUTTON5", stay = true, what = "Shoot or Throw, whichever you carry",
 		SHOW, "/cast [worn:Crossbows] {7919}; [worn:Bows] {2480}; [worn:Guns] {7918}; {2764}" },
@@ -183,7 +183,7 @@ K.JOBS = JOBS
 
 -- A shield from 10, in Defensive Stance: Sunder Armor, the block and Shield Bash are part of every fight.
 local function ShieldFrom10(build)
-	return { from = 10, build = build, tip = "Defensive Stance from 10: Bloodrage after Charge, Revenge whenever it lights up, Sunder Armor with spare rage.",
+	return { from = 10, build = build, tip = "Defensive Stance from 10. Bloodrage after Charge, Revenge whenever it lights up, Sunder Armor with spare rage.",
 		single = { { "Charge", "to open" }, { "Bloodrage", "after Charge" }, { "Counter", "when it's lit" }, { "Block", "when you're hit" },
 			{ "Strike", "keep it up" }, { "Sunder", "rage to spare" }, { "Heroic", "lots of rage" }, { "Stop", "to stop a cast" },
 			{ "Slow", "when it runs" }, { "Shout", "keep it up" } },
@@ -193,7 +193,7 @@ end
 
 local PLAY = {
 	-- (Until each tree's big hit, the strike's key is Rend: the steps name the key, Strike.)
-	{ from = 1, tip = "Charge in, keep Rend on it and spend spare rage on Heroic Strike; you'll rest after most fights.",
+	{ from = 1, tip = "Charge in, keep Rend on it and spend spare rage on Heroic Strike. You'll rest after most fights.",
 		single = { { "Charge", "to open" }, { "Strike", "keep it up" }, { "Heroic", "rage to spare" },
 			{ "Slow", "when it runs" }, { "Shout", "keep it up" } },
 		cleave = { { "Charge", "to open" }, { "Clap", "on 2+ enemies" }, { "Strike", "on each enemy" },
@@ -205,14 +205,14 @@ local PLAY = {
 		cleave = { { "Charge", "to open" }, { "Bloodrage", "after Charge" }, { "Clap", "on 2+ enemies" }, { "Demoralizing", "on 3+ enemies" },
 			{ "Counter", "when it's lit" }, { "Strike", "on each enemy" }, { "Heroic", "rage to spare" } } },
 	-- No build picked: a two-hander's way in Battle Stance, with the shield's keys there if you carry one.
-	{ from = 20, tip = "Charge in, keep Rend up and Overpower when it lights; your strike when it's ready, Heroic Strike with spare rage.",
+	{ from = 20, tip = "Charge in, keep Rend up and Overpower when it lights. Your strike when it's ready, Heroic Strike with spare rage.",
 		single = { { "Charge", "to open" }, { "Bloodrage", "after Charge" }, { "Rend", "keep it up" }, { "Counter", "when it's lit" },
 			{ "Strike", "when it's ready" }, { "Execute", "under 20% health" }, { "Victory", "when it's lit" }, { "Heroic", "rage to spare" },
 			{ "Stop", "to stop a cast" }, { "Slow", "when it runs" }, { "Sunder", "on a tough one" }, { "Wall", "if it goes badly" } },
 		cleave = { { "Charge", "to open" }, { "Clap", "on 2+ enemies" }, { "Demoralizing", "on 3+ enemies" }, { "Rend", "on each enemy" },
 			{ "Cleave", "rage to spare" }, { "Counter", "when it's lit" }, { "Victory", "when it's lit" } } },
 	-- Fury's strike is Heroic Strike until Bloodthirst, and Rend has its own key, Q.
-	{ from = 1, build = "fury", tip = "Charge in, keep Rend on it and spend spare rage on Heroic Strike; you'll rest after most fights.",
+	{ from = 1, build = "fury", tip = "Charge in, keep Rend on it and spend spare rage on Heroic Strike. You'll rest after most fights.",
 		single = { { "Charge", "to open" }, { "Rend", "keep it up" }, { "Strike", "rage to spare" },
 			{ "Slow", "when it runs" }, { "Shout", "keep it up" } },
 		cleave = { { "Charge", "to open" }, { "Clap", "on 2+ enemies" }, { "Rend", "on each enemy" },
@@ -225,28 +225,28 @@ local PLAY = {
 
 	-- Sword and board: Defensive Stance, a block for every Revenge, and little rest.
 	ShieldFrom10("protsolo"),
-	{ from = 20, build = "protsolo", tip = "You fight in Defensive Stance now: block, then Revenge, and you'll hardly need to rest.",
+	{ from = 20, build = "protsolo", tip = "You fight in Defensive Stance now. Block, then Revenge, and you'll hardly need to rest.",
 		single = { { "Charge", "to open" }, { "Bloodrage", "after Charge" }, { "Counter", "when it's lit" }, { "Block", "when you're hit" },
 			{ "Victory", "when it's lit" }, { "Stop", "to stop a cast" }, { "Strike", "keep it up" }, { "Sunder", "rage to spare" },
 			{ "Heroic", "lots of rage" }, { "Stand", "low on health" }, { "Slow", "when it runs" } },
 		cleave = { { "Charge", "to open" }, { "Clap", "on 2+ enemies" }, { "Demoralizing", "on 3+ enemies" }, { "Counter", "when it's lit" },
 			{ "Block", "when you're hit" }, { "Cleave", "rage to spare" }, { "Victory", "when it's lit" }, { "Wall", "if it goes badly" },
 			{ "Stand", "low on health" } } },
-	{ from = 30, build = "protsolo", tip = "Pull two or three at a time: Concussion Blow buys you a breather, and Last Stand saves a bad pull.",
+	{ from = 30, build = "protsolo", tip = "Pull two or three at a time. Concussion Blow buys you a breather, and Last Stand saves a bad pull.",
 		single = { { "Charge", "to open" }, { "Bloodrage", "after Charge" }, { "Counter", "when it's lit" }, { "Block", "when you're hit" },
 			{ "Victory", "when it's lit" }, { "Stop", "to stop a cast" }, { "Concussion", "when it's ready" }, { "Strike", "keep it up" },
 			{ "Sunder", "rage to spare" }, { "Heroic", "lots of rage" }, { "Stand", "low on health" }, { "Slow", "when it runs" } },
 		cleave = { { "Charge", "to open" }, { "Clap", "on 2+ enemies" }, { "Demoralizing", "on 3+ enemies" }, { "Counter", "when it's lit" },
 			{ "Block", "when you're hit" }, { "Cleave", "rage to spare" }, { "Concussion", "on the hardest hitter" },
 			{ "Disarm", "on a hard hitter" }, { "Wall", "if it goes badly" }, { "Stand", "low on health" } } },
-	{ from = 40, build = "protsolo", tip = "Shield Slam hits hardest of all you have: press it, Revenge and your block, and the rest is filler.",
+	{ from = 40, build = "protsolo", tip = "Shield Slam hits hardest of all you have. Press it, Revenge and your block, and the rest is filler.",
 		single = { { "Charge", "to open" }, { "Counter", "when it's lit" }, { "Strike", "when it's ready" }, { "Block", "when you're hit" },
 			{ "Victory", "when it's lit" }, { "Stop", "to stop a cast" }, { "Concussion", "when it's ready" }, { "Sunder", "rage to spare" },
 			{ "Heroic", "lots of rage" }, { "Bloodrage", "for rage" }, { "Stand", "low on health" }, { "Slow", "when it runs" } },
 		cleave = { { "Charge", "to open" }, { "Clap", "on 2+ enemies" }, { "Demoralizing", "on 3+ enemies" }, { "Counter", "when it's lit" },
 			{ "Strike", "when it's ready" }, { "Block", "when you're hit" }, { "Cleave", "rage to spare" },
 			{ "Disarm", "on a hard hitter" }, { "Wall", "if it goes badly" }, { "Stand", "low on health" } } },
-	{ from = 50, build = "protsolo", tip = "Big pulls are yours now: Thunder Clap and Demoralizing Shout keep the pack weak, Shield Wall when it goes badly.",
+	{ from = 50, build = "protsolo", tip = "Big pulls are yours now. Thunder Clap and Demoralizing Shout keep the pack weak, Shield Wall when it goes badly.",
 		single = { { "Charge", "to open" }, { "Counter", "when it's lit" }, { "Strike", "when it's ready" }, { "Block", "when you're hit" },
 			{ "Victory", "when it's lit" }, { "Stop", "to stop a cast" }, { "Concussion", "when it's ready" }, { "Sunder", "rage to spare" },
 			{ "Heroic", "lots of rage" }, { "Bloodrage", "for rage" }, { "Stand", "low on health" }, { "Slow", "when it runs" } },
@@ -256,28 +256,28 @@ local PLAY = {
 
 	-- Protection for dungeons: the same shield, Sunder Armor and Taunt to hold what you pull.
 	ShieldFrom10("prot"),
-	{ from = 20, build = "prot", tip = "Stay in Defensive Stance and stack Sunder Armor on what you pull; Taunt anything that turns away.",
+	{ from = 20, build = "prot", tip = "Stay in Defensive Stance and stack Sunder Armor on what you pull. Taunt anything that turns away.",
 		single = { { "Charge", "to open" }, { "Bloodrage", "after Charge" }, { "Counter", "when it's lit" }, { "Block", "when you're hit" },
 			{ "Sunder", "stack it" }, { "Stop", "to stop a cast" }, { "Victory", "when it's lit" }, { "Strike", "keep it up" },
 			{ "Heroic", "lots of rage" }, { "Taunt", "if it turns away" }, { "Stand", "low on health" } },
 		cleave = { { "Pull", "to pull to you" }, { "Clap", "on 2+ enemies" }, { "Demoralizing", "on 3+ enemies" }, { "Counter", "when it's lit" },
 			{ "Sunder", "on each enemy" }, { "Taunt", "if one turns away" }, { "Cleave", "rage to spare" }, { "Wall", "if it goes badly" },
 			{ "Stand", "low on health" } } },
-	{ from = 30, build = "prot", tip = "Mark your pulls and hold them: Concussion Blow and Shield Bash stop the casters, Last Stand saves a bad pull.",
+	{ from = 30, build = "prot", tip = "Mark your pulls and hold them. Concussion Blow and Shield Bash stop the casters, Last Stand saves a bad pull.",
 		single = { { "Charge", "to open" }, { "Counter", "when it's lit" }, { "Block", "when you're hit" }, { "Sunder", "stack it" },
 			{ "Stop", "to stop a cast" }, { "Concussion", "when it's ready" }, { "Victory", "when it's lit" }, { "Strike", "keep it up" },
 			{ "Heroic", "lots of rage" }, { "Taunt", "if it turns away" }, { "Stand", "low on health" }, { "Bloodrage", "for rage" } },
 		cleave = { { "Pull", "to pull to you" }, { "Clap", "on 2+ enemies" }, { "Demoralizing", "on 3+ enemies" }, { "Counter", "when it's lit" },
 			{ "Sunder", "on each enemy" }, { "Taunt", "if one turns away" }, { "Challenging", "if they all turn" },
 			{ "Cleave", "rage to spare" }, { "Wall", "if it goes badly" }, { "Stand", "low on health" } } },
-	{ from = 40, build = "prot", tip = "Shield Slam and Revenge hold the pack on you; keep Sunder Armor stacked on the one everyone hits.",
+	{ from = 40, build = "prot", tip = "Shield Slam and Revenge hold the pack on you. Keep Sunder Armor stacked on the one everyone hits.",
 		single = { { "Charge", "to open" }, { "Strike", "when it's ready" }, { "Counter", "when it's lit" }, { "Block", "when you're hit" },
 			{ "Sunder", "stack it" }, { "Stop", "to stop a cast" }, { "Concussion", "when it's ready" }, { "Victory", "when it's lit" },
 			{ "Heroic", "lots of rage" }, { "Taunt", "if it turns away" }, { "Stand", "low on health" }, { "Bloodrage", "for rage" } },
 		cleave = { { "Pull", "to pull to you" }, { "Clap", "on 2+ enemies" }, { "Demoralizing", "on 3+ enemies" }, { "Strike", "when it's ready" },
 			{ "Counter", "when it's lit" }, { "Sunder", "on each enemy" }, { "Taunt", "if one turns away" },
 			{ "Challenging", "if they all turn" }, { "Cleave", "rage to spare" }, { "Wall", "if it goes badly" } } },
-	{ from = 50, build = "prot", tip = "Shield Wall and Last Stand are your saves for a pull gone wrong; use one, then the other.",
+	{ from = 50, build = "prot", tip = "Shield Wall and Last Stand are your saves for a pull gone wrong. Use one, then the other.",
 		single = { { "Charge", "to open" }, { "Strike", "when it's ready" }, { "Counter", "when it's lit" }, { "Block", "when you're hit" },
 			{ "Sunder", "stack it" }, { "Stop", "to stop a cast" }, { "Concussion", "when it's ready" }, { "Victory", "when it's lit" },
 			{ "Heroic", "lots of rage" }, { "Taunt", "if it turns away" }, { "Wall", "if it goes badly" }, { "Stand", "low on health" },
@@ -287,13 +287,13 @@ local PLAY = {
 			{ "Challenging", "if they all turn" }, { "Cleave", "rage to spare" }, { "Wall", "if it goes badly" } } },
 
 	-- Arms: one big two-hander from Battle Stance.
-	{ from = 20, build = "arms", tip = "Charge into every pull, Rend and Overpower, then Slam; Victory Rush heals you between fights.",
+	{ from = 20, build = "arms", tip = "Charge into every pull, Rend and Overpower, then Slam. Victory Rush heals you between fights.",
 		single = { { "Charge", "to open" }, { "Bloodrage", "after Charge" }, { "Rend", "keep it up" }, { "Counter", "when it's lit" },
 			{ "Strike", "when it's ready" }, { "Execute", "under 20% health" }, { "Victory", "when it's lit" }, { "Heroic", "lots of rage" },
 			{ "Slow", "when it runs" }, { "Wall", "if it goes badly" } },
 		cleave = { { "Charge", "to open" }, { "Clap", "on 2+ enemies" }, { "Rend", "on each enemy" }, { "Demoralizing", "on 3+ enemies" },
 			{ "Cleave", "rage to spare" }, { "Counter", "when it's lit" }, { "Victory", "when it's lit" } } },
-	{ from = 30, build = "arms", tip = "Sweeping Strikes makes two at once easy: pull a pair, Sweeping Strikes, then Cleave or Slam.",
+	{ from = 30, build = "arms", tip = "Sweeping Strikes makes two at once easy. Pull a pair, Sweeping Strikes, then Cleave or Slam.",
 		single = { { "Charge", "to open" }, { "Bloodrage", "after Charge" }, { "Rend", "keep it up" }, { "Counter", "when it's lit" },
 			{ "Strike", "when it's ready" }, { "Execute", "under 20% health" }, { "Victory", "when it's lit" }, { "Heroic", "lots of rage" },
 			{ "Slow", "when it runs" }, { "Wall", "if it goes badly" }, { "Berserker Rage", "if you're feared" }, { "Stop", "to stop a cast" } },
@@ -305,7 +305,7 @@ local PLAY = {
 			{ "Stop", "to stop a cast" }, { "Slow", "when it runs" }, { "Wall", "if it goes badly" }, { "Heroic", "lots of rage" } },
 		cleave = { { "Charge", "to open" }, { "Sweeping Strikes", "on 2+ enemies" }, { "Strike", "when it's ready" }, { "Cleave", "rage to spare" },
 			{ "Clap", "on 3+ enemies" }, { "Counter", "when it's lit" }, { "Victory", "when it's lit" } } },
-	{ from = 50, build = "arms", tip = "Fights are short now: open with Charge, Mortal Strike on cooldown, and Retaliation if you pull too many.",
+	{ from = 50, build = "arms", tip = "Fights are short now. Open with Charge, Mortal Strike on cooldown, and Retaliation if you pull too many.",
 		single = { { "Charge", "to open" }, { "Strike", "when it's ready" }, { "Counter", "when it's lit" }, { "Execute", "under 20% health" },
 			{ "Victory", "when it's lit" }, { "Slam", "rage to spare" }, { "Rend", "on long fights" }, { "Bloodrage", "for rage" },
 			{ "Stop", "to stop a cast" }, { "Slow", "when it runs" }, { "Berserker Rage", "if you're feared" }, { "Heroic", "lots of rage" } },
@@ -313,7 +313,7 @@ local PLAY = {
 			{ "Clap", "on 3+ enemies" }, { "Wall", "on 3+ enemies" }, { "Victory", "when it's lit" } } },
 
 	-- Arms PvP: the same blows, with every runner slowed.
-	{ from = 20, build = "armspvp", tip = "Charge, Hamstring and keep hitting; Overpower when they dodge, Execute when they're nearly down.",
+	{ from = 20, build = "armspvp", tip = "Charge, Hamstring and keep hitting. Overpower when they dodge, Execute when they're nearly down.",
 		single = { { "Charge", "to open" }, { "Slow", "keep it up" }, { "Rend", "keep it up" }, { "Counter", "when it's lit" },
 			{ "Strike", "when it's ready" }, { "Execute", "under 20% health" }, { "Victory", "when it's lit" }, { "Heroic", "lots of rage" },
 			{ "Bloodrage", "for rage" }, { "Wall", "if it goes badly" } },
@@ -325,13 +325,13 @@ local PLAY = {
 			{ "Wall", "if it goes badly" }, { "Bloodrage", "for rage" } },
 		cleave = { { "Charge", "to open" }, { "Sweeping Strikes", "on 2+ enemies" }, { "Clap", "on 2+ enemies" }, { "Cleave", "rage to spare" },
 			{ "Strike", "when it's ready" }, { "Counter", "when it's lit" }, { "Slow", "on the runner" }, { "Intimidating", "on 3+ enemies" } } },
-	{ from = 40, build = "armspvp", tip = "Mortal Strike cuts their healing: keep it on whoever heals, and Hamstring anyone who runs.",
+	{ from = 40, build = "armspvp", tip = "Mortal Strike cuts their healing. Keep it on whoever heals, and Hamstring anyone who runs.",
 		single = { { "Charge", "to open" }, { "Strike", "when it's ready" }, { "Slow", "keep it up" }, { "Counter", "when it's lit" },
 			{ "Execute", "under 20% health" }, { "Victory", "when it's lit" }, { "Slam", "rage to spare" }, { "Stop", "to stop a cast" },
 			{ "Rend", "keep it up" }, { "Berserker Rage", "if you're feared" }, { "Wall", "if it goes badly" }, { "Heroic", "lots of rage" } },
 		cleave = { { "Charge", "to open" }, { "Sweeping Strikes", "on 2+ enemies" }, { "Strike", "when it's ready" }, { "Cleave", "rage to spare" },
 			{ "Clap", "on 3+ enemies" }, { "Slow", "on the runner" }, { "Intimidating", "on 3+ enemies" } } },
-	{ from = 50, build = "armspvp", tip = "Save Intimidating Shout for when a healer is about to save them; Piercing Howl, once you have it, slows them all.",
+	{ from = 50, build = "armspvp", tip = "Save Intimidating Shout for when a healer is about to save them. Piercing Howl, once you have it, slows them all.",
 		single = { { "Charge", "to open" }, { "Strike", "when it's ready" }, { "Slow", "keep it up" }, { "Counter", "when it's lit" },
 			{ "Execute", "under 20% health" }, { "Victory", "when it's lit" }, { "Slam", "rage to spare" }, { "Stop", "to stop a cast" },
 			{ "Rend", "keep it up" }, { "Berserker Rage", "if you're feared" }, { "Wall", "if it goes badly" }, { "Bloodrage", "for rage" } },
@@ -339,20 +339,20 @@ local PLAY = {
 			{ "Cleave", "rage to spare" }, { "Intimidating", "on 3+ enemies" }, { "Wall", "if it goes badly" } } },
 
 	-- Fury: two weapons, fast swings, a lot of rage.
-	{ from = 20, build = "fury", tip = "Two weapons from 20: Rend and Overpower early, Heroic Strike with every bit of spare rage.",
+	{ from = 20, build = "fury", tip = "Two weapons from 20. Rend and Overpower early, Heroic Strike with every bit of spare rage.",
 		single = { { "Charge", "to open" }, { "Bloodrage", "after Charge" }, { "Counter", "when it's lit" }, { "Execute", "under 20% health" },
 			{ "Victory", "when it's lit" }, { "Rend", "keep it up" }, { "Strike", "rage to spare" }, { "Slow", "when it runs" },
 			{ "Wall", "if it goes badly" } },
 		cleave = { { "Charge", "to open" }, { "Clap", "on 2+ enemies" }, { "Demoralizing", "on 3+ enemies" }, { "Cleave", "rage to spare" },
 			{ "Counter", "when it's lit" }, { "Victory", "when it's lit" } } },
 	-- (Overpower and Rend need Battle Stance: in Berserker, Whirlwind takes Overpower's key from 36.)
-	{ from = 30, build = "fury", tip = "Move to Berserker Stance: Intercept in, Death Wish on hard fights, Berserker Rage for more rage.",
+	{ from = 30, build = "fury", tip = "Move to Berserker Stance. Intercept in, Death Wish on hard fights, Berserker Rage for more rage.",
 		single = { { "Charge", "to open" }, { "Rend", "after Charge" }, { "Death Wish", "on hard fights" }, { "Berserker Rage", "for more rage" },
 			{ "Execute", "under 20% health" }, { "Victory", "when it's lit" }, { "Strike", "rage to spare" }, { "Bloodrage", "for rage" },
 			{ "Slow", "when it runs" }, { "Wall", "if it goes badly" } },
 		cleave = { { "Charge", "to open" }, { "Cleave", "rage to spare" }, { "Demoralizing", "on 3+ enemies" },
 			{ "Death Wish", "on hard fights" }, { "Berserker Rage", "for more rage" }, { "Victory", "when it's lit" } } },
-	{ from = 36, build = "fury", tip = "Whirlwind is yours now: press it whenever it's ready, on one enemy or a whole pack.",
+	{ from = 36, build = "fury", tip = "Whirlwind is yours now. Press it whenever it's ready, on one enemy or a whole pack.",
 		single = { { "Charge", "to open" }, { "Counter", "when it's ready" }, { "Death Wish", "on hard fights" }, { "Berserker Rage", "for more rage" },
 			{ "Execute", "under 20% health" }, { "Victory", "when it's lit" }, { "Strike", "rage to spare" }, { "Bloodrage", "for rage" },
 			{ "Stop", "to stop a cast" }, { "Slow", "when it runs" }, { "Rend", "after Charge" }, { "Wall", "if it goes badly" } },
@@ -364,7 +364,7 @@ local PLAY = {
 			{ "Stop", "to stop a cast" }, { "Slow", "when it runs" }, { "Bloodrage", "for rage" }, { "Wall", "if it goes badly" } },
 		cleave = { { "Charge", "to open" }, { "Counter", "when it's ready" }, { "Strike", "when it's ready" }, { "Cleave", "rage to spare" },
 			{ "Demoralizing", "on 3+ enemies" }, { "Berserker Rage", "for more rage" }, { "Death Wish", "on hard fights" } } },
-	{ from = 50, build = "fury", tip = "Recklessness and Death Wish together end a hard fight fast; Piercing Howl keeps a pack from running.",
+	{ from = 50, build = "fury", tip = "Recklessness and Death Wish together end a hard fight fast. Piercing Howl keeps a pack from running.",
 		single = { { "Charge", "to open" }, { "Strike", "when it's ready" }, { "Counter", "when it's ready" }, { "Execute", "under 20% health" },
 			{ "Victory", "when it's lit" }, { "Berserker Rage", "for more rage" }, { "Heroic", "rage to spare" }, { "Death Wish", "on hard fights" },
 			{ "Wall", "on hard fights" }, { "Stop", "to stop a cast" }, { "Slow", "when it runs" }, { "Bloodrage", "for rage" } },
@@ -382,7 +382,6 @@ local OPTS = {
 	keep = { plain = BATTLE_STANCE, arms = BATTLE_STANCE, armspvp = BATTLE_STANCE, protsolo = DEFENSIVE_STANCE,
 		prot = DEFENSIVE_STANCE, fury = BERSERKER_STANCE },
 	keeps = "stance",
-	list = "/shywarrior keys list",
 	build = function() return Shy.Keys.Build() end,
 	play = PLAY,
 }

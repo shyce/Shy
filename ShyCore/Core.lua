@@ -22,7 +22,7 @@
 --   T:Print(msg)   T:ResetDB()   T:SendComm(msg, channel, target)   T:SendBNComm(msg, gameAccountID)
 --   T:Once(flag, fn)                            -- fn(settings) once per account, on T.db and every profile's copy;
 --                                               -- `flag` must be named in `keep`
---   T:RegisterOptions(frame)   T:OpenOptions()
+--   T:Settings(list)   T:Command(word, help, fn)   T:OpenOptions()   -- its settings and its words after /shy (Hub.lua)
 --   Shy:On(event, fn)   Shy:Off(event, fn)   Shy:Fire(event, ...)
 --   Shy:OnFor(event, key, fn)   Shy:OffFor(event, key, fn)   -- only when the event's first value is `key`
 --   Shy.Profiles                               -- see "Profiles" below
@@ -99,7 +99,9 @@ local slots = setmetatable({}, { __mode = "k" })   -- each wrapper's slot { cloc
 
 -- Whose file a call came from (`level` calls up from the caller of Caller), and its file:line.
 local function Caller(level)
-	local line = debugstack(level + 1, 1, 0) or ""
+	local line = debugstack(level + 1, 1, 0)
+	-- (Read from tainted code in a fight, the stack is secret: nobody's, then.)
+	if issecretvalue(line) or not line then return "ShyCore", nil end
 	local file, at = line:match("([%w_]+%.lua):(%d+)")
 	return line:match("AddOns[/\\](Shy[%w_]*)[/\\]") or "ShyCore", file and (file .. ":" .. at) or nil
 end
@@ -238,7 +240,9 @@ function census.Set(frame, script, fn)
 	if census.setting or not census.SCRIPTS[script] or type(fn) ~= "function" or timed[fn] then return end
 	local run = census.runs[fn]
 	if not run then
-		local stack = debugstack(2, census.DEEP, 0) or ""
+		local stack = debugstack(2, census.DEEP, 0)
+		-- (Set from tainted code in a fight, the stack is secret and can't be read: the script is left alone.)
+		if issecretvalue(stack) or not stack then return end
 		local addon, file, line = census.Setter(stack)
 		if not addon then
 			-- (One that names no file at all, or a Shy file behind another's, was not taken: the first few are
@@ -280,6 +284,15 @@ Shy.census = census
 function Shy.Clock(name, addon)
 	local clock = Clock(name, addon)   -- (not a tail call: the owner is read from this frame's caller)
 	return clock
+end
+
+-- Lines an addon adds to the game's tooltips (TooltipDataProcessor's post-call), each on a clock of its own named
+-- for whose they are: a hover runs them all, and the monitor says which of them cost it what.
+--   Shy.OnTip(kind, name, fn)   kind: an Enum.TooltipDataType, or TooltipDataProcessor.AllTypes
+function Shy.OnTip(kind, name, fn)
+	local label = "tip lines: " .. name
+	Clock(label, Shy.AddonOf(2))   -- (named for the addon asking; Clocked takes the clock as it stands)
+	TooltipDataProcessor.AddTooltipPostCall(kind, Shy.Clocked(label, fn))
 end
 function Entry:Lap(took, made)
 	self.calls, self.ms = self.calls + 1, self.ms + took
@@ -460,6 +473,159 @@ function Shy:Fire(event, ...)
 	end
 	FireFor(event, ...)
 	Took(clock, from)
+end
+
+-- Facts
+--
+-- What the game says of you, read once for the whole family and kept. Ask here, and listen on the bus, instead
+-- of the game's own events: the game sends those for every coin looted and every glance at the spellbook. The bus
+-- speaks only when something really changed.
+--   Shy.Money() -> the copper you carry           bus SHY_MONEY (now, was): it changed, for whoever shows every coin
+--   Shy.MoneyEdges(owner, crossed) -> the owner's list of prices, emptied: fill it as you weigh the gold. crossed
+--                                  (now, was) runs only when the gold crosses one (enough is >= a price). Gold
+--                                  between two prices, or above them all, wakes nobody: a coin is one compare.
+--   Shy.Ruleset([realm]) -> "PvP", "RP", "Normal" or "Hardcore": the ruleset you play under, as your realm's name says
+--                                  it ("... Realm 4 PvP"); with a realm's name, that one's. nil while the name is empty
+--                                  (the game says it a moment into a session). Hardcore can't be told from a name alone.
+--   Shy.RealmOf(guid) -> the realm a character's GUID says it lives on ("Player-6930-..." -> "6930"), readable at once
+--   Shy.SameServer(guid, c, ruleset) -> whether a character ({ faction }) plays where you do: on your realm, and on a
+--                                  PvP one your side too. ruleset: your realm's, where the game hasn't said it yet.
+--   Shy.Spells() -> how many times your spellbook has changed (0: not read yet)
+--                                                 bus SHY_SPELLS: a spell learned or lost, or one to come or gone.
+--                                                 Said once as the book is first read, too.
+do
+	local facts = { book = {}, size = 0, spells = 0 }
+
+	function Shy.Money()
+		if facts.money == nil then facts.money = GetMoney() end
+		return facts.money
+	end
+
+	function Shy.Spells()
+		return facts.spells
+	end
+
+	function Shy.Ruleset(realm)
+		if not realm and C_GameRules.IsHardcoreActive() then return "Hardcore" end
+		local name = realm or GetRealmName()
+		if type(name) ~= "string" or issecretvalue(name) or name == "" then return nil end
+		name = name:lower()
+		if name:find("hardcore", 1, true) then return "Hardcore" end
+		if name:find("pvp", 1, true) then return "PvP" end
+		if name:find("%f[%a]rp%f[%A]") then return "RP" end
+		return "Normal"
+	end
+
+	function Shy.RealmOf(guid)
+		if type(guid) ~= "string" or issecretvalue(guid) then return nil end
+		return guid:match("^Player%-(%d+)%-")
+	end
+
+	function Shy.SameServer(guid, c, ruleset)
+		local theirs, mine = Shy.RealmOf(guid), Shy.RealmOf(UnitGUID("player"))
+		if theirs and mine and theirs ~= mine then return false end
+		ruleset = Shy.Ruleset() or ruleset
+		if ruleset == "PvP" and c.faction and c.faction ~= UnitFactionGroup("player") then return false end
+		return true
+	end
+
+	-- The book, item by item: its kind and its base spell. Learning turns one to come into one known. A level
+	-- adds ones to come. True when anything moved. The last read is written over, so nothing new is made.
+	local function Moved()
+		local book, n, moved = facts.book, 0, false
+		local bank = Enum.SpellBookSpellBank.Player
+		for line = 1, C_SpellBook.GetNumSpellBookSkillLines() or 0 do
+			local info = C_SpellBook.GetSpellBookSkillLineInfo(line)
+			if info then
+				for slot = info.itemIndexOffset + 1, info.itemIndexOffset + info.numSpellBookItems do
+					local kind, id = C_SpellBook.GetSpellBookItemType(slot, bank)
+					if not issecretvalue(kind) and not issecretvalue(id) and kind then
+						n = n + 1
+						local mark = (id or 0) * 16 + kind
+						if book[n] ~= mark then book[n], moved = mark, true end
+					end
+				end
+			end
+		end
+		if n ~= facts.size then
+			for i = n + 1, facts.size do book[i] = nil end
+			facts.size, moved = n, true
+		end
+		return moved
+	end
+
+	local Read = Shy.Clocked("facts: the spellbook read", function()
+		if not Moved() and facts.spells > 0 then return end
+		facts.spells = facts.spells + 1
+		Shy:Fire("SHY_SPELLS")
+	end)
+
+	-- The prices gold is weighed against: owner -> { copper, ..., crossed = fn }. The band is the nearest price at
+	-- or below the gold and the nearest above it, worked out again only after a list or the gold changed.
+	local edges, band = {}, { low = -math.huge, high = math.huge, stale = false }
+
+	function Shy.MoneyEdges(owner, crossed)
+		local list = edges[owner]
+		if not list then
+			list = {}
+			edges[owner] = list
+		end
+		for i = #list, 1, -1 do list[i] = nil end
+		list.crossed = crossed
+		band.stale = true
+		return list
+	end
+
+	local function Band(money)
+		local low, high = -math.huge, math.huge
+		for _, list in pairs(edges) do
+			for i = 1, #list do
+				local price = list[i]
+				if price <= money then
+					if price > low then low = price end
+				elseif price < high then
+					high = price
+				end
+			end
+		end
+		band.low, band.high, band.stale = low, high, false
+	end
+
+	-- Who a coin woke: each owner with a price between the gold it had and the gold it has.
+	local function Cross(now, was)
+		local from, to = math.min(now, was), math.max(now, was)
+		for _, list in pairs(edges) do
+			for i = 1, #list do
+				local price = list[i]
+				if price > from and price <= to then
+					if list.crossed then
+						local ok, err = pcall(list.crossed, now, was)
+						if not ok then geterrorhandler()(err) end
+					end
+					break
+				end
+			end
+		end
+	end
+
+	local events = CreateFrame("Frame")
+	events:RegisterEvent("PLAYER_MONEY")
+	events:RegisterEvent("PLAYER_LOGIN")   -- (the gold as the game first knows it, if anyone asked before)
+	events:RegisterEvent("SPELLS_CHANGED")
+	events:SetScript("OnEvent", function(_, event)
+		if event == "SPELLS_CHANGED" then return Read() end
+		local now, was = GetMoney(), facts.money
+		if now == was then return end
+		facts.money = now
+		if was ~= nil then
+			if band.stale then Band(was) end
+			if now < band.low or now >= band.high then
+				Cross(now, was)
+				band.stale = true
+			end
+		end
+		Shy:Fire("SHY_MONEY", now, was)
+	end)
 end
 
 -- Where the player is
@@ -821,8 +987,7 @@ function P.Create(name)
 end
 
 -- Nothing changes before the reload: addons holding this profile are marked NONE so Give resets them
--- as they next load. Don't reset loaded addons here through their options pages' OnDefault: a page
--- that was never opened errors.
+-- as they next load. Loaded addons are not reset here: what they show would not follow until the reload.
 function P.Fresh(name, kind)
 	local store = Store()
 	local profile = Profile(name)
@@ -968,7 +1133,7 @@ do
 	function Shy.RoleSays()
 		local role, from, name = Shy.Role()
 		if not role then return nil end
-		if from == "group" then return NAMED[role] .. ", as your group has you" end
+		if from == "group" then return NAMED[role] .. ", your role in this group" end
 		if from == "build" then return ("%s, from your %s build"):format(NAMED[role], name) end
 		return NAMED[role] .. ", from your screen's layout"
 	end
@@ -1002,6 +1167,7 @@ end
 --                              role from the group, the build or the layout)
 --   Shy.AdoptThreatRole(pick)  an addon's own pick from before there was one: taken once, while the family's is "auto"
 --   Shy.ThreatSound()          whether aggro changing hands plays the warning (Shy.Aggro)   Shy.SetThreatSound(on)
+--                              bus SHY_THREAT_SOUND (on)
 do
 	local hints = {}
 	local function Saved() return Shy.core and Shy.core.db and Shy.core.db.threat end
@@ -1046,7 +1212,11 @@ do
 
 	function Shy.SetThreatSound(on)
 		local saved = Saved()
-		if saved then saved.sound = on and true or false end
+		if not saved then return end
+		on = on and true or false
+		if saved.sound == on then return end
+		saved.sound = on
+		Shy:Fire("SHY_THREAT_SOUND", on)
 	end
 end
 
@@ -1131,6 +1301,7 @@ end
 -- Shy.ThreatRole has you. A mob is told apart by its GUID, or where that is secret (a dungeon) by its nameplate,
 -- which stands for one mob while it shows, or as your target while it has none.
 --   Shy.Aggro.Want(id, on)   an addon asks for it (the threat meter, a class's light); nothing runs while none does
+--   Shy.Aggro.Watched()      whether any addon asks for it now (the aggro sound can only play while one does)
 --   Shy.Aggro.Worst()        the worst margin over them now (Shy.Threat's), or nil
 --   Shy.Aggro.Loose()        read as a tank: how many of the mobs you are fighting are on someone who is no tank
 --                            (another tank's are theirs, not loose); nil when you read as no tank or nothing runs
@@ -1233,6 +1404,7 @@ do
 		A.wanted[id] = on and true or nil
 		Wake()
 	end
+	function A.Watched() return next(A.wanted) ~= nil end
 	function A.Worst() return worst end
 	function A.Loose() return loose end
 

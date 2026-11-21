@@ -1,4 +1,4 @@
--- ShyHots: what your heals over time still have to heal, friend by friend. Registration, defaults, API, slash command.
+-- ShyHots: what your heals over time still have to heal, friend by friend. Registration, defaults, API, commands.
 --
 -- API (Shy.addons.Hots):
 --   :IsOn()              true while casts are being followed
@@ -31,10 +31,6 @@ ns.T = T
 
 function T:IsOn()
 	return self.db ~= nil and self.db.on == true
-end
-
-function T:OnLoad()
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
@@ -76,26 +72,18 @@ function T:Apply()
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
-SLASH_SHYHOTS1 = "/shyhots"
-SLASH_SHYHOTS2 = "/sho"
-SlashCmdList.SHYHOTS = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "on" or cmd == "off" then
-		T.db.on = cmd == "on"
-		T:Apply()
-		T:Print(T.db.on and "tracking your HoTs." or "off.")
-	elseif cmd == "report" then
-		Shy.UI.ShowCopyBox("ShyHots", T:Report())
-	elseif cmd == "forget" then
-		T:Forget()
-		T:Print("learned tick sizes forgotten.")
-	else
-		T:Print("commands:")
-		print("  /shyhots  - open options")
-		print("  /shyhots on | off")
-		print("  /shyhots report  - what's being tracked, to copy")
-		print("  /shyhots forget  - forget the tick sizes learned so far")
-	end
+local function Switch(on)
+	T.db.on = on
+	T:Apply()
+	T:Print(on and "tracking your HoTs." or "off.")
 end
+
+T:Command("on", "track your HoTs", function() Switch(true) end)
+T:Command("off", "stop tracking your HoTs", function() Switch(false) end)
+-- For finding faults: what is tracked, to copy. Not listed.
+T:Command("report", nil, function() Shy.UI.ShowCopyBox("ShyHots", T:Report()) end)
+T:Command("forget", "forget the tick sizes learned so far", function()
+	T:Forget()
+	Shy.Settings.Refresh()
+	T:Print("learned tick sizes forgotten.")
+end)

@@ -144,7 +144,7 @@ local function Menu(pin)
 			end)
 		end
 		root:CreateButton("Lead me there", function() Lead(note) end)
-		root:CreateButton("Draw for this note", function() Notes.Pen(true, note) end):SetSub("It goes when the note does")
+		root:CreateButton("Draw for this note", function() Notes.Pen(true, note) end):SetSub("Deleted with the note")
 		root:CreateButton("Copy as a code", function() UI.CopyField(pin, Notes.Code({ note }), { cursor = true }) end)
 		local share = Shy.Way.Share
 		if not Shy.Way.missing and share and share.Write then share.Write(root, function() return Place(note) end, "Share with") end
@@ -637,8 +637,16 @@ local function BarMenu(root)
 			T:Print(added == 1 and "1 note added." or ("%d notes added."):format(added))
 		end, { hint = "Paste, then Enter", most = 0, width = 300 })
 	end)
-	root:CreateCheckbox("Add my group's shared pins", function() return T.db.notesFromGroup == true end,
-		function() T.db.notesFromGroup = not T.db.notesFromGroup end):SetTooltip("A pin someone in your group shares with you is kept as a note too.")
+	-- (They come as suggested routes: none without the router, none while those are off.)
+	if not Shy.Way.missing then
+		local keep = root:CreateCheckbox("Add my group's shared pins", function() return T.db.notesFromGroup == true end,
+			function()
+				T.db.notesFromGroup = not T.db.notesFromGroup
+				if ns.RefreshOptions then ns.RefreshOptions() end
+			end)
+		keep:SetTooltip("Pins your group shares with you are saved as notes too.")
+		keep:SetEnabled(Shy.Way.Share.On())
+	end
 	root:CreateDivider()
 	root:CreateCheckbox("Draw on the map", function() return Notes.Pen() end, function() Notes.Pen(not Notes.Pen()) end)
 	local tools = root:CreateButton("Tool")
@@ -660,7 +668,7 @@ local function BarMenu(root)
 			if pen then pen.ink = ink.key end
 		end)
 	end
-	local back = root:CreateButton("Take back the last stroke", TakeBack)
+	local back = root:CreateButton("Undo the last stroke", TakeBack)
 	back:SetEnabled(#Strokes() > 0)
 	local clear = root:CreateButton("Clear this map's drawing", ClearShown)
 	clear:SetEnabled(#Strokes() > 0)

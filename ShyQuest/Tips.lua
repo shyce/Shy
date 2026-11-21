@@ -529,7 +529,7 @@ function Tips.Step(tip, view, state)
 	end
 	if state == "skipped" then
 		local index = view.step.index
-		Line(tip, view.absent and "Skipped: you can't take its quest"
+		Line(tip, view.absent and "Skipped because you can't take its quest"
 			or (view.skipped ~= index and ("Skipped with step " .. ns.Guide.Number(view.skipped))) or "Skipped", GOLD)
 	elseif state == "done" then
 		Line(tip, "Done", GOOD)

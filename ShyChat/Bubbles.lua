@@ -643,7 +643,7 @@ function B.Pass()
 	-- Inside an instance the game keeps its bubbles to itself: said once, so nobody waits for a look that can't come.
 	if forbidden > 0 and not toldForbidden then
 		toldForbidden = true
-		ns.T:Print("inside instances the game keeps its own chat bubbles; they can't be restyled there.")
+		ns.T:Print("inside instances the game keeps its own chat bubbles. They can't be restyled there.")
 	end
 	return count, forbidden
 end

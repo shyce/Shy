@@ -1,33 +1,34 @@
--- Escorts: the quests where someone is walked somewhere (Data\ByHand.lua's `escort`; D.Escort).
--- One sets off the moment it is accepted, so what there is to know of it is wanted before that:
+-- Escorts: quests where you walk someone somewhere (Data\ByHand.lua's `escort`; D.Escort).
+-- An escort starts the moment you accept it, so you want to know about it before that:
 --
---   how long it takes     timed from accepting it to its being done, as a flight is timed, and kept for
---                         the account (T.db.escorts.runs); until one is timed, reckoned from how far
---                         it is from who is walked to where the walk ends, at a walk, at the pace the
---                         timed ones have kept (Pace)
---   where they walk       the way the character went beside them, thinned to a few points; until one
---                         is walked, a straight line from who is walked to where the walk ends
+--   how long it takes     timed from accepting it to finishing it, like a flight, and saved for the
+--                         account (T.db.escorts.runs). Until one is timed, it is estimated from the
+--                         distance between the NPC and where the walk ends, at walking speed, at
+--                         the pace the timed ones kept (Pace)
+--   where they walk       the way your character went beside them, thinned to a few points. Until
+--                         one is walked, a straight line from the NPC to where the walk ends
 --
--- The card's leading row says the time under an escort to accept (ns.cardNotes), the card counts one
--- down while it is walked (Running; Card.lua asks), and the maps draw the way for every pin that
--- stands for one (Walker; Pins.lua draws it as it draws anyone who walks). While one is walked, the
--- minimap and the world map show the way still ahead as a journey, as a flight's (Shy.Maps.Trip): in
--- the escort's lime under its face, with the time left at its end. Share puts the walk in the chat box.
+-- The card's leading row gives the time under an escort to accept (ns.cardNotes). The card counts
+-- down while you walk one (Running; Card.lua asks). The maps draw the way for every pin that stands
+-- for one (Walker; Pins.lua draws it like anyone who walks). While you walk one, the minimap and
+-- the world map show the way still ahead as a journey, like a flight's (Shy.Maps.Trip): in the
+-- escort's lime under its face, with the time left at its end. Share puts the walk in the chat box.
 --
--- The way drawn is, in order: the path the escorted NPC is scripted to take (Data\EscortWays.lua), which
--- is where it walks; the one walked here, told by another copy or that came with the addon
--- (Data\Escorts.lua); a straight line from who is walked to where the walk ends. The time is the one
--- timed (walked, told or come with the addon), else reckoned along that same way.
+-- The way drawn is the first of these that exists:
+--   1. the path the escorted NPC is scripted to take (Data\EscortWays.lua), which is where it walks
+--   2. the one walked here, told by another copy, or shipped with the addon (Data\Escorts.lua)
+--   3. a straight line from the NPC to where the walk ends
+-- The time is the timed one (walked, told or shipped), otherwise estimated along that same way.
 --
--- What one copy has timed, every copy can have. A copy tells its group and its guild a record once,
--- when it is made; a copy with nothing for an escort that is coming up asks once in a session, and one
--- holder answers after a short random wait unless another has by then. A record is one addon message:
+-- What one copy has timed, every copy can have. A copy tells its group and guild a record once,
+-- when it is made. A copy with nothing for an upcoming escort asks once per session. One holder
+-- answers after a short random wait, unless another has answered by then. A record is one addon message:
 --
 --   E1 <tab> quest <tab> tenths of a second <tab> runs <tab> map <tab> the way     a record
 --   E? <tab> quest                                                               who has this one?
 --
--- The way: four characters a point, x then y, each half its 0-9999 in two digits of base 71 (PACK).
--- Records that come with the addon (Data\Escorts.lua, when there is one) stand behind the account's.
+-- The way: four characters per point, x then y, each as its 0-9999 in two base-71 digits (PACK).
+-- Records shipped with the addon (Data\Escorts.lua, when there is one) rank behind the account's.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -660,7 +661,7 @@ function Escort.Share()
 	if editBox then editBox:Insert(text) else ChatFrameUtil.OpenChat(text) end
 end
 
--- What it knows, for /shyquest escort.
+-- What it knows, for /shy quest escort.
 function Escort.Report()
 	local db = T.db.escorts
 	local out = { ("ShyQuest escorts  (%s)"):format(date("%Y-%m-%d %H:%M")) }

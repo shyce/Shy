@@ -722,10 +722,24 @@ local function Lifts(world, data)
 	if shipped then
 		for index = 1, #shipped - 4, 5 do Join(shipped[index], shipped[index + 1], shipped[index + 2], shipped[index + 3], shipped[index + 4]) end
 	end
+	-- A lift learned in play counts only where a lift's model stands (Tier.LiftAt).
 	for _, lift in ipairs(learned or {}) do
-		if lift[1] == world then Join(lift[2], lift[3], lift[4], lift[5], lift[6]) end
+		if lift[1] == world and Tier.LiftAt(world, lift[2], lift[3]) then Join(lift[2], lift[3], lift[4], lift[5], lift[6]) end
 	end
 	data.liftsAt, data.liftKinds, data.liftReach = any and at or nil, any and kinds or nil, {}
+end
+
+-- True if a lift's model stands at a place. T.data.liftRooms lists them by world: north low, north high,
+-- west low, west high. A ride noticed in play is only a lift there. A mine under a hill was once taken
+-- for one. true if the rooms aren't known.
+function Tier.LiftAt(world, north, west)
+	local rooms = T.data.liftRooms
+	if not rooms then return true end
+	local list = rooms[world]
+	for at = 1, list and #list - 3 or 0, 4 do
+		if north >= list[at] and north <= list[at + 1] and west >= list[at + 2] and west <= list[at + 3] then return true end
+	end
+	return false
 end
 
 -- Slowed falls -----------------------------------------------------------------------------------
@@ -1835,17 +1849,18 @@ function T.Mark(into)
 	return into
 end
 
-function T.Ask(world, north, west, a, b, level, up, done)
+-- from: the height the walk starts at. Pass it when the walk starts at a stop, not where you stand.
+function T.Ask(world, north, west, a, b, level, up, done, from)
 	if level == T.NOWHERE then return nil end
 	if type(a) == "table" then level, up = nil, nil else level = Tier.Asked(world, a, b, level, up) end
 	local search = SearchFor(world, a, b, nil, level, up)
 	if not search then return nil end
 	stats.asked = stats.asked + 1
 	stats.by.seconds = stats.by.seconds + 1
-	local seconds, goal, least = Answer(search, north, west)
+	local seconds, goal, least = Answer(search, north, west, nil, from and Tier.Start(world, north, west, from) or nil)
 	if seconds then return seconds, goal end
 	if done and goal == "working" then
-		Tier.Wait(done, function() return T.Ask(world, north, west, a, b, level, up) end)
+		Tier.Wait(done, function() return T.Ask(world, north, west, a, b, level, up, nil, from) end)
 	end
 	return nil, goal, least
 end
@@ -2953,17 +2968,21 @@ end
 -- floor they were last seen on (Tier.rider: T.Saw follows them every second), so that a balcony walked up
 -- to isn't left for the hall under it; else the one walked onto from where the last way began (a step off
 -- it, or the same), so that a bridge isn't left for the road under it by crossing it. Just off a flight
--- (Tier.landed), the topmost: a flight lands in the open, on the tower's top and never in the hall under
--- it. Where that says nothing (a first look, a lift), all of them.
+-- (Tier.landed), it is the one nearest the flight master's height (Tier.LandedAt). A flight lands beside
+-- its master. With no master known nearby, it is the topmost. Where that says nothing (a first look, a
+-- lift), all of them. With the place (north, west), and nothing said: its halls first on Ironforge's or the
+-- Undercity's map (Tier.HallsFirst).
 local stood = {}               -- [ground] = the floor the last way began on
-local function Standing(ground, starts, count)
+local function Standing(ground, starts, count, north, west)
 	if count > 1 and Tier.landed then
+		local at = type(Tier.landed) == "number" and Tier.landed
 		local best, high
 		for index = 1, count do
 			local cell = starts[index] % FSTRIDE
 			local r, c = floor(cell / CSTRIDE), cell % CSTRIDE
 			local height = select(5, Floor(CellIn(ground, r, c), (r % CELLS) * CELLS + c % CELLS, floor(starts[index] / FSTRIDE)))
-			if height and (not high or height > high) then best, high = index, height end
+			local rank = height and (at and -math.abs(height - at) or height)
+			if rank and (not high or rank > high) then best, high = index, rank end
 		end
 		if best then
 			starts[1] = starts[best]
@@ -3005,7 +3024,7 @@ local function Standing(ground, starts, count)
 		end
 	end
 	local was = stood[ground]
-	if count < 2 or not was then return count end
+	if count < 2 or not was then return Tier.HallsFirst(ground, starts, count, north, west) end
 	local wasK, wasCell = floor(was / FSTRIDE), was % FSTRIDE
 	local wasRow, wasCol = floor(wasCell / CSTRIDE), wasCell % CSTRIDE
 	local tile, at = CellIn(ground, wasRow, wasCol)
@@ -3021,6 +3040,40 @@ local function Standing(ground, starts, count)
 		if on then
 			kept = kept + 1
 			starts[kept] = id
+		end
+	end
+	return kept > 0 and kept or Tier.HallsFirst(ground, starts, count, north, west)
+end
+
+-- A place nobody is known to stand on, on a map you can only be inside of (T.data.insideAreas): its halls
+-- first, not the mountain or the ruins above. A route's line from Ironforge's flight master began on the
+-- peak and walked down the mountain's outside. Returns how many are kept first.
+Tier.worldOf = setmetatable({}, { __mode = "k" })   -- [ground] = its world
+function Tier.HallsFirst(ground, starts, count, north, west)
+	local areas = T.data.insideAreas
+	if count < 2 or not north or not areas then return count end
+	local world = Tier.worldOf[ground]
+	if world == nil then
+		world = false
+		for each, floors in pairs(T.data.floors) do
+			if floors == ground then world = each end
+		end
+		Tier.worldOf[ground] = world
+	end
+	local inside = false
+	for _, area in pairs(areas) do
+		if area[1] == world and north >= area[2] and north <= area[3] and west >= area[4] and west <= area[5] then
+			inside = true
+			break
+		end
+	end
+	if not inside then return count end
+	local kept = 0
+	for index = 1, count do
+		local id = starts[index]
+		if Tier.LookOf(ground, id) == T.UNDER then
+			kept = kept + 1
+			starts[index], starts[kept] = starts[kept], id
 		end
 	end
 	return kept > 0 and kept or count
@@ -3059,11 +3112,31 @@ function Tier.At(data, ground, row, col, north, west, pick)
 	local id = floors[1]
 	if pick == "high" then
 		id = floors[count]
+	elseif type(pick) == "number" then
+		-- A height: the floor nearest it.
+		local least
+		for index = 1, count do
+			local cell = floors[index] % FSTRIDE
+			local r, c = floor(cell / CSTRIDE), cell % CSTRIDE
+			local height = select(5, Floor(CellIn(ground, r, c), (r % CELLS) * CELLS + c % CELLS, floor(floors[index] / FSTRIDE)))
+			if height and (not least or math.abs(height - pick) < least) then id, least = floors[index], math.abs(height - pick) end
+		end
 	elseif not pick then
-		Standing(ground, floors, count)
+		Standing(ground, floors, count, north, west)
 		id = floors[1]
 	end
 	return Tier.OfFloor(data, ground, row, col, n, text, at, id) * Tier.SPAN + node
+end
+
+-- The tier a walk starts on, from a height. Used when a walk starts at a stop, not where you stand.
+-- Ironforge's flight master is in the hall. Without his height the walk would start on the mountain's top.
+-- nil if there's no ground there.
+function Tier.Start(world, north, west, height)
+	local data = T.data.nodes[world]
+	if not data then return nil end
+	local row, col = Tier.Stand(data, north, west)
+	if not row then return nil end
+	return Tier.At(data, GroundOf(world, data), row, col, north, west, height)
 end
 
 -- Someone first seen where there are several floors (a login, a hearthstone: Ironforge's halls under the
@@ -3680,7 +3753,7 @@ local function NearWay(search, node, north, west, reach, level)
 		end
 		if startCount == 0 then return nil end
 	end
-	startCount = Standing(ground, starts, startCount)
+	startCount = Standing(ground, starts, startCount, north, west)
 	-- A search up close that found nothing is the most it costs: not asked again for the same goal
 	-- until the player is somewhere else (Tier.GaveUp).
 	local startCell = starts[1] % FSTRIDE
@@ -4582,19 +4655,22 @@ function Tier.Reach(ground, from)
 end
 
 -- A lift ridden between two places: kept, and the ways go by it. Two of the same lift are one.
+-- Returns true if it was a lift. It isn't one where no lift's model stands (Tier.LiftAt).
 function T.Rode(world, footNorth, footWest, headNorth, headWest, seconds)
+	if not Tier.LiftAt(world, footNorth, footWest) then return false end
 	local saved = T.Saved()
 	saved.lifts = saved.lifts or {}
 	for _, lift in ipairs(saved.lifts) do
 		if lift[1] == world and (lift[2] - footNorth) ^ 2 + (lift[3] - footWest) ^ 2 < Ridden.OFF * Ridden.OFF
 			and (lift[4] - headNorth) ^ 2 + (lift[5] - headWest) ^ 2 < Ridden.OFF * Ridden.OFF then
-			return
+			return true
 		end
 	end
 	local lifts = saved.lifts
 	lifts[#lifts + 1] = { world, floor(footNorth * 10 + 0.5) / 10, floor(footWest * 10 + 0.5) / 10,
 		floor(headNorth * 10 + 0.5) / 10, floor(headWest * 10 + 0.5) / 10, floor(math.min(Ridden.MOST, seconds) + 0.5) }
 	liftsKnown = liftsKnown + 1
+	return true
 end
 
 -- Of the floors at a place (into[1 .. count]), those someone indoors (or not) may be on: a floor under ground is
@@ -4604,15 +4680,68 @@ function Tier.Indoors(ground, into, count, indoors)
 	local kept = 0
 	for index = 1, count do
 		local id = into[index]
-		local cell = id % FSTRIDE
-		local r, c = floor(cell / CSTRIDE), cell % CSTRIDE
-		local look = select(4, Floor(CellIn(ground, r, c), (r % CELLS) * CELLS + c % CELLS, floor(id / FSTRIDE)))
-		if (look == T.UNDER) == indoors then
+		if (Tier.LookOf(ground, id) == T.UNDER) == indoors then
 			kept = kept + 1
 			into[index], into[kept] = into[kept], id
 		end
 	end
 	return kept > 0 and kept or count
+end
+
+-- The level a floor is on (T.GROUND, T.UNDER, T.ABOVE).
+function Tier.LookOf(ground, id)
+	local cell = id % FSTRIDE
+	local r, c = floor(cell / CSTRIDE), cell % CSTRIDE
+	return (select(4, Floor(CellIn(ground, r, c), (r % CELLS) * CELLS + c % CELLS, floor(id / FSTRIDE))))
+end
+
+-- True when the game's map for the player is one you can only be inside of (T.data.inside: Ironforge, the
+-- Undercity). No terrain belongs to those maps. So you're in the halls, not on the mountain or the ruins
+-- above. "Out of doors" doesn't help here. The game lets you ride in Ironforge.
+function Tier.Inside()
+	local inside = T.data.inside
+	if not inside then return false end
+	local map = C_Map.GetBestMapForUnit("player")
+	if map == nil or (issecretvalue and issecretvalue(map)) then return false end
+	return inside[map] == true
+end
+
+-- The floors under ground at a place, into into[1 ...]. The spot's own come first. If it has none, its
+-- cell's do. That happens beside a wall or a counter. Returns how many.
+function Tier.Halls(data, ground, north, west, into)
+	local count, kept = FloorsAt(data, ground, north, west, into), 0
+	for index = 1, count do
+		local id = into[index]
+		if Tier.LookOf(ground, id) == T.UNDER then
+			kept = kept + 1
+			into[index], into[kept] = into[kept], id
+		end
+	end
+	if kept > 0 then return kept end
+	local row, col = CellAt(data, north, west)
+	for k = 0, Floors(CellIn(ground, row, col)) - 1 do
+		local id = k * FSTRIDE + row * CSTRIDE + col
+		if Tier.LookOf(ground, id) == T.UNDER then
+			kept = kept + 1
+			into[kept] = id
+		end
+	end
+	return kept
+end
+
+-- The height to land at off a flight. It is the flight master's, if one is known within LAND_NEAR yards
+-- (Journey.lua's stops). A flight lands beside its master. That is a tower's top in most cities. In
+-- Ironforge it is the hall under the mountain. true if no master is known that near.
+Tier.LAND_NEAR = 60
+function Tier.LandedAt(world, north, west)
+	local best, least = true, Tier.LAND_NEAR * Tier.LAND_NEAR
+	for _, stop in ipairs(T.Stops and T.Stops() or Tier.empty) do
+		if stop.by == "flight" and stop.world == world and stop.up then
+			local far = (stop.north - north) ^ 2 + (stop.west - west) ^ 2
+			if far <= least then best, least = stop.up, far end
+		end
+	end
+	return best
 end
 
 -- Shy.Way.SetGuess(fn): fn(world, north, west) -> a height someone may stand at there, or nil. Asked when
@@ -4638,6 +4767,17 @@ function T.Saw(world, north, west, now, up)
 	rider.seen = now
 	local jumped = last and now and gone > Tier.JUMP and gone > (now - last) * Tier.FASTEST
 	local fresh = rider.world ~= world or rider.ground ~= ground or jumped
+	-- The game's map says you're inside a city under the ground. Only its floors count. If you were taken
+	-- for the mountain's top, look again.
+	if not up and Tier.Inside() then
+		local halls = Tier.Halls(data, ground, north, west, seen)
+		if halls > 0 then
+			count = halls
+			if rider.floor and Tier.LookOf(ground, rider.floor) ~= T.UNDER then rider.floor = nil end
+		else
+			count = FloorsAt(data, ground, north, west, seen)
+		end
+	end
 	if fresh or not rider.floor or up then
 		-- First seen, or not yet known on which floor: where there is one, that; at a height told, the floor
 		-- nearest it; off a flight, the top floor where it landed; once a way has been found from here, the floor
@@ -4662,9 +4802,12 @@ function T.Saw(world, north, west, now, up)
 		elseif count == 1 then
 			first = seen[1]
 		elseif Tier.landed then
+			-- Nearest the flight master's height (Tier.LandedAt). The topmost if none is known.
+			local at = type(Tier.landed) == "number" and Tier.landed
 			for index = 1, count do
 				local height = FloorHeight(data, ground, seen[index])
-				if height and (not best or height > best) then best, first = height, seen[index] end
+				local rank = height and (at and -math.abs(height - at) or height)
+				if rank and (not best or rank > best) then best, first = rank, seen[index] end
 			end
 		elseif not fresh and stood[ground] then
 			local reach = NearFloors(ground, stood[ground], NEAR_STEPS)
@@ -4752,8 +4895,8 @@ function T.Saw(world, north, west, now, up)
 			end
 		end
 		if high and low and high - low >= Ridden.RISE and now - rider.since >= Ridden.STILL_FOR
-			and (north - rider.north) ^ 2 + (west - rider.west) ^ 2 <= Ridden.OFF * Ridden.OFF then
-			T.Rode(world, rider.north, rider.west, north, west, now - rider.since)
+			and (north - rider.north) ^ 2 + (west - rider.west) ^ 2 <= Ridden.OFF * Ridden.OFF
+			and T.Rode(world, rider.north, rider.west, north, west, now - rider.since) then
 			onto = highest
 		else
 			onto = nearest or highest
@@ -4808,7 +4951,7 @@ local function Moves()
 	end
 end
 local moves = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_LEVEL_UP",
+for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_LEVEL_UP",
 	"PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }) do
 	moves:RegisterEvent(event)
 end
@@ -4844,6 +4987,8 @@ moves:SetScript("OnEvent", function(_, event, spell, base)
 	end
 	Moves()
 end)
+-- A fall or water spell learned (the spellbook, said by ShyCore only when it really changed).
+Shy:On("SHY_SPELLS", function() Moves() end)
 
 -- Shy.Way.Moves() -> the yards a drop may be now (0: none) and the spell that slows the fall; whether
 -- water is walked on and by which spell; the yards a steered glide may come down and its spell.
@@ -4904,9 +5049,11 @@ Tier.Look = Shy.Clocked("ground: which floor you stand on", function(now)
 		Tier.flying = UnitOnTaxi("player") or nil
 		return
 	end
-	-- (Off a flight: on the landing's top floor until a way begins from there: Standing.)
-	if Tier.flying then Tier.flying, Tier.landed = nil, true end
+	-- Off a flight you stand where the flight master does, until a way begins from there (Standing).
+	local landed = Tier.flying
+	Tier.flying = nil
 	local world, north, west = Shy.Here(true)
+	if landed then Tier.landed = world and Tier.LandedAt(world, north, west) or true end
 	if world then T.Saw(world, north, west, now) end
 end)
 C_Timer.NewTicker(1, function()
@@ -5065,14 +5212,15 @@ function T.With(world, north, west, toNorth, toWest, fall, glide, water, soon)
 	return Supposing(world, north, west, toNorth, toWest, fall or 0, glide or 0, water and true or false, soon)
 end
 
-function T.Seconds(world, north, west, toNorth, toWest, level, up)
+-- from: the height the walk starts at. Pass it when the walk starts at a stop, not where you stand.
+function T.Seconds(world, north, west, toNorth, toWest, level, up, from)
 	if level == T.NOWHERE then return nil end
 	level = Tier.Asked(world, toNorth, toWest, level, up)
 	local search = SearchFor(world, toNorth, toWest, nil, level, up)
 	if not search then return nil end
 	stats.asked = stats.asked + 1
 	stats.by.now = stats.by.now + 1
-	local seconds, state, least = Answer(search, north, west, true)
+	local seconds, state, least = Answer(search, north, west, true, from and Tier.Start(world, north, west, from) or nil)
 	if seconds then return seconds end
 	return nil, state, least
 end

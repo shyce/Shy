@@ -15,7 +15,7 @@ ns.Feature({
 	id = "skipGossip",
 	category = "Quests & NPCs",
 	title = "Skip NPC gossip",
-	desc = "When an NPC offers only one option (flight master, vendor, banker), it is picked for you. Hold Shift to read the text.",
+	desc = "When an NPC has only one thing to offer, you go straight to it. Hold Shift to stop and read.",
 	keywords = "gossip npc dialog dialogue chatter talk flight master vendor banker skip auto",
 	default = false,
 	events = {
@@ -54,7 +54,8 @@ local function TrainNext()
 	training = false
 end
 
--- ShySkin's trainer window has its own "Train all"; this button hides while it does.
+-- ShySkin's trainer window has its own "Train all": this button hides while it does, and the tweak's row
+-- is left out.
 local function SkinTrains()
 	local skin = Shy.addons.Skin
 	return skin ~= nil and skin.owns ~= nil and skin.owns.trainAll == true
@@ -94,9 +95,10 @@ ns.Feature({
 	id = "trainAll",
 	category = "Quests & NPCs",
 	title = "Train all button",
-	desc = "Adds a button to trainers that learns everything you can afford. Mouse over it for the total cost.",
+	desc = "Trainers get a button that learns everything you can afford. Point at it for the total.",
 	keywords = "trainer train all spells ranks learn skills profession class",
 	default = true,
+	leftOut = SkinTrains,
 	events = {
 		ADDON_LOADED = function(_, _, name)
 			if name == "Blizzard_TrainerUI" then CreateTrainButton() end
@@ -138,12 +140,13 @@ if not Shy.addons.Bags then
 	ns.Feature({
 		id = "sellJunk",
 		category = "Loot & vendors",
-		title = "Auto-sell junk",
-		desc = "Sells your gray items when you open a vendor. Hold Shift to keep them this time.",
+		title = "Sell junk",
+		desc = "Your gray items sell when you open a vendor. Hold Shift to keep them this time.",
 		keywords = "gray grey junk vendor sell auto automatic money gold trash",
 		default = true,
 		options = {
-			{ key = "report", kind = "checkbox", label = "Print the total in chat", default = true },
+			{ key = "report", kind = "checkbox", label = "Say the total", default = true,
+				desc = "Chat tells you what the junk sold for." },
 		},
 		events = {
 			MERCHANT_SHOW = function(f)
@@ -159,13 +162,15 @@ if not Shy.addons.Bags then
 	ns.Feature({
 		id = "autoRepair",
 		category = "Loot & vendors",
-		title = "Auto-repair",
-		desc = "Repairs your gear when you open a vendor that can repair. Hold Shift to skip it.",
+		title = "Repair gear",
+		desc = "Your gear is repaired when you open a vendor who can. Hold Shift to skip it.",
 		keywords = "repair auto automatic durability armor gear gold guild bank vendor",
 		default = true,
 		options = {
-			{ key = "guild", kind = "checkbox", label = "Use guild funds when allowed", default = false },
-			{ key = "report", kind = "checkbox", label = "Print the cost in chat", default = true },
+			{ key = "guild", kind = "checkbox", label = "Use guild funds", default = false,
+				desc = "The guild bank pays when your rank allows it. Otherwise you do." },
+			{ key = "report", kind = "checkbox", label = "Say the cost", default = true,
+				desc = "Chat tells you what the repair cost." },
 		},
 		events = {
 			MERCHANT_SHOW = function(f)
@@ -192,7 +197,7 @@ ns.Feature({
 	id = "fasterLoot",
 	category = "Loot & vendors",
 	title = "Faster auto loot",
-	desc = "With auto loot on, loots everything at once instead of one item at a time.",
+	desc = "With auto loot on, you pick up everything at once instead of item by item.",
 	keywords = "loot fast faster quick instant auto pick up corpse",
 	default = true,
 	events = {
@@ -211,7 +216,7 @@ ns.Feature({
 	id = "lootConfirm",
 	category = "Loot & vendors",
 	title = "Skip loot confirmations",
-	desc = "Confirms the \"this item will bind to you\" popup when you loot or roll. You still choose what to roll.",
+	desc = "The \"this will bind to you\" question answers itself when you loot or roll. You still pick what to roll.",
 	keywords = "bind pickup bop confirm confirmation popup loot roll need greed",
 	default = false,
 	events = {
@@ -233,7 +238,7 @@ ns.Feature({
 	id = "easyDelete",
 	category = "Loot & vendors",
 	title = "Easy item delete",
-	desc = "Fills in the confirmation word when you delete a rare or better item.",
+	desc = "The word you have to type to delete a rare item is filled in for you.",
 	keywords = "delete destroy item rare epic confirm type word popup",
 	default = false,
 	events = {
@@ -271,7 +276,7 @@ ns.Feature({
 	id = "skipCinematics",
 	category = "System",
 	title = "Skip cinematics at once",
-	desc = "Esc stops a cinematic or movie without asking first.",
+	desc = "Esc ends a cinematic or movie without asking if you're sure.",
 	keywords = "cinematic movie cutscene scene skip escape esc confirm",
 	default = false,
 	Enable = function()

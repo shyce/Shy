@@ -1,9 +1,9 @@
--- What you could farm: creatures out in the world, and the items had from them or from nodes. Townsfolk, guards,
--- vendors, quest givers and your friends are no farm, nor is anything only sold, nor anyone only in a dungeon. With
--- ShyFarm on, a creature is one its loot tables know (it has something to loot).
+-- What you could farm: creatures out in the world, and the items you get from them or from nodes.
+-- Not farms: townsfolk, guards, vendors, quest givers, your friends, anything only sold, and anyone
+-- only in a dungeon. With ShyFarm on, a creature must be in its loot tables (it has something to loot).
 --
---   Fa.Creature(npc)          whether a creature is one you could farm
---   Fa.Item(id)               where an item is best farmed from: { kind = "n" | "o", id, name, chance } (the creature
+--   Fa.Creature(npc)          whether you could farm a creature
+--   Fa.Item(id)               where an item is best farmed: { kind = "n" | "o", id, name, chance } (the creature
 --                             likeliest to drop it, else a node that holds it), or nil for one you can't farm
 --   Fa.Search(text, kinds)    T:Farmable's answer (ShyQuest.lua has its fields)
 

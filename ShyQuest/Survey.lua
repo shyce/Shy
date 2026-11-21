@@ -1,8 +1,8 @@
 -- The quest survey: asks the server about every quest the data knows, once, so that what it says of
 -- each (which quest it offers next, its levels) can be read back into the data for everyone.
--- /shyquest survey starts it. It goes on across sessions until it is done, two quests a second out
+-- /shy quest survey starts it. It goes on across sessions until it is done, two quests a second out
 -- of fights and loading screens, and stops by itself when the server stops answering. Only on an
--- account gathering quest data (/shyquest dev): players get the answers in the addon's own files.
+-- account gathering quest data (/shy quest dev): players get the answers in the addon's own files.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -15,7 +15,7 @@ local ABREAST = 20           -- questions out without an answer before it waits
 local PATIENCE = 30          -- seconds it waits for one before stopping
 local SETTLE = 10            -- seconds after entering the world before it goes on
 local ID = "shyquest.survey"
-local HELP = "|cff888888/shyquest survey stop|r ends it."
+local HELP = "|cff888888/shy quest survey stop|r ends it."
 
 local ids                    -- every quest the data knows, in order
 local running, loading = false, false
@@ -73,7 +73,7 @@ function S.Stop(why)
 	run = run + 1
 	Shy.Notices.Clear(ID)
 	local s = State()
-	T:Print(("quest survey %s at %d of %d. |cff888888/shyquest survey|r goes on with it."):format(why or "stopped", s.at, #Ids()))
+	T:Print(("quest survey %s at %d of %d. |cff888888/shy quest survey|r goes on with it."):format(why or "stopped", s.at, #Ids()))
 end
 
 local function Step(mine)
@@ -145,7 +145,7 @@ function S.Resume()
 	local s = State()
 	if not T.db.dev or running or s.done or s.at == 0 then return end
 	if s.build ~= Build() then
-		T:Print("the game was patched since the quest survey began: |cff888888/shyquest survey|r starts it over.")
+		T:Print("the game was patched since the quest survey began: |cff888888/shy quest survey|r starts it over.")
 		return
 	end
 	C_Timer.After(SETTLE, function()
@@ -169,11 +169,11 @@ function S.Report()
 	return table.concat(lines, "\n")
 end
 
--- /shyquest survey [stop | again | report]
+-- /shy quest survey [stop | again | report]
 function S.Command(word)
 	local s = State()
 	if not T.db.dev and word ~= "report" then
-		T:Print("the quest survey gathers data for the addon's own files. |cff888888/shyquest dev|r turns that on.")
+		T:Print("the quest survey gathers data for the addon's own files. |cff888888/shy quest dev|r turns that on.")
 	elseif word == "stop" then
 		if running then S.Stop() else T:Print("no quest survey is running.") end
 	elseif word == "report" then
@@ -187,7 +187,7 @@ function S.Command(word)
 		local total = #Ids()
 		T:Print(("quest survey: %d of %d asked, about %d min left. %s"):format(s.at, total, Minutes(total - s.at), HELP))
 	elseif s.done and s.build == Build() then
-		T:Print("the quest survey is done for this build. |cff888888/shyquest survey report|r shows it; |cff888888/shyquest survey again|r starts over.")
+		T:Print("the quest survey is done for this build. |cff888888/shy quest survey report|r shows it; |cff888888/shy quest survey again|r starts over.")
 	else
 		Start()
 	end

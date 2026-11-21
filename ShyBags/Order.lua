@@ -47,7 +47,7 @@ local KINDS = {
 		flip = "backward", by = "type, then name",
 		[false] = {
 			name = "By type", again = "Re-sort by type",
-			tip = "Sorted by type, then name: what to keep first, what can go last. Click again to sort from the last slot back, so new items land at the top left.",
+			tip = "Sorted by type, then name. What you'd keep comes first, what can go comes last. Click again to sort from the last slot back, so new items land at the top left.",
 		},
 		[true] = {
 			name = "By type, reversed", again = "Re-sort by type",
@@ -325,10 +325,10 @@ local WORDS = {
 	bags = { "bags" },
 }
 
-ns.Command("sort", "show your bags by type, cheapest, expensive, newest or oldest first, or as bags", function(rest)
+T:Command("sort", "show your bags by type, cheapest, expensive, newest or oldest first, or as bags", function(rest)
 	local pick = WORDS[strtrim(rest or ""):lower():gsub("%s+", " ")]
 	if not pick then
-		T:Print("/shybags sort type, type reversed, cheapest, expensive, newest, oldest or bags")
+		T:Print("/shy bags sort type, type reversed, cheapest, expensive, newest, oldest or bags")
 		return
 	end
 	Order.Set(pick[1], pick[2])

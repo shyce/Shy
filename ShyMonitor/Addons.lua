@@ -121,7 +121,7 @@ local function Header(parent)
 			if sortKey == self.key then sortDown = not sortDown else sortKey, sortDown = self.key, self.key ~= "name" end
 			view.refresh()
 		end)
-		b:SetScript("OnEnter", function(self) UI.Tip(self, label, (MEANS[key] or "") .. " Click to sort by it; click again to reverse.", { side = "BOTTOM" }) end)
+		b:SetScript("OnEnter", function(self) UI.Tip(self, label, (MEANS[key] or "") .. " Click to sort by it. Click again to reverse.", { side = "BOTTOM" }) end)
 		b:SetScript("OnLeave", function(self) UI.TipHide(self) end)
 		h.cells[key] = b
 	end

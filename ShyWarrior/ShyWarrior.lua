@@ -88,40 +88,29 @@ function T:OnLoad()
 	Shy.AdoptThreatRole(threat.role)
 	if threat.sound == false then Shy.SetThreatSound(false) end
 	threat.role, threat.sound = nil, nil
-	self:RegisterOptions(ns.CreateOptions())
 end
 
 function T:OnLogin()
 	if not ns.isWarrior then return end
 	local spells = CreateFrame("Frame")
-	spells:RegisterEvent("SPELLS_CHANGED")
 	spells:RegisterEvent("LEARNED_SPELL_IN_SKILL_LINE")
-	spells:SetScript("OnEvent", function()
+	local function Learned()
 		wipe(known)
 		ns.Refresh()
-	end)
+	end
+	spells:SetScript("OnEvent", Learned)
+	Shy:On("SHY_SPELLS", Learned)   -- (the spellbook, said by ShyCore only when it really changed)
 	ns.SetupOpenings()
 	ns.SetupShout()
 	ns.SetupThreat()
 	if ns.SetupKeys then ns.SetupKeys() end
 end
 
-SLASH_SHYWARRIOR1 = "/shywarrior"
-SlashCmdList.SHYWARRIOR = function(input)
-	local cmd = strtrim(input or ""):lower()
-	if cmd == "" then
-		T:OpenOptions()
-	elseif cmd == "light" and ns.Threat then
-		ns.Threat.Try()
-	elseif cmd == "keys" and ns.Keys then
-		ns.Keys.Run()
-	elseif cmd == "keys list" and ns.Keys then
-		Shy.Hub.Open("keys")
-	else
-		T:Print("commands:")
-		print("  /shywarrior  - open options")
-		print("  /shywarrior keys  - lay out your keys and macros, for every level")
-		print("  /shywarrior keys list  - every key and what it does")
-		print("  /shywarrior light  - show the threat light from held to lost")
+if ns.isWarrior then
+	T:Command("light", "show the threat light from held to lost", function()
+		if ns.Threat then ns.Threat.Try() end
+	end)
+	if Shy.Keys then
+		T:Command("keys", "lay out your keys and macros, for every level", function() ns.Keys.Run() end)
 	end
 end

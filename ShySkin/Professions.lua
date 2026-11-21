@@ -83,7 +83,7 @@ local WORDS = {
 	up = "%s went up to |cffffffff%d|r", ups = "Skill-ups", point = "%d gives a skill-up", points = "%d give a skill-up",
 	noPoints = "No skill-ups left", ready = "%d you can make now", recipes = "%d to learn", you = "You, %d",
 	always = "A point every time until |cffffffff%d|r.", now = "%d%% right now", grey = "grey at %d",
-	learnOdds = "Orange the day you learn it: a point every time until |cffffffff%d|r.",
+	learnOdds = "Orange as soon as you learn it. A point every time until |cffffffff%d|r.",
 	needs = "Needs", reagents = "Reagents", enough = "enough for %d", makes = "What it makes", bank = "%d in your bank",
 	build = "Build one: %s", createAll = "Create all (%d)", createNone = "Create all", worth = "About |cffffffff+%d|r skill",
 	making = "Making %d of %d", secLeft = "%d sec left", minLeft = "%d min left", learn = "How to learn it",
@@ -94,8 +94,8 @@ local WORDS = {
 	profit = "Profit", forProfit = "Make for profit", learnProfit = "Learn for profit", paying = "%d make a profit",
 	worthHead = "Worth", gain = "Profit %s", loss = "Loss %s", unpriced = "Not priced yet", sells = "Sells for",
 	vendorPays = "A vendor pays", reagentsCost = "Reagents", profitCell = "Profit", lossCell = "Loss", noPrice = "No price",
-	afterCut = "after the house's %d%% cut", lack = "You lack %s of them",
-	lackPoor = "You lack %s of them, more than you have", recipeCost = "The recipe costs %s", payback = ", paid back in %d",
+	afterCut = "after the auction house's %d%% cut", lack = "You're missing %s of them",
+	lackPoor = "You're missing %s of them, more than you have", recipeCost = "The recipe costs %s", payback = ", paid back in %d",
 }
 -- The secondary professions' cards: the game's painting and words for each.
 local SECONDARY = {
@@ -116,10 +116,11 @@ local making         -- crafting: { recipe, total, skill (at the start), last (s
 local page = "book"  -- "book" (your professions) or "craft" (a profession's recipes)
 local mode = "all"   -- the list's filter
 local mouse          -- the game's window took the mouse before we emptied it
+local theirs         -- the game's two list filters as we found them: given back when this is switched off
 local seen = {}      -- professionID -> the skill last drawn, so a point gained shows
 local toast          -- { text, untilTime }
 local made = {}      -- recipe -> what one craft makes and needs, for pricing ({ item, count, reagents }), or false
-local plans = {}     -- recipe -> its plan at the house's prices (the list's), or false; let go when prices change
+local plans = {}     -- recipe -> its plan at the auction house's prices (the list's), or false; let go when prices change
 local Refresh, Stale
 
 local function Frame() return ProfessionsFrame end
@@ -240,7 +241,7 @@ end
 
 local function Held(item) return C_Item.GetItemCount(item, true) or 0 end
 
--- A recipe's plan at the house's prices (ShyAuction's CraftPlan): the list's kept until prices change, the stage's
+-- A recipe's plan at the auction house's prices (ShyAuction's CraftPlan): the list's kept until prices change, the stage's
 -- worked out fresh (what you hold and your gold change).
 local function PlanOf(r, fresh)
 	local auction = Auction()
@@ -1588,7 +1589,7 @@ local function DrawRow(row, r)
 		row.pct:SetText(math.floor(p * 100 + 0.5) .. "%")
 		row.pct:SetTextColor(dif[1]:GetRGB())
 	end
-	-- Under its name, with the house's prices: its profit or its loss making one.
+	-- Under its name, with the auction house's prices: its profit or its loss making one.
 	local plan = PlanOf(r)
 	local profit = plan and plan.profit
 	row.profit:SetShown(profit ~= nil)
@@ -2160,6 +2161,9 @@ local function Paint(m, kit)
 		own.spine = ns.Spine(kit, own.box, "profSpine")
 		Empty(kit)
 		-- The list's filter stands in for the game's two: theirs off, so nothing hides a recipe out of sight.
+		if not theirs then
+			theirs = { makeable = C_TradeSkillUI.GetOnlyShowMakeableRecipes() == true, skillUp = C_TradeSkillUI.GetOnlyShowSkillUpRecipes() == true }
+		end
 		if C_TradeSkillUI.GetOnlyShowMakeableRecipes() then C_TradeSkillUI.SetOnlyShowMakeableRecipes(false) end
 		if C_TradeSkillUI.GetOnlyShowSkillUpRecipes() then C_TradeSkillUI.SetOnlyShowSkillUpRecipes(false) end
 		Refresh()
@@ -2170,6 +2174,11 @@ local function Clear(m)
 	if m.on then return end   -- a repaint: the layout stays
 	making = nil
 	Unlearn()
+	if theirs then
+		if theirs.makeable then C_TradeSkillUI.SetOnlyShowMakeableRecipes(true) end
+		if theirs.skillUp then C_TradeSkillUI.SetOnlyShowSkillUpRecipes(true) end
+		theirs = nil
+	end
 	local f = Frame()
 	ns.AfterCombat("professions:clear", function()
 		if M.on then return end
@@ -2182,7 +2191,9 @@ end
 M = ns.Module({
 	id = "professions",
 	title = "Professions",
-	desc = "Replaces the professions window with one of your own: your professions with their skills and spells, and each profession's recipes with where they take your skill and what each needs.",
+	desc = "Your professions get a new window. Each recipe shows how far it takes your skill and what it needs.",
+	group = "rebuilt",
+	words = "tradeskill crafting recipes",
 	Ready = function() return ProfessionsFrame ~= nil end,
 	Hook = Hook,
 	Paint = Paint,

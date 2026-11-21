@@ -1,11 +1,11 @@
 -- Preview of the arranged screen.
---   P.Section(parent, width)           scaled drawing of the screen with the layouts, sizes and bars to pick from
+--   P.Section(parent, width)           the Screen room's console: the layouts as cards, the size and the bars, worn
+--                                      as you pick them while the console is in use
 --   P.Stage(parent, width, opts)       the drawing alone: S:Draw(size, style, grow, vessel), S.holder (the setup pages'
 --                                      cards); opts.focus = "vessel" draws the cooldown manager alone, large, `opts.height`
 --                                      tall (Picker.lua), opts.mini a thumbnail of it (no names, no flap); `vessel` is a
 --                                      choice of its scale and bars' side to draw; opts.look = function() -> look
 --                                      dresses every housing drawn in that look (a setup plan's pick), else the theme's
---   P.Choice(section, field, key, width, height, name, words)   a choice tile: section:Choose / section:Look
 --   P.BarsDrawing(parent, dot, gap)    a small drawing of a bars step: f:Paint(have, want)
 --   P.ShowGhost(size, cockpit, style)  the same plan as labelled outlines on the real screen (layout mode)
 --   P.HideGhost()
@@ -72,7 +72,7 @@ local STYLE_WORDS = {
 	center = "Your frames either side of your character, the bars under your feet. For damage and levelling.",
 	healer = "Your party or raid right under your character, your own frames out to the sides.",
 	tank = "The threat meter tall beside your target, your target's target over it.",
-	minimal = "Only your main bar. The others show while you point at them, the meter in a fight.",
+	minimal = "Only your main bar. The others show while you point at them, and the meter shows in a fight.",
 }
 P.STYLE_WORDS = STYLE_WORDS
 
@@ -85,7 +85,7 @@ function P.BarsWords(grow)
 	local L = ns.Layout
 	local step = L.STEPS[L.GrowStep()]
 	local sides = step.sides > 1 and "both side bars" or "a side bar for food and potions"
-	return COUNT[step.rows] .. " and " .. sides .. " for now; more as you learn abilities."
+	return COUNT[step.rows] .. " and " .. sides .. " for now, and more as you learn abilities."
 end
 
 -- The pieces: the planned screen as Parts.lua lists it. cockpit = false leaves the cockpit out. With them
@@ -926,238 +926,237 @@ function P.SidesDrawing(parent)
 	return f
 end
 
--- The section: drawing, choice tiles, status line
+-- The section: the layouts, the size and the bars, a line and a button
 
-local GAP = 8
-local LIGHT = 6
+-- GAP: between the cards; CARD_MOST: a card's widest (the name and its badge need some 170 across, more is only
+-- room); ROW: the size's and the bars' choices; ROW_GAP: between the rows; SIZE_W, BARS_W: their widths; LABEL:
+-- a choice's name to the choice; PAIR: between the two choices; BUTTON: the button's width; LINE: the line's
+-- room, two lines of words.
+local M = { GAP = 6, CARD_MOST = 176, ROW = 22, ROW_GAP = 10, SIZE_W = 234, BARS_W = 220, LABEL = 6, PAIR = 22,
+	BUTTON = 110, LINE = 30 }
 local sections = {}
 
--- A choice tile: a light, a name and a line of words.
-local function Choice(section, field, key, width, height, name, words)
-	local b = CreateFrame("Button", nil, section)
-	b:SetSize(width, height)
-	UI.Skin(b)
-	b.glow = b:CreateTexture(nil, "BORDER", nil, -1)
-	b.glow:SetTexture(Skin.GLOW)
-	b.glow:SetTextureSliceMargins(Skin.GLOW_SLICE, Skin.GLOW_SLICE, Skin.GLOW_SLICE, Skin.GLOW_SLICE)
-	b.glow:SetPoint("TOPLEFT", -3, 3)
-	b.glow:SetPoint("BOTTOMRIGHT", 3, -3)
-	UI.Tint(b.glow, C.hot, 0.7)
-	b.glow:Hide()
-	local well = CreateFrame("Frame", nil, b)
-	well:SetSize(LIGHT + 2, LIGHT + 2)
-	well:SetPoint("TOPLEFT", 10, -11)
-	UI.Skin(well, C.bg, C.border)
-	b.light = well:CreateTexture(nil, "ARTWORK")
-	b.light:SetPoint("TOPLEFT", 1, -1)
-	b.light:SetPoint("BOTTOMRIGHT", -1, 1)
-	b.name = UI.Text(b, name, 14, true)
-	b.name:SetPoint("LEFT", well, "RIGHT", 6, 0)
-	b.used = UI.Text(b, "in use", 10, true, C.good)
-	b.used:SetPoint("TOPRIGHT", -10, -10)
-	b.words = UI.Text(b, words, height < 54 and 10 or 11, false, C.dim)
-	b.words:SetPoint("TOPLEFT", 10, -28)
-	b.words:SetWidth(width - 20)
-	b.words:SetWordWrap(true)
+-- A live pick owes a reload (Layout.Owed). It's asked once, as the window closes, not at every pick: `fresh` is a
+-- live pick made since the last ask. A pick still being worn is waited for (`tries` at most), so it isn't dropped.
+local owe = { fresh = false, tries = 0, WAIT = 0.1, TRIES = 20 }
+local ASK = "Your new layout is on. Reload to finish setting it up."
 
-	-- lit: the choice picked. inUse: the console is set up with it.
-	function b:Paint(lit, inUse)
-		lit = lit and true or false
-		self.inUse = lit
-		self.used:SetShown(inUse and true or false)
-		UI.Paint(self.light, lit and ACCENT or C.bg)
-		UI.SetBorder(self, (lit or self.hover) and C.hot or C.border)
-		UI.SetFill(self, lit and C.row or C.bg)
-		self.glow:SetShown(self.hover and true or false)
+local function AnyShown()
+	for _, section in ipairs(sections) do
+		if section:IsVisible() then return true end
 	end
-
-	b:SetScript("OnClick", function()
-		if InCombatLockdown() then return end
-		PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
-		section:Choose(field, key)
-	end)
-	b:SetScript("OnEnter", function(self)
-		self.hover = true
-		section:Look(field, key)
-	end)
-	b:SetScript("OnLeave", function(self)
-		self.hover = false
-		section:Look(nil)
-	end)
-	return b
+	return false
 end
-P.Choice = Choice
 
--- The console as it is and as it could be, for the /shy window and the options page: the drawing,
--- then the layouts, the sizes, and bars that grow, picked here and set up with the Set up button.
--- The section's picks start as the console in use.
-P.DWELL = 0.12   -- seconds the mouse rests on a choice before the drawing shows it
+-- A frame after a section hid, or the window closed. (The room hides and shows its sections as it lays them
+-- out again: still shown a frame later, nothing was left.)
+local function Left()
+	local L = ns.Layout
+	if AnyShown() then return end
+	-- Setup took the window: its Finish reloads, and closing it asks.
+	if Shy.Hub.Lent() then
+		owe.fresh = false
+		return
+	end
+	if L.Wearing() and owe.tries < owe.TRIES then
+		owe.tries = owe.tries + 1
+		C_Timer.After(owe.WAIT, Left)
+		return
+	end
+	owe.tries = 0
+	if L.Previewing() then L.Keep() end
+	-- (Another room of the window: asked when it closes.)
+	if not owe.fresh or Shy.Hub.IsOpen() then return end
+	owe.fresh = false
+	if L.Owed() then Shy.Reload(ASK) end
+end
+local function Leave() C_Timer.After(0, Left) end
+
+-- The window closing from another room: asked then.
+Shy:On("SHY_HUB_CLOSED", Leave)
+
+-- The console's section of the /shy window's Screen room: the layouts as cards, then the size and the bars on one
+-- row, then a line saying what a pick does with a button for the bigger steps. With the console in use a pick goes
+-- on the screen at once (Layout.Wear); you're asked for the one reload it owes as you close the window. Not set up,
+-- or a layout you changed yourself: a pick waits for the button, which lays the console out fresh.
 function P.Section(parent, width)
 	local L = ns.Layout
 	local f = CreateFrame("Frame", nil, parent)
-	local own   -- the picks: { style, size }
+	-- Picks other than the console's: held for the button, or being worn (live). nil: the console's own.
+	local own
 	local function Picks()
-		own = own or { style = L.Style(), size = L.Size() }
-		own.grow = L.Grows()
-		return own
+		return own or { style = L.Style(), size = L.Size(), grow = L.Grows() }
+	end
+	local function Live()
+		return L.IsActive() and not L.Custom()
 	end
 
-	local stage = Stage(f, width)
-	stage.holder:SetPoint("TOPLEFT")
-	local buttons, styles = {}, {}
-	local y = -stage.holder:GetHeight() - GAP
-	-- The layouts as cards, a row of the classic ones and a row by role: a thumbnail each of the screen's band where
-	-- they differ.
+	local styles = {}
+	local y = 0
+	local each = 0
 	for _, row in ipairs(P.STYLE_ROWS) do
 		local count = #row[2]
-		local each = (width - (count - 1) * GAP) / count
+		each = min(M.CARD_MOST, (width - (count - 1) * M.GAP) / count)
 		for i, key in ipairs(row[2]) do
-			local b = P.Card(f, each, key, function(picked) f:Choose("style", picked) end, function(over) f:Look(over and "style" or nil, over) end)
-			b:SetPoint("TOPLEFT", (i - 1) * (each + GAP), y)
+			local b = P.Card(f, each, key, function(picked) f:Choose("style", picked) end, function() end)
+			b:SetPoint("TOPLEFT", (i - 1) * (each + M.GAP), y)
 			styles[key] = b
 		end
-		y = y - P.CardHeight(each) - GAP
+		y = y - P.CardHeight(each) - M.GAP
 	end
-	local each
-	each = (width - 2 * GAP) / 3
-	for i, key in ipairs(Console.SIZE_ORDER) do
-		local b = Choice(f, "size", key, each, 58, P.NAMES[key], WORDS[key])
-		b:SetPoint("TOPLEFT", (i - 1) * (each + GAP), y)
-		buttons[key] = b
+	local across = 4 * each + 3 * M.GAP
+
+	-- The size and the bars, each after its name.
+	y = y - (M.ROW_GAP - M.GAP)
+	local function Named(text, x)
+		local label = UI.Text(f, text, 11, false, C.text)
+		label:SetPoint("LEFT", f, "TOPLEFT", x, y - M.ROW / 2)
+		return x + label:GetStringWidth() + M.LABEL
 	end
-	y = y - 58 - 12
-	local grow = UI.Checkbox(f, "Grow with me", function() return L.Grows() end, function(v)
-		ns.char.grow = v and true or false
-		f:Refresh()
-	end, { desc = "Start with one bar and a side bar for food and potions. When your abilities outgrow your bars, you're asked to add one." })
-	grow:SetPoint("TOPLEFT", 0, y - 2)
-	local bars = UI.Text(f, "", 11, false, C.dim)
-	bars:SetPoint("LEFT", grow, "RIGHT", 12, 0)
-	bars:SetWidth(width - 140 - 130)
-	bars:SetWordWrap(true)
+	local sizeTips = {}
+	for i, key in ipairs(Console.SIZE_ORDER) do sizeTips[i] = WORDS[key] end
+	local names = {}
+	for i, key in ipairs(Console.SIZE_ORDER) do names[i] = P.NAMES[key] end
+	local sizes = UI.Segmented(f, names, function()
+		local size = Picks().size
+		for i, key in ipairs(Console.SIZE_ORDER) do
+			if key == size then return i end
+		end
+		return false
+	end, function(i) f:Choose("size", Console.SIZE_ORDER[i]) end, { width = M.SIZE_W, height = M.ROW, tips = sizeTips })
+	local sizeX = Named("Size", 0)
+	sizes:SetPoint("TOPLEFT", sizeX, y)
+	local bars = UI.Segmented(f, { "Grow with me", "Every bar now" }, function() return Picks().grow and 1 or 2 end,
+		function(i) f:Choose("grow", i == 1) end, { width = M.BARS_W, height = M.ROW, tips = {
+			"You start with fewer bars and get more as you learn abilities.",
+			"Three rows and both side bars from the start.",
+		} })
+	bars:SetPoint("TOPLEFT", Named("Bars", sizeX + M.SIZE_W + M.PAIR), y)
+	y = y - M.ROW - M.ROW_GAP
+
+	-- The line, and the button at its right.
 	local apply
-	apply = UI.Button(f, "Set up", 120, function()
-		if apply.dimmed or InCombatLockdown() then return end
-		local picks = Picks()
-		L.Report(L.SetUp(picks.size, picks.style))
+	apply = UI.Button(f, "Set up", M.BUTTON, function()
+		if InCombatLockdown() then return end
+		local p = Picks()
+		local opts
+		if p.grow ~= L.Grows() then opts = { grow = p.grow } end
+		-- (What live picks put on is kept: the button's reload settles it too.)
+		if L.Previewing() then L.Keep() end
+		owe.fresh = false
+		L.Report(L.SetUp(p.size, p.style, opts))
 		own = nil
 		f:Refresh()
 	end)
-	apply:SetPoint("TOPRIGHT", 0, y)
-	UI.SetFill(apply, C.fill)
-	local foot = -y + 24
-	local status = UI.Text(f, "", 12)
-	status:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -foot - 10)
-	status:SetWidth(width)
+	apply:SetPoint("TOPRIGHT", f, "TOPLEFT", across, y)
+	local status = UI.Text(f, "", 11)
+	status:SetPoint("LEFT", f, "TOPLEFT", 0, y - M.LINE / 2)
+	status:SetWidth(across - M.BUTTON - 12)
+	status:SetJustifyH("LEFT")
 	status:SetWordWrap(true)
-	f:SetSize(width, foot + 10 + 34)
-	f.stage, f.buttons, f.styles, f.grow, f.apply = stage, buttons, styles, grow, apply
+	f:SetSize(across, -y + M.LINE)
+	f.styles, f.sizes, f.bars, f.apply, f.status = styles, sizes, bars, apply, status
 
-	-- A click on a choice.
-	function f:Choose(field, key)
-		Picks()[field] = key
+	-- A click on a layout, a size or the bars.
+	function f:Choose(field, value)
+		if InCombatLockdown() then return end
+		local p = Picks()
+		local pick = { style = p.style, size = p.size, grow = p.grow }
+		pick[field] = value
+		if not Live() then
+			own = pick
+			return self:Refresh()
+		end
+		local same = pick.style == L.Style() and pick.size == L.Size() and pick.grow == L.Grows()
+		if same and not own then return self:Refresh() end
+		-- On the screen now, as setup puts it on. The bars are told only when they change: as they are otherwise.
+		local opts = {}
+		if pick.grow ~= L.Grows() then opts.grow = pick.grow end
+		pick.live = true
+		own = pick
+		local ok, why = L.Wear(pick.size, pick.style, opts, function()
+			if own == pick then own = nil end
+			T:Apply()
+			P.Refresh()
+		end)
+		if ok then
+			owe.fresh = true
+		else
+			own = nil
+			L.Report(ok, why)
+		end
 		self:Refresh()
 	end
 
-	-- Preview the choice under the mouse. The drawing is laid again (some 180 ms) once the mouse has rested
-	-- P.DWELL on a choice, or off them all: laid at once, crossing the choices laid it at every card's edge,
-	-- once to leave one and once to come onto the next.
-	local dwell = CreateFrame("Frame", nil, f)
-	dwell:Hide()
-	dwell:SetScript("OnUpdate", function(self, elapsed)
-		self.left = self.left - elapsed
-		if self.left > 0 then return end
-		self:Hide()
-		f:Refresh(true)
-	end)
-	function f:Look(field, key)
-		self.looking = field and { field = field, key = key } or nil
-		dwell.left = P.DWELL
-		dwell:Show()
-	end
-
-	-- Something to set up: not in use, out of date, or picks other than the console's.
-	local function Pending(picks)
-		if not L.IsActive() or L.IsStale() then return true end
-		if picks.style ~= L.Style() or picks.size ~= L.Size() then return true end
+	-- Something the button would set up: not in use, out of date, picks held for it, or bars to grow.
+	local function Pending(change)
+		if not L.IsActive() or L.IsStale() or change then return true end
 		return L.Grows() and L.GrowStep() ~= L.StepNow()
 	end
 
-	-- What a fight changes: the choices dimmed and the line under them. `pending` is worked out only if asked.
-	local function Status(picks, pending)
-		local fighting, active, size, style = InCombatLockdown(), L.IsActive(), L.Size(), L.Style()
-		for _, b in pairs(buttons) do b:SetAlpha(fighting and 0.4 or 1) end
-		for _, b in pairs(styles) do b:SetAlpha(fighting and 0.4 or 1) end
-		apply.dimmed = fighting
-		apply:SetAlpha(apply.dimmed and 0.4 or 1)
-		local change = picks.style ~= style or picks.size ~= size
-		if fighting then
-			UI.Ink(status, C.dim)
-			status:SetText("You're in combat. You can set up the console after the fight.")
-		elseif active and change then
-			UI.Ink(status, C.text)
-			status:SetText(("Press Set up to switch to %s, %s. Needs a reload."):format(P.STYLES[picks.style], P.NAMES[picks.size]:lower()))
-		elseif active and L.IsStale() then
-			UI.Ink(status, C.alert)
-			status:SetText("Your bars, unit frames or skins changed since the console was set up. Set up refits it. Needs a reload.")
-		elseif active and (pending == nil and Pending(picks) or pending) then
-			UI.Ink(status, C.text)
-			status:SetText(L.GrowStep() > L.StepNow() and "Your abilities have outgrown your bars. Set up adds what they need. Needs a reload."
-				or "Set up puts away the bars you don't need yet; their buttons are kept. Needs a reload.")
-		elseif active and L.Custom() then
-			UI.Ink(status, C.alert)
-			status:SetText("You changed this layout yourself, so setup leaves it alone. Set up lays it out fresh and you lose your changes. Needs a reload.")
-		elseif active then
-			UI.Ink(status, C.good)
-			status:SetText("The console is in use. Pick another layout or size, or press Put it back to reset every piece. Needs a reload.")
-		else
-			UI.Ink(status, C.dim)
-			status:SetText(L.Exists() and "You're using your own Edit Mode layout, so setup leaves it alone. Set up switches back to the console. Needs a reload."
-				or "Not set up on this character. Set up adds an Edit Mode layout named \"Shy\"; your own layout is kept. Needs a reload.")
-		end
+	local function Say(color, text)
+		UI.Ink(status, color)
+		status:SetText(text)
 	end
 
-	-- There are nine drawings: the console's own and a card's each (P.Painter). The console's own is laid at
-	-- once, again only where it would show something else while only the mouse has moved (looking); the cards'
-	-- one a frame after it.
 	local painter = P.Painter(f)
 
-	-- looking: asked only because the mouse rests on another choice, or on none.
-	function f:Refresh(looking)
-		local active, size, style = L.IsActive(), L.Size(), L.Style()
-		local picks = Picks()
-		local drawn = { style = picks.style, size = picks.size, grow = picks.grow }
-		if self.looking then drawn[self.looking.field] = self.looking.key end
+	function f:Refresh()
+		local p = Picks()
+		local fighting, active, style, custom = InCombatLockdown(), L.IsActive(), L.Style(), L.Custom()
 		local from = P.From()
-		if not (looking and stage:Shows(drawn.size, drawn.style, drawn.grow, from)) then stage:Lay(drawn.size, drawn.style, drawn.grow, from) end
-		for key, b in pairs(buttons) do b:Paint(picks.size == key, active and size == key) end
 		painter:Forget()
+		local used = custom == "changed" and "custom" or true
 		for key, b in pairs(styles) do
-			painter:Ask(b.stage, drawn.size, key, drawn.grow, from)
-			b:Paint(picks.style == key, active and style == key)
+			painter:Ask(b.stage, p.size, key, p.grow, from)
+			b:Paint(p.style == key, active and style == key and used, fighting)
 		end
-		grow:Refresh()
-		bars:SetText(P.BarsWords(drawn.grow))
-		local pending = Pending(picks)
-		-- With nothing to change the button sets the console up again as it is: every piece back in its
-		-- place and at its size.
+		sizes:Refresh()
+		bars:Refresh()
+		local alpha = fighting and 0.4 or 1
+		sizes:SetAlpha(alpha)
+		bars:SetAlpha(alpha)
+		apply:SetAlpha(alpha)
+		local change = own ~= nil and not own.live
+			and (own.style ~= style or own.size ~= L.Size() or own.grow ~= L.Grows())
+		local pending = Pending(change)
+		-- With nothing to change the button sets the console up again as it is: every piece back in its place
+		-- and at its size.
 		apply.text:SetText((active and not pending) and "Put it back" or "Set up")
-		Status(picks, pending)
+		-- (Lit only while it has something to set up: putting things back is no call to act.)
+		apply:SetPrimary(pending)
+		if fighting then
+			Say(C.dim, "You're in combat. You can change the console after the fight.")
+		elseif not active then
+			Say(C.dim, L.Exists() and "You're on your own Edit Mode layout. Set up switches back to the console, with a reload."
+				or "Not set up on this character. Set up adds a layout named \"Shy\" and keeps yours, with a reload.")
+		elseif custom then
+			Say(C.alert, change and "You changed this layout yourself. Set up lays out your pick and your changes go, with a reload."
+				or "You changed this layout yourself. Put it back lays it out fresh and your changes go, with a reload.")
+		elseif L.IsStale() then
+			Say(C.alert, "Your bars, frames or skins changed since the console was set up. Set up refits it, with a reload.")
+		elseif pending then
+			Say(C.text, L.GrowStep() > L.StepNow() and "Your abilities have outgrown your bars. Set up adds what they need, with a reload."
+				or "Set up puts away the bars you don't need yet, with a reload. They keep their buttons.")
+		elseif owe.fresh and (own or L.Owed()) then
+			Say(C.good, "It's on now. You'll be asked to reload when you close this window.")
+		else
+			Say(C.good, "Pick a layout or size and it's on now. Put it back resets every piece, with a reload.")
+		end
 	end
 
-	-- A fight begins or ends: only what it changes. The drawings stay as they are.
-	function f:Dim()
-		Status(Picks())
-	end
-
+	-- A fight begins: a pick still being worn is dropped (Layout.Wear waits for no fight), never worn after it.
 	f:RegisterEvent("PLAYER_REGEN_DISABLED")
 	f:RegisterEvent("PLAYER_REGEN_ENABLED")
-	f:SetScript("OnEvent", function(self)
-		if self:IsVisible() then self:Dim() end
+	f:SetScript("OnEvent", function(self, event)
+		if event == "PLAYER_REGEN_DISABLED" and own and own.live then own = nil end
+		if self:IsVisible() then self:Refresh() end
 	end)
-	f:SetScript("OnHide", function(self)
-		self.looking = nil
-		own = nil
+	f:SetScript("OnHide", function()
+		if own and not own.live then own = nil end
+		-- (Left now, so a window lent to setup starts from what is on the screen.)
+		if not L.Wearing() and L.Previewing() then L.Keep() end
+		Leave()
 	end)
 	sections[#sections + 1] = f
 	return f

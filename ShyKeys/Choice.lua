@@ -134,7 +134,7 @@ function Hot.Says(pick, plan)
 	local says = { notes = {}, changes = 0 }
 	if pick == "off" then
 		says.safe = ((mine and Keys.Has(mine.addon)) or Hot.On()) and "Every button and hotkey goes back exactly as you had it."
-			or "This is what you have now. Nothing of yours is changed."
+			or "This is what you have now. Nothing changes."
 		return says
 	end
 	-- What of yours a layout would move to a free button: said before anything is done.
@@ -146,10 +146,10 @@ function Hot.Says(pick, plan)
 	-- The macros a layout comes to: among the account's when the character's are full, and no layout without room.
 	local space = mine and Keys.Space(mine.addon, mine.jobs, mine.opts)
 	if space and space.short > 0 then
-		says.block = ("Not enabled yet: your keys need %d macros and there is room for %d. Delete %d you don't use, this character's or the account's, and they can be laid out. Your own macros are never touched here."):format(
+		says.block = ("Not enabled yet. Your keys need %d macros and there's room for %d. Delete %d you don't use, character or account, and they can be laid out. Your own macros are never touched here."):format(
 			space.need, space.need - space.short, space.short)
 	elseif space and space.spill > 0 then
-		says.notes[1] = ("This character has room for %d of your keys' %d macros, so %d go among the account's, which every character sees. They are removed when you go back; your own are never touched."):format(
+		says.notes[1] = ("This character has room for %d of your keys' %d macros, so %d go among the account's, which every character sees. They're removed when you go back. Your own macros are never touched."):format(
 			math.max(0, space.character), space.need, space.spill)
 	end
 	if pick == "own" then
@@ -182,7 +182,7 @@ function Hot.Says(pick, plan)
 			if (state.was[key] or "") ~= "" then kept = kept + 1 end
 		end
 		says.safe = kept > 0 and ("%d of your hotkeys were changed. Each is saved, and one click puts them all back."):format(kept)
-			or "Your hotkeys already matched: nothing of yours was changed."
+			or "Your hotkeys already matched, so nothing of yours changed."
 		return says
 	end
 	local will = Hot.Plan(mine and mine.opts)
@@ -193,9 +193,9 @@ function Hot.Says(pick, plan)
 	if says.changes > 0 then
 		says.safe = ("%d of your hotkeys change. Each is saved, and %s."):format(says.changes, back)
 	elseif #will.changes > 0 then
-		says.safe = ("None of your hotkeys change: %d keys that do nothing now get a button."):format(#will.changes)
+		says.safe = ("None of your hotkeys change. %d keys that do nothing now get a button."):format(#will.changes)
 	else
-		says.safe = "Your hotkeys already match: nothing of yours changes."
+		says.safe = "Your hotkeys already match, so nothing of yours changes."
 	end
 	-- (what loses its key is said key by key in the list under it: Hot.Yours)
 	if #will.freed > 0 then
@@ -498,7 +498,7 @@ function Hot.Panel(parent, width, plan, onPick, part)
 		row.target:SetScript("OnEnter", function(self)
 			if listening ~= row then
 				UI.Tip(self, ("A key for %s"):format(row.moves or "it"),
-					"Click, then press the key you want. Esc cancels; Backspace gives back the key we picked.")
+					"Click, then press the key you want. Esc cancels. Backspace goes back to the suggested key.")
 			end
 		end)
 		row.target:SetScript("OnLeave", function(self) UI.TipHide(self) end)
@@ -713,7 +713,7 @@ function Hot.Panel(parent, width, plan, onPick, part)
 		end
 		for _ in pairs(keys) do n = n + 1 end
 		if n == 0 then return nil end
-		return ("%d %s waiting. Nothing of yours is bound until you save."):format(n, n == 1 and "change" or "changes")
+		return ("%d %s waiting. Nothing is bound until you save."):format(n, n == 1 and "change" or "changes")
 	end
 	f.Waiting = Waiting
 	-- "Shift + 1 to 6" for a run of the number row, else each key.
@@ -793,7 +793,7 @@ function Hot.Panel(parent, width, plan, onPick, part)
 			return ("%s %s %s"):format(name, on and "is on" or "moves to", Keys.Key(entry.home)), becomes
 		end
 		local still = entry.also and (" Still on %s."):format(Keys.Key(entry.also))
-			or (on and " It has no key now: pick one." or " Pick a key for it, or it has none.")
+			or (on and " It has no key now. Pick one." or " Pick a key for it, or it has none.")
 		return ("%s %s %s"):format(name, on and "is no longer on" or "leaves", key), becomes .. still
 	end
 	-- The list in numbers, beside its caption: "8 move · 2 yours · 1 with no key".

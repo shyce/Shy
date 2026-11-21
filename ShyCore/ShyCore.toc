@@ -3,7 +3,7 @@
 ## Notes: The look, layout and setup every Shy addon shares |cff888888/shy|r
 ## Author: Shyce Cream
 ## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r
-## Version: 5.2.0
+## Version: 5.2.2
 ## X-Date: 2026-11-21
 ## IconTexture: Interface\AddOns\ShyCore\Media\ShyCoreMarkColor
 ## SavedVariables: ShyCoreDB
@@ -29,9 +29,12 @@ Looks\Grove.lua
 Looks\Galaxy.lua
 Model.lua
 Hover.lua
+List.lua
+Search.lua
 Shop.lua
 Fold.lua
 Hub.lua
+Settings.lua
 Credits.lua
 LookAudit.lua
 Memory.lua

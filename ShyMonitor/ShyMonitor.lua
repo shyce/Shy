@@ -2,9 +2,9 @@
 -- behind a number, read from what the addons register with ShyCore (the clocks, counters and memory
 -- hooks) and from the game's own profiler. Loaded when first opened; closed, nothing of it runs.
 --
---   /shymon                open or close the window
---   /shymon <addon>        open at that addon (the name, or its suffix: quest, way)
---   /shymon errors         the errors
+--   /shy monitor           open or close the window
+--   /shy monitor <addon>   open at that addon (the name, or its suffix: quest, way)
+--   /shy monitor errors    the errors
 --   Shy.Monitor(view, key) opens it from anywhere (ShyCore loads it)
 
 local ADDON, ns = ...
@@ -90,10 +90,10 @@ local function AddonNamed(word)
 	end
 end
 
-SLASH_SHYMONITOR1 = "/shymonitor"
-SLASH_SHYMONITOR2 = "/shymon"
-SlashCmdList.SHYMONITOR = function(input)
-	local cmd = strtrim(input or ""):lower()
+-- /shy monitor and what was typed after it: nothing opens or closes the window, an addon's name opens it at
+-- that addon, "errors" opens the errors caught. (The core has the command: this addon loads when it is first used.)
+function T:Ask(words)
+	local cmd = strtrim(words or ""):lower()
 	if cmd == "" then
 		ns.Window.Toggle()
 	elseif cmd == "errors" then
@@ -101,9 +101,6 @@ SlashCmdList.SHYMONITOR = function(input)
 	elseif AddonNamed(cmd) then
 		ns.Window.Open("addon", AddonNamed(cmd))
 	else
-		T:Print("commands:")
-		print("  /shymon  - open or close the task manager")
-		print("  /shymon <addon>  - open at that addon")
-		print("  /shymon errors  - the errors caught")
+		T:Print("add an addon's name, or \"errors\".")
 	end
 end

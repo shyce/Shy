@@ -13,9 +13,8 @@ local SLAB = UI.LookSlab
 -- The measures (units): the rain's tile W x TALL, its layers falling at SPEED units a second, each at LAYER of the
 -- rain's strength (RAIN by the option); the scanlines a SCAN-texel tile a texel a pixel at SCAN_A; the edge a nine
 -- slice (EDGE_SLICE) at EDGE_A; a head's line: the stream STREAM long, BAND tall, at STREAM_A, its scan BEAM long
--- running BEAM_SPEED units a second (a looping slide the game runs itself); a button's glow a nine slice
--- (KEY_SLICE), at KEY_REST at rest. The rain falls FPS times a second (the game can't scroll a texture itself),
--- only on a housing shown.
+-- running BEAM_SPEED units a second; a button's glow a nine slice (KEY_SLICE), at KEY_REST at rest. The rain falls
+-- and the scans run FPS times a second (the game can't scroll a texture itself), only on what is shown.
 local M = {
 	W = 96, TALL = 192, SPEED = { 6, 10 }, LAYER = { 1, 0.55 }, RAIN = { falling = 0.55, still = 0.55, off = 0 },
 	SCAN = 64, SCAN_A = 0.22, EDGE_SLICE = 8, EDGE_A = 0.9,
@@ -53,7 +52,29 @@ local function LayRain(h, t)
 	end
 end
 
-clock:SetScript("OnUpdate", Shy.Clocked("look: the matrix's rain", function(_, elapsed)
+-- A head's scan: where it is on its line is the time's, never a slide begun anew. Showing the line again, laying it
+-- again or a new width can't send it back to the start. It runs from the line's left end to its right, fading in
+-- as it sets out and out as it gets there, inside the line.
+local scans = setmetatable({}, { __mode = "k" })     -- a line's set -> true
+local function LayScan(set, t)
+	local line, beam = set.line, set.beam
+	local w = line:GetWidth()
+	if not w or issecretvalue(w) or w <= M.BEAM then
+		beam:SetAlpha(0)
+		return
+	end
+	if w ~= set.wide then
+		set.wide = w
+		set.stream:SetTexCoord(0, w / M.STREAM, 0, 1)
+	end
+	local span = w - M.BEAM
+	local along = ((t * M.BEAM_SPEED + set.seed) % span) / span
+	beam:ClearAllPoints()
+	beam:SetPoint("LEFT", line, "LEFT", span * along, 0)
+	beam:SetAlpha(math.sin(math.pi * along))
+end
+
+clock:SetScript("OnUpdate", Shy.Clocked("look: the matrix's rain and scans", function(_, elapsed)
 	since = since + elapsed
 	if since < 1 / M.FPS then return end
 	since = 0
@@ -67,8 +88,18 @@ clock:SetScript("OnUpdate", Shy.Clocked("look: the matrix's rain", function(_, e
 			if h.matrixRain[1]:IsVisible() then LayRain(h, t) end
 		end
 	end
+	for set in pairs(scans) do
+		-- (A line wears the look while UI.LookLine says so. Worn again, SHY_THEME starts the clock.)
+		if set.line.shyKindOn == "matrix" then
+			any = true
+			if set.beam:IsVisible() then LayScan(set, t) end
+		end
+	end
 	if not any then clock:Hide() end
 end))
+Shy:On("SHY_THEME", function()
+	if next(scans) then clock:Show() end
+end)
 
 -- ------------------------------------------------------------------ built, dressed, fitted
 local function Build(h, kit)
@@ -124,8 +155,8 @@ local function Fit(h, g)
 	h.matrixEdge:SetShown(h.matrixW >= 2 * M.EDGE_SLICE and h.matrixTall >= 2 * M.EDGE_SLICE)
 end
 
--- A head's line: the stream of glyphs along it, the scan sliding over it from before its start to past its end, over
--- and over (a slide the game runs: laid again only when the line changes width); the line itself put away.
+-- A head's line: the stream of glyphs along it, the scan running over it from its start to its end, over and over
+-- (LayScan); the line itself put away.
 local function Line(owner, line)
 	local set = { owner = owner, line = line }
 	set.stream = owner:CreateTexture(nil, "ARTWORK", nil, 0)
@@ -143,24 +174,11 @@ local function Line(owner, line)
 		local r, g, b = accent()
 		return r + (1 - r) * 0.4, g + (1 - g) * 0.4, b + (1 - b) * 0.4, 0.9
 	end)
-	set.beam:SetPoint("RIGHT", line, "LEFT", 0, 0)
-	local run = set.beam:CreateAnimationGroup()
-	run:SetLooping("REPEAT")
-	local slide = run:CreateAnimation("Translation")
-	local wide
-	local function Lay()
-		local w = line:GetWidth()
-		if not w or issecretvalue(w) or w <= 0 or w == wide then return end
-		wide = w
-		set.stream:SetTexCoord(0, w / M.STREAM, 0, 1)
-		slide:SetOffset(w + M.BEAM, 0)
-		slide:SetDuration((w + M.BEAM) / M.BEAM_SPEED)
-		run:Stop()
-		run:Play()
-	end
-	if owner.HookScript and owner:HasScript("OnSizeChanged") then owner:HookScript("OnSizeChanged", Lay) end
-	C_Timer.After(0, Lay)
-	Lay()
+	-- (Each line's scan a little apart from the others', so the heads on a screen don't run together.)
+	set.seed = math.random() * 1000
+	LayScan(set, GetTime())
+	scans[set] = true
+	clock:Show()
 	return { set.stream, set.beam }
 end
 

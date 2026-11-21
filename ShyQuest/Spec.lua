@@ -17,7 +17,7 @@
 --     numbered pins, the next one a white ring, and their tooltips say so. They are frames of ours standing
 --     on the talent buttons: the game's own glow and search mark are fields written on its buttons, which
 --     addon code must not do.
---   C_Traits has no data until SPELLS_CHANGED or a trait event has fired (`ready`).
+--   C_Traits has no data until the spellbook is first read (SHY_SPELLS) or a trait event has fired (`ready`).
 
 local ADDON, ns = ...
 local T = ns.T
@@ -630,9 +630,10 @@ function Spec.Lineup(id)
 	return ok
 end
 
--- A build picked from the card or the options: followed, and the cooldown manager laid out for it.
+-- A build picked from the quest window or the settings: followed, and the cooldown manager laid out for it.
 local function Pick(id)
 	Spec.Choose(id)
+	Shy.Settings.Refresh()
 	if Spec.Lineup(id) then Shy.Reload("Your cooldown manager is laid out for your build. Reload to see it.") end
 end
 
@@ -689,7 +690,7 @@ local function Find()
 		caption = (mine.first == now.earned and "LEVEL %d  \194\183  YOUR FIRST TALENT" or "LEVEL %d  \194\183  TALENTS"):format(level),
 		mark = "talent",
 		menu = function(root)
-			root:CreateButton("Not now: ask again at the next point", function()
+			root:CreateButton("Ask me at the next point", function()
 				Mine().skip = now.earned
 				fresh = nil
 				ns.Refresh()
@@ -821,6 +822,13 @@ end
 -- Talent and spellbook events come in bursts: one deferred refresh covers them.
 local looking = false
 local routing = false   -- the look coming asks again: "route" (the card's row moved), "all" (the talents changed)
+local told = nil        -- the talents as the guide was last told of them (Said)
+-- What the guide reads of your talents, in a line. Only a change in it rebuilds the guide.
+local function Said()
+	local now = Spec.Now()
+	if not now then return "" end
+	return ("%d %d %s %s"):format(now.unspent, now.spent, tostring(now.build.id), tostring(now.next and now.next.node))
+end
 local function Look()
 	looking = false
 	local route = routing
@@ -828,7 +836,14 @@ local function Look()
 	if not ready or not ns.char then return end
 	Greet()
 	Dress()
-	if route == "all" then ns.Refresh() elseif route then ns.RefreshRoute() end
+	local said = route == "all" and Said()
+	if said and said ~= told then
+		told = said
+		ns.Refresh(nil, "talents")
+	elseif route then
+		-- (The card's row alone moved: a fight, a rest, the same talents told again. The errands are fitted again.)
+		ns.RefreshErrands()
+	end
 end
 local function Soon(route)
 	if route == "all" or (route and not routing) then routing = route end
@@ -847,12 +862,12 @@ end
 local QUIET = { PLAYER_REGEN_DISABLED = true, PLAYER_REGEN_ENABLED = true, PLAYER_UPDATE_RESTING = true }
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "SPELLS_CHANGED", "TRAIT_CONFIG_LIST_UPDATED", "PLAYER_TALENT_UPDATE", "TRAIT_CONFIG_UPDATED",
+for _, event in ipairs({ "TRAIT_CONFIG_LIST_UPDATED", "PLAYER_TALENT_UPDATE", "TRAIT_CONFIG_UPDATED",
 	"TRAIT_TREE_CURRENCY_INFO_UPDATED", "TRAIT_NODE_CHANGED", "ACTIVE_TALENT_GROUP_CHANGED", "ACTIVE_COMBAT_CONFIG_CHANGED",
 	"PLAYER_LEVEL_UP", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_UPDATE_RESTING" }) do
 	events:RegisterEvent(event)
 end
-events:SetScript("OnEvent", function(_, event)
+local function Seen(_, event)
 	if event == "PLAYER_LEVEL_UP" then
 		-- The new point may be counted a moment after the level-up event.
 		stale = true
@@ -870,7 +885,10 @@ events:SetScript("OnEvent", function(_, event)
 		ready, stale = true, true
 	end
 	if not QUIET[event] then Soon("all") else Soon(Spending() and "route") end
-end)
+end
+events:SetScript("OnEvent", Seen)
+-- The spellbook read or changed (ShyCore, only when it really did): the talents can be read now.
+Shy:On("SHY_SPELLS", function() Seen(nil, "SHY_SPELLS") end)
 
 ns.OnApply(function() Dress() end)
 
@@ -882,33 +900,30 @@ ns.CardSwitch("suggestions", function(root)
 	Spec.Menu(root)
 end)
 
--- Options section below OptionsWorld.lua's (whose left column ends 380 under `y`).
-local before = ns.MoreOptions
-function ns.MoreOptions(page, group, y)
-	local top = y
-	if before then
-		before(page, group, y)
-		top = y - 420
-	end
-	local header = UI.Header(page, "Talents", 270)
-	header:SetPoint("TOPLEFT", page, "TOPLEFT", 24, top)
-	local box = group:Checkbox(page, "Suggest talents", function() return T.db.spec.on end,
-		function(v) T.db.spec.on = v end,
-		{ desc = "With a talent point to spend, the card names the next talent of your leveling build, and the talent window numbers the build's next talents. Click the row to open talents, or right-click it to learn the talent or hide it until the next point." })
-	box:SetPoint("TOPLEFT", page, "TOPLEFT", 24, top - 32)
-	local items = {}
-	for index, one in ipairs(Spec.Builds()) do
-		items[index] = { value = one.build.id, text = ("%s  (%s)"):format(one.build.name, one.tag) }
-	end
-	if #items < 2 then return end
-	local pick = group:Dropdown(page, "Leveling build", items, function()
-		local build = Spec.Build()
-		return build and build.id
-	end, function(v) Pick(v) end, { width = 270,
-		desc = "How you want to play while leveling: the card suggests talents for it and the cooldown manager is laid out for it. Switching to a build your talents don't fit means a reset at a class trainer." })
-	-- In the page's right column, beside the switch: the next section begins 72 under `top`.
-	pick:SetPoint("TOPLEFT", page, "TOPLEFT", 330, top - 20)
-end
+-- Settings: whether talents are suggested, and for which build.
+T:Settings({
+	{ section = "Talents" },
+	{ key = "spec.on", label = "Suggest talents",
+		desc = "With a point to spend, the quest window names your build's next talent. The talent window numbers the next few." },
+	{ label = "Leveling build", words = "spec talents", shown = function() return #Spec.Builds() >= 2 end,
+		default = function()
+			local first = Spec.Builds()[1]
+			return first and first.build.id
+		end,
+		items = function()
+			local items = {}
+			for index, one in ipairs(Spec.Builds()) do
+				items[index] = { value = one.build.id, text = ("%s  (%s)"):format(one.build.name, one.tag) }
+			end
+			return items
+		end,
+		get = function()
+			local build = Spec.Build()
+			return build and build.id
+		end,
+		set = function(v) Pick(v) end,
+		desc = "How you want to play while leveling. A build your talents don't fit needs a reset at a class trainer." },
+})
 
 -- The setup window's step: what to play
 
@@ -979,9 +994,9 @@ Spec.Step = {
 		end
 		-- A tank's or a healer's build says how threat reads: on the nameplates and the threat meter.
 		if build.role == "tank" then
-			lines[#lines + 1] = { text = "Nameplates and threat read you as a tank", sub = "green while you hold an enemy, red as you lose it" }
+			lines[#lines + 1] = { text = "Nameplates and threat treat you as a tank", sub = "green while you hold aggro, red as you lose it" }
 		elseif build.role == "healer" then
-			lines[#lines + 1] = { text = "Nameplates and threat read you as a healer", sub = "green while the tank holds an enemy, red once it turns to you" }
+			lines[#lines + 1] = { text = "Nameplates and threat treat you as a healer", sub = "green while the tank holds aggro, red once it turns on you" }
 		end
 		return lines
 	end,

@@ -454,7 +454,7 @@ function R.Channels()
 	return out
 end
 
--- Unset in the options means LookingForGroup only.
+-- Unset in the settings means LookingForGroup only.
 function R.PostsIn(name)
 	local chosen = T.db.postChannels[name]
 	if chosen == nil then return name == "LookingForGroup" end
@@ -480,7 +480,7 @@ function R.Post()
 	if R.PostWait() > 0 then return end
 	local channels = R.PostChannels()
 	if #channels == 0 then
-		T:Print("no channel to post in. Join LookingForGroup or pick channels in the options.")
+		T:Print("no channel to post in. Join LookingForGroup or pick channels in the settings.")
 		return
 	end
 	local text = R.PostText()

@@ -361,7 +361,7 @@ function Keys.Panel(parent, width, plan, part)
 	local function Changing(cap, sections)
 		local change = cap.change
 		if change and change.from ~= "" then
-			sections[#sections + 1] = { rows = { { text = ("Now this key is %s. It gets a button of its own, and putting your keys back returns it."):format(
+			sections[#sections + 1] = { rows = { { text = ("Right now this key is %s. Your new keys take it over. Put your keys back to undo that."):format(
 				BindingCalled(change.from)), color = C.alert } } }
 		end
 		return sections
@@ -369,14 +369,14 @@ function Keys.Panel(parent, width, plan, part)
 	local function Hover(cap)
 		local job = cap.job
 		if not job and cap.stance then
-			local rows = { { text = "1, 2 and 3: " .. cap.stance }, { text = "They stand on the small bar under your character, each with its key in its corner.", color = C.dim } }
+			local rows = { { text = "1, 2 and 3: " .. cap.stance }, { text = "They sit on the small bar under your character, each with its key in its corner.", color = C.dim } }
 			if cap.keep then rows[#rows + 1] = { text = ("Your build's %s: keep it on."):format(cap.keep), color = C.good } end
 			Shy.Hover.Show(cap, { title = "Stance bar", note = Keys.Key(cap.key), sections = Changing(cap, { { rows = rows } }) }, { side = "TOP" })
 			return
 		end
 		if not job and cap.extra then
 			Shy.Hover.Show(cap, { title = "Extra button", note = Keys.Key(cap.key),
-				sections = Changing(cap, { { rows = { { text = ("Yours to fill, on the %s flyout."):format(cap.side) } } } }) },
+				sections = Changing(cap, { { rows = { { text = ("A free button for you, on the %s flyout."):format(cap.side) } } } }) },
 				{ side = "TOP" })
 			return
 		end
@@ -536,7 +536,7 @@ function Keys.Panel(parent, width, plan, part)
 	-- What changes at a level, said a row each.
 	local SAY = {
 		new = function(turn) return "New: " .. (turn.name or turn.job.what) end,
-		moved = function() return "Moves here meanwhile" end,
+		moved = function() return "Sits here for now" end,
 		grows = function(turn) return "Now " .. (turn.name or turn.job.what) end,
 	}
 	local function Turns(level)
@@ -646,15 +646,15 @@ function Keys.Panel(parent, width, plan, part)
 		if not mine then
 			self.status:SetText("No keys for this class yet.")
 		elseif plan == nil and laid and Keys.Old(mine.addon) then
-			self.status:SetText("Your keys have a new layout, drawn below: water and each potion on a key of its own, what you stay in on 1 2 3, and what your people alone can do on Shift + 1 and 2. Yours stay as they are until you press Update my keys.")
+			self.status:SetText("There's a new key layout, shown below. Water and each potion get their own key, your stances, forms or auras are on 1 2 3, and your racials are on Shift + 1 and 2. Your keys stay as they are until you press Update my keys.")
 		elseif shown == "shy" and state == "shy" then
 			local _, name = nil, nil
 			if mine.opts.build then _, name = mine.opts.build() end
-			self.status:SetText(("Your keys are set up%s. An ability comes to its key when you learn it; move one and it stays where you put it."):format(name and (" for " .. name) or ""))
+			self.status:SetText(("Your keys are set up%s. Each ability lands on its key when you learn it. Move one and it stays where you put it."):format(name and (" for " .. name) or ""))
 		elseif shown == "shy" then
-			self.status:SetText(("Every ability gets its own key, close to where your hand rests, and comes to it as you learn it. Nothing changes until you press %s."):format(done))
+			self.status:SetText(("Every ability gets its own key close to your hand, and lands on it when you learn it. Nothing changes until you press %s."):format(done))
 		elseif shown == "own" then
-			self.status:SetText("Your hotkeys stay as they are, and abilities go on the keys you already use. Any whose key does something else waits.")
+			self.status:SetText("Your hotkeys stay as they are, and abilities go on the keys you already use. If a key already does something else, its ability waits.")
 		else
 			self.status:SetText(state ~= "off" and "Every button and hotkey goes back exactly as you had it."
 				or "Everything stays exactly as you have it now.")

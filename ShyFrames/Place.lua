@@ -215,6 +215,8 @@ end
 
 function P.Apply()
 	ns.AfterCombat("place", function()
+		-- Your frame's height and your target's, with the buttons that carry them: never one without the other.
+		L.MainHeight(T.db.height)
 		-- The party's cells take the grid's make or the row's here, with the frames that carry them: never one
 		-- without the other.
 		L.Party(ns.TakeGrid())

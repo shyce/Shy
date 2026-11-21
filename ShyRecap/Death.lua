@@ -9,7 +9,7 @@
 -- Events can be missing at PLAYER_DEAD or still be the previous death's (same newest
 -- timestamp): the record is then built from the log and rebuilt on a retry (RETRY).
 -- Any field can be secret: each is checked with issecretvalue first, and only readable
--- values are used or saved. The raw answer is saved in ShyRecapCharDB.raw for "/shyrecap raw".
+-- values are used or saved. The raw answer is saved in ShyRecapCharDB.raw for "/shy recap raw".
 --
 -- A record (saved, plain values only):
 --   at            time()
@@ -84,7 +84,7 @@ local function Plain(event)
 	return values, hidden
 end
 
--- Returns the events (or nil), max health, and a note of the raw answer for "/shyrecap raw".
+-- Returns the events (or nil), max health, and a note of the raw answer for "/shy recap raw".
 local function Game()
 	local note = { events = {}, hidden = {} }
 	local has = C_DeathRecap.HasRecapEvents()
@@ -467,7 +467,7 @@ function D.Start()
 	events:SetScript("OnEvent", Died)
 end
 
--- "/shyrecap raw"
+-- "/shy recap raw"
 
 local function Pairs(values)
 	local keys, parts = {}, {}
@@ -515,7 +515,7 @@ function D.RawText()
 	return table.concat(lines, "\n")
 end
 
--- A sample death for the options preview, layout mode and "/shyrecap test"
+-- A sample death for layout mode and "/shy recap test"
 
 -- { t, spell ID, fallback name, amount, school, attacker, crit }. Names and icons come from the client.
 local SAMPLE = {

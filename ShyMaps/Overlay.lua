@@ -4,7 +4,7 @@
 --   One key (Key Bindings, ShyMaps: "Map overlay"): with the map's window open, it closes onto the overlay;
 --   else the overlay comes or goes.
 --   "Map overlay" in the map's menu: on, the map's window closes onto it. Off, the map stays.
---   /shymaps overlay, and the options page.
+--   /shy maps overlay, and the settings.
 -- The map's window opens over it as ever and the overlay comes back as it closes.
 
 local ADDON, ns = ...

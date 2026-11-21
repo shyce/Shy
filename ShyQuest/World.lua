@@ -542,6 +542,18 @@ local function Said(stop)
 	return best
 end
 
+-- Some maps you can only be inside of: Ironforge, the Undercity (Shy.Way.data.inside). A stop on one is
+-- in its halls. "On the ground" can't be true there, so that answer is ignored.
+function W.Halls(stop)
+	local inside = Shy.Way.data.inside
+	return inside ~= nil and stop.map ~= nil and inside[stop.map] == true
+end
+local function Mine(stop)
+	local mine = Said(stop)
+	if mine == Shy.Way.GROUND and W.Halls(stop) then return nil end
+	return mine
+end
+
 -- The floor what is at a stop is known to stand on: "ground", "under" or "above", as the nearest known
 -- place within KNOWN_NEAR yards has it; nil where none is known, or the nearest are as near and differ.
 -- The nearest, not the most: each spawn is known where it stands (Data/Levels.lua), and the trainers in a
@@ -583,7 +595,7 @@ local function LevelOf(stop, any)
 	local level = levels[key]
 	if level == nil then
 		-- (What you said of it first; then what is known to stand there.)
-		level = KNOWN_WORDS[Said(stop) or -1] or Known(stop)
+		level = KNOWN_WORDS[Mine(stop) or -1] or Known(stop)
 		if not level then
 			local far = not stop.yards or stop.yards > NEAR_LEVEL
 			if far and not any then return nil end
@@ -635,9 +647,12 @@ local preferred = setmetatable({}, { __mode = "k" })   -- stop -> { at, north, w
 local PREFER_KEPT = 1
 local function Preferred(stop)
 	local ground = Shy.Way
-	local mine = Said(stop)
+	local mine = Mine(stop)
 	if mine then return mine, (W.Height(stop, nil, mine)) end
+	local halls = W.Halls(stop)
 	local up, look, far = W.Height(stop)
+	-- In a city's halls, skip a height that belongs to the mountain above.
+	if halls and look == ground.GROUND then up, look, far = W.Height(stop, nil, ground.UNDER) end
 	if up and look then
 		local told, toldFar = Known(stop)
 		if told and KNOWN_LOOKS[told] ~= look then
@@ -648,6 +663,8 @@ local function Preferred(stop)
 	local level, maybe = W.Level(stop, true)
 	-- (On no floor that is known: the ground is told so, and knows no way there. The straight line leads.)
 	if level == "none" then return KNOWN_LOOKS.none, nil end
+	-- In a city's halls the stop is under ground.
+	if halls and (not level or level == "under") then return ground.UNDER, up end
 	if not level then return LevelOf(stop, true) == "ground" and ground.GROUND or nil, up end
 	if level == "under" and (not maybe or stop.kind == "goal") then return ground.UNDER, up end
 	if level == "above" then return ground.ABOVE, up end
@@ -683,7 +700,7 @@ end
 --        level; nil: forget what you said there. Kept for the account, and the way is found again.
 function W.Floor(stop)
 	if not stop.north or not stop.continent then return nil end
-	local mine = Said(stop)
+	local mine = Mine(stop)
 	if mine then return mine, "said" end
 	local level, up = W.Prefer(stop)
 	if Known(stop) then return level, "known" end

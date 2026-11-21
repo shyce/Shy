@@ -1,6 +1,6 @@
--- The scan bar, along the window's foot: your market at the left (its side's emblem, the house, region and ruleset, how
+-- The scan bar, along the window's foot: your market at the left (its side's emblem, the auction house, region and ruleset, how
 -- fresh its prices are), one bar across the middle that fills as the listings are read (the count and what is left in
--- it, a light at its tip), what the scan has found so far under it, and the button at its end: Scan the house, Stop,
+-- it, a light at its tip), what the scan has found so far under it, and the button at its end: Scan the auction house, Stop,
 -- Scanned, or waiting with the next scan's countdown in the bar.
 
 local ADDON, ns = ...
@@ -18,7 +18,7 @@ local foot, ticker
 local Ticking   -- (below: the footer's hide stops it)
 
 local EMBLEM = { Alliance = "communities-icon-faction-alliance", Horde = "communities-icon-faction-horde" }
-local SIDE = { Alliance = "Alliance house", Horde = "Horde house", Neutral = "Neutral house" }
+local SIDE = { Alliance = "Alliance auction house", Horde = "Horde auction house", Neutral = "Neutral auction house" }
 
 -- (on the window's body: UI.Body)
 function F.Build(body, tall)
@@ -77,7 +77,7 @@ function F.Build(body, tall)
 	foot.right:SetPoint("TOPRIGHT", foot.bar, "BOTTOMRIGHT", 0, -3)
 	foot.right:SetJustifyH("RIGHT")
 
-	foot.button = UI.Button(foot, "Scan the house", L.button, function()
+	foot.button = UI.Button(foot, "Scan", L.button, function()
 		if ns.Scan.State() then ns.Scan.Stop() return end
 		local ok, why = ns.Scan.Full()
 		if not ok then T:Print(why) end
@@ -147,17 +147,17 @@ function F.Draw()
 	local button = foot.button
 	if not ns.Scan.CAN then
 		Fill(0)
-		Say(foot.words, "This game has no whole-house scan")
+		Say(foot.words, "This game can't scan the whole auction house")
 		Say(foot.left, ("%s items priced"):format(Count(ns.Book.Count())))
 		Say(foot.right, "from your searches and other players")
-		button:SetLabel("Scan the house")
-		button:SetUsable(false, "This game has no whole-house scan.")
+		button:SetLabel("Scan")
+		button:SetUsable(false, "This game can't scan the whole auction house.")
 		button:SetPrimary(false)
 		Ticking(nil)
 	elseif state then
 		if state.state == "asked" then
 			Fill(0.02, "accent")
-			Say(foot.words, "Asking the house for every listing...")
+			Say(foot.words, "Asking the auction house for every listing...")
 			Say(foot.left, "")
 			Say(foot.right, "")
 		else
@@ -174,10 +174,10 @@ function F.Draw()
 		Ticking(state.state == "reading" and 0.2 or 1)
 	elseif ns.Scan.refused and time() - ns.Scan.refused < 120 then
 		Fill(0)
-		Say(foot.words, "The house didn't answer the scan  |cffc8c8c8try again|r")
+		Say(foot.words, "The auction house didn't answer the scan  |cffc8c8c8try again|r")
 		Say(foot.left, ("%s items priced"):format(Count(ns.Book.Count())))
 		Say(foot.right, "")
-		button:SetLabel("Scan the house")
+		button:SetLabel("Scan")
 		button:SetUsable(ns.Scan.IsOpen(), "Open the auction house first.")
 		button:SetPrimary(true)
 		Ticking(nil)
@@ -186,16 +186,16 @@ function F.Draw()
 		Say(foot.words, ("Next scan in %d:%02d  |cffc8c8c8the server allows one each 15 min|r"):format(math.floor(wait / 60), wait % 60))
 		Say(foot.left, ("%s items priced"):format(Count(ns.Book.Count())))
 		Say(foot.right, at and ("Scanned %s"):format(UI.Ago(at)) or "")
-		button:SetLabel(last and time() - last.at < 60 and "Scanned" or "Scan the house")
+		button:SetLabel(last and time() - last.at < 60 and "Scanned" or "Scan")
 		button:SetUsable(false, ("The server allows the next scan in %d min."):format(math.ceil(wait / 60)))
 		button:SetPrimary(false)
 		Ticking(1)
 	else
 		Fill(0)
-		Say(foot.words, at and ("Prices %s  |cffc8c8c8scan for fresh ones|r"):format(UI.Ago(at)) or "No prices yet  |cffc8c8c8scan the house|r")
+		Say(foot.words, at and ("Prices %s  |cffc8c8c8scan for fresh ones|r"):format(UI.Ago(at)) or "No prices yet  |cffc8c8c8scan to get some|r")
 		Say(foot.left, ("%s items priced"):format(Count(ns.Book.Count())))
 		Say(foot.right, "")
-		button:SetLabel("Scan the house")
+		button:SetLabel("Scan")
 		button:SetUsable(ns.Scan.IsOpen(), "Open the auction house first.")
 		button:SetPrimary(true)
 		Ticking(nil)

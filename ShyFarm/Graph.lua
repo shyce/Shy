@@ -81,7 +81,7 @@ function ns.Graph(parent, width, height)
 	end)
 	g:SetScript("OnEnter", function(self)
 		UI.Tip(self, T.db.graph == "gold" and "Gold an hour" or "How many an hour",
-			"A bar a session, the latest at the right, lit while you farm it now.", { hints = { { "left", "Show the other" } }, side = "CURSOR" })
+			"One bar per session, newest on the right. It's lit while you're farming it.", { hints = { { "left", "Show the other" } }, side = "CURSOR" })
 	end)
 	g:SetScript("OnLeave", function(self) UI.TipHide(self) end)
 	return g

@@ -342,18 +342,9 @@ Shy:On("SHY_LOGIN", function()
 	end)
 	Shy:On("SHY_NAMEPLATE", Paint)
 	Shy:On("SHY_NAMEPLATES", PaintAll)
-	-- Samples for ShyPlates' options preview.
-	local plates = Shy.addons.Plates
-	local function Samples()
-		if not plates then return end
-		plates.sampleTag = Tag()
-		plates.sampleLead = StopTag({ kind = "turnin" })
-	end
-	Samples()
 	-- A tag's colors were read when it was made: a lit white mark wears the accent.
 	Shy:On("SHY_THEME", function()
 		Forget()
-		Samples()
 		PaintAll()
 	end)
 end)

@@ -1,79 +1,56 @@
--- Options: scanning, and how the prices on your market stand.
+-- Settings: the auction window, prices on tooltips and scanning.
 
 local ADDON, ns = ...
 local T = ns.T
-local UI = Shy.UI
 
-local LEFT, RIGHT, COL = 24, 330, 270
+ns.RefreshOptions = Shy.Settings.Refresh
 
-local function Get(key) return function() return T.db[key] end end
-local function Set(key) return function(v) T.db[key] = v end end
-
--- How the prices on your market stand, in a line.
+-- The prices on your market, in a few words.
 local function Standing()
-	local at = ns.Book.ScannedAt()
+	if ns.Scan.State() then return "scanning" end
 	local count = ns.Book.Count()
-	if count == 0 then return "No prices on your market yet. Open the auction house to scan it." end
-	return ("Prices for %d items on your market, scanned %s."):format(count, at and UI.Ago(at) or "by searches only")
+	if count == 0 then return "none yet" end
+	local at = ns.Book.ScannedAt()
+	return ("%s items, %s"):format(BreakUpLargeNumbers(count), at and Shy.UI.Ago(at) or "from searches")
 end
 
-function ns.CreateOptions()
-	local panel = CreateFrame("Frame")
-	local group = UI.Group(function() end)
-	local line, scan
+local function CanScan() return ns.Scan.CAN end
 
-	local function Refresh()
-		if not line then return end
-		line:SetText(Standing())
-		local wait = ns.Scan.Wait()
-		local usable, why = ns.Scan.IsOpen() and wait == 0 and not ns.Scan.State(), nil
-		if not ns.Scan.CAN then usable, why = false, "This game has no whole-house scan."
-		elseif not ns.Scan.IsOpen() then why = "Open the auction house first."
-		elseif wait > 0 then why = ("The server allows the next scan in %d min."):format(math.ceil(wait / 60)) end
-		scan:SetUsable(usable, why)
-	end
+-- Space, and its hint on the Post button.
+local function Keys()
+	ns.SellKeys()
+	ns.Window.Stale()
+end
 
-	local function Build()
-		UI.PageHeader(panel, T)
-		local head = UI.Header(panel, "Scanning")
-		head:SetPoint("TOPLEFT", LEFT, -112)
-		local auto = group:Checkbox(panel, "Scan as it opens", Get("autoScan"), Set("autoScan"),
-			{ desc = "Scans the whole auction house when you open it, as often as the server allows." })
-		auto:SetPoint("TOPLEFT", LEFT, -148)
-		local window = group:Checkbox(panel, "Our auction window", Get("window"), function(v)
-			T.db.window = v
-			ns.Window.Apply()
-		end, { desc = "Buy, Sell, Auctions and Farm in one window, with the scan along its foot, in place of the game's." })
-		window:SetPoint("TOPLEFT", LEFT, -176)
-		local tip = group:Checkbox(panel, "Prices on items", Get("tooltip"), Set("tooltip"),
-			{ desc = "An item's market price, how old it is, and a stack's worth on its tooltip." })
-		tip:SetPoint("TOPLEFT", LEFT, -204)
-		scan = UI.Button(panel, "Scan now", COL, function()
+T:Settings({
+	reset = function()
+		T:ResetDB()
+		ns.Window.Apply()
+		Keys()
+	end,
+	{ key = "window", label = "Auction window", words = "auction house ah buy sell default replace",
+		apply = function() ns.Window.Apply() end,
+		desc = "One window to buy, sell, watch your auctions and find farms. Off gives you the default one." },
+	{ key = "spacePosts", label = "Space posts", sub = true, words = "spacebar key sell stack",
+		enabled = function() return T.db.window end, apply = Keys,
+		desc = "On the Sell tab, each press of Space posts your next stack." },
+	{ note = "The auction window hit an error. You have the default one until you reload.", alert = true,
+		shown = function() return ns.Window.failed end },
+
+	{ section = "Prices" },
+	{ key = "tooltip", label = "Prices on tooltips", words = "item worth market value stack",
+		desc = "An item's tooltip shows its market price and what your stack is worth." },
+	{ key = "autoScan", label = "Scan when it opens", shown = CanScan, words = "auto automatic",
+		desc = "Opening the auction house reads every price there, as often as the server allows." },
+	{ label = "Market prices", button = "Scan now", shown = CanScan, says = Standing, words = "scan refresh update",
+		enabled = function() return ns.Scan.IsOpen() and not ns.Scan.State() end,
+		run = function()
 			local ok, why = ns.Scan.Full()
 			if not ok then T:Print(why) end
-			Refresh()
-		end)
-		scan:SetPoint("TOPLEFT", RIGHT, -146)
-		line = UI.Text(panel, "", 12)
-		line:SetPoint("TOPLEFT", RIGHT, -182)
-		line:SetWidth(COL)
-		local selling = UI.Header(panel, "Selling")
-		selling:SetPoint("TOPLEFT", LEFT, -252)
-		local space = group:Checkbox(panel, "Space posts", Get("spacePosts"), function(v)
-			T.db.spacePosts = v
-			if ns.SellKeys then ns.SellKeys() end
-		end, { desc = "Space posts the next stack while the Sell tab is open, so a pile goes up a press at a time." })
-		space:SetPoint("TOPLEFT", LEFT, -288)
-		Refresh()
-	end
+		end,
+		desc = ("Reads every price at the auction house. It has to be open, and the server allows one scan every %d minutes.")
+			:format(ns.Scan.K.EVERY / 60) },
+})
 
-	panel:SetScript("OnShow", function(self)
-		if not self.built then Build(); self.built = true end
-		group:Refresh()
-		Refresh()
-	end)
-	Shy:On("SHY_AUCTION", function() if panel.built and panel:IsShown() then Refresh() end end)
-	function panel:OnDefault() T:ResetDB() end
-	ns.RefreshOptions = function() if panel.built then group:Refresh(); Refresh() end end
-	return panel
-end
+-- A scan begins or ends, the auction house opens or closes: the scan's row reads again.
+Shy:On("SHY_AUCTION", function() Shy.Settings.Refresh() end)

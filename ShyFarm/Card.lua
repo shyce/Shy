@@ -359,7 +359,7 @@ function ns.CreateCard(parent, box)
 	-- What you can do with what you farm, at the block's foot on the right: put where to farm it on your route, keep
 	-- the item as a favorite (lit in gold while it is one).
 	want.star = UI.GlyphButton(want, Shy.MEDIA .. "GlyphStar", K.GLYPH, function() if Card.Tool then Card.Tool("favorite") end end,
-		{ tip = { "Favorite", "Your favorites wait in Find, with how your farming of each went." } })
+		{ tip = { "Favorite", "You'll find your favorites in Find, with how each one went." } })
 	want.star:SetPoint("BOTTOMRIGHT", 0, 4)
 	want.go = UI.GlyphButton(want, Shy.Skin.GLYPH.pin, K.GLYPH, function() if Card.Tool then Card.Tool("go") end end,
 		{ tip = { "Go there", "Puts the best place to farm it on your route." } })
@@ -723,7 +723,7 @@ function ns.CreateCard(parent, box)
 	function card:FillAsk(item)
 		local ask = self.ask
 		if not item then return end
-		local auction = T.db.auction
+		local auction = P.Auctions()
 		local vendor = P.Vendor(item)
 		local typing = self.typing == item
 		if typing then

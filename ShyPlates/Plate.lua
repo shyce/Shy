@@ -1,4 +1,4 @@
--- One plate: everything drawn for one unit. Used on nameplates (Driver.lua) and in the options preview.
+-- One plate: everything drawn for one unit, on its nameplate (Driver.lua).
 --
 --          [ 8 ][ 6 ][11 ]        auras                         (Auras.lua)
 --        14 Defias Pillager       level, name, rank glyph
@@ -32,7 +32,7 @@ ns.Plate = P
 local Plate = {}
 Plate.__index = Plate
 
-P.all = setmetatable({}, { __mode = "k" })   -- every plate, preview included
+P.all = setmetatable({}, { __mode = "k" })   -- every plate, the spares too
 -- The plates a change of target or focus can change (your target, your focus, or a secret answer), and those
 -- under the mouse: kept as each plate learns it, so Driver.lua walks these alone.
 P.aimed = setmetatable({}, { __mode = "k" })
@@ -150,7 +150,7 @@ end
 
 local playerClass
 
--- reader: the unit reader (Units.lua by default; the preview passes its own).
+-- reader: what the plate reads its unit through (Units.lua unless given).
 function P.Create(parent, reader)
 	local self = setmetatable({ parent = parent, read = reader or U, mode = "full", casting = false, shines = {} }, Plate)
 	P.all[self] = true
@@ -1452,7 +1452,6 @@ local function LevelPattern(R, level, quiet)
 		end
 		return pattern
 	end
-	if R ~= U then return "|cff" .. Hex(R.LevelColor(level)) .. level .. "|r %s" end   -- the preview's own colors
 	local mine = UnitLevel("player")
 	if mine ~= LEVELS.at then
 		LEVELS.hard, LEVELS.at = {}, mine

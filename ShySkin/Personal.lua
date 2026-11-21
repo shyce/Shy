@@ -105,7 +105,9 @@ end
 local m = ns.Module({
 	id = "personal",
 	title = "Personal resource display",
-	desc = "Restyles the health and power bars under your character to match your cast bar. Edit Mode still sizes, moves and fades them.",
+	desc = "The health and power bars under your character match your cast bar.",
+	group = "screen",
+	words = "health mana energy rage",
 
 	Ready = function()
 		return PersonalResourceDisplayFrame ~= nil
@@ -136,6 +138,12 @@ Shy:On("SHY_THEME", function()
 	if m.on and Shy.Skin.HealthColor() == "accent" then Tone() end
 end)
 
+-- The cockpit moved or changed shape: the bars are dressed again only if it took the display in or let it go.
+local held
 Shy:On("SHY_COCKPIT", function()
-	if m.on then m:Refresh() end
+	if not m.on then return end
+	local now = InCockpit()
+	if now == held then return end
+	held = now
+	m:Refresh()
 end)

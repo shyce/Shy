@@ -13,7 +13,7 @@ local HOME = { "TOP", "TOP", 0, -4 }   -- until the column places it
 
 local box, line, ledger
 local hold             -- the ledger's own box, hung from the line: sized apart from it
-local test             -- the sample view shown by "/shyrecap test"
+local test             -- the sample view shown by "/shy recap test"
 local viewing          -- an earlier death shown in the ledger instead of the line's
 
 -- The view the line shows, or nil when it should be hidden.
@@ -21,7 +21,7 @@ local function Current()
 	if test then return test end
 	local up = ns.char.up
 	local death = up and T:IsOn() and ns.Latest() or nil
-	-- "/shyrecap" (up == "asked") shows any death; otherwise the "creatures" filter applies.
+	-- "/shy recap" (up == "asked") shows any death; otherwise the "creatures" filter applies.
 	if death and (up == "asked" or ns.Wanted(death)) then return ns.View(death) end
 end
 
@@ -109,6 +109,10 @@ end
 
 function ns.Test()
 	if not box then return end
+	if not T:IsOn() then
+		T:Print("death recap is off.")
+		return
+	end
 	Fold()
 	test = ns.Death.Sample()
 	ns.Refresh()
@@ -133,7 +137,7 @@ local function Menu(root)
 		Shy.UI.TellMenu(root, ns.Killer(death) and "Tell who killed you" or "Tell where you died",
 			function() return ns.ShareText(death) end, function() return ns.Where(death) end)
 	end
-	root:CreateButton("Options", function() T:OpenOptions() end)
+	root:CreateButton("Settings", function() T:OpenOptions() end)
 	root:CreateButton("Close", CloseLine)
 end
 
@@ -150,13 +154,12 @@ function ns.SetupLine()
 		id = "shyrecap", title = "Death recap",
 		width = LINE.w, height = LINE.h, point = HOME,
 		shown = function() return Current() ~= nil end,
-		-- Its options' "Show death recap".
+		-- Its setting, "Death recap". ns.Apply tells the settings it changed.
 		switch = {
 			get = function() return T.db.on ~= false end,
 			set = function(on)
 				T.db.on = on
 				ns.Apply()
-				if ns.RefreshOptions then ns.RefreshOptions() end
 			end,
 			hint = "What killed you, when you die",
 		},
@@ -232,6 +235,7 @@ function ns.SetupLine()
 	end)
 	Shy:On("SHY_THEME", ns.Refresh)
 	ns.OnApply(function()
+		if not T:IsOn() then test = nil end   -- switched off, a sample goes too
 		Rise()
 		ns.Refresh()
 	end)

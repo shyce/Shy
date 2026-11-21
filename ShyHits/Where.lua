@@ -19,7 +19,6 @@ local FELL = 1.2     -- seconds after a plate's last blow, or its going, that a 
 -- The box beside the player: size, lane inset from each side and from the bottom, default position.
 -- What you gain stands `over` the box's top, in its middle.
 local YOU = { width = 300, height = 44, inward = 64, foot = 8, over = 22, point = { "CENTER", "CENTER", 0, -24 } }
-W.YOU = YOU
 
 local byPlate = {}   -- nameplate -> its lanes
 -- A friend with no nameplate to write by is written on their unit frame: over its top, in the middle.
@@ -199,14 +198,13 @@ function W.Start()
 		id = "shyhits-you", title = "Hits on you",
 		width = YOU.width, height = YOU.height, point = YOU.point,
 		shown = function() return false end,   -- visible in layout mode only
-		-- Its options' "On you" (and combat text with it, turned on).
+		-- Its setting, "On you" (and the numbers with it, turned on). Applying tells the settings' rows.
 		switch = {
 			get = function() return T.db.on ~= false and T.db.you ~= false end,
 			set = function(on)
 				if on then T.db.on = true end
 				T.db.you = on
 				ns.Apply()
-				if ns.RefreshOptions then ns.RefreshOptions() end
 			end,
 			hint = "The hits and heals you take, beside you",
 		},

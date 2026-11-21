@@ -9,22 +9,22 @@
 --   ns.Arrow.Sample(parent)    -- the arrow as a picture for a picker, drawn by the box's own builder:
 --                              -- a frame with :Set(on), pointing at the step the route leads with
 --
--- Standing on the ground where what a followed stop asks for is found (stop.among, Route.lua: kills, loot
--- and gathering are done anywhere on it), there is nowhere more to point: the hand is put away, the emblem
--- of what is found fills the dial in place of the yards, in its color with the ring in that color too (as
--- the quest window's dial does, Card.lua), and the line under the name says it is here. Arrived at any
--- other stop (within ARRIVED yards: a vendor, a trainer, a flight master, someone to talk to) the hand is
--- put away too, and the emblem of what the stop is for fills the dial in its color (Emblem: a vendor's
--- coin in copper, a trainer's book in periwinkle, a quest's gold mark), so the dial never stands empty.
+-- When you stand on the ground where a followed stop's work is found (stop.among, Route.lua: kills,
+-- loot and gathering can be done anywhere on it), there is nowhere left to point. The hand hides. The
+-- emblem of what is found fills the dial in place of the yards, in its color, and the ring takes that
+-- color too (like the quest window's dial, Card.lua). The line under the name says it is here.
+-- At any other stop (within ARRIVED yards: a vendor, a trainer, a flight master, someone to talk to)
+-- the hand hides too. The emblem of what the stop is for fills the dial in its color (Emblem: a
+-- vendor's coin in copper, a trainer's book in periwinkle, a quest's gold mark). The dial is never empty.
 --
--- The hand points along the way the maps draw (W.Heading), a few yards on from where the player is, so
--- it comes round each bend of the trail with it. Where the place itself lies well off that, a smaller
--- arrowhead of the same make rides the ring there in the accent: the hand is which way to go now, the
--- small one where it all leads.
+-- The hand points along the way the maps draw (W.Heading), a few yards ahead of the player, so it
+-- turns with each bend of the trail. When the place itself lies well off that heading, a smaller
+-- arrowhead of the same make rides the ring toward it, in the accent. The hand is which way to go
+-- now. The small one is where it all leads.
 --
--- The look: a dark dial in a steel ring, the name on a plaque that runs to a point. The accent is its
--- light: along the plaque's top edge, on the ring either side of the hand and on the face under it, and
--- the hand itself, which stands in a dark rim so a pale or steel-like color still reads on the ring.
+-- The look: a dark dial in a steel ring, with the name on a plaque that runs to a point. The accent
+-- is its light: along the plaque's top edge, on the ring either side of the hand, on the face under
+-- it, and on the hand itself. The hand sits in a dark rim so a pale or steel-like color still reads.
 --
 --   /way 45.2 33.1 [name]            current map
 --   /way Darnassus 45.2 33.1 [name]  another zone (or #1457, a map ID)
@@ -49,7 +49,7 @@ local POINT, PLAQUE = 8, 23          -- plaque: width of its pointed end, height
 local LIGHT = 12                     -- height of the plaque's top light (as ShyCore's Hover.lua)
 local WIDTH = 196
 local OFF = 0.35                     -- how much of a picker's picture shows while the arrow is off
-local SAMPLE = { title = "Your next step", sub = "Its zone and where in it", yards = "120", turn = -0.7, heading = 0.35 }
+local SAMPLE = { title = "Your next step", sub = "The zone and the place", yards = "120", turn = -0.7, heading = 0.35 }
 local HEADING_ALPHA = 0.85           -- the heading's mark is the accent, a little faint (as the media sheet draws it)
 local APART = math.rad(25)           -- the heading shows once the place lies this far off where the hand points
 local FADE = 8                       -- ... and fades in and out at this share a second
@@ -310,12 +310,12 @@ local function Aboard()
 	return sign, ns.SignColor(sign), label, said
 end
 
--- The line under the ride's name: when it lands, then the lead stop. "about 2:24" -> "Lands in about
--- 2:24  ·  then Learn First Aid"; "landing", "arriving", "1:05 so far" stand as they are.
+-- The line under the ride's name: when it lands, and no more (what comes after is on the map and the
+-- card). "about 2:24" -> "Lands in about 2:24"; "landing", "arriving", "1:05 so far" stand as they are.
 local function Landing(said)
 	local words = said or "Aboard"
 	if words:match("^%d+:%d%d$") or words:match("^about %d+:%d%d$") then words = "Lands in " .. words end
-	return (words:gsub("^%l", string.upper)) .. "  ·  then " .. target.title
+	return (words:gsub("^%l", string.upper))
 end
 
 -- Just off a ride: the line under the name says so for a moment, in the ride's color.

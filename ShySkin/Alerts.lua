@@ -101,7 +101,9 @@ end
 ns.Module({
 	id = "alerts",
 	title = "Chat alerts",
-	desc = "Restyles the alerts that come up by the chat, such as a friend coming online, in your theme.",
+	desc = "Alerts that come up by the chat, like a friend coming online, wear your theme.",
+	group = "screen",
+	words = "toast friend online",
 
 	Ready = function() return BNToastFrame ~= nil end,
 

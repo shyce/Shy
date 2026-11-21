@@ -1228,6 +1228,7 @@ local SHADE_ROOM = UI.LookLeast(LOOK.SHADE_SLICE, LOOK.SHADE_REACH)
 -- its middle a whole number of pixels in from the edges it is laid from, so every rivet of every housing comes
 -- out alike wherever the housing's edges fall. Laid again when the UI's scale or a HUD piece's changes.
 local studded = setmetatable({}, { __mode = "k" })   -- housing -> true while it wears rivets
+Kin.housingOf = setmetatable({}, { __mode = "k" })    -- owner frame -> its housing (a box scaled finds its own)
 local function Rivet(h, i)
 	local t = h.rivets[i]
 	if not t then
@@ -1399,6 +1400,7 @@ function UI.LookFit(h, again)
 	end
 	for i = used + 1, #h.rivets do h.rivets[i]:Hide() end
 	studded[h] = used > 0 or nil
+	Kin.housingOf[h.owner] = h
 	-- A look kind lays what goes by size itself (and again when the scale changes: it may lay on whole pixels).
 	if kind and kind.fit then
 		local g = h.fitting or {}
@@ -1510,7 +1512,15 @@ function UI.LookContent(h, keep)
 	local was = h.content
 	if keep and was and keep[1] == was[1] and keep[2] == was[2] and keep[3] == was[3] and keep[4] == was[4] then return end
 	if not keep and not was then return end
-	h.content = keep and { keep[1], keep[2], keep[3], keep[4] } or nil
+	-- (Kept as a copy, the housing's own table written over: a drawer's slide sets it every step.)
+	if keep then
+		local own = h.contentOwn or {}
+		h.contentOwn = own
+		own[1], own[2], own[3], own[4] = keep[1], keep[2], keep[3], keep[4]
+		h.content = own
+	else
+		h.content = nil
+	end
 	UI.LookFit(h, true)
 end
 
@@ -1837,6 +1847,10 @@ do
 	function UI.GroupRefit()
 		for h in pairs(heads) do Lay(h) end
 	end
+	-- One frame laid again if it is a group head (a box scaled: only what stands in it).
+	function UI.GroupLay(f)
+		if heads[f] then Lay(f) end
+	end
 end
 
 -- A row of choices, one picked (the pick is the primary): a list's filter, the kinds of a search.
@@ -1912,7 +1926,8 @@ local function Refit()
 	for h in pairs(studded) do UI.LookFit(h) end
 	UI.GroupRefit()
 end
-Shy:On("SHY_HUD_SCALED", Refit)
+-- (The whole screen's scale: everything again. A HUD piece's own scale: only what stands in it, walked down from
+-- it with the rivets, below.)
 local refit = CreateFrame("Frame")
 refit:RegisterEvent("UI_SCALE_CHANGED")
 refit:RegisterEvent("DISPLAY_SIZE_CHANGED")
@@ -3870,7 +3885,34 @@ do
 	local function Restud()
 		for f in pairs(KEY.studded) do Studs(f) end
 	end
-	Shy:On("SHY_HUD_SCALED", Restud)
+	-- A HUD piece given a new scale moves only what stands in it on the pixel grid: its own frames and regions
+	-- are fitted again, walked down from it, and nothing else on the screen is touched. (Nothing is made: the
+	-- game's lists are read as they come.)
+	local Walk
+	local function Regions(...)
+		for i = 1, select("#", ...) do
+			local r = select(i, ...)
+			if fitted[r] then UI.LineFit(r) end
+			local units = glyphs[r]
+			if units then UI.GlyphFit(r, units) end
+			local box = boxes[r]
+			if box then UI.BoxFit(r, box[1], box[2]) end
+		end
+	end
+	local function Kids(depth, ...)
+		for i = 1, select("#", ...) do Walk((select(i, ...)), depth) end
+	end
+	Walk = function(f, depth)
+		local h = Kin.housingOf[f]
+		if h and studded[h] then UI.LookFit(h) end
+		UI.GroupLay(f)
+		if KEY.studded[f] then Studs(f) end
+		Regions(f:GetRegions())
+		if depth < 24 then Kids(depth + 1, f:GetChildren()) end
+	end
+	Shy:On("SHY_HUD_SCALED", Shy.Clocked("ui: fitted again in a piece scaled", function(box)
+		if type(box) == "table" and box.GetChildren then Walk(box, 0) end
+	end))
 	local restud = CreateFrame("Frame")
 	restud:RegisterEvent("UI_SCALE_CHANGED")
 	restud:RegisterEvent("DISPLAY_SIZE_CHANGED")
@@ -5332,6 +5374,8 @@ end
 -- piece of the screen takes its value there, and only remembers it in `set` (with `get` giving that back while
 -- the knob is held): a piece laid out again at every step jumps about under the knob, and takes the slider
 -- with it where the slider stands by the piece. A slider that only paints (a color, an opacity) stays live.
+-- opts.bare: for a row that has the label itself. No label, one line tall: the value at the left in a column
+-- opts.says wide (52), the groove the rest of the width. opts.wheel = false: the wheel is the list's it stands in.
 
 local SLIDER = {
 	trackH = 8,
@@ -5349,20 +5393,29 @@ function UI.Slider(parent, label, minV, maxV, step, get, set, opts)
 	local fmt = opts.format or function(v) return tostring(v) end
 
 	local f = CreateFrame("Frame", nil, parent)
-	f:SetSize(width, 38)
+	local bare = opts.bare
+	local says = bare and (opts.says or 52) or 0
+	f:SetSize(width, bare and SLIDER.knob or 38)
 	f.label = UI.Text(f, label)
 	f.label:SetPoint("TOPLEFT")
+	f.label:SetShown(not bare)
 	f.value = UI.Text(f, "", 13, true, C.head)
-	f.value:SetPoint("TOPRIGHT")
+	if bare then
+		f.value:SetPoint("RIGHT", f, "LEFT", says - 10, 0)
+		f.value:SetJustifyH("RIGHT")
+		width = width - says
+	else
+		f.value:SetPoint("TOPRIGHT")
+	end
 
 	local s = CreateFrame("Slider", nil, f)
-	s:SetPoint("BOTTOMLEFT", 0, 1)
+	if bare then s:SetPoint("RIGHT") else s:SetPoint("BOTTOMLEFT", 0, 1) end
 	s:SetSize(width, SLIDER.knob)
 	s:SetOrientation("HORIZONTAL")
 	s:SetMinMaxValues(minV, maxV)
 	s:SetValueStep(step)
 	s:SetObeyStepOnDrag(true)
-	s:EnableMouseWheel(true)
+	s:EnableMouseWheel(opts.wheel ~= false)
 	f.slider = s
 
 	-- The groove: the slider's whole width, under the label and the value, its ends round.
@@ -6827,16 +6880,18 @@ end
 -- Dropdown. items = { { value = v, text = "Label", font = optionalFontPath, icon = optionalIcon }, ... }; f:SetItems(items)
 -- (icon: a picture beside the words in the open list, as UI.Menu's item.icon)
 -- opts.preview(value): the value the mouse is on in the open list, shown before it is picked; nil as the list
--- closes (a pick has been set by then).
+-- closes (a pick has been set by then). label may be nil: the button alone, for a row that has the label itself.
 
 function UI.Dropdown(parent, label, items, get, set, opts)
 	opts = opts or {}
 	local width = opts.width or 260
 
 	local f = CreateFrame("Frame", nil, parent)
-	f:SetSize(width, 46)
-	f.label = UI.Text(f, label)
-	f.label:SetPoint("TOPLEFT")
+	f:SetSize(width, label and 46 or 24)
+	if label then
+		f.label = UI.Text(f, label)
+		f.label:SetPoint("TOPLEFT")
+	end
 
 	local preview = opts.preview
 	local btn = UI.MenuButton(f, {
@@ -6885,7 +6940,8 @@ function UI.Dropdown(parent, label, items, get, set, opts)
 	end
 	-- A dropdown is picked by clicking alone: it takes no keys (the arrow keys are chat's history) and no wheel
 	-- (the wheel scrolls the page it stands on).
-	AttachHelp(btn, label, opts)
+	AttachHelp(btn, label or "", opts)
+	f.button = btn
 	return f
 end
 
@@ -8132,8 +8188,12 @@ end
 --   quiet = true     the wheel is the area's only while it has something to scroll (a HUD piece leaves the
 --                    wheel to the camera otherwise)
 --   onScroll = f     f(area, offset) after every change of where it is, and of its range
+--   range = f        f() -> how far it scrolls, for an area that knows (a list that places its own rows). The
+--                    game tells its own count a frame after the content changes
 -- area:Reveal(top, bottom)  brings that stretch of the content into view (gliding with smooth)
 -- area:Overflows()          whether the content is taller than the area
+-- area:Rest(on)             stands still: no bar, no wheel, at its top, whatever it holds (what it holds
+--                           scrolls by itself, and two bars side by side are one too many)
 
 local SCROLL = { step = 48, ease = 14, shade = 18 }
 
@@ -8177,6 +8237,7 @@ function UI.ScrollArea(parent, width, height, opts)
 	-- last readable value.
 	local range, at = 0, 0
 	function scroll:Range()
+		if opts.range then return opts.range() end
 		local now = self:GetVerticalScrollRange()
 		if not issecretvalue(now) then range = now end
 		return range
@@ -8235,8 +8296,16 @@ function UI.ScrollArea(parent, width, height, opts)
 		return self:Range() > 0
 	end
 
+	function scroll:Rest(on)
+		on = on and true or false
+		if self.rested == on then return end
+		self.rested = on
+		Still()
+		self:Update()
+	end
+
 	function scroll:Update()
-		local far, now = self:Range(), self:At()
+		local far, now = self.rested and 0 or self:Range(), self:At()
 		if now > far then
 			self:SetVerticalScroll(far)
 			now, at = far, far
@@ -8298,6 +8367,7 @@ function UI.ScrollArea(parent, width, height, opts)
 
 	scroll:EnableMouseWheel(not opts.quiet)
 	scroll:SetScript("OnMouseWheel", function(self, delta)
+		if self.rested then return end
 		Go((goal or self:At()) - delta * SCROLL.step)
 	end)
 	scroll:SetScript("OnScrollRangeChanged", function(self) self:Update() end)

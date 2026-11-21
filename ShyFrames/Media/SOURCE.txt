@@ -19,4 +19,9 @@ Blade.tga, BladeWell.tga, BladeGlow.tga
     A combo point: a blade, its empty well and its glow.
     All five are original work.
 
+PortraitFace<size>.tga, PortraitRing<size>.tga
+    A round portrait's dial, drawn for each size it is shown at: its dark
+    face, and its steel ring with the shadow under it. Original work, the
+    family's own dial.
+
 Numbers are set in ShyCore\Media\NunitoExtraBold.ttf.

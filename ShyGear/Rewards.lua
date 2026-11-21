@@ -115,7 +115,7 @@ function ns.TakeReward()
 	if not pick or not pick.clear then return end
 	local item = ns.Read(choices[pick.index].link)
 	if pick.kind == "sell" then
-		T:Print(("took %s to sell (%s): no upgrades."):format(item.link, ns.Money(pick.worth)))
+		T:Print(("took %s to sell (%s). Nothing was an upgrade."):format(item.link, ns.Money(pick.worth)))
 	else
 		T:Print(("took %s: %s."):format(item.link, ns.Words(pick.verdicts[pick.index])))
 	end

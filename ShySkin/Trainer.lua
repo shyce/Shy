@@ -742,7 +742,9 @@ end
 M = ns.Module({
 	id = "trainer",
 	title = "Trainers",
-	desc = "Replaces the trainer window with a lesson plan you can size: what you can learn now and its cost, each lesson's own words before you buy it, what comes at the levels ahead, and Train all that never overspends.",
+	desc = "Trainers get a window you can resize. You see what you can learn now, what comes later and a Train all.",
+	group = "rebuilt",
+	words = "learn spells ranks",
 	Ready = function() return ClassTrainerFrame ~= nil and Shop ~= nil and WIN ~= nil end,
 	Hook = Hook,
 	Paint = Paint,

@@ -83,7 +83,7 @@ function W.Legend(frame, whisper, text)
 			rows[#rows + 1] = { text = "{" .. word.key .. "}", color = C.head, right = live and word.value or word.what,
 				rightColor = live and C.text or C.dim }
 		end
-		UI.Tip(self, "Words in braces", text or "Type anything; these fill in when you send.", { side = "RIGHT", width = 320,
+		UI.Tip(self, "Words in braces", text or "Type anything. These fill in when you send.", { side = "RIGHT", width = 320,
 			sections = { { rows = rows } } })
 	end)
 	frame:HookScript("OnLeave", function(self) UI.TipHide(self) end)
@@ -158,7 +158,7 @@ function W.RoleToggles(parent, size)
 		end)
 		W.Tip(b, function(self) return self.can and D.ROLE_NAME[self.role] or ("Not for a " .. className) end, function(self)
 			if not self.can then return "A " .. className .. " can't " .. (self.role == "tank" and "tank" or "heal") .. "." end
-			return "Roles you can play. Ticked ones show on your Group Finder listing; the last one you tick is your role in the group."
+			return "Roles you can play. Ticked ones show on your Group Finder listing. The last one you tick is your role in the group."
 		end)
 		-- The family's button make; ticked, its primary (Refresh).
 		UI.KeyPress(b, { sink = { b.icon } })
@@ -345,12 +345,14 @@ local function LineHeight()
 	end
 	return lineHeight
 end
+W.LineHeight = LineHeight
 
 -- A multi-line edit box grows with its text: the frame around it starts
 -- `lines.min` lines tall, grows to `lines.max`, then scrolls. Returns that
 -- frame, with the box as `.box`; the frame's height changes with the text.
 function W.TextBox(parent, width, lines, get, set)
-	local f = UI.ScrollArea(parent, width, 10)
+	-- (The wheel is the box's only while its text runs past it: over a short one, the list it stands in scrolls.)
+	local f = UI.ScrollArea(parent, width, 10, { quiet = true })
 	UI.Skin(f)
 	f:EnableMouse(true)
 	local box = CreateFrame("EditBox", nil, f.content)

@@ -461,13 +461,13 @@ function Keys.Run(addon, jobs, opts, asked)
 		result.waiting > 0 and (" %d more come as you learn what they do."):format(result.waiting) or ""))
 	local changed = result.hot and (result.hot.bound + result.hot.cleared) or 0
 	if changed > 0 then
-		print(("  %d of your hotkeys were set to match. Each is kept as it was, and comes back if you put your keys back."):format(changed))
+		print(("  %d of your hotkeys were set to match. Each old one is saved and comes back if you put your keys back."):format(changed))
 	end
 	if result.hot and result.hot.kept > 0 then
 		print(("  %d keys you bound to something else yourself stay as you have them."):format(result.hot.kept))
 	end
 	if result.shared > 0 then
-		print(("  This character's macros are full, so %d of your keys' macros are among the account's. They go when you put your keys back; yours are never touched."):format(result.shared))
+		print(("  This character's macros are full, so %d of your keys' macros are among the account's. They're removed when you put your keys back. Yours are never touched."):format(result.shared))
 	end
 	if result.tidied > 0 then
 		print(("  %d of your own buttons for abilities that are on a key now were taken off. They come back if you put your keys back."):format(result.tidied))
@@ -492,7 +492,7 @@ function Keys.Run(addon, jobs, opts, asked)
 		print(("  %s%s was left: %s."):format(job.name, job.key and (" (" .. Keys.Key(job.key) .. ")") or "", WHY[entry[2]]))
 	end
 	if not result.learns then
-		print("  This game's macros can't ask what you have learned: a key keeps its first ability.")
+		print("  This game's macros can't check what you've learned, so a key keeps its first ability.")
 	end
 	print("  /shy keys  - what each key does, and how to put yours back")
 	return result

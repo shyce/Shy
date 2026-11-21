@@ -268,7 +268,9 @@ local PIECES = {
 M = ns.Module({
 	id = "dropdowns",
 	title = "Dropdown menus",
-	desc = "Restyles the game's own dropdown menus to match the family's: a dark panel with the accent line, lit rows, and the family's checks and fonts.",
+	desc = "The game's dropdown menus get a dark panel, lit rows and the same checks and font as the rest.",
+	group = "window",
+	words = "right-click context",
 
 	Hook = function()
 		for name, dress in pairs(PIECES) do

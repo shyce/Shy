@@ -1023,10 +1023,12 @@ end
 M = ns.Module({
 	id = "character",
 	title = "Character",
-	desc = "Restyles the character window and all its tabs: a dark panel, gear in quality-colored slots, plain stat rows and square tabs down the right edge.",
+	desc = "Your character window goes dark, with gear in quality-colored slots and tabs down its right edge.",
+	group = "window",
+	words = "paper doll gear stats reputation skills",
 	options = {
 		{ key = "home", label = "Your race's home", default = true,
-			desc = "Shows the painting of your race's home behind your character, or a plain dark background when off." },
+			desc = "A painting of your race's home hangs behind your character. Off, the background is plain." },
 	},
 
 	Ready = function()

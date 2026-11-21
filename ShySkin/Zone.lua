@@ -363,7 +363,9 @@ end
 ns.Module({
 	id = "zone",
 	title = "Zone name",
-	desc = "Shows the zone's name on a plate as you enter, lit by who controls it, with the area's name under it.",
+	desc = "A zone's name comes up on a plate as you enter, in the color of who holds it.",
+	group = "screen",
+	words = "area subzone",
 
 	Ready = function() return ZoneTextFrame ~= nil and SubZoneTextFrame ~= nil end,
 

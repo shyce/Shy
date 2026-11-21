@@ -1,14 +1,14 @@
--- First Aid as the way to healing potions: stops to learn it and to train its recipes, a row to
--- make the potions once the bags hold what they take, and the herb from an auction house that is
--- near. Cloth in the bags becomes the bandages that raise the skill most for the cloth, as long as
--- one is likely to; cloth a trainer's next recipe or rank would use far better is kept for that.
---   Recipes: Data/Supplies.lua (ns.data.aid). What a trainer asks for one is the server's to say:
---     read from a first aid trainer's window and kept per account (T.db.aid). Until one was seen,
---     the trainer is a stop while no potion recipe is known.
---   Known: by the spellbook, by a trainer's list and by the game saying a recipe was learned
---     (ns.char.aid). The skill itself is read as the game's skills window reads it (C_SkillInfo).
---   Vials and spices are vendors' goods: Supplies.lua buys them (Supplies.Mats).
---   All of it goes by the healing potions' amount (Supplies.lua): set to Off, none of this shows.
+-- First Aid as your way to healing potions. Adds stops to learn it and train its recipes, a row to
+-- make the potions once your bags hold the materials, and the herb from a nearby auction house.
+-- Cloth in your bags goes to the bandages that raise the skill most per cloth, while a skill-up is
+-- likely. Cloth that a trainer's next recipe or rank would use far better is saved for that.
+--   Recipes: Data/Supplies.lua (ns.data.aid). Only the server knows what a trainer charges, so the
+--     cost is read from a first aid trainer's window and saved per account (T.db.aid). Until one
+--     has been seen, the trainer is a stop while no potion recipe is known.
+--   Known: from the spellbook, a trainer's list, and the game saying a recipe was learned
+--     (ns.char.aid). The skill is read the way the game's skills window reads it (C_SkillInfo).
+--   Vials and spices are vendor goods. Supplies.lua buys them (Supplies.Mats).
+--   Everything follows the healing potions amount (Supplies.lua). Set to Off, none of this shows.
 -- Nothing is trained, made or bought for you.
 
 local ADDON, ns = ...
@@ -250,6 +250,12 @@ end
 -- What to do with the cloth, worked out once for each look at the bags: { legs, points } as Cloth
 -- gives them, and `waits` when what a trainer would teach now makes the cloth worth that many
 -- points instead. Then the cloth is kept for it, but for what would be made first either way.
+-- The plan let go, to be worked out again: the gold crossed what a trainer asks.
+function Aid.Recount()
+	stale = true
+	Supplies.Stale()
+end
+
 local function Plans(now)
 	local plan = now.cloth
 	if plan then return plan end
@@ -258,7 +264,10 @@ local function Plans(now)
 	if now.tailor or not now.has then return plan end
 	plan.legs, plan.points = Cloth(now)
 	local due, cost = Due(now)
-	if #due == 0 or cost > GetMoney() or (Mine().skip or 0) >= now.level then return plan end
+	-- (Gold that crosses what the trainer asks changes the plan: it is worked out again then.)
+	local weighs = ns.Weighed("aid", Aid.Recount)
+	if #due > 0 and cost > 0 then weighs[1] = cost end
+	if #due == 0 or cost > Shy.Money() or (Mine().skip or 0) >= now.level then return plan end
 	local more, cap = {}, now.cap
 	for _, each in ipairs(due) do
 		if each.recipe then more[each.recipe] = true end
@@ -320,6 +329,7 @@ end
 
 -- The trainer as a route errand (R.AddErrand), or nil.
 local function Train(lead)
+	local weighs = ns.Weighed("aidtrain")
 	local now = Aid.Now()
 	if not now or (Mine().skip or 0) >= now.level then return nil end
 	local title, why, due, cost
@@ -329,9 +339,10 @@ local function Train(lead)
 	else
 		due, cost = Due(now)
 		if #due > 0 then
-			if cost > GetMoney() then return nil end
+			if cost > 0 then weighs[1] = cost end
+			if cost > Shy.Money() then return nil end
 			title = #due == 1 and ("Train: " .. due[1].name) or ("Train: %d First Aid recipes"):format(#due)
-			why = cost > 0 and ("%s of your %s"):format(Coins(cost), Coins(GetMoney())) or nil
+			why = cost > 0 and ("Costs " .. Coins(cost)) or nil
 		elseif next(T.db.aid.list) == nil and not now.potion then
 			-- No trainer's list was read yet: what there is to learn shows there.
 			title, why = "First Aid: see the trainer", "For a potion recipe"
@@ -365,7 +376,7 @@ local function Train(lead)
 			for _, each in ipairs(due or {}) do tip:AddLine(each.name, 1, 1, 1) end
 		end,
 		menu = function(root)
-			root:CreateButton("Not now: ask again next level", function()
+			root:CreateButton("Ask me next level", function()
 				Mine().skip = now.level
 				ns.Refresh()
 			end)
@@ -505,8 +516,7 @@ local function Read()
 end
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP", "PLAYER_MONEY", "SPELLS_CHANGED",
-	"SKILL_LINES_CHANGED", "NEW_RECIPE_LEARNED", "TRAINER_SHOW", "TRAINER_UPDATE", "AUCTION_HOUSE_SHOW" }) do
+for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED", "NEW_RECIPE_LEARNED", "TRAINER_SHOW", "TRAINER_UPDATE", "AUCTION_HOUSE_SHOW" }) do
 	events:RegisterEvent(event)
 end
 events:SetScript("OnEvent", function(_, event, id)
@@ -534,6 +544,13 @@ events:SetScript("OnEvent", function(_, event, id)
 	-- (A change in the bags builds the route again already, ShyQuest.lua: the guide is asked only when it reads them.)
 	if event == "BAG_UPDATE_DELAYED" then return end
 	-- (Gold, a trainer's list, a recipe: the first-aid errand's alone. The errands are fitted again, not the route.)
+	ns.RefreshErrands()
+end)
+-- The spellbook, told by ShyCore when it changes: the same. (Gold: ns.Weighed above.)
+Shy:On("SHY_SPELLS", function()
+	if not ns.char then return end
+	stale = true
+	Supplies.Stale()
 	ns.RefreshErrands()
 end)
 

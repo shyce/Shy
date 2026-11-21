@@ -191,7 +191,7 @@ local function CreateStart(page)
 	end, true)
 	go:SetHeight(24)
 	go:SetPoint("BOTTOMLEFT", nameBox, "BOTTOMRIGHT", 10, 0)
-	local note = UI.Text(custom, "Your own run. The Group Finder lists it under Custom; you type its description in the default window.", 12, false, C.dim)
+	local note = UI.Text(custom, "Your own run. The Group Finder lists it under Custom. You type its description in the default window.", 12, false, C.dim)
 	note:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", 0, -10)
 	note:SetWidth(PAGE_W)
 	note:SetJustifyH("LEFT")
@@ -203,7 +203,7 @@ local function CreateStart(page)
 	refresh:SetHeight(24)
 	refresh:SetPoint("BOTTOMRIGHT", -PAD, 10)
 	refresh:SetMotionScriptsWhileDisabled(true)
-	W.Tip(refresh, "Refresh", "Asks the Group Finder again. Listings update on their own after that; chat posts show up as people post them.")
+	W.Tip(refresh, "Refresh", "Asks the Group Finder again. Listings update on their own after that. Chat posts show up as people post them.")
 
 	local function Foot(kind)
 		local finder = Search.finder
@@ -388,7 +388,7 @@ local function CreateListing(left)
 	desc:SetScript("OnClick", function() Listing.OpenDescription() end)
 	desc:SetScript("OnEnter", function(self) UI.Ink(self.text, C.hot) end)
 	desc:SetScript("OnLeave", function(self) UI.Ink(self.text, C.dim) end)
-	W.Tip(desc, "Description", "What your listing says. You can only type it in the default Group Finder window; this opens it with the box ready.")
+	W.Tip(desc, "Description", "What your listing says. You can only type it in the default Group Finder window. This opens it with the box ready.")
 
 	local function StateText(run, listing)
 		if listing == "run" then
@@ -563,13 +563,13 @@ local function CreatePost(left)
 	count:SetJustifyH("RIGHT")
 	W.Tip(preview, "What goes out", function()
 		local n = #Run.FillFull(T.db.templates.post)
-		if n > Run.LIMIT then return "Chat fits " .. Run.LIMIT .. " characters; the red part won't be sent." end
+		if n > Run.LIMIT then return "Chat fits " .. Run.LIMIT .. " characters. The red part won't be sent." end
 		return "How your post looks in chat: " .. n .. " of " .. Run.LIMIT .. " characters."
 	end)
 	W.Tip(post, "Post in chat", function()
 		local names = {}
 		for _, channel in ipairs(Run.PostChannels()) do names[#names + 1] = channel.name end
-		if #names == 0 then return "No channel to post in. Join LookingForGroup or pick channels in the options." end
+		if #names == 0 then return "No channel to post in. Join LookingForGroup or pick channels in the settings." end
 		return "Sends \"" .. Run.PostText() .. "\" to " .. table.concat(names, ", ") .. ". It updates as your group fills."
 	end)
 
@@ -583,7 +583,7 @@ local function CreatePost(left)
 		UI.Ink(count, over and C.bad or C.dim)
 		local wait = Run.PostWait()
 		post.text:SetText(wait > 0 and ("Posted  \194\183  again in " .. wait .. "s") or "Post in chat")
-		post:SetOn(wait == 0 and not Run.IsFull(), Run.IsFull() and "Your group is full." or "Just posted: chat takes another in a moment.")
+		post:SetOn(wait == 0 and not Run.IsFull(), Run.IsFull() and "Your group is full." or "Just posted. You can post again in a moment.")
 	end
 	return block
 end
@@ -838,7 +838,7 @@ local function UpdateRow(row, item)
 	elseif kind == "asked" then
 		action.text:SetText("Asked")
 		action:SetPrimary(false)
-		action:SetOn(false, "You asked them for a spot; their answer lands in Replies.")
+		action:SetOn(false, "You asked them for a spot. Their answer shows up in Replies.")
 	elseif kind == "invite" then
 		action.text:SetText("Invite")
 		action:SetPrimary(INVITE_FIRST[p.status] or false)
@@ -892,7 +892,7 @@ local function CreateRight(main)
 
 	local levels = UI.Text(right, "Levels", 12, false, C.dim)
 	levels:SetPoint("TOPLEFT", 0, -50)
-	local LEVEL_TIP = { "Levels to search", "The levels Find people searches, and which chat posts count as your level. Shift-click steps by five; the mouse wheel works too." }
+	local LEVEL_TIP = { "Levels to search", "The levels Find people searches, and which chat posts count as your level. Shift-click steps by five. The mouse wheel works too." }
 	local minLevel = W.Stepper(right, function() return Run.Get().min end, function(delta) Run.AdjustLevel("min", delta) end,
 		{ min = 1, max = GetMaxPlayerLevel(), tip = LEVEL_TIP })
 	minLevel:SetPoint("LEFT", levels, "RIGHT", 8, 0)
@@ -934,7 +934,7 @@ local function CreateRight(main)
 
 	local function EmptyText(run)
 		if roleFilter == "groups" then
-			return "No group listed or posting for " .. run.name .. " yet.\nThe Group Finder gets checked when the window opens; Refresh on the Browse tab checks again."
+			return "No group listed or posting for " .. run.name .. " yet.\nThe Group Finder gets checked when the window opens. Refresh on the Browse tab checks again."
 		end
 		if roleFilter then return "No one for that role yet.\nPress Find people to search for classes that can fill it." end
 		return "No one yet.\nPress Find people to search for players in your level range.\nAnyone posting LFG in chat or listed in the Group Finder shows up here."

@@ -3,12 +3,12 @@
 -- Damage), the mob the table is for where the meter shows its fight, and the cog at the right. Its rows are the
 -- meter's, as tall and as far apart as the damage meter has its own (DamageMeter:GetBarHeight, GetBarSpacing): a
 -- class icon in a slot, a bar in the hatch with a lit top, a dark foot and a bright tip, the name at the left and the
--- number at the right. One builder, ns.CreateCard, makes the box's card and the options' preview.
+-- number at the right.
 --
 -- It is sized as the damage meter is, from every corner and side (Shy.HUD's flowing grip): its height is how many
 -- rows show before the rest scroll (the mouse wheel; a slim marker at the right says where you are), and unused
 -- places stand as faint wells, so its size reads at a glance. Until you size it, its size is planned: the width of
--- its home and the setting's rows (Shy.HUD.Made); a setup gives that back.
+-- its home and its planned rows, T.db.rows (Shy.HUD.Made); a setup gives that back.
 --
 -- It shows in your fights by default; the setting (or the layout editor's "Show out of combat") keeps it up between
 -- them too, or keeps it to group fights. Layout mode always shows it, a made-up fight in it, to place and size. Up
@@ -16,7 +16,7 @@
 --
 -- Where it stands is ShyDock's to plan (Arrange.lua): in a classic layout a meter window standing on the damage
 -- meter at its width, the mirror of the stack over chat; in a layout by role by your target, as the role has it.
--- The rows it is planned at are the setting's, fewer where its slot has room for fewer (Dock:MeterRows).
+-- It is planned at T.db.rows rows, fewer where its slot has room for fewer (Dock:MeterRows).
 --
 -- A bar is how close that player is to pulling the mob (the holder's is full); its color is the class's, as the damage
 -- meter's are. The number says the same in the family's threat colors (Theme.Threat, as ShyPlates' bars): a damage
@@ -55,6 +55,7 @@ local EVERY = 0.2                   -- seconds between looks
 local TRY = 10                      -- seconds of the made-up fight
 local WARN = 0.5                    -- a margin under this lights the header
 local FADED = 0.55                  -- a fight gone by, while it lingers
+local LINGER = 8                    -- seconds the last fight's table stays after the fight
 local LEAST = 2                     -- rows at the least: planned, and sized to
 local CLASSES = "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes"
 local CROP = 0.018
@@ -227,8 +228,8 @@ local function Height(n) return TOP + n * ROW + (n - 1) * GAP + FOOT end
 local function Fits(height) return math.max(1, math.floor((height - TOP - FOOT + GAP) / (ROW + GAP))) end
 M.Height = Height
 
--- The card. box: the Shy.HUD box it fills (nil for a preview, which is given its size with card:Flow): it takes the
--- mouse and the wheel, its controls drag the box, its cog opens the box's menu.
+-- The card. box: the Shy.HUD box it fills. It takes the mouse and the wheel, its controls drag the box, its cog
+-- opens the box's menu.
 function ns.CreateCard(parent, box)
 	local card = CreateFrame("Frame", nil, parent)
 	card.box = box
@@ -238,7 +239,7 @@ function ns.CreateCard(parent, box)
 	-- The header, the damage meter's: the chooser where the meter's type stands, the mob where it shows its fight,
 	-- the cog at the right.
 	card.view = UI.MenuButton(card, { font = UI.TitleFont(UI.TITLE_SIZE), height = CONTROL, write = ViewMenu, drag = box,
-		tip = "How the numbers read. A tank's row is its lead over the next player; anyone else's is how close they are to pulling." })
+		tip = "How the numbers read. A tank's row is its lead over the next player. Anyone else's is how close they are to pulling." })
 	card.view:SetLabel("Threat", C.text)
 	card.cog = UI.MenuButton(card, { height = CONTROL, drag = box, tip = "Threat meter menu",
 		write = function(root) if ns.Meter.Menu then ns.Meter.Menu(root) end end })
@@ -300,7 +301,7 @@ function ns.CreateCard(parent, box)
 		self.mob:SetPoint("LEFT", self.view, "RIGHT", 6, 0)
 	end
 
-	-- The rows it is planned at: the setting's, no more than its slot has room for (ShyDock: Dock:MeterRows).
+	-- The rows it is planned at: T.db.rows, no more than its slot has room for (ShyDock: Dock:MeterRows).
 	function card:Most()
 		local most = T.db.rows
 		local dock = self.box and Shy.addons.Dock
@@ -310,7 +311,7 @@ function ns.CreateCard(parent, box)
 	end
 
 	-- The card at a size (own units): as many places as fit, the table drawn again. The box's grip calls it as it
-	-- flows; a preview is sized by it.
+	-- flows.
 	function card:Flow(width, height)
 		if not self.box then self:SetSize(width, height) end
 		self.places = Fits(height)
@@ -470,7 +471,7 @@ function ns.CreateCard(parent, box)
 		card:SetScript("OnEnter", function(self)
 			local text
 			if T:IsTank() then
-				text = "The top row holds it. Its number is the lead over the next player: at +30% nobody can pull it."
+				text = "The top row has aggro. Its number is the lead over the next player. At +30% nobody can pull it."
 			else
 				text = "Each bar is how close that player is to pulling it. Melee pulls at 110% of the holder's threat, range at 130%."
 			end
@@ -479,7 +480,7 @@ function ns.CreateCard(parent, box)
 			if f and f[7] and f[7] > 0 then
 				text = text .. "\n\nLoose: mobs you're fighting that are on someone who isn't a tank."
 			elseif f and f[3] == UNSORTED then
-				text = text .. "\n\nThe game keeps these numbers to itself, so whoever has it comes first, then those close to pulling it, then the rest in group order."
+				text = text .. "\n\nThe game hides these numbers, so whoever has aggro comes first, then those close to pulling it, then the rest in group order."
 			end
 			UI.Tip(self, "Threat", text, { hints = HINTS })
 		end)
@@ -506,6 +507,7 @@ local kept                  -- the last table shown: { rows, name, sorted, key (
 local gone = false          -- the mob that table was of died, or you let go of it: nothing lingers
 local trying                -- the made-up fight's start
 local fitted                -- the width its home gives it (ShyDock), or nil
+local inFights              -- when it showed before it was kept up always: "combat" or "group"
 
 local function On() return T.db.on == true end
 
@@ -514,7 +516,7 @@ local function Fighting() return UnitAffectingCombat("player") == true end
 -- The last table stays faded a while only while its mob is still there to read (a fight that ended with it alive:
 -- it reset, or you got away); the mob dead or let go of, the meter goes with it (Look).
 local function Lingering()
-	return not live and kept ~= nil and not gone and GetTime() - lastLive < T.db.linger
+	return not live and kept ~= nil and not gone and GetTime() - lastLive < LINGER
 end
 
 -- When it shows (T.db.when): always; in your fights (a table, the one lingering, or you in combat); in group fights
@@ -577,7 +579,7 @@ local function Look()
 			-- meter lets it go at once. Shown always, it keeps the last fight's table, said so.
 			local mob = Rd.Mob()
 			if not mob or (kept and Rd.Key(mob) ~= kept[4]) then gone = true end
-			if kept and T.db.when ~= "always" and (gone or GetTime() - lastLive >= T.db.linger) then kept = nil end
+			if kept and T.db.when ~= "always" and (gone or GetTime() - lastLive >= LINGER) then kept = nil end
 		end
 	end
 	Paint()
@@ -597,7 +599,7 @@ end
 -- The driver runs (tests and the report ask).
 function M.Awake() return driver ~= nil and driver:IsShown() end
 
--- The size it is planned at (own units): its home's width (ShyDock's) or its own, and its rows (the setting's, no
+-- The size it is planned at (own units): its home's width (ShyDock's) or its own, and its rows (T.db.rows, no
 -- more than the slot has room for). The box wears it until you size it yourself (Shy.HUD.Made).
 function M.Planned()
 	local rows = card and card:Most() or T.db.rows
@@ -633,21 +635,21 @@ function M.Menu(root)
 		db.pets = not db.pets
 		ns.Apply()
 	end)
-	root:CreateCheckbox("Follow the nameplate under the mouse", function() return db.hover end, function()
+	root:CreateCheckbox("Follow your mouseover", function() return db.hover end, function()
 		db.hover = not db.hover
 		ns.Apply()
 	end)
-	root:CreateCheckbox("Warn me near the pull", function() return db.warn end, function()
+	root:CreateCheckbox("Warn near the pull", function() return db.warn end, function()
 		db.warn = not db.warn
 		ns.Apply()
 	end)
 	root:CreateDivider()
 	root:CreateButton("Show a made-up fight", M.Try)
-	root:CreateButton("Options", function() T:OpenOptions() end)
+	root:CreateButton("Settings", function() T:OpenOptions() end)
 	root:CreateButton("Hide the meter", function()
 		db.on = false
 		ns.Apply()
-		T:Print("threat meter hidden. Turn it back on in the options: /shythreat")
+		T:Print("threat meter hidden. Turn it back on with /shy threat")
 	end)
 end
 
@@ -673,15 +675,21 @@ function M.Start()
 	card:Flow(box:GetWidth(), box:GetHeight())
 	HUD.Manage(box, card, M.Menu)
 	-- Its own controls on the layout editor's panel: shown in layout mode whatever the setting, so it can be placed
-	-- and sized out of a fight, and kept up out of one from here as from the options.
+	-- and sized out of a fight, and kept up out of one from here as from the settings.
 	box.panel = function(panel, Put, group, width)
 		local own = panel.threat
 		if not own then
 			own = {}
+			-- (Unticked, it goes back to what it was: in combat, or in group fights.)
 			own.out = group:Checkbox(panel, "Show out of combat", function() return T.db.when == "always" end, function(on)
-				T.db.when = on and "always" or "combat"
+				if on then
+					if T.db.when ~= "always" then inFights = T.db.when end
+					T.db.when = "always"
+				else
+					T.db.when = inFights or "combat"
+				end
 				ns.Apply()
-			end, { desc = "Keeps the meter up between fights, with the last fight's table. Off, it shows in combat only." })
+			end, { desc = "Keeps the meter up between fights, with the last fight's table. When off, it shows in combat only." })
 			own.options = UI.Button(panel, "Threat meter options", width, function() T:OpenOptions() end)
 			panel.threat = own
 		end
@@ -718,6 +726,14 @@ function M.Start()
 	Shy:On("SHY_THREAT_ROLE", Look)   -- how you are read, picked here or on the nameplates' page
 	Shy:On("SHY_AGGRO", Paint)   -- the mobs on someone who is no tank: the header counts them
 	table.insert(ns.appliers, function() Shy.Aggro.Want("ShyThreat", On()) end)
+	local whenWas = T.db.when
+	table.insert(ns.appliers, function()
+		local when = T.db.when
+		if when ~= "always" then inFights = when end
+		-- (Picked anew: the last table doesn't linger, so the pick shows at once.)
+		if when ~= whenWas and when ~= "always" then gone = true end
+		whenWas = when
+	end)
 	table.insert(ns.appliers, function()
 		Measure()
 		Plan()
@@ -730,7 +746,7 @@ end
 
 function M.Parts() return box, card end
 
--- The meter as a piece of a planned screen (ShyDock's Parts.lua): its width, its height at the setting's rows
+-- The meter as a piece of a planned screen (ShyDock's Parts.lua): its width, its height at its planned rows
 -- (head and row: the height at n rows is head + n * row), at its scale; nil while it is off. Bus SHY_THREAT_PIECE
 -- whenever that changes, so whoever plans the screen plans again.
 function T:Piece()

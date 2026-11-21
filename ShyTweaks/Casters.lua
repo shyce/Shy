@@ -14,7 +14,7 @@
 -- instead, which comes through here like any other.
 --
 -- The game shows no Lua errors: anything that fails here is said once in chat,
--- and /shytweaks casters tells where the last aura tooltip got to.
+-- and /shy tweaks casters tells where the last aura tooltip got to.
 
 local ADDON, ns = ...
 local Secret = issecretvalue
@@ -69,7 +69,7 @@ local function Report(where, err)
 	last.error = where .. ": " .. err
 	if told[err] then return end
 	told[err] = true
-	ns.T:Print("Show who cast a buff, " .. where .. ": " .. err)
+	ns.T:Print(casters.title .. ", " .. where .. ": " .. err)
 end
 
 -- Resolving a caster
@@ -437,7 +437,7 @@ function ns.T:AuraCasters()
 	return list
 end
 
--- The report: /shytweaks casters
+-- The report: /shy tweaks casters
 
 local function Ago(at)
 	local s = GetTime() - at
@@ -450,7 +450,7 @@ function ns.CastersReport()
 	local lines = {}
 	local function Say(text) lines[#lines + 1] = text end
 	local secret = C_Secrets.ShouldAurasBeSecret()
-	Say("Show who cast a buff is " .. (casters.running and "on" or "off") .. "."
+	Say(casters.title .. " is " .. (casters.running and "on" or "off") .. "."
 		.. (secret and " The game hides buffs from addons during a fight, so nothing is read until it ends." or ""))
 	if last.at then
 		if last.forbidden then
@@ -488,17 +488,17 @@ watch:SetScript("OnEvent", function(_, _, _, info) Changed(info) end)
 casters = ns.Feature({
 	id = "casters",
 	category = "Combat",
-	title = "Show who cast a buff",
-	desc = "Buff and debuff tooltips say who cast them, players in class color. Works on your target and group too, and skips your own spells. ShyBuffs' bars show the name too.",
-	keywords = "buff debuff aura caster source cast by applied from who whom thank tooltip hover mouseover mob creature enemy player poison curse",
+	title = "Who cast that buff",
+	desc = "Buff and debuff tooltips name who cast them, players in class color. Your own spells are skipped.",
+	keywords = "show buff debuff aura caster source cast by applied from who whom thank tooltip hover mouseover mob creature enemy player poison curse",
 	default = true,
 	options = {
 		{ key = "buffs", kind = "checkbox", label = "On buffs", default = true,
-			desc = "The caster's name stays for as long as the buff lasts, even after they leave." },
+			desc = "The name stays as long as the buff does, even after they leave." },
 		{ key = "debuffs", kind = "checkbox", label = "On debuffs", default = true,
-			desc = "Names the mob or player who put it on. If it lands in combat, the name shows once the fight ends." },
+			desc = "Names the mob or player who put it on you. One that lands in a fight is named when it ends." },
 		{ key = "detail", kind = "checkbox", label = "Level and class", default = true,
-			desc = "Adds \"Level 24 Priest\" or \"Level 21 Beast\" on the right. An enemy's level is in difficulty color. ShyBuffs' icons show the name alone." },
+			desc = "Adds what they are on the right, like Level 24 Priest." },
 	},
 	events = {
 		PLAYER_ENTERING_WORLD = Scan,

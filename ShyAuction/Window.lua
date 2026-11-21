@@ -87,7 +87,7 @@ local function Show(key)
 	W.Draw()
 end
 
--- Our window is up (the house open, the setting on).
+-- Our window is up (the auction house open, the setting on).
 function W.IsUp() return box ~= nil and box:IsShown() end
 
 function W.Open(key)

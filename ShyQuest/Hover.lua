@@ -1,11 +1,11 @@
 -- Quest lines on GameTooltip for a creature, object or item: quests that need it (progress, drop
 -- chance), quests it gives or completes, a quest item's status, and party progress (Party.lua).
--- Also a warning on hostile elites three or more levels above the player, in careful play only (the hardcore
--- route, or a hardcore realm).
+-- Also a warning on hostile elites three or more levels above the player, in careful play only (the
+-- hardcore route, or a hardcore realm).
 --
 -- The game's tooltip already names a quest and its progress on creatures it counts (QuestTitle
--- lines); for those the drop chance is written at the right of the game's own objective line, and
--- only party progress is added.
+-- lines). For those, the drop chance goes at the right of the game's own objective line and only
+-- party progress is added.
 -- Lines are added in TooltipDataProcessor post-calls, so they are rewritten whenever the game rebuilds
 -- the tooltip. Only the tooltip's data is read, never its text. Anything secret is left alone.
 
@@ -449,9 +449,9 @@ local function OnItem(tip, data)
 end
 
 Shy:On("SHY_LOGIN", function()
-	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, OnUnit)
-	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Object, OnObject)
-	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, OnItem)
+	Shy.OnTip(Enum.TooltipDataType.Unit, "a quest's creature", OnUnit)
+	Shy.OnTip(Enum.TooltipDataType.Object, "a quest's object", OnObject)
+	Shy.OnTip(Enum.TooltipDataType.Item, "a quest's item", OnItem)
 	-- In a hover the mark before a quest's name is drawn whole, as the row's lead (tooltips, and the
 	-- lines Tips.lua writes for pins and the tracker).
 	for _, kind in ipairs({ "goal", "pickup", "turnin" }) do

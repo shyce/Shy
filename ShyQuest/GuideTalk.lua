@@ -480,7 +480,7 @@ local function Up(panel, page)
 	return talk ~= nil and talk.Page ~= nil and talk.Page() == page
 end
 
--- Interaction log, kept across reloads; "/shyquest talk" shows it. Each line is prefixed with
+-- Interaction log, kept across reloads; "/shy quest talk" shows it. Each line is prefixed with
 -- G / Q (gossip / quest window shown) and g / q (client counts that interaction as open).
 local function Note(text, quest)
 	local manager, kind = C_PlayerInteractionManager, Enum.PlayerInteractionType

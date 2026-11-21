@@ -528,7 +528,6 @@ end
 
 local function OnWheel(frame, delta)
 	lastScroll[frame] = GetTime()
-	if not db.wheel then return end
 	if IsShiftKeyDown() then
 		if delta > 0 then frame:ScrollToTop() else frame:ScrollToBottom() end
 	elseif IsControlKeyDown() then
@@ -648,9 +647,14 @@ function W.SetupAll()
 	ns.Look.Apply()
 end
 
-function W.ApplyAll()
+-- The windows' own settings alone: face, spacing, fading, how much they keep.
+function W.ApplyText()
 	Each(ApplyFrame)
 	DressAll()
+end
+
+function W.ApplyAll()
+	W.ApplyText()
 	-- Look first: the clamp insets depend on its reach. UpdateClampOffsets restores Blizzard's
 	-- insets before the hook applies ours, so re-showing the column gets its room back.
 	ns.Look.Apply()

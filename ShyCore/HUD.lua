@@ -71,6 +71,7 @@
 --   Shy.HUD.Resize(box, w, h)           -- new size; a `hang` box keeps its top edge (room allowing)
 --   Shy.HUD.Folded(box, on)             -- folded away to its header (UI.FoldHead): no size to drag it to, so
 --                                       -- its corner and sides offer none while it is (bus "SHY_HUD_FOLDED")
+--   Shy.HUD.HasSize(box)                -- whether you sized this box by hand
 --   Shy.HUD.SetUnlocked(true)           -- open layout mode; HUD.IsUnlocked()
 --   Shy.HUD.DragHandle(box, titleBar)   -- a window's title bar drags it at any time
 --   Shy.HUD.Carry(box, control)         -- a control on that bar: clicked as ever, but pressed and moved it
@@ -192,7 +193,7 @@ end
 -- Drops a box's entry once nothing in it differs from where and how the box starts.
 local function Tidy(box)
 	local saved = Saved(box)
-	if not saved or saved.x or saved.locked or saved.w or saved.dock ~= nil then return end
+	if not saved or saved.x or saved.locked or saved.w or saved.dock ~= nil or saved.dockTo then return end
 	if saved.scale and math.abs(saved.scale - (box.foreign and (box.homeScale or 1) or 1)) > 0.001 then return end
 	core.db.hud[box.id] = nil
 end
@@ -349,82 +350,202 @@ local function Room(box, point, relativePoint, y)
 	return "BOTTOM" .. point:sub(4), "BOTTOM" .. across, 0
 end
 
--- Docking: a window that stands beside another (its host), a seam off, anchored to it so the engine moves
--- the two together. The side the player docked it on is kept in its entry as `dock` ("LEFT", "RIGHT"; none:
--- its made side), `false` while it stands free.
+-- A window keeps its place as it changes width (its top left corner, as placed), and is kept on the screen across:
+-- wider than the room to the screen's right, it stands that much further left while it is, never as a place of its
+-- own, so it is back where it was once narrower again (another character's bags). x in the box's own units.
+local function Across(box, point, relativePoint, x)
+	if not box.window then return x end
+	local s, sw = Scaled(box), UIParent:GetWidth()
+	local w = box:GetWidth() * s
+	local base = relativePoint:find("LEFT") and 0 or relativePoint:find("RIGHT") and sw or sw / 2
+	local left = base + x * s - (point:find("LEFT") and 0 or point:find("RIGHT") and w or w / 2)
+	box.across = nil
+	if left + w > sw then left = math.max(0, sw - w) elseif left < 0 then left = 0 else return x end
+	box.across = true   -- standing aside: placed again as it changes width, to come back
+	return (left - base + (point:find("LEFT") and 0 or point:find("RIGHT") and w or w / 2)) / s
+end
 
-local OTHER_SIDE = { LEFT = "RIGHT", RIGHT = "LEFT" }
+-- Docking: a window that stands beside another (its host), a seam off, on any of its four sides, anchored to it
+-- so the engine moves the two together. Every window docks: dragged near a side of another window it docks
+-- there. Its entry keeps the side (`dock`: "LEFT", "RIGHT", "TOP", "BOTTOM"; none: its made side; false: free)
+-- and, docked to another than its made host, that host's id (`dockTo`).
+-- Placed, it takes its side while that has room on the screen and nothing docked to the same host stands there;
+-- else it stands past what does, then the other side, then the two across (the roomier first); where nothing
+-- fits, wherever most of it shows. Windows docked to one host are seated in the order they opened, so one
+-- already open keeps its place and the newcomer finds room.
 
--- The window a box docks to, while there is one.
-local function Host(box)
-	local d = box.dock
-	if not d then return nil end
-	local host = d.to
+local SIDES = { "LEFT", "RIGHT", "TOP", "BOTTOM" }
+local OTHER_SIDE = { LEFT = "RIGHT", RIGHT = "LEFT", TOP = "BOTTOM", BOTTOM = "TOP" }
+local UPRIGHT = { LEFT = true, RIGHT = true }   -- beside it, not over or under it
+-- How a docked window hangs from what it stands beside: by side, then by how the two line up.
+local DOCK_POINTS = {
+	RIGHT = { TOP = { "TOPLEFT", "TOPRIGHT" }, BOTTOM = { "BOTTOMLEFT", "BOTTOMRIGHT" } },
+	LEFT = { TOP = { "TOPRIGHT", "TOPLEFT" }, BOTTOM = { "BOTTOMRIGHT", "BOTTOMLEFT" } },
+	TOP = { LEFT = { "BOTTOMLEFT", "TOPLEFT" }, RIGHT = { "BOTTOMRIGHT", "TOPRIGHT" } },
+	BOTTOM = { LEFT = { "TOPLEFT", "BOTTOMLEFT" }, RIGHT = { "TOPRIGHT", "BOTTOMRIGHT" } },
+}
+local DOCK_OFF = { RIGHT = { 1, 0 }, LEFT = { -1, 0 }, TOP = { 0, 1 }, BOTTOM = { 0, -1 } }
+local DEPTH = 8            -- windows docked one to another: a chain no longer than this
+local opened = 0           -- windows shown so far: the order docked ones are seated in
+local made = 0             -- boxes made so far
+
+-- The window it was made to dock to, if any.
+local function MadeHost(box)
+	local host = box.dock and box.dock.to
 	if type(host) == "function" then host = host() end
 	if type(host) == "string" then host = HUD.Find(host) end
+	return host
+end
+
+-- The window a box docks to now: the one it was docked to, else its made one.
+local function RawHost(box)
+	if not box.dock then return nil end
+	local saved = Saved(box)
+	local host
+	if saved and saved.dockTo then host = HUD.Find(saved.dockTo) else host = MadeHost(box) end
 	if host == box then return nil end
 	return host
 end
 
--- The side the player docked it on, or nil while it stands free (or has no host).
+-- The same, never through a ring (two windows docked to each other): the one closing it stands free.
+local function Host(box)
+	local host = RawHost(box)
+	local up, n = host, 0
+	while up and n < DEPTH do
+		up, n = RawHost(up), n + 1
+		if up == box then return nil end
+	end
+	return host
+end
+
+-- The side it docks on, or nil while it stands free (or has no host).
 local function DockSide(box)
-	if not Host(box) then return nil end
 	local saved = Saved(box)
 	if saved and saved.dock == false then return nil end
+	if not Host(box) then return nil end
 	return (saved and saved.dock) or box.dock.side or "LEFT"
 end
 
 -- The height a window docked `tall` takes from its host: as tall as the host on screen, in the window's own units
--- (the two may be drawn at different scales). Nil while its height is its own: free, or not docked so.
--- Whoever sizes a flowing box asks this (Grip.lua's Flow, UI.Window as it is made), so nothing else has to put the
--- height back after the box is placed again.
+-- (the two may be drawn at different scales). Nil while its height is its own: free, over or under its host, or not
+-- docked so. Whoever sizes a flowing box asks this (Grip.lua's Flow, UI.Window as it is made), so nothing else has to
+-- put the height back after the box is placed again.
 function HUD.DockTall(box)
-	if not (box.dock and box.dock.tall) or not DockSide(box) then return nil end
+	if not (box.dock and box.dock.tall) then return nil end
+	local side = DockSide(box)
+	if not side or not UPRIGHT[box.dockedOn or side] then return nil end
 	local host = Host(box)
 	return host:GetHeight() * Scaled(host) / Scaled(box)
 end
 
--- Where a box `width` by `height` (UIParent units) stands docked on `side` of its host: its left and bottom
--- in UIParent units, the side it takes and how it lines up ("TOP": tops level; "BOTTOM": feet level, where
--- level tops would take it off the screen's foot). `exact`: that side whatever room it has; else the other
--- side where that one runs off the screen and the other doesn't. Nil while the host can't be measured.
-local function DockSeat(box, side, width, height, exact)
-	local hl, hb, hw, hh = Rect(Host(box))
-	if not hl then return nil end
+-- Where a box `width` by `height` stands on `side` of the rectangle (l, b, w, h), all in UIParent units: its left
+-- and bottom, and how the two line up. Beside it, tops level ("TOP"), or feet ("BOTTOM") where tops would take it
+-- off the screen's foot; over or under it, left edges level ("LEFT"), or right ("RIGHT") where lefts would take it
+-- off the screen's right.
+local function Beside(l, b, w, h, side, width, height)
 	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
-	local function At(s)
-		if s == "RIGHT" then return hl + hw + SEAM end
-		return hl - SEAM - width
+	if UPRIGHT[side] then
+		local left = side == "RIGHT" and l + w + SEAM or l - SEAM - width
+		local level, bottom = "TOP", b + h - height
+		if bottom < 0 and b + height <= sh then level, bottom = "BOTTOM", b end
+		return left, bottom, level
 	end
-	local left = At(side)
-	if not exact and (left < 0 or left + width > sw) then
-		local other = OTHER_SIDE[side]
-		local there = At(other)
-		if there >= 0 and there + width <= sw then side, left = other, there end
-	end
-	local level, bottom = "TOP", hb + hh - height
-	if bottom < 0 and hb + height <= sh then level, bottom = "BOTTOM", hb end
-	return left, bottom, side, level
+	local bottom = side == "TOP" and b + h + SEAM or b - SEAM - height
+	local level, left = "LEFT", l
+	if left + width > sw and l + w - width >= 0 then level, left = "RIGHT", l + w - width end
+	return left, bottom, level
 end
 
--- Anchored to its host's side: TOPLEFT to the host's TOPRIGHT on the right, TOPRIGHT to its TOPLEFT on the left
--- (BOTTOM... where the feet line up). box.dockedOn is the side it stands on.
-local function ApplyDocked(box, side)
+-- How much of a rectangle is on the screen.
+local function Shows(left, bottom, width, height)
+	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+	local w = math.min(left + width, sw) - math.max(left, 0)
+	local h = math.min(bottom + height, sh) - math.max(bottom, 0)
+	return math.max(0, w) * math.max(0, h)
+end
+
+local function Overlaps(l1, b1, w1, h1, l2, b2, w2, h2)
+	return l1 < l2 + w2 - 0.5 and l2 < l1 + w1 - 0.5 and b1 < b2 + h2 - 0.5 and b2 < b1 + h1 - 0.5
+end
+
+-- Whether window `a` opened before `b` (by when each was last shown, then by when each was made).
+local function Before(a, b)
+	if (a.openedAt or 0) ~= (b.openedAt or 0) then return (a.openedAt or 0) < (b.openedAt or 0) end
+	return (a.made or 0) < (b.made or 0)
+end
+
+-- Where a box `width` by `height` (UIParent units) stands docked, asking for `side`: its left and bottom, the side it
+-- takes, how it lines up (Beside) and what it hangs from (its host, or a window docked to it already). `exact`: on that
+-- side of the host whatever stands there. Nil while the host can't be measured.
+local function DockSeat(box, side, width, height, exact)
 	local host = Host(box)
+	local hl, hb, hw, hh = Rect(host)
+	if not hl then return nil end
+	if exact then
+		local left, bottom, level = Beside(hl, hb, hw, hh, side, width, height)
+		return left, bottom, side, level, host
+	end
+	-- What stands docked to the same host already: opened before this one, and on the screen.
+	local taken = {}
+	for _, other in ipairs(boxes) do
+		if other ~= box and other.dockedOn and RawHost(other) == host and Visible(other) and Before(other, box) then
+			local l, b, w, h = Rect(other)
+			if l then taken[#taken + 1] = { box = other, side = other.dockedOn, l, b, w, h } end
+		end
+	end
+	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+	local best, most
+	local function Try(s, anchor, l, b, w, h)
+		local left, bottom, level = Beside(l, b, w, h, s, width, height)
+		local fits = left >= 0 and bottom >= 0 and left + width <= sw and bottom + height <= sh
+		local clear = true
+		for _, t in ipairs(taken) do
+			if Overlaps(left, bottom, width, height, t[1], t[2], t[3], t[4]) then
+				clear = false
+				break
+			end
+		end
+		if fits and clear then return { left, bottom, s, level, anchor } end
+		-- Nothing fits: clear of the others where it can be, then wherever most of it shows.
+		local shows = Shows(left, bottom, width, height) + (clear and sw * sh or 0)
+		if not most or shows > most + 0.5 then best, most = { left, bottom, s, level, anchor }, shows end
+	end
+	local order = { side, OTHER_SIDE[side] }
+	if UPRIGHT[side] then
+		local up = sh - (hb + hh) > hb
+		order[3], order[4] = up and "TOP" or "BOTTOM", up and "BOTTOM" or "TOP"
+	else
+		local right = sw - (hl + hw) > hl
+		order[3], order[4] = right and "RIGHT" or "LEFT", right and "LEFT" or "RIGHT"
+	end
+	for _, s in ipairs(order) do
+		local seat = Try(s, host, hl, hb, hw, hh)
+		-- Past what stands on that side already, nearest first.
+		for _, t in ipairs(taken) do
+			if seat then break end
+			if t.side == s then seat = Try(s, t.box, t[1], t[2], t[3], t[4]) end
+		end
+		if seat then return unpack(seat) end
+	end
+	if best then return unpack(best) end
+end
+
+-- Hung from what it stands beside (DockSeat): the matching corners, a seam off. box.dockedOn is the side it stands
+-- on, box.dockedBy what it hangs from.
+local function ApplyDocked(box, side)
 	local s = Scaled(box)
-	local level = "TOP"
-	local _, _, took, lined = DockSeat(box, side, box:GetWidth() * s, box:GetHeight() * s)
-	if took then side, level = took, lined end
-	box.dockedOn = side
-	local point = level .. (side == "RIGHT" and "LEFT" or "RIGHT")
-	local relativePoint = level .. side
-	local x = (side == "RIGHT" and SEAM or -SEAM) / s
+	local _, _, took, level, anchor = DockSeat(box, side, box:GetWidth() * s, box:GetHeight() * s)
+	if not took then took, level, anchor = side, UPRIGHT[side] and "TOP" or "LEFT", Host(box) end
+	box.dockedOn, box.dockedBy = took, anchor
+	local pair, off = DOCK_POINTS[took][level], DOCK_OFF[took]
+	local x, y = off[1] * SEAM / s, off[2] * SEAM / s
 	if box:GetNumPoints() == 1 then
 		local p, to, rp, px, py = box:GetPoint(1)
-		if p == point and to == host and rp == relativePoint and type(px) == "number" and math.abs(px - x) < 0.01 and py == 0 then return end
+		if p == pair[1] and to == anchor and rp == pair[2] and type(px) == "number" and type(py) == "number"
+			and math.abs(px - x) < 0.01 and math.abs(py - y) < 0.01 then return end
 	end
 	box:ClearAllPoints()
-	box:SetPoint(point, host, relativePoint, x, 0)
+	box:SetPoint(pair[1], anchor, pair[2], x, y)
 end
 
 function HUD.Apply(box)
@@ -448,7 +569,7 @@ function HUD.Apply(box)
 		box.lastDock = side   -- the side the player had it on, for docking it again (HUD.Dock)
 		ApplyDocked(box, side)
 	else
-		box.dockedOn = nil
+		box.dockedOn, box.dockedBy = nil, nil
 		local point, relativePoint, x, y
 		if saved and saved.x and box.hang and saved.top then
 			point, relativePoint, x, y = "TOPLEFT", "BOTTOMLEFT", saved.x, saved.top
@@ -459,6 +580,7 @@ function HUD.Apply(box)
 			point, relativePoint, x, y = p[1], p[2], p[3] / s, p[4] / s
 		end
 		point, relativePoint, y = Room(box, point, relativePoint, y)
+		x = Across(box, point, relativePoint, x)
 		if not Stands(box, point, relativePoint, x, y) then
 			box:ClearAllPoints()
 			box:SetPoint(point, UIParent, relativePoint, x, y)
@@ -660,25 +782,40 @@ local function Snap(box, left, bottom, width, height)
 	if not left or IsShiftKeyDown() then return left, bottom end
 	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
 
-	-- A window that docks: within reach of either side of its host it docks there (box.docking), and its
-	-- home is that side, not a place of its own.
+	-- A window: within reach of a side of another window it docks there (box.docking = { side, host }), and its
+	-- home is that side, not a place of its own. Its made host comes first; never one docked to it in turn.
 	if box.dock then
-		local host = Host(box)
-		if host and Visible(host) then
-			for _, side in ipairs({ "LEFT", "RIGHT" }) do
-				local dl, db = DockSeat(box, side, width, height, true)
-				if dl and math.abs(left - dl) < SEAT and math.abs(bottom - db) < SEAT then
-					box.docking = side
-					-- (Docked `tall` it will stand as tall as its host: the outline shows it so.)
-					local _, hb, _, hh = Rect(host)
-					local tall = box.dock.tall and hb ~= nil
-					seat:ClearAllPoints()
-					seat:SetPoint("BOTTOMLEFT", guides, "BOTTOMLEFT", dl, tall and hb or db)
-					seat:SetSize(width, tall and hh or height)
-					seat:Show()
-					return dl, db
+		local made = MadeHost(box)
+		local near, found
+		for _, other in ipairs(boxes) do
+			if other ~= box and other.window and not other.foreign and Visible(other) then
+				-- (One docked to this box, however far down, can't be its host.)
+				local up, n, mine = other, 0, false
+				while up and n < DEPTH do
+					up, n = RawHost(up), n + 1
+					if up == box then mine = true break end
+				end
+				local ol, ob, ow, oh = Rect(other)
+				if ol and not mine then
+					for _, side in ipairs(SIDES) do
+						local dl, db = Beside(ol, ob, ow, oh, side, width, height)
+						local d = math.max(math.abs(left - dl), math.abs(bottom - db))
+						if other == made then d = d - 1 end
+						if d < SEAT and (not near or d < near) then near, found = d, { side, other, dl, db, ol, ob, ow, oh } end
+					end
 				end
 			end
+		end
+		if found then
+			local side, host, dl, db = found[1], found[2], found[3], found[4]
+			box.docking = { side, host }
+			-- (Docked `tall` beside it, it will stand as tall as its host: the outline shows it so.)
+			local tall = box.dock.tall and UPRIGHT[side]
+			seat:ClearAllPoints()
+			seat:SetPoint("BOTTOMLEFT", guides, "BOTTOMLEFT", dl, tall and found[6] or db)
+			seat:SetSize(width, tall and found[8] or height)
+			seat:Show()
+			return dl, db
 		end
 	end
 
@@ -768,12 +905,18 @@ local dragging
 
 -- Whatever is docked to `host` is placed against it again: it moved, changed size, or was placed anew, so a
 -- side may have run out of room or the tops may now take a window off the screen's foot.
+-- They are seated in the order they opened, so each finds room past the ones before it.
 function Follow(host)
+	local docked
 	for _, other in ipairs(boxes) do
 		if other ~= host and other ~= dragging and other.dock and Host(other) == host and DockSide(other) then
-			HUD.Apply(other)
+			docked = docked or {}
+			docked[#docked + 1] = other
 		end
 	end
+	if not docked then return end
+	table.sort(docked, Before)
+	for _, other in ipairs(docked) do HUD.Apply(other) end
 end
 
 local function Place(box, left, bottom)
@@ -808,12 +951,18 @@ local function Remember(box)
 	if box == selected then Bar.Readout() end
 end
 
--- Docked on `side` of its host (Snap's box.docking, the menu, HUD.Dock): no place of its own is kept.
-local function Dock(box, side)
+-- Docked on `side` of `host` (Snap's box.docking, the menu, HUD.Dock; nil: the one it has): no place of its own is
+-- kept. Its made host on its made side is no entry at all.
+local function Dock(box, side, host)
 	box.docking = nil
 	local saved = Keep(box)
 	saved.x, saved.y, saved.top = nil, nil, nil
-	saved.dock = side ~= (box.dock.side or "LEFT") and side or nil
+	host = host or RawHost(box)
+	saved.dockTo = (host and host ~= MadeHost(box)) and host.id or nil
+	saved.dock = (saved.dockTo or side ~= (box.dock.side or "LEFT")) and side or nil
+	-- Seated last among what is docked there: it finds room past what stands there already.
+	opened = opened + 1
+	box.openedAt = opened
 	Tidy(box)
 	HUD.Apply(box)
 	Shy:Fire("SHY_HUD_MOVED", box)
@@ -994,7 +1143,7 @@ local function StopDrag()
 		Place(box, Snap(box, Rect(box)))
 	end
 	if box.docking and not Busy(box) then
-		Dock(box, box.docking)
+		Dock(box, box.docking[1], box.docking[2])
 	elseif box.homing and not Busy(box) then
 		GoHome(box)
 	else
@@ -1233,9 +1382,17 @@ local function OpenMenu(box, owner, extra)
 		align:SetIcon(UI.MenuGlyph("center"))
 		align:CreateButton("Across the screen", function() Center(box, true) end)
 		align:CreateButton("Up and down", function() Center(box, false) end)
-		if box.dock and Host(box) then
-			root:CreateCheckbox(box.dock.label or "Docked", function() return DockSide(box) ~= nil end, function()
-				HUD.Dock(box, not DockSide(box))
+		-- Docked to another than its made host, the switch says so and lets it go; free, it docks back to its made one.
+		local by = DockSide(box) and Host(box)
+		if by or (box.dock and MadeHost(box)) then
+			local label = (by and by ~= MadeHost(box)) and ("Docked to " .. (by.title or "a window")) or (box.dock.label or "Docked")
+			root:CreateCheckbox(label, function() return DockSide(box) ~= nil end, function()
+				if DockSide(box) then
+					HUD.Dock(box, false)
+				else
+					Keep(box).dockTo = nil
+					HUD.Dock(box, true)
+				end
 			end)
 		end
 		root:CreateCheckbox("Lock in place", function() return IsLocked(box) end, function()
@@ -1245,7 +1402,7 @@ local function OpenMenu(box, owner, extra)
 		end)
 		root:CreateButton(box.editMode and "Back to Edit Mode's place" or "Reset position", function()
 			local saved = Saved(box)
-			if saved then saved.x, saved.y, saved.top, saved.dock = nil, nil, nil, nil end
+			if saved then saved.x, saved.y, saved.top, saved.dock, saved.dockTo = nil, nil, nil, nil, nil end
 			Tidy(box)
 			HUD.Apply(box)
 			Shy:Fire("SHY_HUD_MOVED", box)
@@ -1261,7 +1418,7 @@ local function OpenMenu(box, owner, extra)
 			local edit = root:CreateButton("Edit Mode")
 			edit:SetSecure({ type = "macro", macrotext = SLASH_EDITMODE1 })
 			edit:SetIcon(UI.MenuGlyph("window"))
-			edit:SetTooltip("Opens Edit Mode for this piece's own settings. If you move it there, Edit Mode takes it back over.")
+			edit:SetTooltip("Opens Edit Mode for this piece's settings. If you move it there, Edit Mode controls it again.")
 		end
 		if not unlocked then root:CreateButton("Layout mode", function() HUD.SetUnlocked(true) end):SetIcon(UI.MenuGlyph("window")) end
 	end)
@@ -1390,7 +1547,10 @@ function HUD.Create(def)
 	box.awayFn = def.away
 	box.secure, box.inCombat = def.secure, def.inCombat
 	box.hang, box.window = def.hang, def.window
-	box.dock = def.window and def.dock or nil
+	-- Every window docks to another dragged beside it; `dock = false` keeps one free.
+	box.dock = def.window and (def.dock or (def.dock ~= false and {} or nil)) or nil
+	made = made + 1
+	box.made = made
 	box.toggle, box.dockedFn, box.fitFn, box.switch, box.greyFn = def.toggle, def.docked, def.fit, def.switch, def.grey
 	box.labelAt = def.label
 	box.grip = def.grip
@@ -1408,6 +1568,16 @@ function HUD.Create(def)
 		-- and never past REACH of it each other way: its header can always be taken hold of again.
 		Reach(box)
 		box:HookScript("OnSizeChanged", Reach)
+		-- Opened, a docked window is seated after what is docked beside it already; closed, the ones after it close up.
+		box:HookScript("OnShow", function(self)
+			opened = opened + 1
+			self.openedAt = opened
+			if DockSide(self) then HUD.Apply(self) end
+		end)
+		box:HookScript("OnHide", function(self)
+			local host = self.dockedOn and RawHost(self)
+			if host then Follow(host) end
+		end)
 	else
 		Mover(box)
 	end
@@ -1477,9 +1647,16 @@ function HUD.Resize(box, width, height)
 		HUD.Apply(box)
 	elseif box.hang and changed then
 		HUD.Apply(box)   -- down while there is room under it, else up (Room)
+	elseif changed and box.window and not box.dockedOn and not Busy(box) then
+		-- Kept on the screen across (Across), and back where it was once it fits: placed again only then.
+		local l, _, w = Rect(box)
+		if l and (l < -0.5 or l + w > UIParent:GetWidth() + 0.5 or box.across) then HUD.Apply(box) end
 	end
-	-- Told at once, so whoever stacks the box with others can move them before the frame is drawn.
+	-- Told at once, so whoever stacks the box with others can move them before the frame is drawn. Docked, what
+	-- shares its host is seated again: it may now stand in the way.
 	if changed then
+		local host = box.dockedOn and RawHost(box)
+		if host and not Busy(box) then Follow(host) end
 		Follow(box)
 		Shy:Fire("SHY_HUD_RESIZED", box)
 	end
@@ -1931,7 +2108,7 @@ end
 function HUD.Forget(box, size)
 	local saved = Saved(box)
 	if not saved then return end
-	saved.x, saved.y, saved.dock = nil, nil, nil
+	saved.x, saved.y, saved.dock, saved.dockTo = nil, nil, nil, nil
 	if size then saved.scale, saved.w, saved.h = nil, nil, nil end
 	HUD.Apply(box)
 end
@@ -1941,7 +2118,7 @@ end
 function HUD.Dock(box, side)
 	if not (box.dock and Host(box)) or Busy(box) then return end
 	if side then
-		if side ~= "LEFT" and side ~= "RIGHT" then side = box.lastDock or box.dock.side or "LEFT" end
+		if not OTHER_SIDE[side] then side = box.lastDock or box.dock.side or "LEFT" end
 		Dock(box, side)
 		return
 	end
@@ -2226,7 +2403,7 @@ HUD.Act = {
 	end,
 	ResetPosition = function(box)
 		local saved = Saved(box)
-		if saved then saved.x, saved.y, saved.top, saved.dock = nil, nil, nil, nil end
+		if saved then saved.x, saved.y, saved.top, saved.dock, saved.dockTo = nil, nil, nil, nil, nil end
 		Tidy(box)
 		HUD.Apply(box)
 		Look(box)
@@ -2242,6 +2419,8 @@ HUD.Act = {
 		Bar.Readout()
 	end,
 }
+
+function HUD.HasSize(box) return HUD.Act.HasSize(box) end
 
 -- "Layout mode" buttons open Edit Mode, which ShySkin dresses as Shy's layout editor, through one
 -- secure button laid over them while the mouse is on them: Edit Mode opened from addon code would

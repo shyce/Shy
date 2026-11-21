@@ -1,7 +1,8 @@
--- Tricky spots with a picture: a jump, a leap into the sea, a ledge to walk off (Data/Spots.lua, with a
--- picture each in Media/Spots drawn from the game's own map art). Within a spot's reach the card says so
--- under the stop that leads, and that row's hover carries the picture: the way over the art, and a ring at
--- the jump. Nothing is said of a spot the player isn't near: the map pictures need no pointer.
+-- Tricky spots with a picture: a jump, a leap into the sea, a ledge to walk off (Data/Spots.lua, each
+-- with a picture in Media/Spots drawn from the game's own map art). Within a spot's reach the card
+-- says so under the leading stop, and that row's hover carries the picture: the way over the art,
+-- and a ring at the jump. Nothing is said about a spot the player isn't near, because the map
+-- pictures need no pointer.
 --
 --   ns.Spots.Near() -> spot or nil          the spot the player stands within reach of: { key, name, caption,
 --                                            kind, world, north, west, radius, file, yards }

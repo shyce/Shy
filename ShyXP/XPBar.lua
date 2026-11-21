@@ -1,4 +1,4 @@
--- The XP bar widget: used over the default XP bar, in the stats box and in the options preview.
+-- The XP bar widget: used in the stats window, under the action bars and on the quest window.
 -- Layers: rested XP, what the whole quest log would add, what the quests ready to hand in add, the fill,
 -- bubble dividers, a spark on each gain. The two quest bands start at the fill's end: the ready one reaches
 -- where handing in would put you, the log's goes on from there to where every quest done would.
@@ -171,7 +171,7 @@ function ns.CreateXPBar(parent, bare)
 		self.rested:SetWidth(math.max(1, self.restedTarget * width))
 		self.rested:SetShown(self.restedTarget > self.target)
 		-- The ready band lies over the log's, so the log's shows only past it: what is still to be done.
-		local bands = not self.followsQuestSetting or T.db.questOverlay
+		local bands = T.db.questOverlay
 		self.quest:SetWidth(math.max(1, self.questTarget * width))
 		self.quest:SetShown(bands and self.questTarget > self.target)
 		self.log:SetWidth(math.max(1, self.logTarget * width))

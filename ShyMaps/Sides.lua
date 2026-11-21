@@ -4,15 +4,14 @@
 --   the journal's bar. Two pictures on one small plate, the globe and the journal's sign (the first build wrote
 --   World | Dungeons on it and took the breadcrumb's room: its maps folded away): the half of the side you are
 --   on is lit; the other turns the window. Each says what it is under the mouse.
---   Dungeons lays the journal's face on a host of ours over everything under the window's title (the bar's row,
---   the map, the quest log). The game's window, its header and its keys are never touched.
+--   Dungeons lays the journal's face on a host of ours over everything under the window's header (the row, the
+--   map), its bar where the row is (Window.Room). The window's header and its keys are never touched.
 --   The map opens on the world; inside a dungeon the journal has, on that dungeon, until you turn it to the world
 --   yourself in there.
 --   The door joins them: an entrance on the map goes in (Sides.Enter), the journal's ways out show the door on
 --   the map (Sides.ToDoor).
--- The game's map is never opened from addon code. With the map shut the journal stands in a window of its own;
--- there its World half and its ways out are answered by one secure button (ShyMapsSideKey) laid over them while
--- the mouse is on them, out of a fight, which clicks the micro menu's quest log button: the game opens its map.
+-- With the map shut the journal stands in a window of its own; there its World half and its ways out open the
+-- map's window, on the world.
 --   Sides.Switch(parent, mine) -> frame   the switch, for the side `mine` ("world" | "dungeons")
 --   Sides.Now() -> "world" | "dungeons"   the side the map window shows
 --   Sides.MapUp()                         the map window is open, with our view in use
@@ -23,8 +22,6 @@
 --   Sides.Forget()                        the journal left that dungeon: its way out is every dungeon again
 --   Sides.ToDoor(dungeon)                out through it: the world, the view flown to its entrance
 --   Sides.Door(dungeon) -> { map, x, y }  its entrance as the game's own maps have it, or nil
---   Sides.KeyOver(button, dungeon)        the secure button laid over one of the journal's own (dungeon: the
---                                         one whose door the map is to open on)
 
 local ADDON, ns = ...
 local T = ns.T
@@ -37,69 +34,54 @@ ns.Sides = Sides
 local S = {
 	tall = 22, half = 24, glyph = 12,   -- the switch: a plate of the bar's, a half and its picture
 	fade = 0.18,               -- seconds the journal takes to come up over the map
-	head = 28,                 -- the host's top under the window's, where the game's bar can't be measured
-	mid = 18,                  -- the journal's bar's middle under its top (half its row)
-	crumb = 5,                 -- the map's crumbs stand this far under the game's bar's middle (Nav.lua)
-	left = 2, right = 3, foot = 2,   -- the host inside the window's edge, as the game's canvas is
 	deep = 2.2,                -- how close the view comes to a door, times the whole map's size, at the least
-	fresh = 1,                 -- seconds a click of the secure button answers for the map's opening
-	key = "ShyMapsSideKey",
+	fresh = 1,                 -- seconds an asked opening of the map window answers for
 }
 local side = "world"
 local host                   -- ours, in the map window: the journal's face stands on it
 local stay                   -- { map, side }: the side turned to by hand inside that dungeon
 local doors                  -- dungeon -> its entrance, read from the game's maps once
-local after                  -- { dungeon, at }: the secure button's click, to answer as the map opens
+local after                  -- { dungeon, at }: the map window asked open on the world (at a door), to answer as it opens
 local came                   -- { dungeon, map, x, y, zoom }: where the view stood as you went in at a door
 
 local function View() return ns.View end
+local function Window() return ns.Window end
 
 function Sides.Now() return side end
 
 function Sides.MapUp()
-	local map = rawget(_G, "WorldMapFrame")
-	return map ~= nil and map:IsShown() == true and View().InUse() == true
+	local window = Window()
+	return window ~= nil and window.Shown() == true and View().InUse() == true
 end
 
 ---------------------------------------------------------------------------
 -- The host
 ---------------------------------------------------------------------------
-local function Host()
-	if host then return host end
-	local map = rawget(_G, "WorldMapFrame")
-	if not (map and map.NavBar) then return nil end
-	host = CreateFrame("Frame", nil, map)
-	-- (Over the window's own buttons on the map, which stand in HIGH; menus and hovers stand higher still.)
-	host:SetFrameStrata("DIALOG")
-	host:SetFrameLevel(20)
-	host:EnableMouse(true)
-	host:EnableMouseWheel(true)
-	host:SetScript("OnMouseWheel", function() end)
-	host.ground = host:CreateTexture(nil, "BACKGROUND", nil, -8)
-	host.ground:SetAllPoints()
-	host.ground:SetColorTexture(0, 0, 0, 1)
-	host:Hide()
-	return host
-end
-
--- Stands the host under the window's title, its top where the journal's bar lies on the map's own; returns its
--- size, and how far in the game's bar begins (the switch stands there on both sides).
+-- Over everything under the window's header, from the body's edges: the journal's bar where the window's row is,
+-- its pieces beginning where the map's edge is (the switch stands there on both sides). Returns its size, and how
+-- far in the bar's pieces begin.
 local function Stand()
-	local map = WorldMapFrame
-	local bar = map.NavBar
-	local top, x = S.head, nil
-	local mapTop, mapLeft = map:GetTop(), map:GetLeft()
-	local barTop, barBottom, barLeft = bar:GetTop(), bar:GetBottom(), bar:GetLeft()
-	if mapTop and barTop and barBottom then top = math.max(0, mapTop - (barTop + barBottom) / 2 + S.crumb - S.mid) end
-	if mapLeft and barLeft then x = math.max(0, barLeft - mapLeft - S.left) end
+	local box, body, top, pad = Window().Room()
+	if not host then
+		host = CreateFrame("Frame", nil, box)
+		-- (Over the window's own plates on the map, which stand in its strata; menus and hovers stand higher still.)
+		host:SetFrameStrata("DIALOG")
+		host:SetFrameLevel(20)
+		host:EnableMouse(true)
+		host:EnableMouseWheel(true)
+		host:SetScript("OnMouseWheel", function() end)
+		host.ground = host:CreateTexture(nil, "BACKGROUND", nil, -8)
+		host.ground:SetAllPoints()
+		host.ground:SetColorTexture(0, 0, 0, 1)
+		host:Hide()
+	end
 	host:ClearAllPoints()
-	host:SetPoint("TOPLEFT", map, "TOPLEFT", S.left, -top)
-	host:SetPoint("BOTTOMRIGHT", map, "BOTTOMRIGHT", -S.right, S.foot)
-	return map:GetWidth() - S.left - S.right, map:GetHeight() - top - S.foot, x
+	host:SetPoint("TOPLEFT", body, "TOPLEFT", 0, -top)
+	host:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", 0, 0)
+	return body:GetWidth(), body:GetHeight() - top, pad
 end
 
--- The window was sized (maximized, put back, its quest log shown or shut): the face is laid out for it again,
--- its bar beginning where the game's does now.
+-- The window was sized (maximized, put back, dragged): the face is laid out for it again.
 local sizing = false
 local function Sized()
 	if sizing or side ~= "dungeons" or not (host and host:IsShown()) then return end
@@ -111,13 +93,13 @@ end
 
 function Sides.Turn(to)
 	if to == "dungeons" then
-		if not (Sides.MapUp() and Host()) then return end
+		if not Sides.MapUp() then return end
 		local was = side
 		side = "dungeons"
 		sizing = true
 		local width, height, x = Stand()
 		host:Show()
-		-- (Under its bar the journal is as small as everything laid over the map: the map's window gets the room.)
+		-- (Under its bar the journal is as small as everything laid over the map: the map gets the room.)
 		ns.Journal.Home(host, width, height, x, Shy.Maps.OVER)
 		sizing = false
 		if was ~= "dungeons" then UI.FadeIn(host, S.fade) end
@@ -125,6 +107,21 @@ function Sides.Turn(to)
 		side, came = "world", nil
 		if host then host:Hide() end
 	end
+end
+
+-- The map window opened on the world (from the journal in its own window: its World half, a way out), at a
+-- dungeon's door where one is named.
+local function OpenWorld(dungeon)
+	local window = Window()
+	if not (window and T.db.on) then
+		-- (The view off: the game's map is the map, and not ours to open.)
+		T:Print("open the map with its own key to see the world.")
+		return
+	end
+	after = { dungeon = dungeon, at = GetTime() }
+	local door = dungeon and ns.Journal.Door(dungeon)
+	if door then View().Open(door.map) end
+	window.Set(true)
 end
 
 ---------------------------------------------------------------------------
@@ -146,8 +143,7 @@ local function Pick(key, mine)
 	elseif Sides.MapUp() then
 		Sides.Turn("world")
 	else
-		-- (The journal in its own window, in a fight: the secure button isn't there to open the map.)
-		T:Print("open the map with its own key to see the world.")
+		OpenWorld(nil)
 	end
 end
 
@@ -184,10 +180,6 @@ function Sides.Switch(parent, mine)
 	f.world:SetPoint("LEFT", f, "LEFT", 0, 0)
 	f.dungeons:SetPoint("LEFT", f.world, "RIGHT", 0, 0)
 	f:SetWidth(f.world:GetWidth() + f.dungeons:GetWidth())
-	-- (The journal's own, in its own window: the map is opened by the secure button over its World half.)
-	if mine == "dungeons" then
-		f.world:HookScript("OnEnter", function(self) Sides.KeyOver(self) end)
-	end
 	return f
 end
 
@@ -266,23 +258,21 @@ end
 function Sides.ToDoor(dungeon)
 	local door = ns.Journal.Door(dungeon)
 	if not door then return end
-	if not Sides.MapUp() then
-		-- (The map shut, and no secure button to open it: it opens there next time.)
-		View().Open(door.map)
-		T:Print("its door shows when you open the map.")
-		return
-	end
 	local here = ns.Journal.Here()
 	if here then stay = { map = here, side = "world" } end
+	if not Sides.MapUp() then
+		OpenWorld(dungeon)
+		return
+	end
 	Sides.Turn("world")
 	Land(door)
 end
 
 ---------------------------------------------------------------------------
--- The game's window
+-- The map's window
 ---------------------------------------------------------------------------
--- The map window opened. A click of the secure button asked for the world (at a door, with a dungeon named);
--- else it opens on the world, or inside a dungeon the journal has, on that dungeon.
+-- The map window opened. Asked open on the world (at a door, with a dungeon named), on the world; else on the world,
+-- or inside a dungeon the journal has, on that dungeon.
 local function Shown()
 	local journal = ns.Journal
 	local asked = after
@@ -295,7 +285,7 @@ local function Shown()
 	if asked and GetTime() - asked.at <= S.fresh then
 		Sides.Turn("world")
 		local door = asked.dungeon and journal.Door(asked.dungeon)
-		-- (A frame on: the view has opened by then, whichever of us heard the window first.)
+		-- (A frame on: the view has opened by then.)
 		if door then C_Timer.After(0, function()
 			if Sides.MapUp() and side == "world" then Land(door) end
 		end) end
@@ -317,98 +307,19 @@ local function Hidden()
 	if host then host:Hide() end
 end
 
-local hooked = false
-local function Hook()
-	if hooked then return end
-	local map = rawget(_G, "WorldMapFrame")
-	if not map then return end
-	hooked = true
-	map:HookScript("OnShow", Shown)
-	map:HookScript("OnHide", Hidden)
-	map:HookScript("OnSizeChanged", Sized)
+if ns.Window then
+	ns.Window.Tell(function(what)
+		if what == "shown" then
+			Shown()
+		elseif what == "hidden" then
+			Hidden()
+		else
+			Sized()
+		end
+	end)
 end
 
--- (The view given up while the journal lies on the map: the game's own map has no side of ours.)
+-- (The view given up while the journal lies on the map: the map's window closes with it.)
 ns.OnApply(function()
-	Hook()
 	if side == "dungeons" and not Sides.MapUp() then Hidden() end
 end)
-
----------------------------------------------------------------------------
--- Opening the map from the journal's own window
----------------------------------------------------------------------------
-local key = CreateFrame("Button", S.key, UIParent, "SecureActionButtonTemplate")
-key:SetFrameStrata("FULLSCREEN_DIALOG")
-key:SetFrameLevel(500)
-key:RegisterForClicks("AnyUp")
-key:SetAttribute("type", "click")
-key:SetAttribute("useOnKeyDown", false)
-key:Hide()
-
--- The quest log's button of the micro menu, as the button's click (set out of a fight, once it is there).
-local armed = false
-local function Arm()
-	if armed or InCombatLockdown() then return end
-	local button = rawget(_G, "QuestLogMicroButton")
-	if type(button) ~= "table" then return end
-	key:SetAttribute("clickbutton", button)
-	armed = true
-end
-
-local function Away()
-	key.owner, key.dungeon = nil, nil
-	if not InCombatLockdown() then key:Hide() end
-end
-
-key:SetScript("PreClick", function(self)
-	after = { dungeon = self.dungeon, at = GetTime() }
-	-- (Where the map is to open: on the door's own map.)
-	local door = self.dungeon and ns.Journal.Door(self.dungeon)
-	if door then View().Open(door.map) end
-end)
-key:SetScript("PostClick", Away)
-
--- Laid over a button, the hover and the press are the button's under it, for its look.
-local function Tell(script)
-	return function(self, ...)
-		local owner = self.owner
-		local fn = owner and owner:GetScript(script)
-		if fn then fn(owner, ...) end
-	end
-end
-key:SetScript("OnEnter", Tell("OnEnter"))
-key:SetScript("OnLeave", function(self)
-	Tell("OnLeave")(self)
-	Away()
-end)
-key:HookScript("OnMouseDown", Tell("OnMouseDown"))
-key:HookScript("OnMouseUp", Tell("OnMouseUp"))
-
-function Sides.KeyOver(button, dungeon)
-	if InCombatLockdown() or not armed or Sides.MapUp() then return end
-	if key.owner == button and key:IsShown() then return end
-	local left, bottom, width, height = button:GetLeft(), button:GetBottom(), button:GetWidth(), button:GetHeight()
-	if not left then return end
-	local s = button:GetEffectiveScale() / UIParent:GetEffectiveScale()
-	key.owner, key.dungeon = button, dungeon
-	key:ClearAllPoints()
-	key:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * s, bottom * s)
-	key:SetSize(width * s, height * s)
-	key:Show()
-end
-
-local events = CreateFrame("Frame")
-events:RegisterEvent("PLAYER_LOGIN")
-events:RegisterEvent("ADDON_LOADED")
-events:RegisterEvent("PLAYER_REGEN_ENABLED")
-events:RegisterEvent("PLAYER_REGEN_DISABLED")
-events:SetScript("OnEvent", function(_, event)
-	if event == "PLAYER_REGEN_DISABLED" then
-		-- (Laid over a button as the fight begins: gone before the lockdown holds it there.)
-		Away()
-	else
-		Arm()
-		Hook()
-	end
-end)
-Arm()

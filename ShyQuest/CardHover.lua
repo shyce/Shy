@@ -1374,8 +1374,13 @@ local function OnKeep(frame, kept)
 	if whole or content.pins then Shy.Hover.Refill(frame, content) end
 end
 
--- Mouse hints for a card row: a click pins the hover, the menu has the rest.
+-- Mouse hints for a card row: a click opens a quest in your log beside the map (Card.lua, ns.OpensQuest), else pins
+-- the hover; the menu has the rest.
 local function RowHints(stop)
+	if ns.OpensQuest and ns.OpensQuest(stop) then
+		return { { "left", "Open quest" }, { "right", stop.kind == "guide" and "Point the way, done, skip"
+			or stop.chosen and "Remove from my route" or "Go here next" } }
+	end
 	if stop.kind == "guide" then return { { "left", "Pin step" }, { "right", "Point the way, done, skip" } } end
 	if stop.kind == "errand" then
 		-- An errand with a click of its own keeps it (Card.lua).
@@ -1403,7 +1408,7 @@ function CardHover.Show(row, stop, card)
 	local words = card and card.filter
 	Lit(content, words)
 	content.hints = RowHints(stop)
-	content.pins = not (stop.kind == "errand" and stop.click)   -- a row click pins it (OnKeep)
+	content.pins = not (stop.kind == "errand" and stop.click) and not (ns.OpensQuest and ns.OpensQuest(stop))   -- a row click pins it (OnKeep)
 	shown = row
 	row.hoverCard = card
 	local frame = Shy.Hover.Show(row, content, { dock = card, key = Key(stop), onKeep = OnKeep, keep = true })

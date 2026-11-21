@@ -4,8 +4,8 @@
 -- me, which quests should I bring, and how do I get in.
 --
 -- The face: one frame that stands in the map window while it is open (Sides.lua: over everything under the
--- window's title) and in a window of its own, the map window's size, while it is shut (the game's map can't be
--- opened from addon code: a command, the run card and the options open the journal there).
+-- window's header) and in a window of its own, the map window's size, while it is shut (a command, the run card
+-- and the options open the journal there; its World half and its ways out open the map's window).
 --   the bar     as the map's, and its size: the side switch (World | Dungeons) leading it, the way down to where
 --               you are as crumbs (every dungeon, this one, the page), the search at its right end
 -- Under the bar everything is small and close, as what is laid over the map is (Shy.Maps.OVER there): as much as
@@ -1562,7 +1562,8 @@ local function Sources(self)
 	lines:AddLine("Bosses and their order are the game's own.", C.text[1], C.text[2], C.text[3], true)
 	lines:AddLine(" ")
 	lines:AddLine("Drops in this game", C.head[1], C.head[2], C.head[3])
-	lines:AddLine("What you've looted yourself, and what was looted in the making of this journal.", C.text[1], C.text[2], C.text[3], true)
+	lines:AddLine("What players recorded here, with the kills they counted, and what you've looted yourself.", C.text[1], C.text[2], C.text[3], true)
+	lines:AddLine(J.CREDIT, C.dim[1], C.dim[2], C.dim[3], true)
 	lines:AddLine(" ")
 	lines:AddLine("Drops in Classic, and what bosses do", C.head[1], C.head[2], C.head[3])
 	lines:AddLine("As the Classic game had them. This game may differ.", C.text[1], C.text[2], C.text[3], true)
@@ -1570,6 +1571,11 @@ local function Sources(self)
 	lines:AddLine(" ")
 	lines:AddLine("The newest dungeons", C.head[1], C.head[2], C.head[3])
 	lines:AddLine("Where a boss stands and where you come in are learned as you play them.", C.text[1], C.text[2], C.text[3], true)
+	-- (Another's work, shown under its credit: where the newest dungeons' bosses stand, and the way through.)
+	if ns.data.dungeonRoutesCredit then
+		lines:AddLine("Until then, placed by hand from guides and videos, with the way through. Rough places.", C.text[1], C.text[2], C.text[3], true)
+		lines:AddLine(ns.data.dungeonRoutesCredit, C.dim[1], C.dim[2], C.dim[3], true)
+	end
 	UI.Tip(self, lines, { side = "TOP" })
 end
 
@@ -1676,8 +1682,6 @@ local function MakeBand(main)
 	band.where:SetScript("OnEnter", function(self)
 		UI.Ink(self.text, C.head)
 		UI.Tip(self, "The way in", nil, { side = "TOP", hints = { { "left", "Show it on the map" } } })
-		-- (In its own window the map is shut: the secure button over it opens it at the door.)
-		if ns.Sides and ns.Sides.KeyOver then ns.Sides.KeyOver(self, state.map) end
 	end)
 	band.where:SetScript("OnLeave", function(self)
 		UI.Ink(self.text, C.hot)
@@ -1798,7 +1802,6 @@ local function Create()
 	own.out = Key(own.corners, "", function() Journal.Out() end, L.corner, true)
 	own.out:HookScript("OnEnter", function(self)
 		UI.Tip(self, "The way in", nil, { side = "TOP", hints = { { "left", "Show it on the map" } } })
-		if ns.Sides and ns.Sides.KeyOver then ns.Sides.KeyOver(self, state.map) end
 	end)
 	own.out:HookScript("OnLeave", function(self) UI.TipHide(self) end)
 	Journal.out = own.out

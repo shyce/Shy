@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffPaladin|r
 ## Notes: Your seal on the swing bar, help seal twisting, and your keys laid out |cff888888/shypaladin|r
 ## Author: Shyce Cream
-## Version: 5.1.7
-## X-Date: 2026-11-18
+## Version: 5.2.0
+## X-Date: 2026-11-21
 ## IconTexture: Interface\AddOns\ShyPaladin\Media\ShyPaladinMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyKeys, ShyDock

@@ -247,12 +247,13 @@ function ns.CreateOptions()
 		-- (The roads are ShyWay's: without it there is nothing to choose.)
 		if not Shy.Way.missing then
 			At(group:Dropdown(panel, "Paths", {
-				{ value = "never", text = "Shortest" },
+				{ value = "high", text = "Roads in higher zones" },
 				{ value = "auto", text = "Roads unless I outlevel it" },
 				{ value = "always", text = "Always roads" },
-			}, function() return Shy.Way.Paths() or "never" end,
+				{ value = "never", text = "Shortest" },
+			}, function() return Shy.Way.Paths() or "high" end,
 				function(v) Shy.Way.SetPaths(v) end, { width = COL,
-				desc = "Keeps you on roads, leaving them only near your step. \"Unless I outlevel it\" cuts across where everything off the road is below your level. Set per character." }), panel, RIGHT, y - 84)
+				desc = "Keeps you on roads, leaving them only near your step. \"In higher zones\" does so where what lives off the road is 5 or more levels above you, \"unless I outlevel it\" where it is your level or higher. Set per character." }), panel, RIGHT, y - 84)
 		end
 		At(group:Checkbox(panel, "Areas past the edge", Get("minimapRim"), Set("minimapRim"),
 			{ enabled = Get("minimapPins"), desc = "Where a quest area runs on past the minimap's edge, its outline carries on along the edge." }), panel, LEFT + 16, y - 84)

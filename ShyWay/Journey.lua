@@ -14,7 +14,8 @@
 --                                                      zeppelin or the tram, where it lands (place.aboard: how)
 --   T.Journey(from, to [, opts]) -> journey, state
 --   T.Journey(from, { place, place, ... } [, opts])    to the quickest reached of several (journey.goal)
---        journey = { seconds =, goal =, key =, n =, [1..n] = leg }
+--        journey = { seconds =, goal =, key =, n =, [1..n] = leg }; a walk's seconds are as the character
+--        goes (Shy.Way.Pace: ridden where they ride)
 --        leg = { by = "walk" | "flight" | "boat" | "zeppelin" | "airboat" | "tram" | "portal",
 --                from = place, to = place, seconds = the whole leg (a ride's wait and talk in it),
 --                aboard = seconds riding, wait = seconds waited on average, every = seconds between two
@@ -22,8 +23,9 @@
 --                far = a walk too long to work out, reckoned at least this long }
 --        A ride's ends are stops: places with by, name, whose ("A", "H", "" anyone's) and, for a flight
 --        point, node.
---        state: nil, known. "working": being worked out; journey is the quickest found so far (or nil),
---        and SHY_TERRAIN is sent when there is more. "far": a walk on it is too long to work out. A nil
+--        state: nil, known. "working": being worked out; journey is the quickest found so far (or nil; a
+--        walk that is known rather than a ride whose walks are not yet), and SHY_TERRAIN is sent when there
+--        is more. "far": a walk on it is too long to work out. A nil
 --        journey with a nil state: no way at all is known (a place the ground doesn't reach).
 --        opts.lead: the journey being followed; it is kept until another is clearly quicker (STAY)
 --        opts.by: { flight = false, boat = false, ... }: ways not to take
@@ -57,8 +59,10 @@
 local T = Shy.Way
 local Flight = T.Flight
 
-local PACE = 7               -- yards a second: a runner's pace
-local RUN = PACE * 1.05      -- yards a second no walk is quicker than (a runner's pace and a little: a lower bound)
+local FOOT = 7               -- yards a second: a runner's pace, as the ground reckons every walk
+local BOUND = 1.05           -- no walk is quicker than the character's pace times this (a little over it: a lower bound)
+local PACE = FOOT            -- yards a second: the character's pace (T.Pace: a runner's, or their mount's), read as a
+local RUN = PACE * BOUND     -- journey is asked for; and what no walk is quicker than
 local TALK = 10              -- seconds at a flight master before a flight
 local STAY = 1.2             -- the journey being followed is kept until another takes less than its time over this
 local LEAD_NEAR = 40         -- yards: ... while it ends this near the place asked for (a camp's middle moves a little)
@@ -164,9 +168,15 @@ local function Mine(whose, side)
 	return whose == "" or side == "" or whose:find(side, 1, true) ~= nil
 end
 
--- The flight points this character knows (ShyWayDB.flightPoints, by character: [node] = true).
+-- The flight points this character knows (ShyWayDB.flightPoints, by character: [node] = true). Lists kept before
+-- they were learned from the flight master's map alone held points nobody had found (the world map calls every
+-- point found): they are dropped once (flightPointsKept), and the next flight map teaches them again.
+local KEPT = 2
 local function Known()
 	local saved = T.Saved()
+	if saved.flightPointsKept ~= KEPT then
+		saved.flightPoints, saved.flightPointsKept = {}, KEPT
+	end
 	saved.flightPoints = saved.flightPoints or {}
 	local who = UnitGUID("player") or "?"
 	local known = saved.flightPoints[who]
@@ -238,7 +248,10 @@ function T.Stops()
 end
 
 function T.Learn(node, quiet)
-	local known = Known()
+	local known, m = Known(), Made()
+	-- The other side's points are never the character's.
+	local stop = node and m and m.byNode[node]
+	if stop and not Mine(stop.whose, Side()) then return end
 	if node and not known[node] then
 		known[node] = true
 		version = version + 1
@@ -304,7 +317,8 @@ local function Graph(by)
 	local side, known = Side(), Known()
 	local count = 0
 	for _ in pairs(known) do count = count + 1 end
-	local stamp = side .. version .. ":" .. count .. (by and ((by.flight == false and "f" or "") .. (by.boat == false and "b" or "")
+	-- (Their pace is in it: the walks between stops are as long as they take the character.)
+	local stamp = side .. version .. ":" .. count .. ":" .. PACE .. (by and ((by.flight == false and "f" or "") .. (by.boat == false and "b" or "")
 		.. (by.zeppelin == false and "z" or "") .. (by.airboat == false and "a" or "") .. (by.tram == false and "t" or "")
 		.. (by.portal == false and "p" or "")) or "")
 	if graph and graph.m == m and graph.stamp == stamp then return graph end
@@ -319,7 +333,7 @@ local function Graph(by)
 				local to = m.stops[list[at]]
 				if to and Mine(to.whose, side) then
 					local out = links[index]
-					out[#out + 1] = { from = from, to = to, seconds = list[at + 1], kind = "walk", exact = true }
+					out[#out + 1] = { from = from, to = to, seconds = T.Paced(list[at + 1]), kind = "walk", exact = true }
 				end
 			end
 		end
@@ -384,17 +398,17 @@ end
 
 -- Walks asked of the ground ---------------------------------------------------------------------------
 
--- Seconds on foot from one place to another: seconds; or nil and "working"; or the least it can be and
--- "far"; or nil (no way).
+-- Seconds over the ground from one place to another, as the character goes (T.Paced: ridden where they ride):
+-- seconds; or nil and "working"; or the least it can be and "far"; or nil (no way).
 local function Walk(from, to, now)
 	if from.world ~= to.world then return nil end
 	local ask = now and T.Seconds or T.Ask
 	local seconds, state, least = ask(from.world, from.north, from.west, to.north, to.west, to.level, to.up)
-	if seconds then return seconds end
-	if state == "far" then return least or Straight(from, to) / RUN, "far" end
+	if seconds then return T.Paced(seconds) end
+	if state == "far" then return least and T.Paced(least) or Straight(from, to) / RUN, "far" end
 	if state == "working" then return nil, "working" end
 	-- No ground kept for that world: the straight line at a runner's pace, as anyone would reckon it.
-	if not T.Has(from.world) then return Straight(from, to) / PACE end
+	if not T.Has(from.world) then return T.Paced(Straight(from, to) / FOOT) end
 	return nil
 end
 
@@ -702,11 +716,16 @@ end
 
 function T.Journey(from, to, opts)
 	if not from or not to then return nil end
+	PACE = T.Pace()
+	RUN = PACE * BOUND
 	local goals = to.world and { to } or to
 	local path, seconds, goal, working, far = Solve(from, goals, opts)
 	if not path then return nil, working and "working" or nil end
 	-- Walking all the way, where that is known and the ride spares too little of it.
 	if Ridden(path) then
+		-- (A way by a ride with a walk on it still being worked out, or too long to work out, takes at least its
+		-- seconds: the least it can be is no time to hold against a walk that is known.)
+		local least = working or far
 		local walked, which
 		-- (Only a walk that could win is asked of the ground: one whose straight line, at a pace no walk beats,
 		-- already takes too long would be a search across the continent for nothing.)
@@ -718,7 +737,7 @@ function T.Journey(from, to, opts)
 				if s and not state and (not walked or s < walked) then walked, which = s, index end
 			end
 		end
-		if walked and (seconds > walked * GAIN or walked - seconds < SPARE) then
+		if walked and (least or seconds > walked * GAIN or walked - seconds < SPARE) then
 			path = { { from = from, to = goals[which], seconds = walked, kind = "walk", exact = true } }
 			seconds, goal, far = walked, which, false
 		end
@@ -755,54 +774,12 @@ local function LearnBeside()
 		if stop.world == here.world and Straight(stop, here) <= BESIDE then T.Learn(stop.node) end
 	end
 end
--- Flight points the world map shows as known, read by continent (the map itself where it lies on none):
--- the ones a character starts with (the Skyborne's Stormwind) are known before any flight map opens.
-local continents             -- [map] = the continent's map, found once
-local function Continent(map)
-	continents = continents or {}
-	local found = continents[map]
-	if found then return found end
-	found = map
-	local id = map
-	while id and id > 0 do
-		local info = C_Map.GetMapInfo(id)
-		if not info then break end
-		if info.mapType == Enum.UIMapType.Continent then
-			found = id
-			break
-		end
-		id = info.parentMapID
-	end
-	continents[map] = found
-	return found
-end
-
-local function LearnShown()
-	local m = Made()
-	if not m then return end
-	local before, read = version, {}
-	for _, stop in ipairs(m.flights) do
-		local top = stop.map and Continent(stop.map)
-		if top and not read[top] then
-			read[top] = true
-			for _, node in ipairs(C_TaxiMap.GetTaxiNodesForMap(top) or {}) do
-				if not node.isUndiscovered and m.byNode[node.nodeID] then T.Learn(node.nodeID, true) end
-			end
-		end
-	end
-	if version ~= before then Shy:Fire("SHY_TERRAIN", "flights") end
-end
+-- The world map is not asked: it shows every point, both sides', as found.
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("TAXIMAP_OPENED")
 events:RegisterEvent("UI_INFO_MESSAGE")
-events:RegisterEvent("PLAYER_ENTERING_WORLD")
-events:RegisterEvent("TAXI_NODE_STATUS_CHANGED")
 events:SetScript("OnEvent", function(_, event, _, message)
-	if event == "PLAYER_ENTERING_WORLD" or event == "TAXI_NODE_STATUS_CHANGED" then
-		LearnShown()
-		return
-	end
 	if event == "TAXIMAP_OPENED" then
 		local nodes = C_TaxiMap.GetAllTaxiNodes(GetTaxiMapID())
 		for _, node in ipairs(nodes or {}) do

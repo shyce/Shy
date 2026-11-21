@@ -14,6 +14,8 @@
 --   T:Cut()                 the share of a sale the house keeps on your market (0.05 a faction's, 0.15 a goblin's)
 --   T:Show(page)            at the auction house, its window on that page ("buy" | "sell" | "auctions" | "farm"):
 --                           true, or false while the house isn't open or the window isn't ours
+--   T:Find(item)            at the auction house, its window on Buy with that item (an item ID) picked and the
+--                           house asked what is listed of it: true, or false as T:Show
 --   T:Market()              your market's key ("US-PvP-Alliance") and when it was last scanned (by you or anyone)
 --   T:CraftPlan(r)          what a recipe is worth to make here (Craft.lua has r and the answer): its worth, the cost of
 --                           its reagents (a vendor's or the house's, the cheaper), the profit, what you lack and can afford,
@@ -207,6 +209,12 @@ function T:Cut() return ns.Book.Cut() end
 function T:Show(page)
 	if not (ns.Scan.IsOpen() and ns.Window.IsUp()) then return false end
 	ns.Window.Open(page)
+	return true
+end
+
+function T:Find(item)
+	if type(item) ~= "number" or not self:Show("buy") then return false end
+	ns.BuyPage.Pick(item)
 	return true
 end
 

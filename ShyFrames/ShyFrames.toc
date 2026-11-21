@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffFrames|r
 ## Notes: Compact unit frames for you, your target and your party |cff888888/shyframes|r
 ## Author: Shyce Cream
-## Version: 5.1.7
-## X-Date: 2026-11-18
+## Version: 5.2.0
+## X-Date: 2026-11-21
 ## IconTexture: Interface\AddOns\ShyFrames\Media\ShyFramesMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyDock, ShySkin, ShyDots, ShyHots

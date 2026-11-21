@@ -749,6 +749,11 @@ ns.Module({
 			hooksecurefunc(QueueStatusButton, "SetPoint", Again)
 		end
 		Shy:On("SHY_HUD_LAYOUT", Again)
+		-- The map is as wide as the objective tracker's panel (MapWidth), whose reach is said once everyone has
+		-- logged in, after the map was first placed, and again whenever that panel comes or goes: placed again
+		-- then, so the map is the same width at every login.
+		Shy:On("SHY_LOGIN", Again)
+		Shy:On("SHY_WINGS", Again)
 		Minimap:HookScript("OnEnter", function() Wake() end)
 		-- The picture drawn again at the map's size: after each resize, and once the world is in.
 		Minimap:HookScript("OnSizeChanged", RedrawSoon)

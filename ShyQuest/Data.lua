@@ -195,6 +195,18 @@ function D.Quest(id)
 	return quest or nil
 end
 
+-- Where objective `index` of quest `id` was seen to advance in this game (QuestsSeen.lua: players, else the client's
+-- quest map), as places; for a quest asking for an item ours know no source of. nil where nothing was seen.
+function D.GoalSeen(id, index)
+	local text = data.goalsSeen and data.goalsSeen[id]
+	if not text then return nil end
+	for part in text:gmatch("[^%^]+") do
+		local objective, places = part:match("^(%d+)=(.*)$")
+		if tonumber(objective) == index then return Places(places) end
+	end
+	return nil
+end
+
 -- "80,4604:5" -> { { item = 80, count = 1 }, { item = 4604, count = 5 } }
 local function Counted(text)
 	local out = {}
@@ -299,6 +311,33 @@ function D.Path(thing)
 	return thing.path or nil
 end
 
+-- What players measured an item dropping in this game (Data/QuestsSeen.lua: "npc:chance;..."), laid over its sources:
+-- the chance of a creature its sources name; one of the others that drop it (item.more: named with no chance)
+-- becomes a source at that chance; the creatures the data places only for an item that lists no dropper.
+local function Measured(item, text)
+	local sources, dropper = item.sources, item.more ~= nil and item.more[1] ~= nil
+	for _, source in ipairs(sources) do
+		if source.kind == "n" then dropper = true end
+	end
+	for npcText, chanceText in text:gmatch("(%d+):([%d%.]+)") do
+		local npc, chance = tonumber(npcText), tonumber(chanceText)
+		local found = false
+		for _, source in ipairs(sources) do
+			if source.kind == "n" and source.id == npc then
+				source.chance, found = chance, true
+			end
+		end
+		for index = #(item.more or {}), 1, -1 do
+			if not found and item.more[index] == npc then
+				table.remove(item.more, index)
+				sources[#sources + 1] = { kind = "n", id = npc, chance = chance }
+				found = true
+			end
+		end
+		if not found and not dropper and data.npcs and data.npcs[npc] then sources[#sources + 1] = { kind = "n", id = npc, chance = chance } end
+	end
+end
+
 function D.Item(id)
 	local item = cache.items[id]
 	if item == nil then
@@ -310,6 +349,8 @@ function D.Item(id)
 		local f = Fields(text)
 		item = { id = id, name = f[1], sources = Tokens(f[2]), more = Numbers(f[3]), begins = Numbers(f[4]), trade = f[5] == "t",
 			asks = Numbers(f[6]), given = Numbers(f[7]) }
+		local seen = data.dropsSeen and data.dropsSeen[id]
+		if seen then Measured(item, seen) end
 		cache.items[id] = item
 	end
 	return item or nil

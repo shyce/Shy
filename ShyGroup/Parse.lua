@@ -30,6 +30,8 @@ for word in ("dps dd dds damage dmg dpser dpsers caster casters melee ranged"):g
 -- Allowed between "need" / "lf" and the role: "need a good tank".
 local FILLER = Set("a an one two three four 1 2 3 4 1x 2x 3x x good geared decent more last final another and or the")
 local GROUP_WORD = Set("group grp party pt")
+-- Roles after these are the ones a group has, until it asks again: "have tank and heals, need dps".
+local HAVE = Set("have has got")
 
 local YES = Set("yes yea yeah yep yup ye ya sure ok okay k kk inv invite down definitely absolutely omw ready y pls plz please coming")
 local YES_PHRASE = { " im in ", " i am in ", " count me in ", " sounds good ", " lets go ", " why not ", " im down ", " id love to ", " on my way ",
@@ -150,9 +152,9 @@ function P.Message(text, authorLevel, myLevel)
 
 	local lfm, lfg, bareLF = counted, false, false
 	local roles = {}
+	local owned = false   -- past "have": the roles named are filled, not wanted
 	for i, tok in ipairs(tokens) do
-		local role = ROLE[tok]
-		if role then roles[role] = true end
+		local asks = true
 		if tok == "lfm" or tok:match("^lf%d+m?$") or tok:match("^lfm%d+$") then
 			lfm = true
 		elseif tok == "lfg" then
@@ -164,6 +166,15 @@ function P.Message(text, authorLevel, myLevel)
 			else bareLF = true end
 		elseif tok == "need" or tok == "needs" or tok == "needing" then
 			if Ahead(i) == "members" then lfm = true end
+		else
+			asks = false
+		end
+		if asks then
+			owned = false
+		elseif HAVE[tok] then
+			owned = true
+		elseif ROLE[tok] and not owned then
+			roles[ROLE[tok]] = true
 		end
 	end
 

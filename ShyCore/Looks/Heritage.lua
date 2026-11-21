@@ -28,10 +28,13 @@ local function Size(x)
 	return SIZES[Option(x, "frame")] or SIZES.fine
 end
 
--- The size on a piece: the option's, or smaller on a piece too small for the corners with ROOM between them.
+-- The size on a piece: the option's, or smaller on a piece too small for the corners with ROOM between them. A bar's
+-- housing (`slim`) keeps it while its corners fit at all: drawn much smaller, the frame's line is less than a pixel
+-- of bronze and goes dark.
 local ROOM = 8
 local function Fitted(x, w, tall)
-	return min(Size(x), (min(w, tall) + 2 * OUT - ROOM) / (2 * MARGIN))
+	local room = (x and x.slim) and 0 or ROOM
+	return min(Size(x), (min(w, tall) + 2 * OUT - room) / (2 * MARGIN))
 end
 
 -- The light laid again, added, over the tinted metal (none in the game's own colors).
@@ -193,8 +196,7 @@ UI.LookKind("heritage", {
 		if not owner then return 4 end
 		local w, tall = owner:GetWidth(), owner:GetHeight()
 		if not w or w <= 0 or issecretvalue(w) then return 4 end
-		local s = max(0.1, min(Size(h), (min(w, tall) + 2 * OUT - ROOM) / (2 * MARGIN)))
-		return max(2, INNER * s - OUT)
+		return max(2, INNER * max(0.1, Fitted(h, w, tall)) - OUT)
 	end,
 	rims = false,
 	-- The dialog's border and its lit rim, and the foot's: nothing across the face.

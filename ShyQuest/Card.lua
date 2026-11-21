@@ -999,16 +999,53 @@ function Writing(row, line, i, entry, y, width, wrap)
 	return height
 end
 
+-- Rows and objective lines are lit the family's one way (UI.RowLight): under the mouse, and held while what they
+-- stand for is open in the Quests window beside the map (LogRows.lua, ns.QuestOpened): the quest, or the one
+-- objective of it a click flew the map to. The map shut, nothing is held.
+local function Opened()
+	if ns.QuestOpened then return ns.QuestOpened() end
+end
+
+-- Whether the lead shows a line for that objective (then the line is held, not the row).
+local function LinkFor(row, id, objective)
+	for _, link in pairs(row.links or {}) do
+		if link:IsShown() and link.objective and link.objective.id == id and link.objective.index == objective then return true end
+	end
+	return false
+end
+
+-- The quest a click on a stop's row opens beside the map (ns.OpenQuest), or nil: its first, in your log or one
+-- still ahead of you (a pickup, a hand-in to come) that the data knows. An errand keeps its own click.
+function ns.OpensQuest(stop)
+	local action = stop and stop.kind ~= "errand" and stop.actions and stop.actions[1]
+	local id = action and action.id
+	return id and (L.Has(id) or D.Quest(id) ~= nil) and id or nil
+end
+
+local function RowLit(row)
+	local stop, held = row.stop, false
+	local id, objective = Opened()
+	if id and stop and stop.kind ~= "errand" and stop.actions and stop.actions[1] and stop.actions[1].id == id then
+		held = (objective == nil or stop.objective == nil or stop.objective == objective) and not (objective and LinkFor(row, id, objective))
+	end
+	row.light:Set(row.over, held)
+end
+
+local function LinkLit(link)
+	local id, objective = Opened()
+	local own = link.objective
+	link.light:Set(link.over, own ~= nil and objective ~= nil and own.id == id and own.index == objective)
+end
+-- (Reached through ns: the card's maker is at its limit of upvalues.)
+ns.CardLit = { Row = RowLit, Link = LinkLit }
+
 -- A stop's frame: its node on the rail (a numbered pin or a plain mark), title, level and distance.
 -- The lead's node is the dial.
 local function CreateRow(card, lead)
 	local row = CreateFrame("Frame", nil, card)
 	row.lines = {}
 	row.node = lead and DIAL / 2 + 3 or PIN / 2      -- the node's middle under the row's top
-	row.glow = row:CreateTexture(nil, "BACKGROUND")
-	row.glow:SetAllPoints()
-	UI.Paint(row.glow, C.hot, 0.07)
-	row.glow:Hide()
+	row.light = UI.RowLight(row)
 	-- A stop you put on your route yourself: a wash of your color from the rail, fading out (Node.Show).
 	row.mine = row:CreateTexture(nil, "BACKGROUND", nil, -1)
 	row.mine:SetAllPoints()
@@ -1537,11 +1574,14 @@ function ns.CreateCard(parent, onResize)
 		if not link then
 			link = CreateFrame("Frame", nil, first)
 			link:EnableMouse(true)
+			-- (Its light is the lead's own regions, under the line's words.)
+			link.light = UI.RowLight(link, { left = UI.ROW_INSET, right = 2 }, first)
 			link:SetScript("OnEnter", function(self)
+				self.over = true
+				ns.CardLit.Link(self)
 				-- An objective: what it is after, the creature turning over its facts (CardHover.Objective),
 				-- and its own ground lit on the open map.
 				if self.objective and not self.url and not self.failed and ns.CardHover and ns.CardHover.Objective then
-					first.glow:Show()
 					ns.CardHover.Objective(self, first.stop, self.objective.id, self.objective.index, card)
 					if ns.LightObjective then ns.LightObjective(self.objective.id, self.objective.index) end
 					return
@@ -1565,18 +1605,21 @@ function ns.CreateCard(parent, onResize)
 				end
 			end)
 			link:SetScript("OnLeave", function(self)
+				self.over = false
+				ns.CardLit.Link(self)
 				UI.TipHide(self)
 				if self.objective and ns.CardHover and ns.CardHover.Objective then
-					first.glow:Hide()
 					ns.CardHover.Hide(self)
 					if ns.LightObjective then ns.LightObjective(nil) end
 				end
 			end)
 			link:SetScript("OnMouseUp", function(self, mouse)
 				if mouse ~= "LeftButton" or (card.wasDragged and card.wasDragged()) then return end
-				if self.objective and not self.url and not self.failed and not self.task and ns.CardHover then
-					-- (A click keeps the objective's hover up, as a row's click keeps the row's.)
-					if Shy.Hover.Owner() == self then Shy.Hover.Keep(self) end
+				if self.objective and not self.url and not self.failed and not self.task then
+					-- An objective of a quest in your log: the map opens with the quest's page beside it, flown to
+					-- where that objective is done, lit.
+					local id = self.objective.id
+					if id and L.Has(id) and ns.OpenQuest then ns.OpenQuest(id, self.objective.index) end
 					return
 				end
 				if self.url then
@@ -2077,6 +2120,7 @@ function ns.CreateCard(parent, onResize)
 	-- title says what it is for). Returns the row's height.
 	local function Stop(self, row, stop, place, y, above, ends, bare)
 		row.stop = stop
+		ns.CardLit.Row(row)
 		local title = Describe(stop)
 		local level = TitleLevel(stop, title)
 		level = level ~= "" and ("  " .. level) or ""
@@ -2369,6 +2413,7 @@ function ns.CreateCard(parent, onResize)
 		Node.Mine(first, stop)
 		if stop then
 			first.stop = stop
+			ns.CardLit.Row(first)
 			-- What it is for: in the dial where nothing points, over the dial's lower right while the
 			-- arrow has the dial (Point).
 			local sign, tone = Sign(stop)
@@ -2442,6 +2487,7 @@ function ns.CreateCard(parent, onResize)
 							link = Link(i)
 							link.url, link.task, link.asked, link.failed = entry.url, entry.task, entry.asked, entry.failed
 							link.objective, link.tip = entry.objective, entry.tip
+							ns.CardLit.Link(link)
 							if link.from ~= from or link.to ~= at then
 								link.from, link.to = from, at
 								link:ClearAllPoints()
@@ -2679,7 +2725,15 @@ function ns.CreateCard(parent, onResize)
 		local height = Lay(self, all)
 		self:SetHeight(height)
 		if onResize then onResize(width, height) end
+		self:Lit()
 	end
+
+	-- Each row and objective line lit as it stands: held while what it stands for is open beside the map (RowLit).
+	function card:Lit()
+		for _, row in ipairs(self.rows) do ns.CardLit.Row(row) end
+		for _, link in pairs(first.links) do ns.CardLit.Link(link) end
+	end
+	Shy:On("SHY_QUEST_OPENED", function() card:Lit() end)
 
 	-- Laid again from the stops it has, for a change on the card itself (the filter, a zone opened): the on-screen
 	-- card's whole fill (card.refill), which places GuideButtons.lua's strip again too.
@@ -2809,8 +2863,12 @@ end
 -- under a row's own heading when the row stands for the one quest, or into the quest's own submenu.
 -- Its page: in the Quests window beside ShyMaps' own map while that is the map you use (LogRows.lua, T:QuestPage),
 -- else the game's map at its log. page: the menu is the Quests window's own, its page a click away already.
-local function OpenQuest(id)
-	if not (T.QuestPage and T:QuestPage(id)) then QuestMapFrame_OpenToQuestDetails(id) end
+-- (stop: the route's stop it was opened from, for a quest not in your log yet. True when something opened.)
+local function OpenQuest(id, objective, stop)
+	if T.QuestPage and T:QuestPage(id, objective, stop) then return true end
+	if not L.Has(id) then return false end
+	QuestMapFrame_OpenToQuestDetails(id)
+	return true
 end
 ns.OpenQuest = OpenQuest
 local function QuestActions(root, id, title, stop, page)
@@ -3368,7 +3426,8 @@ function ns.SetupCard()
 	for _, row in ipairs(card.rows) do
 		Shy.HUD.Manage(box, row, function(root) RowMenu(root, row) end)
 		row:SetScript("OnEnter", function(self)
-			self.glow:Show()
+			self.over = true
+			ns.CardLit.Row(self)
 			-- CardHover.lua if loaded and it has a form for the stop, else Tips.lua's lines.
 			if self.stop and not (ns.CardHover and ns.CardHover.Show(self, self.stop, card)) then Tips.ShowStop(self, self.stop) end
 			-- Pins.lua draws the route to this row's stop on the open world map.
@@ -3379,18 +3438,24 @@ function ns.SetupCard()
 			Shy.Clock("card: a row's way lit on the map, its own button laid"):Lap(debugprofilestop() - from)
 		end)
 		row:SetScript("OnLeave", function(self)
-			self.glow:Hide()
+			self.over = false
+			ns.CardLit.Row(self)
 			if ns.CardHover then ns.CardHover.Hide(self) end
 			if ns.RevealWay then ns.RevealWay(nil) end
 		end)
-		-- A click toggles the pin on the row's hover (CardHover.Pin); a stop with no hover (a zone) is
-		-- headed for instead. An errand with a click of its own keeps it. With the chat box open, a
-		-- Shift-click writes the stop's quest into it.
+		-- A click on a quest in your log opens the map with its page beside it, flown to its ground (ns.OpenQuest:
+		-- the Quests window's page, T:QuestPage); on a stop with an objective of its own, to that objective's ground.
+		-- Else it toggles the pin on the row's hover (CardHover.Pin); a stop with no hover (a zone) is headed for
+		-- instead. An errand with a click of its own keeps it. With the chat box open, a Shift-click writes the
+		-- stop's quest into it.
 		row:HookScript("OnMouseUp", function(self, button)
 			local stop = self.stop
 			if button ~= "LeftButton" or not stop or Shy.HUD.WasDragged(box) then return end
 			local quest = stop.actions[1] and L.Has(stop.actions[1].id) and stop.actions[1].id
+			local opens = ns.OpensQuest(stop)
 			if quest and ChatFrameUtil.TryInsertQuestLinkForQuestID(quest) then
+				return
+			elseif opens and ns.OpenQuest and ns.OpenQuest(opens, stop.kind == "goal" and stop.objective or nil, stop) then
 				return
 			elseif stop.kind == "errand" and stop.click then
 				stop.click()

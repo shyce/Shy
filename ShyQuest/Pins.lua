@@ -3005,6 +3005,9 @@ local ChooseMini
 -- than this many times the reach is left ahead of them as they walk, it is laid again from where they are,
 -- back to AHEAD, before its end can come into sight. (Measured along the way: a way through a city's
 -- streets that left a circle round the player and came back into sight was cut where it first left it.)
+-- A way that doubles back is long along itself and still close by: the trail is laid on past AHEAD while its
+-- end would stand within AGAIN times the reach of the player, and laid again when its end comes within the
+-- reach all the same. It never stops short where it can be seen to while more of the way lies ahead.
 -- STRAY: pixels the player may stray from it before it is laid again from where they are. KEEP: yards
 -- walked before the minimap's own plate is drawn again (the ground's keeps its own). GLIDING: pixels the
 -- pin at the rim may be short of where it is going and be there. WAY_ASKS: times a second the way is asked
@@ -3076,23 +3079,36 @@ function miniAt.Trail(to, shot, north, west)
 	if stop.north then way, at = W.Way(stop.continent, stop.north, stop.west, W.Prefer(stop)) end
 	-- (What it was laid along: a frame where nothing moved lays it again only when the way is another, PlaceMiniPins.)
 	miniAt.way, miniAt.wayAt, miniAt.wayTo = way, at, stop
-	miniAt.short = false
+	miniAt.short, miniAt.wayCut = false, false
 	-- (While the first way there is being worked out, nothing: not a line through whatever is between.)
 	if at == "working" then return 0 end
 	local depth, fall, water = xs.depth, xs.fall, xs.water
 	local px, py = miniAt.On(shot, north, west)
 	xs[1], ys[1], depth[1], fall[1], water[1] = px, py, 0, 0, 0
 	local count = 1
-	-- As far along the way as AHEAD times the minimap's reach, however it winds.
+	-- As far along the way as AHEAD times the minimap's reach, however it winds; and on from there while its
+	-- end would be in sight (within AGAIN times the reach of the player: a way that doubles back).
 	local left = miniAt.AHEAD * miniAt.Reach(shot.radius, shot.square)
+	local sight = (miniAt.AGAIN * miniAt.Reach(shot.radius, shot.square)) ^ 2
 	-- The next point, the way cut short where it has run as far as it is laid. Whether it was.
 	local function Add(x, y, level, falling, wet)
 		local dx, dy = x - xs[count], y - ys[count]
 		local length = math.sqrt(dx * dx + dy * dy)
 		if length <= 0 then return false end
 		local cut = length > left
-		if cut then x, y = xs[count] + dx * left / length, ys[count] + dy * left / length end
-		left = left - length
+		if cut then
+			local cx, cy = xs[count] + dx * left / length, ys[count] + dy * left / length
+			if (cx - px) ^ 2 + (cy - py) ^ 2 < sight then
+				-- (In sight there: this stretch whole, and the next is looked at.)
+				cut = false
+			elseif left <= 0 then
+				-- (Out of sight where the last stretch ended: it ends there.)
+				return true
+			else
+				x, y = cx, cy
+			end
+		end
+		left = math.max(0, left - length)
 		count = count + 1
 		xs[count], ys[count], depth[count], fall[count], water[count] = x, y, level, falling, wet
 		return cut
@@ -3109,7 +3125,7 @@ function miniAt.Trail(to, shot, north, west)
 		end
 		-- (Only the beginning of the way: it ends where that does, short of the place.)
 		if way.cut then
-			short = true
+			short, miniAt.wayCut = true, true
 		elseif not short then
 			-- On to the place itself, as the world map's trail goes: the ground's way may end short of it
 			-- (on the nearest floor it knows), and the line is to lead to the pin, not stop on the way there.
@@ -3371,7 +3387,13 @@ local function PlaceMiniPins()
 		-- once less than AGAIN of the reach is left ahead of the player, before its end comes into sight.
 		local path = miniYou.trail
 		if not relay and miniAt.short and path and path.n > 1 then
-			relay = path.along[path.n] - (path.from or 0) < miniAt.AGAIN * miniAt.Reach(radius, square)
+			local reach = miniAt.Reach(radius, square)
+			relay = path.along[path.n] - (path.from or 0) < miniAt.AGAIN * reach
+			-- ... or once its end comes within the reach all the same: the way doubled back toward the player.
+			-- (Not where the way itself is only known that far: laying it again would end at the same place.)
+			if not relay and not miniAt.wayCut then
+				relay = (path.x[path.n] - px) ^ 2 + (path.y[path.n] - py) ^ 2 < reach * reach
+			end
 		end
 	end
 	if relay then

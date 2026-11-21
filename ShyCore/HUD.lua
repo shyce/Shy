@@ -46,7 +46,11 @@
 --                                                    -- takes the other side where its own runs off the screen,
 --                                                    -- and lines its top up with the host's, or its foot where
 --                                                    -- the tops would take it off the screen's foot. `label`
---                                                    -- names the switch in its menu.
+--                                                    -- names the switch in its menu. `tall = true`, for a
+--                                                    -- window that flows (`grip`): docked, it is as tall as
+--                                                    -- its host on screen, however it is placed or sized, and
+--                                                    -- only its width is the player's; free, it has the height
+--                                                    -- of its own again (HUD.DockTall)
 --       secure = true,                               -- optional: holds secure buttons (see below)
 --       inCombat = true,                             -- optional, with secure: stay shown in combat
 --       hang = true,                                 -- optional: keeps its top edge when resized (HUD.Resize),
@@ -92,6 +96,8 @@
 --   Shy.HUD.Dock(box, side)             -- a `dock` window docked on side ("LEFT", "RIGHT", true: the side it
 --                                       -- had), or free where it stands (false). Shy.HUD.Docked(box): the side
 --                                       -- it stands on now, nil while free
+--   Shy.HUD.DockTall(box)               -- the height a `dock` window takes from its host now (`tall`), in its
+--                                       -- own units; nil while it has its own (free, or never matched)
 --   Shy.HUD.SetHousing(frame, region)   -- the panel an addon draws for a game frame, larger than the frame
 --                                       -- itself (ShyChat's window, ShySkin's minimap): the editor's sheet
 --                                       -- fits it. nil takes it back. Shy.HUD.HousingOf(frame)
@@ -366,6 +372,16 @@ local function DockSide(box)
 	local saved = Saved(box)
 	if saved and saved.dock == false then return nil end
 	return (saved and saved.dock) or box.dock.side or "LEFT"
+end
+
+-- The height a window docked `tall` takes from its host: as tall as the host on screen, in the window's own units
+-- (the two may be drawn at different scales). Nil while its height is its own: free, or not docked so.
+-- Whoever sizes a flowing box asks this (Grip.lua's Flow, UI.Window as it is made), so nothing else has to put the
+-- height back after the box is placed again.
+function HUD.DockTall(box)
+	if not (box.dock and box.dock.tall) or not DockSide(box) then return nil end
+	local host = Host(box)
+	return host:GetHeight() * Scaled(host) / Scaled(box)
 end
 
 -- Where a box `width` by `height` (UIParent units) stands docked on `side` of its host: its left and bottom
@@ -653,9 +669,12 @@ local function Snap(box, left, bottom, width, height)
 				local dl, db = DockSeat(box, side, width, height, true)
 				if dl and math.abs(left - dl) < SEAT and math.abs(bottom - db) < SEAT then
 					box.docking = side
+					-- (Docked `tall` it will stand as tall as its host: the outline shows it so.)
+					local _, hb, _, hh = Rect(host)
+					local tall = box.dock.tall and hb ~= nil
 					seat:ClearAllPoints()
-					seat:SetPoint("BOTTOMLEFT", guides, "BOTTOMLEFT", dl, db)
-					seat:SetSize(width, height)
+					seat:SetPoint("BOTTOMLEFT", guides, "BOTTOMLEFT", dl, tall and hb or db)
+					seat:SetSize(width, tall and hh or height)
 					seat:Show()
 					return dl, db
 				end

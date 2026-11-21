@@ -534,7 +534,10 @@ function L.Apply(atLogin)
 	end
 	-- For ShyDock's layout: how far the panel reaches past the tracker's frame (left, top, right, bottom). The
 	-- same whatever the Background setting, as chat's: the minimap and the column stay put as it is dragged.
+	-- Said when it comes or goes (the minimap is as wide as this panel); at login whoever reads it reads it after.
+	local had = Shy.wings.tracker ~= nil
 	Shy.wings.tracker = on and { GROUND.left, GROUND.top, GROUND.right, GROUND.bottom } or nil
+	if had ~= (on and true or false) and atLogin ~= true then Shy:Fire("SHY_WINGS") end
 end
 ns.ApplyLook = function() L.Apply() end
 

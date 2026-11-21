@@ -171,6 +171,8 @@ local function Mode(h)
 	-- The side a box hangs by doesn't move: nothing to drag there.
 	if h.edge and h.opts.hung == h.point then return nil end
 	if h.opts.shape then return "shape" end
+	-- As tall as the window it is docked beside (`dock.tall`): its top and foot are that window's to move.
+	if h.edge and (h.point == "TOP" or h.point == "BOTTOM") and h.opts.flow and HUD.DockTall(box) then return nil end
 	if h.opts.flow then return "flow" end
 	if Act.Scalable(box) and not box.ownSize then return "scale" end
 	return nil
@@ -615,8 +617,12 @@ local function Bounds(g)
 end
 
 -- (width and height: the box's)
+-- A window docked `tall` beside another is as tall as that one whatever is asked for (HUD.DockTall): every way a
+-- grip sizes a flowing box comes through here (a drag, a kept size put on, the box placed again), so it stays so.
+-- (Before a grip has hold of it, the same is asked where it is made: UI.Window, HUD.WearMade.)
 local function Flow(g, width, height)
 	local box = g.box
+	height = HUD.DockTall(box) or height
 	local minW, minH, maxW, maxH = Bounds(g)
 	width, height = max(minW, math.min(maxW, width)), max(minH, math.min(maxH, height))
 	if abs(box:GetWidth() - width) < 0.01 and abs(box:GetHeight() - height) < 0.01 then return false end
@@ -626,12 +632,13 @@ local function Flow(g, width, height)
 	return true
 end
 
--- The size it keeps, or the one it was made at. Not while it is dragged: the mouse has it.
+-- The size it keeps, or the one it was made at. Not while it is dragged: the mouse has it. True where that
+-- changed its size.
 local function Wear(g)
-	if not g.made or (drag and drag.box == g.box) or Act.Busy(g.box) then return end
+	if not g.made or (drag and drag.box == g.box) or Act.Busy(g.box) then return false end
 	local saved = Shy.core.db.hud[g.box.id]
 	local cw, ch = Clear(g.box)
-	Flow(g, (saved and saved.w or g.made[1]) + cw, (saved and saved.h or g.made[2]) + ch)
+	return Flow(g, (saved and saved.w or g.made[1]) + cw, (saved and saved.h or g.made[2]) + ch)
 end
 
 local function BeginFlow(h, x, y)
@@ -655,6 +662,8 @@ local function EndFlow()
 	local width, height = floor(box:GetWidth() + 0.5), floor(box:GetHeight() + 0.5)
 	local cw, ch = Clear(box)
 	local saved = Shy.core.db.hud[box.id]
+	-- (As tall as its host while docked beside it: the height it keeps is still the one of its own.)
+	if HUD.DockTall(box) then height = (saved and saved.h or g.made[2]) + ch end
 	if abs(width - cw - g.made[1]) < 0.5 and abs(height - ch - g.made[2]) < 0.5 then
 		if saved then saved.w, saved.h = nil, nil end   -- as it was made: nothing to keep
 	else
@@ -1294,12 +1303,12 @@ function HUD.Made(box, width, height)
 end
 
 -- A flowing box no grip has taken hold of yet: the size it was made at (box.shyMade, its body's), with its look's
--- clearance round it (UI.Body).
+-- clearance round it (UI.Body); docked `tall`, as tall as its host all the same.
 function HUD.WearMade(box)
 	local made = box.shyMade
 	if not made then return end
 	local cw, ch = Clear(box)
-	HUD.Resize(box, made[1] + cw, made[2] + ch)
+	HUD.Resize(box, made[1] + cw, HUD.DockTall(box) or made[2] + ch)
 	local how = box.grip
 	if how and type(how.flow) == "function" then how.flow(box, made[1], made[2]) end
 end
@@ -1310,6 +1319,17 @@ hooksecurefunc(HUD, "Apply", Shy.Clocked("grip: a box applied", function(box)
 	local g = byBox[box]
 	if g and g.made then Wear(g) end
 end))
+
+-- A window as tall as its host while docked (`dock.tall`), let go of away from it or freed from its menu: the
+-- height of its own again at once, its top left corner where it is (else it would keep the host's until it was
+-- next placed, and change then for no reason seen).
+Shy:On("SHY_HUD_MOVED", function(box)
+	if type(box) ~= "table" or not (box.dock and box.dock.tall) or Act.Docked(box) then return end
+	local g = byBox[box]
+	if not (g and g.made) then return end
+	local hold = HUD.Hold(box, "BOTTOMRIGHT")
+	if Wear(g) then hold(true) end
+end)
 
 -- A window's look keeps another clearance round its body (UI.Body): it wears its size again with that round it.
 -- (A maximized one is laid out again by UI.Maximize's own.)

@@ -235,6 +235,8 @@ function ns.Close(kit, button, inset, glyph, size, head)
 end
 
 function T:OnLoad()
+	-- (The game's world map is ShyMaps' now: the module that dressed it is gone, and its settings with it.)
+	self.db.modules.worldmap, self.db.options.worldmap = nil, nil
 	self:RegisterOptions(ns.CreateOptions())
 end
 

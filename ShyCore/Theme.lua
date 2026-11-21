@@ -509,6 +509,7 @@ local accent = { 0, 0, 0 }
 local WHITE = { 1, 1, 1 }
 local FILL_LUMA = 0.30   -- brightness cap for the fill
 local PICK = 0.38        -- how much of the fill a picked row takes
+local DIM_MORE = 8       -- contrast the quiet grey keeps above a label's, for housings that let the world through
 
 Theme.STRENGTH = 55      -- default opacity, in percent
 Theme.SHEET = 88         -- default opacity of the sheet a window's content is read off, in percent
@@ -581,13 +582,16 @@ local function Compute(r, g, b)
 	ui.hot[4] = 1
 	Blend(ui.head, ramp[3], WHITE, 0.45)
 	Blend(ui.text, WHITE, accent, 0.06)
-	Blend(ui.dim, { 0.56, 0.57, 0.60 }, accent, 0.10)
 	Blend(ui.border, { 0.23, 0.23, 0.25 }, accent, 0.14, 1)
 	Blend(ui.rowEdge, { 0.17, 0.17, 0.19 }, accent, 0.10, 1)
 	Blend(ui.bg, { 0.072, 0.072, 0.078 }, accent, 0.025, 0.90)
 	Blend(ui.bgHot, { 0.125, 0.125, 0.135 }, accent, 0.04, 0.95)
 	Blend(ui.panel, { 0.055, 0.055, 0.060 }, accent, 0.02, 0.96)
 	Blend(ui.row, { 0.105, 0.105, 0.115 }, accent, 0.03, 0.78)
+	-- The quiet grey of captions and counts: lifted until it reads as a label on the panel (a housing at low opacity
+	-- shows the world through, so it needs this much to start with).
+	Blend(ui.dim, { 0.56, 0.57, 0.60 }, accent, 0.10)
+	Put(ui.dim, Theme.Readable(ui.dim[1], ui.dim[2], ui.dim[3], ui.panel[1], ui.panel[2], ui.panel[3], Theme.LC_LABEL + DIM_MORE))
 	-- The text and the gold a tad quieter on the panel (a row you may pass by): words still a label's, the gold a mark's.
 	Put(ui.quiet, Theme.Quiet(ui.text[1], ui.text[2], ui.text[3], ui.panel[1], ui.panel[2], ui.panel[3], Theme.LC_LABEL))
 	Put(ui.quietAlert, Theme.Quiet(ui.alert[1], ui.alert[2], ui.alert[3], ui.panel[1], ui.panel[2], ui.panel[3], Theme.LC_MARK))

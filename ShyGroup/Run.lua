@@ -236,25 +236,51 @@ local function Plural(n, one, many)
 	return n == 1 and one or (n .. " " .. many)
 end
 
--- "tank, healer, 2 DPS", or nil when every role is covered.
-function R.NeedText()
-	local missing = R.Missing()
+-- "tank, healer, 2 DPS" for how many of each role; nil when there are none.
+local function RoleList(n)
 	local parts = {}
-	if missing.tank > 0 then parts[#parts + 1] = Plural(missing.tank, "tank", "tanks") end
-	if missing.healer > 0 then parts[#parts + 1] = Plural(missing.healer, "healer", "healers") end
-	if missing.dps > 0 then parts[#parts + 1] = Plural(missing.dps, "DPS", "DPS") end
+	if n.tank > 0 then parts[#parts + 1] = Plural(n.tank, "tank", "tanks") end
+	if n.healer > 0 then parts[#parts + 1] = Plural(n.healer, "healer", "healers") end
+	if n.dps > 0 then parts[#parts + 1] = Plural(n.dps, "DPS", "DPS") end
 	if #parts > 0 then return table.concat(parts, ", ") end
+end
+
+-- The roles still missing, or nil when every role is covered.
+function R.NeedText()
+	return RoleList((R.Missing()))
+end
+
+-- The roles the group has so far, or nil when none is known.
+-- have: the run's, or a sample for a preview.
+function R.HaveText(have)
+	return RoleList(have or R.Have())
 end
 
 -- Roles in a whisper: "a tank", "tank, heal or dps".
 R.ARTICLE = { tank = "a tank", healer = "a healer", dps = "a dps" }
 R.BARE = { tank = "tank", healer = "heal", dps = "dps" }
+R.MANY = { tank = "tanks", healer = "healers", dps = "dps" }
 
 -- "a tank", "a tank or a healer", "tank, heal or dps"
-function R.Or(words)
+local function List(words, last)
 	if #words <= 1 then return words[1] or "" end
-	if #words == 2 then return words[1] .. " or " .. words[2] end
-	return table.concat(words, ", ", 1, #words - 1) .. " or " .. words[#words]
+	if #words == 2 then return words[1] .. " " .. last .. " " .. words[2] end
+	return table.concat(words, ", ", 1, #words - 1) .. " " .. last .. " " .. words[#words]
+end
+
+function R.Or(words)
+	return List(words, "or")
+end
+
+-- The same roles as a whisper says them: "a healer and 2 dps"; nil when none is known.
+function R.HaveWords(have)
+	have = have or R.Have()
+	local words = {}
+	for _, role in ipairs(D.ROLES) do
+		local n = have[role]
+		if n > 0 then words[#words + 1] = n == 1 and R.ARTICLE[role] or (n .. " " .. R.MANY[role]) end
+	end
+	if #words > 0 then return List(words, "and") end
 end
 
 -- "Ann" from "Ann Smith" or "Ann-Realm"; "" when unknown.
@@ -282,7 +308,8 @@ end
 R.WORDS = {
 	{ key = "dungeon", what = "The run's name" },
 	{ key = "need", what = "Roles still missing, like \"tank, 2 DPS\"" },
-	{ key = "tally", what = "\"(3/5)\" once there are two of you; nothing alone" },
+	{ key = "have", what = "Roles you have, like \"healer, DPS\"" },
+	{ key = "tally", what = "Your count and roles, like \"(2/5, have healer)\"" },
 	{ key = "left", what = "Spots left" },
 	{ key = "count", what = "How many of you there are" },
 	{ key = "size", what = "The group's size" },
@@ -293,16 +320,19 @@ R.WORDS = {
 	{ key = "level", what = "Your level" },
 	{ key = "class", what = "Your class" },
 	{ key = "name", what = "Their first name", whisper = true },
-	{ key = "group", what = "\"We're 3/5.\" once there are two of you; nothing alone", whisper = true },
+	{ key = "group", what = "Your count and roles, like \"We're 2/5 with a healer.\"", whisper = true },
 	{ key = "role", what = "The one role you're asking for, like \"a healer\"", whisper = true },
 	{ key = "roles", what = "Two roles to pick from, like \"a tank or a dps\"", whisper = true },
 	{ key = "choices", what = "Three roles to pick from, like \"tank, heal or dps\"", whisper = true },
 }
 
--- Everything a template can say right now. extra: the caller's own words.
+-- Everything a template can say right now. extra: the caller's own words;
+-- its `having` is how many of each role a preview's sample group has.
 function R.Vars(extra)
 	local run = R.Get()
 	local n = R.Count()
+	local having = extra and extra.having or (run and R.Have()) or nil
+	local have, haveWords = having and R.HaveText(having), having and R.HaveWords(having)
 	local vars = {
 		dungeon = run and run.name or "",
 		count = n,
@@ -318,9 +348,16 @@ function R.Vars(extra)
 		name = "",
 	}
 	for k, v in pairs(extra or {}) do vars[k] = v end
+	vars.having = nil
 	local count, size = tonumber(vars.count) or 1, tonumber(vars.size) or 5
-	if vars.group == nil then vars.group = count < 2 and "" or (" We're " .. count .. "/" .. size .. ".") end
-	if vars.tally == nil then vars.tally = count < 2 and "" or (" (" .. count .. "/" .. size .. ")") end
+	-- With company, the count says who is there: "need tank, 2 DPS" alone leaves that to be worked out.
+	if vars.have == nil then vars.have = have or "" end
+	if vars.group == nil then
+		vars.group = count < 2 and "" or (" We're " .. count .. "/" .. size .. (haveWords and (" with " .. haveWords) or "") .. ".")
+	end
+	if vars.tally == nil then
+		vars.tally = count < 2 and "" or (" (" .. count .. "/" .. size .. (have and (", have " .. have) or "") .. ")")
+	end
 	return vars
 end
 

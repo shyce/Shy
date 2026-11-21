@@ -748,7 +748,7 @@ end)
 -- The game's quest log lives in the game's map, and opening it closes ShyMaps' window: beside that window your
 -- quests stand in a window of ours, docked on its right as the bank stands beside the bags (Shy.HUD's `dock`):
 -- dragged away it stands free, dragged back near either side it docks there again, and docked it is as tall as the
--- map. ShyMaps' toggle at the map's right edge shows and hides it (T:QuestList); it comes and goes with that window
+-- map (the dock's `tall`: the HUD keeps it so as the map is moved or sized). ShyMaps' toggle at the map's right edge shows and hides it (T:QuestList); it comes and goes with that window
 -- (T:QuestListFollow), as you left it (T.db.mapQuests).
 --   Your quests by zone, the zone you are in first; in a zone, those with a place on the route by its number, then
 --   the rest as the log has them. A quest's row: its mark as in the game's log (its place on the route, a hand-in,
@@ -759,14 +759,19 @@ end)
 --   T:QuestList([on]) -> shown     on true or false, or nil to switch it; the setting is kept
 --   T:QuestListFollow(open)        ShyMaps' window opened or closed: the list goes with it
 --   T:QuestListShown() -> bool
---   T:QuestPage(id) -> opened      a quest's page in it, the map opened and flown to it (false: the game's map is yours)
+--   T:QuestListRoom() -> units     the room the list takes beside the map while you keep it on (its width as it is
+--                                  made, and the seam between the two): 0 while it is off
+--   T:QuestPage(id [, objective]) -> opened   a quest's page in it, the map opened and flown to it (or to that objective)
+--                                  (false: the game's map is yours)
 -- Bus: SHY_QUEST_LIST (shown) as it shows or hides (ShyMaps' toggle points the way it would go).
 
 local UI = Shy.UI
 local LIST = {
 	wide = 300, tall = 560, least = { 240, 260 },
+	seam = 4,                                  -- between it and the map it is docked beside (Shy.HUD's)
 	pad = 8, mark = 16, name = 12, small = 11, caps = 10,
 	row = 18, line = 14, heading = 22, apart = 6, gap = 4, most = 4,
+	after = 4,                                 -- room at a row's right, as its light's bar leaves room at its left (UI.ROW_INSET)
 	switch = 132, control = 22, between = 6,   -- the Zone | Guide switch, the filter box, and the room between rows of them
 	detail = 3, button = 22, aside = 0.55,     -- a quest's details: lines of its text before they are cut; its buttons; a quest off your guide, faded
 }
@@ -776,18 +781,34 @@ local listRows, listHeadings = {}, {}
 local listPage        -- the quest whose page the window shows (nil: the list)
 local listFilter      -- what the filter box asks for, lower case (nil: everything)
 
+-- The quest the Quests window has open (its page up while the window shows) and the one objective of it kept lit on
+-- the map: whatever can open a quest lights the one that is open (ns.QuestOpened; SHY_QUEST_OPENED as it changes).
+local told = {}
+local function Opened()
+	if not (list and list:IsShown() and listPage) then return nil end
+	return listPage, Holding() and kept.id == listPage and kept.objective or nil
+end
+function ns.QuestOpened() return Opened() end
+local function Told()
+	local id, objective = Opened()
+	if told.id == id and told.objective == objective then return end
+	told.id, told.objective = id, objective
+	Shy:Fire("SHY_QUEST_OPENED", id, objective)
+end
+
 -- A quest's ground, framed on the map of ShyMaps' view: on the map your route takes you to for it (its stop on the
--- route), else the one with most of its places; a hand-in, where it is handed in. The game's map is never opened.
-local function Focus(id)
+-- route), else the one with most of its places; a hand-in, where it is handed in. `objective`: that one objective's
+-- ground alone. The game's map is never opened.
+local function Focus(id, objective)
 	local maps = Shy.addons.Maps
 	if not (maps and maps.Frame) then return end
 	local entry = L.entries[id]
 	local points = {}
-	if entry and entry.complete then
+	if entry and entry.complete and not objective then
 		local at = Ender(id)
 		if at then points[1] = at end
 	else
-		for _, point in ipairs((R.Where(id))) do points[#points + 1] = point end
+		for _, point in ipairs((R.Where(id, objective))) do points[#points + 1] = point end
 	end
 	local stop = RouteStop(id)
 	local map = stop and stop.map
@@ -859,30 +880,34 @@ end
 
 local ListFill, ListOpen   -- below
 
+-- A row's light (UI.RowLight): under the mouse, and held while its quest is the one kept lit on the map.
+local function RowPaint(row)
+	row.light:Set(row.over, row.id ~= nil and Holding() and kept.id == row.id and not kept.objective)
+end
+
 local function ListRow(parent)
 	local row = CreateFrame("Button", nil, parent)
 	row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	row.glow = row:CreateTexture(nil, "BACKGROUND")
-	row.glow:SetAllPoints()
-	UI.Paint(row.glow, C.hot, 0.08)
-	row.glow:Hide()
+	row.light = UI.RowLight(row, { top = 1, bottom = 1 })
 	row.mark = ns.CreateMark(row, LIST.mark, "small")
-	row.mark:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+	row.mark:SetPoint("TOPLEFT", row, "TOPLEFT", UI.ROW_INSET, -1)
 	row.mark:EnableMouse(false)
 	row.name = UI.Text(row, "", LIST.name)
-	row.name:SetPoint("TOPLEFT", row, "TOPLEFT", LIST.mark + LIST.apart, -2)
+	row.name:SetPoint("TOPLEFT", row, "TOPLEFT", UI.ROW_INSET + LIST.mark + LIST.apart, -2)
 	row.name:SetWordWrap(false)
 	row.name:SetJustifyH("LEFT")
 	row.level = UI.Text(row, "", LIST.small, false, C.dim)
-	row.level:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -3)
+	row.level:SetPoint("TOPRIGHT", row, "TOPRIGHT", -LIST.after, -3)
 	row.level:SetJustifyH("RIGHT")
 	row.lines, row.counts = {}, {}
 	row:SetScript("OnEnter", Safe(function(self)
-		self.glow:Show()
+		self.over = true
+		RowPaint(self)
 		if self.id then Light(self, self.id) end
 	end))
 	row:SetScript("OnLeave", Safe(function(self)
-		self.glow:Hide()
+		self.over = false
+		RowPaint(self)
 		Unlight(self)
 	end))
 	row:SetScript("OnClick", Safe(function(self, button)
@@ -913,11 +938,11 @@ local function ListLine(row, i, words, count, color)
 	end
 	local y = -(LIST.row + (i - 1) * LIST.line)
 	text:ClearAllPoints()
-	text:SetPoint("TOPLEFT", row, "TOPLEFT", LIST.mark + LIST.apart, y)
+	text:SetPoint("TOPLEFT", row, "TOPLEFT", UI.ROW_INSET + LIST.mark + LIST.apart, y)
 	right:ClearAllPoints()
-	right:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, y)
+	right:SetPoint("TOPRIGHT", row, "TOPRIGHT", -LIST.after, y)
 	right:SetText(count or "")
-	text:SetWidth(math.max(20, row:GetWidth() - LIST.mark - LIST.apart - (count and right:GetStringWidth() + 8 or 0)))
+	text:SetWidth(math.max(20, row:GetWidth() - UI.ROW_INSET - LIST.after - LIST.mark - LIST.apart - (count and right:GetStringWidth() + 8 or 0)))
 	text:SetText(words)
 	UI.Ink(text, color or C.dim)
 	text:Show()
@@ -930,6 +955,7 @@ local function ListPaint(row, entry, wide, leading, aside)
 	row.id = id
 	row:SetWidth(wide)
 	row:SetAlpha(aside and LIST.aside or 1)
+	RowPaint(row)
 	local place = PlaceOf(id)
 	if place then
 		row.mark:Set("step", place.lit, place.number)
@@ -942,7 +968,7 @@ local function ListPaint(row, entry, wide, leading, aside)
 	local level = entry.level or 0
 	row.level:SetText(level > 0 and tostring(level) or "")
 	local color = GetQuestDifficultyColor(level > 0 and level or L.Level())
-	row.name:SetWidth(math.max(20, wide - LIST.mark - LIST.apart - row.level:GetStringWidth() - 8))
+	row.name:SetWidth(math.max(20, wide - UI.ROW_INSET - LIST.after - LIST.mark - LIST.apart - row.level:GetStringWidth() - 8))
 	row.name:SetTextColor(color.r, color.g, color.b)
 	row.name:SetText(listFilter and ns.LightWords and (ns.LightWords(entry.title, listFilter, true)) or entry.title)
 	local n = 0
@@ -1078,8 +1104,8 @@ end
 -- sharing with your group and abandoning. Its ground is lit and the map flies to it as it opens.
 
 local PAGE = { title = 14, text = 11, caps = 10, row = 26, icon = 20, gap = 10, after = 4, foot = 22 }
-local pageTexts, pageItems, pageRules = {}, {}, {}
-local pageUsed = { texts = 0, items = 0, rules = 0 }
+local pageTexts, pageItems, pageRules, pageGoals = {}, {}, {}, {}
+local pageUsed = { texts = 0, items = 0, rules = 0, goals = 0 }
 
 local function PageText(parent, size, color, wrap)
 	pageUsed.texts = pageUsed.texts + 1
@@ -1181,18 +1207,74 @@ local function PageItem(parent, y, wide, row)
 	return y + PAGE.row
 end
 
+-- An objective on the page is a line that opens: under the mouse its ground is lit on the map; a click flies the map
+-- to that objective's ground and keeps it lit (held), a second click goes back to the whole quest.
+local function GoalPaint(hit)
+	hit.light:Set(hit.over, Holding() and kept.id == hit.id and kept.objective == hit.index)
+end
+
+local function PageGoal(parent, top, bottom, wide, id, index)
+	pageUsed.goals = pageUsed.goals + 1
+	local hit = pageGoals[pageUsed.goals]
+	if not hit then
+		hit = CreateFrame("Button", nil, parent)
+		hit.light = UI.RowLight(hit, { top = 1, bottom = 1 }, parent)
+		hit:SetScript("OnEnter", Safe(function(self)
+			self.over = true
+			GoalPaint(self)
+			Light(self, self.id, self.index)
+		end))
+		hit:SetScript("OnLeave", Safe(function(self)
+			self.over = false
+			GoalPaint(self)
+			Unlight(self)
+		end))
+		hit:SetScript("OnClick", Safe(function(self)
+			local whole = Holding() and kept.id == self.id and kept.objective == self.index
+			Keep(self.id, not whole and self.index or nil, nil, true)
+			Focus(self.id, not whole and self.index or nil)
+			for i = 1, pageUsed.goals do GoalPaint(pageGoals[i]) end
+			Told()
+		end))
+		pageGoals[pageUsed.goals] = hit
+	end
+	hit.id, hit.index = id, index
+	hit:ClearAllPoints()
+	hit:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -top)
+	hit:SetSize(wide, math.max(1, bottom - top))
+	GoalPaint(hit)
+	hit:Show()
+end
+
+-- A quest not in your log yet, under its name: who gives it (or takes it back) and where; that it isn't yours yet;
+-- what it asks, in its own sentence. Returns the y under it.
+local function PageAhead(body, y, wide, id, stop)
+	local zone = stop.map and W.MapName(stop.map)
+	local where = (stop.kind == "turnin" and "Hand in to " or "Pick up from ") .. (stop.who or "")
+	if zone then where = where .. "  \194\183  " .. zone end
+	y = PageWords(body, y, 0, wide, where, PAGE.text, C.dim) + PAGE.gap
+	y = PageHeading(body, y, wide, "Objectives")
+	y = PageWords(body, y, 0, wide, "Not in your log yet", PAGE.text, C.dim) + PAGE.after
+	local offer = D.Offer(id)
+	if offer and offer.says then y = PageWords(body, y + PAGE.after, 0, wide, D.Says(offer.says), PAGE.text, C.text) end
+	return y
+end
+
 local function PageFill()
 	local id = listPage
 	local entry = id and L.entries[id]
-	if not (list and entry) then return end
+	-- (A quest not in your log yet: what the data says of it, and the route's stop for it.)
+	local quest = id and D.Quest(id)
+	local ahead = not entry and quest and listAhead
+	if not (list and (entry or ahead)) then return end
 	local area = list.pageScroll
 	local body = area.content
 	local wide = math.max(60, area:GetWidth() - 14)
 	body:SetWidth(wide)
-	pageUsed.texts, pageUsed.items, pageUsed.rules = 0, 0, 0
+	pageUsed.texts, pageUsed.items, pageUsed.rules, pageUsed.goals = 0, 0, 0, 0
 	local y = 2
 	-- Its name in its difficulty's color, its level at the right.
-	local level = entry.level or 0
+	local level = entry and entry.level or quest and quest.level or 0
 	local color = GetQuestDifficultyColor(level > 0 and level or L.Level())
 	local levelText = PageText(body, PAGE.text, C.dim, false)
 	levelText:SetPoint("TOPRIGHT", body, "TOPLEFT", wide, -(y + 2))
@@ -1202,32 +1284,42 @@ local function PageFill()
 	title:SetFontObject(UI.TitleFont and UI.TitleFont(PAGE.title) or UI.TextFont(PAGE.title))
 	title:SetPoint("TOPLEFT", body, "TOPLEFT", 0, -y)
 	title:SetWidth(wide - levelText:GetStringWidth() - 10)
-	title:SetText(entry.title)
+	title:SetText(entry and entry.title or quest.name)
 	title:SetTextColor(color.r, color.g, color.b)
 	y = y + math.ceil(title:GetStringHeight()) + 2
-	-- Where, and who takes it back.
-	local at = Ender(id)
-	local where = entry.header or ""
-	if at and at.who then where = (where ~= "" and (where .. "  \194\183  ") or "") .. "Hand in to " .. at.who end
-	if where ~= "" then y = PageWords(body, y, 0, wide, where, PAGE.text, C.dim) end
-	y = y + PAGE.gap
-	-- What is left of it, each with its count; what is done ticked.
-	y = PageHeading(body, y, wide, "Objectives")
-	if entry.failed then
-		y = PageWords(body, y, 0, wide, "Failed: abandon it and take it again", PAGE.text, C.bad) + PAGE.after
-	elseif entry.complete then
-		y = PageWords(body, y, 0, wide, "Ready to hand in", PAGE.text, C.good) + PAGE.after
-	end
-	for _, goal in ipairs(L.Goals(id)) do
-		if goal.text and goal.text ~= "" then
-			local words, count = Counted(goal.text)
-			if count then
-				local right = PageText(body, PAGE.text, goal.finished and C.good or C.text, false)
-				right:SetPoint("TOPRIGHT", body, "TOPLEFT", wide, -y)
-				right:SetJustifyH("RIGHT")
-				right:SetText(count)
+	if ahead then
+		y = PageAhead(body, y, wide, id, ahead)
+	else
+		-- Where, and who takes it back.
+		local at = Ender(id)
+		local where = entry.header or ""
+		if at and at.who then where = (where ~= "" and (where .. "  \194\183  ") or "") .. "Hand in to " .. at.who end
+		if where ~= "" then y = PageWords(body, y, 0, wide, where, PAGE.text, C.dim) end
+		y = y + PAGE.gap
+		-- What is left of it, each with its count; what is done ticked.
+		y = PageHeading(body, y, wide, "Objectives")
+		if entry.failed then
+			y = PageWords(body, y, 0, wide, "Failed: abandon it and take it again", PAGE.text, C.bad) + PAGE.after
+		elseif entry.complete then
+			y = PageWords(body, y, 0, wide, "Ready to hand in", PAGE.text, C.good) + PAGE.after
+		end
+		for index, goal in ipairs(L.Goals(id)) do
+			if goal.text and goal.text ~= "" then
+				local words, count = Counted(goal.text)
+				-- (A line that opens: its words past the light's bar, UI.ROW_INSET, lit or not.)
+				local opens = not entry.complete
+				local inset = opens and UI.ROW_INSET or 0
+				if count then
+					local right = PageText(body, PAGE.text, goal.finished and C.good or C.text, false)
+					right:SetPoint("TOPRIGHT", body, "TOPLEFT", wide - (opens and LIST.after or 0), -y)
+					right:SetJustifyH("RIGHT")
+					right:SetText(count)
+				end
+				local top = y
+				y = PageWords(body, y, inset, wide - 44, words, PAGE.text, goal.finished and C.dim or C.text)
+				if opens then PageGoal(body, top, y, wide, id, index) end
+				y = y + PAGE.after
 			end
-			y = PageWords(body, y, 0, wide - 44, words, PAGE.text, goal.finished and C.dim or C.text) + PAGE.after
 		end
 	end
 	-- What it asks, in its own sentence; then its own words.
@@ -1238,10 +1330,10 @@ local function PageFill()
 		y = PageWords(body, y, 0, wide, text.story, PAGE.text, C.dim)
 	end
 	-- What it gives.
-	local quest, offer = D.Quest(id), D.Offer(id) or {}
-	local xp = GetQuestLogRewardXP(id)
+	local offer = D.Offer(id) or {}
+	local xp = entry and GetQuestLogRewardXP(id)
 	if not (xp and xp > 0) and quest then xp = L.Pays(quest) end
-	local money = GetQuestLogRewardMoney(id) or 0
+	local money = entry and GetQuestLogRewardMoney(id) or 0
 	if money <= 0 then money = offer.money or 0 end
 	local items, choices = offer.items or {}, offer.choices or {}
 	if (xp and xp > 0) or money > 0 or #items > 0 or #choices > 0 or offer.spell then
@@ -1267,6 +1359,7 @@ local function PageFill()
 	for i = pageUsed.texts + 1, #pageTexts do pageTexts[i]:Hide() end
 	for i = pageUsed.items + 1, #pageItems do pageItems[i]:Hide() end
 	for i = pageUsed.rules + 1, #pageRules do pageRules[i]:Hide() end
+	for i = pageUsed.goals + 1, #pageGoals do pageGoals[i]:Hide() end
 	body:SetHeight(math.max(1, y + PAGE.gap))
 	area:Update()
 	-- Its foot: your route first; then tracking, sharing and abandoning.
@@ -1274,6 +1367,7 @@ local function PageFill()
 	list.go:SetLabel(stop and stop.chosen and "Remove from my route" or "Go here next")
 	list.go:SetPrimary(not (stop and stop.chosen))
 	list.go:SetTone(stop and stop.chosen and C.bad or nil)
+	if not entry then return end
 	list.track:SetLabel(C_QuestLog.GetQuestWatchType(id) ~= nil and "Untrack" or "Track")
 	local share = C_QuestLog.IsPushableQuest(id) and IsInGroup() and not InCombatLockdown()
 	list.share:SetUsable(share, not IsInGroup() and "Only with a group" or InCombatLockdown() and "After the fight" or "This quest can't be shared")
@@ -1284,44 +1378,69 @@ local function ListView(id)
 	listPage = id
 	local page = id ~= nil
 	for _, part in ipairs({ list.mode, list.count, list.filter, list.scroll }) do part:SetShown(not page) end
-	for _, part in ipairs({ list.back, list.pageScroll, list.go, list.track, list.share, list.abandon }) do part:SetShown(page) end
+	for _, part in ipairs({ list.back, list.pageScroll, list.go }) do part:SetShown(page) end
+	-- (Tracking, sharing and abandoning: a quest of your log's.)
+	local yours = page and L.entries[id] ~= nil
+	for _, part in ipairs({ list.track, list.share, list.abandon }) do part:SetShown(yours) end
 	list.none:SetShown(false)
 	if page then
 		list.pageScroll:SetVerticalScroll(0)
 		PageFill()
 	else
+		for i = 1, #pageGoals do pageGoals[i]:Hide() end
 		ListFill()
 	end
+	Told()
 end
 
--- A quest's page, its ground lit and the map flown to it.
-function ListOpen(id)
-	if not (list and L.entries[id]) then return end
-	Keep(id, nil, nil, true)
-	Focus(id)
-	ListView(id)
+-- A quest not in your log let go of: its stop no longer kept lit on the map.
+local function AheadGo()
+	if listAhead and ns.FoundShown and ns.FoundShown() == listAhead and ns.LetGo then ns.LetGo() end
+	listAhead = nil
 end
 
--- Docked, as tall as the map it stands beside.
-local function ListMatch()
+-- The map shut (or the window closed): nothing stays open or lit. Back to the list, the quest let go of.
+local function LetGo()
+	if Holding() then Keep(nil) end
+	AheadGo()
+	if list and listPage then ListView(nil) end
+	Told()
+end
+
+-- A quest's page, its ground lit and the map flown to it (`objective`: that objective's ground).
+-- One not in your log yet (`stop`: the route's stop for it, a pickup or a hand-in to come): its page, its stop kept
+-- lit on the map and the map flown to it.
+function ListOpen(id, objective, stop)
 	if not list then return end
-	local host = Shy.HUD.Find("shymaps.window")
-	if host and Shy.HUD.Docked(list) and math.abs(list:GetHeight() - host:GetHeight()) > 0.5 then
-		Shy.HUD.Resize(list, list:GetWidth(), host:GetHeight())
+	if L.entries[id] then
+		AheadGo()
+		Keep(id, objective, nil, true)
+		Focus(id, objective)
+	elseif stop and D.Quest(id) then
+		if Holding() then Keep(nil) end
+		listAhead = stop
+		if ns.KeepQuest then ns.KeepQuest(stop) end
+		local maps = Shy.addons.Maps
+		if maps and stop.map and stop.x and maps.Frame then
+			maps:Frame(stop.map, { { x = stop.x / 10000, y = stop.y / 10000 } })
+		elseif maps and stop.map and maps.Open then
+			maps:Open(stop.map)
+		end
+	else
+		return
 	end
+	ListView(id)
 end
 
 local function ListMake()
 	if list then return list end
 	local top = UI.HEAD.window.line + UI.HEAD.window.lip + 6
-	-- (Made as tall as the map it docks beside, so it opens matched; ListMatch keeps it so.)
-	local host = Shy.HUD.Find("shymaps.window")
 	-- (No name: Escape is the map's to close it with, which takes this down with it and keeps it on for next time. On
 	-- the game's list of windows Escape closes, it would be shut as if by its own x.)
 	list = UI.Window({
 		id = "shyquest.quests",
 		title = "Quests",
-		width = LIST.wide, height = host and math.max(LIST.least[2], host:GetHeight()) or LIST.tall,
+		width = LIST.wide, height = LIST.tall,
 		point = { "CENTER", "CENTER", 360, 0 },
 		-- (Shown while the map's window is and you keep it on: the HUD lays its windows out again now and then, and a
 		-- window it is told is shut it shuts, as if by its x.)
@@ -1332,7 +1451,8 @@ local function ListMake()
 		grip = { flow = true, min = LIST.least },
 		strata = "HIGH",
 		head = { size = "window", icon = T.mark, title = "Quests" },
-		dock = { to = "shymaps.window", side = "RIGHT", label = "Beside the map" },
+		-- (Docked, as tall as the map, which the HUD keeps it; standing free, the height of its own.)
+		dock = { to = "shymaps.window", side = "RIGHT", label = "Beside the map", tall = true },
 		-- Its x: docked beside the map, the map and the list close together (the list kept on for next time); standing
 		-- free, the list alone, and the setting goes with it. Nothing else switches it off (T:QuestList): shut with the
 		-- map or laid out again by the HUD, it is kept.
@@ -1343,6 +1463,7 @@ local function ListMake()
 			else
 				T.db.mapQuests = false
 			end
+			LetGo()
 			ListHide()
 		end,
 	})
@@ -1377,6 +1498,7 @@ local function ListMake()
 	-- A quest's page: Back where the switch stands; its words down a scroll of their own; its buttons at the foot.
 	list.back = UI.Button(body, "Back", 72, Safe(function()
 		if Holding() and kept.id == listPage then Keep(nil) end
+		AheadGo()
 		ListView(nil)
 	end))
 	list.back:SetHeight(LIST.control)
@@ -1387,6 +1509,7 @@ local function ListMake()
 	list.pageScroll:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -LIST.pad, LIST.pad + footTall + LIST.between)
 	list.pageScroll:HookScript("OnSizeChanged", Safe(function() if listPage then PageFill() end end))
 	list.pageTexts = pageTexts   -- (what the page says, for whoever reads the window)
+	list.pageGoals = pageGoals   -- (its objectives' lines that open, likewise)
 	list.go = UI.Button(body, "Go here next", 100, Safe(function()
 		if listPage then Head(listPage) end
 	end))
@@ -1427,15 +1550,12 @@ local function ListMake()
 	list.scroll:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -LIST.pad, LIST.pad)
 	list.scroll:HookScript("OnSizeChanged", Safe(function() ListFill() end))
 	list:HookScript("OnShow", Safe(function()
-		ListMatch()
-		-- (Docked by the HUD as it shows: matched again once it stands there, the frame after. Once an opening.)
-		C_Timer.After(0, Safe(ListMatch))
 		ListFill()
 		Shy:Fire("SHY_QUEST_LIST", true)
 	end))
-	list:HookScript("OnHide", function() Shy:Fire("SHY_QUEST_LIST", false) end)
-	Shy:On("SHY_HUD_RESIZED", function(box)
-		if box == Shy.HUD.Find("shymaps.window") then ListMatch() end
+	list:HookScript("OnHide", function()
+		Shy:Fire("SHY_QUEST_LIST", false)
+		Told()
 	end)
 	-- (Whole now: the HUD may show it, its rows filled as it opens.)
 	list.made = true
@@ -1465,17 +1585,17 @@ function T:QuestList(on)
 	return list ~= nil and list:IsShown()
 end
 
--- A quest's page in the Quests window, the map opened as you use it (Shy.Maps.Open) and flown to it. False where
--- the map you use is the game's (its own log has the page there).
-function T:QuestPage(id)
-	if not L.entries[id] then return false end
+-- A quest's page in the Quests window, the map opened as you use it (Shy.Maps.Open) and flown to it (`objective`: to
+-- that objective's ground, lit alone). False where the map you use is the game's (its own log has the page there).
+function T:QuestPage(id, objective, stop)
+	if not (L.entries[id] or (stop and D.Quest(id))) then return false end
 	local maps = Shy.addons.Maps
 	if not MapUp() and not (maps and maps.ShowMap and maps:ShowMap(nil) and MapUp()) then return false end
 	T.db.mapQuests = true
 	ListMake()
 	list:Show()
 	list:Raise()
-	ListOpen(id)
+	ListOpen(id, objective, stop)
 	return true
 end
 
@@ -1486,18 +1606,30 @@ function T:QuestListShown()
 	return list ~= nil and list:IsShown()
 end
 
+function T:QuestListRoom()
+	if not T.db.mapQuests then return 0 end
+	return LIST.wide + LIST.seam
+end
+
 function T:QuestListFollow(open)
 	if open and T.db.mapQuests then
 		ListMake()
 		list:Show()
 	else
+		LetGo()
 		ListHide()
 	end
 end
 
 ns.OnRoute(Safe(function(rebuilt)
 	if not rebuilt then return end
-	-- (A quest whose page is up and has left the log: back to the list.)
-	if listPage and not L.entries[listPage] and list then ListView(nil) end
+	-- (A quest whose page is up and has left the log, or one not yet in it the route no longer goes to: back to the
+	-- list. One just taken is its log's page now.)
+	if listPage and not L.entries[listPage] and list then
+		listAhead = listAhead and RouteStop(listPage) or nil
+		if not listAhead then ListView(nil) end
+	elseif listAhead and listPage and L.entries[listPage] then
+		AheadGo()
+	end
 	if listPage then PageFill() else ListFill() end
 end))

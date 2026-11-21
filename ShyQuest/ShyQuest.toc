@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffQuest|r
 ## Notes: Your next quest step on screen, the way there, and leveling guides |cff888888/shyquest|r
 ## Author: Shyce Cream
-## Version: 5.1.7
-## X-Date: 2026-11-18
+## Version: 5.2.0
+## X-Date: 2026-11-21
 ## IconTexture: Interface\AddOns\ShyQuest\Media\ShyQuestMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyWay, ShyXP
@@ -16,6 +16,7 @@ Data\Quests.lua
 Data\Npcs.lua
 Data\Objects.lua
 Data\Items.lua
+Data\QuestsSeen.lua
 Data\Dungeons.lua
 Data\Starts.lua
 Data\Town.lua
@@ -74,6 +75,7 @@ Dungeons.lua
 Run.lua
 Legacy.lua
 Supplies.lua
+Stock.lua
 Aid.lua
 Hearth.lua
 Flights.lua

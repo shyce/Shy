@@ -687,7 +687,7 @@ function T:OnLogin()
 	-- A way over the ground that was being worked out is known (World.lua): what is nearest may have changed.
 	-- (They come a second apart while a trip's ways are worked out: those that come within terrainSettle seconds
 	-- of each other are one measuring of the first stops, a few a pulse. The route is built for the reasons in
-	-- Pulse, not for these.)
+	-- Pulse, not for these: but for a journey of it that was still being worked out when it was built.)
 	local settling = false
 	Shy:On("SHY_TERRAIN", function()
 		if settling then return end
@@ -697,6 +697,13 @@ function T:OnLogin()
 			-- Ways refined: the yards change, and the lines (each map lays its own again). What leads does
 			-- not: the stops are measured again, a few a pulse, and keep their order.
 			measured.north, measured.next = nil, nil
+			-- (The route was built on a journey not yet known, R.journeysOpen: built again as for a walk, what
+			-- leads kept, so its rides are the ones the journey has now.)
+			if ns.Route.journeysOpen and not stale then
+				Asked("a journey came to be known")
+				stale = true
+				ns.Route.held = true
+			end
 		end)
 	end)
 end

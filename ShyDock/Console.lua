@@ -186,6 +186,8 @@ C.GRIP = 2 * C.PAD + C.SEAM
 -- Mode's sliders stop at 70 and 75%, so as the layout has them a row can be wider than the map, and the
 -- tray with it; `fit`: Shy.HUD homes the game's frames (Arrange.lua) and can size them, so a row wider
 -- than the map's room is made to fit it (`scale`, by row) and the tray is never wider than the column.
+-- There a row is laid as it stands: at the size the layout in use keeps it at (row.stands, in percent), which
+-- a setup wrote for the map as it was then and need not be the one that fits the map now.
 -- With the menu in a drawer (now.drawer) its `pull` is the tray's header (C.PULL), the rows a seam under
 -- its line; and while the drawer is tucked (now.tucked) the column keeps only the pull's room: the tray
 -- slides down out of it over what hangs below. Without one the rows stand a pad under the tray's top.
@@ -201,10 +203,12 @@ function C.Column(now, under, fit)
 	for _, key in ipairs({ "menu", "bags" }) do
 		local row = now.column and now.column[key]
 		if row then
-			local k = (fit and row.w > room) and room / row.w or 1
-			rows[key] = { w = row.w * k, h = row.h * k }
+			local stands = (fit and row.stands) and row.stands / row.percent or 1
+			local w, h = row.w * stands, row.h * stands
+			local k = (fit and w > room) and room / w or 1
+			rows[key] = { w = w * k, h = h * k }
 			out.scale[key] = k
-			wide = max(wide, row.w * k)
+			wide = max(wide, w * k)
 		end
 	end
 	if wide <= 0 then return out end

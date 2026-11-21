@@ -41,8 +41,8 @@
 --   Shy.Maps.OnMini(view, north, west) -> x, y            -- a place on the minimap, as shares of its range
 --   Shy.Maps.MapLayer(above) -> frame                     -- a frame over the world map's canvas, at the level
 --        of the game's quest pins (+ above)
---   Shy.Maps.Open(map) -> opened                          -- the map you use opened on `map`: ShyMaps' window of its own
---        while that is your map (its :ShowMap), else the game's (not in a fight: the game's map is not ours to open)
+--   Shy.Maps.Open(map) -> opened                          -- the map you use opened on `map`: ShyMaps' window
+--        while ShyMaps is on (its :ShowMap), else the game's (not in a fight: the game's map is not ours to open)
 --   Shy.Maps.Hush(who, on)                                -- every addon's layers out of sight while any `who` hushes
 --        them (ShyMaps inside an instance), back as the last lets go
 --   Shy.Maps.MapScale() -> unit, grow                     -- one screen pixel in canvas units, and the growth
@@ -1162,8 +1162,8 @@ function Maps.OnMini(view, north, west)
 end
 
 -- The world map
--- What shows in the game's map window is the game's canvas, or ShyMaps' view while that is in use
--- (Shy.addons.Maps:View()), which lays its own canvas over the game's and hides the game's. Both answer
+-- What shows the world map is the game's canvas in its map window, or ShyMaps' view while that is in use
+-- (Shy.addons.Maps:View()), in ShyMaps' own window (the map then). Both answer
 -- alike: a canvas the size of the map's art, scaled by the zoom, with the map shown, the zoom and the pin
 -- levels. Everything here goes by the one in use, and a layer (MapLayer) or a frame over the map (Over)
 -- moves to the other when that changes, so what is drawn there shows whichever draws the map.

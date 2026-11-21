@@ -62,10 +62,10 @@
 --   Shy.Way.With(world, north, west, toNorth, toWest, fall, glide, water [, soon])   -- ... as though so (yards, yards, bool)
 --        soon: as Ask (nil and "working" while it is worked out, a frame's share at a time); else on the spot
 --   Shy.Way.Moves()                                        -- yards a drop may be now, its spell; water walked, its spell
---   Shy.Way.Paths(), Shy.Way.SetPaths(mode)                -- how this character's ways keep to the roads: "never" (the
---                                                              -- shortest, as it comes), "auto" (where what lives off them
---                                                              -- is their level or higher), "always"; off one but near the
---                                                              -- goal, a way goes round by one
+--   Shy.Way.Paths(), Shy.Way.SetPaths(mode)                -- how this character's ways keep to the roads: "high" (as it
+--                                                              -- comes: where what lives off them is 5 levels above them
+--                                                              -- or more), "auto" (... is their level or higher), "always",
+--                                                              -- "never" (the shortest); near the goal a way leaves them
 --   Shy.Way.Roads()                                        -- false where ways don't keep to roads now, else the mode
 --   Shy.Way.Up(world)                                      -- the height (yards) of the floor the player is on, as
 --                                                              -- followed (T.Saw); nil while not known there
@@ -1355,12 +1355,16 @@ local function Begin(data, key, goals, lead, level, world, on, up)
 	-- (Kept to the roads: Tier.Toll.)
 	local kept = Tier.Kept()
 	local roads = kept and Tier.RoadsOf(world, data)
-	if roads then
+	-- (Only where it's dangerous: by what lives round each place, for the character's side. A world that tells
+	-- nothing of it: everywhere for whoever asked to be kept to them there ("auto"), nowhere as it comes ("high":
+	-- nothing is known to be too high).)
+	local lives = roads and kept ~= "always" and roads.levels and roads.levels[UnitFactionGroup("player") or ""]
+	if lives and next(lives) == nil then lives = nil end
+	if roads and (lives or kept ~= "high") then
 		search.roads, search.free, search.real, search.realFor = roads, Tier.Free(data, goals), {}, {}
-		-- (Only where it's dangerous: by what lives round each place, for the character's side. A world that
-		-- tells nothing of it, everywhere.)
-		local lives = kept == "auto" and roads.levels and roads.levels[UnitFactionGroup("player") or ""]
-		if lives and next(lives) ~= nil then search.lives, search.me = lives, UnitLevel("player") or 1 end
+		-- (search.me: the level from which what lives there is a danger: the character's own, or as it comes
+		-- ROAD_ABOVE over it.)
+		if lives then search.lives, search.me = lives, (UnitLevel("player") or 1) + (kept == "high" and Tier.ROAD_ABOVE or 0) end
 	end
 	local ground = world and Tier.GroundOf(world, data)
 	for index = 1, #goals, 2 do
@@ -2113,15 +2117,17 @@ local BIT = { 1, 2, 4, 8, 16, 32, 64, 128 }
 -- Whoever keeps to the roads (Shy.Way.SetPaths) is led along them: to a search every step off a road takes
 -- ROAD_OFF times as long, so a way leaves a road only where going round by it takes that much longer, or
 -- within ROAD_FREE yards of where it goes (the quest is off the road). A level up (a bridge, an upper
--- floor) is never off one. Kept to them only where it's dangerous ("auto", as it comes), a step off a road
--- costs that only where something that would attack the character, of their level or higher, lives within
--- reach (Tier.Safe): where everything is below them, the way is the shortest. The seconds a way is said to
+-- floor) is never off one. Kept to them only where it's dangerous, a step off a road costs that only where
+-- something that would attack the character lives within reach (Tier.Safe), elsewhere the way is the shortest:
+-- as it comes ("high") something ROAD_ABOVE levels over them or more, land they have no business crossing;
+-- asked for ("auto"), something of their level or higher. The seconds a way is said to
 -- take are those it takes (Tier.Real). T.data.roads[world] (ShyWay_Ground_<world>\Roads.lua): { col, row,
 -- cols, rows, tiles = { [n] = text }, levels = { Alliance = { [n] = text }, Horde = ... } }, tiles numbered as
 -- the nodes'; a road tile a bit a cell, row after row from the north-west, the lowest bit of a byte first;
 -- a levels tile a byte a node, row after row: the highest level of what attacks that side within reach
 -- (0: nothing; a tile left out: nothing anywhere in it).
 Tier.ROAD_OFF = 2.5
+Tier.ROAD_ABOVE = 5            -- levels over the character: what is this far above them or more is a danger as it comes ("high")
 Tier.ROAD_FREE = 250           -- yards round a goal (Close.GOAL's: what is that near is gone to floor by floor)
 Tier.ROAD_LEAST = 4            -- road cells of a node's 64, at the least, for a road to run through it
 Tier.chain = {}                -- (the keys of a way, Tier.Real)
@@ -2230,8 +2236,8 @@ function Tier.Free(data, goals)
 end
 
 -- Whether a node is no danger to a search kept to the roads only where it's dangerous (search.lives: the
--- levels tiles of the character's side; search.me: their level): nothing there that attacks them is their
--- level or higher. Kept to the roads everywhere (no search.lives), never.
+-- levels tiles of the character's side; search.me: the level a danger begins at): nothing there that attacks
+-- them is that level or higher. Kept to the roads everywhere (no search.lives), never.
 function Tier.Safe(search, row, col)
 	local lives = search.lives
 	if not lives then return false end
@@ -2355,13 +2361,14 @@ function Tier.CellToll(job, row, col, level)
 	return Tier.Off(job, row, col, level) and Tier.ROAD_OFF or 1
 end
 
--- How this character's ways keep to the roads now: false (they don't, or they are dead), "always", or "auto"
--- (where it's dangerous, Tier.Safe); then a number that changes with it (and with their level, where that counts).
+-- How this character's ways keep to the roads now: false (they don't, or they are dead), "always", or "high" or
+-- "auto" (where it's dangerous, Tier.Safe: what is too high for them, or their level and higher); then a number
+-- that changes with it (and with their level, where that counts).
 function Tier.Kept()
 	local mode = T.Paths()
 	if mode == "never" or Tier.dead then return false, 0 end
 	if mode == "always" then return "always", 1 end
-	return "auto", 2 + (UnitLevel("player") or 0) * 4
+	return mode, (mode == "high" and 3 or 2) + (UnitLevel("player") or 0) * 4
 end
 
 -- The ticks a way from a key to the goal takes, where its search keeps to roads and so knows only what its
@@ -4851,28 +4858,30 @@ function T.SetWater(on)
 	Moves()
 end
 
--- Shy.Way.Paths() -> how this character's ways keep to the roads (Roads, above): "never" (the shortest, as
--- it comes), "auto" (where it's dangerous) or "always". Shy.Way.SetPaths(mode): so (ShyWayDB.roads, by
--- character). Shy.Way.Roads() -> false where they don't now, else "auto" or "always". SHY_TERRAIN when it
--- changes, and at a level gained while it is "auto". Setup puts it back to the shortest.
+-- Shy.Way.Paths() -> how this character's ways keep to the roads (Roads, above): "high" (as it comes: where
+-- what lives off them is too high for the character, the shortest elsewhere), "auto" (where it is their level
+-- or higher), "always" or "never" (the shortest everywhere). Shy.Way.SetPaths(mode): so (ShyWayDB.roads, by
+-- character; nothing kept for as it comes). Shy.Way.Roads() -> false where they don't now, else "high", "auto"
+-- or "always". SHY_TERRAIN when it changes, and at a level gained while it goes by their level. Setup puts it
+-- back to as it comes.
 function T.Paths()
 	local kept, guid = T.Saved().roads, UnitGUID("player")
 	local mode = type(kept) == "table" and guid ~= nil and kept[guid] or nil
 	if mode == true then return "always" end
-	return (mode == "always" or mode == "auto") and mode or "never"
+	return (mode == "always" or mode == "auto" or mode == "never") and mode or "high"
 end
 function T.SetPaths(mode)
-	if mode ~= "always" and mode ~= "auto" then mode = "never" end
+	if mode ~= "always" and mode ~= "auto" and mode ~= "never" then mode = "high" end
 	if mode == T.Paths() then return end
 	local saved, guid = T.Saved(), UnitGUID("player")
 	if not guid then return end
 	if type(saved.roads) ~= "table" then saved.roads = {} end
-	saved.roads[guid] = mode ~= "never" and mode or nil
+	saved.roads[guid] = mode ~= "high" and mode or nil
 	Tier.News("roads")
 end
--- (A step of setup with no page of its own: run, it leads the character the shortest way.)
+-- (A step of setup with no page of its own: run, the character is led as it comes.)
 if Shy.Setup then
-	Shy.Setup.Step({ id = "paths", order = 90, title = "Paths", Run = function() T.SetPaths("never") end })
+	Shy.Setup.Step({ id = "paths", order = 90, title = "Paths", Run = function() T.SetPaths("high") end })
 end
 function T.Roads()
 	return (Tier.Kept())
@@ -4881,7 +4890,8 @@ Tier.levelled = CreateFrame("Frame")
 Tier.levelled:RegisterEvent("PLAYER_LEVEL_UP")
 Tier.levelled:SetScript("OnEvent", function()
 	-- (A moment on: the level the game says is the new one by then.)
-	if T.Paths() == "auto" then C_Timer.After(1, function() Tier.News("roads") end) end
+	local mode = T.Paths()
+	if mode == "auto" or mode == "high" then C_Timer.After(1, function() Tier.News("roads") end) end
 end)
 
 -- Every second: where the player is, unless on a flight or dead. (The game tells no move of a place: a lift
@@ -5094,7 +5104,8 @@ function T.Stats()
 end
 
 if Shy.Counters then
-local ROADS = { auto = "kept to where mobs off them are your level or higher", always = "kept to", never = "not kept to" }
+local ROADS = { high = "kept to where mobs off them are " .. Tier.ROAD_ABOVE .. " levels above you or more",
+	auto = "kept to where mobs off them are your level or higher", always = "kept to", never = "not kept to" }
 local groundLabels = {}
 Shy.Counters("Ground", function(row)
 	local s = T.Stats()

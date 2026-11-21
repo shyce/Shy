@@ -26,6 +26,9 @@
 -- you are in glows in your color, its name said at the sheet's top (`room`, its owner's word).
 -- A dungeon whose data has no way in (one only this game has) shows where you came in yourself (J.Door), on
 -- the floor that holds it, the nearest by height.
+-- For the newest dungeons a second file (Data\DungeonRoutes.lua, another's work under its own notice) says
+-- roughly where each boss stands and where you come in: those bosses and that way in are marks that say they
+-- are rough, and where you met a boss or came in yourself, that stands instead.
 -- Every dungeon has the way through it: from the way in boss to boss in the order they are met, walked over the
 -- dungeon's own ground when the data was made, and drawn as the family draws a way on any map (Shy.Maps, a
 -- journey's even line in your color): the ways out to the bosses off it finer and fainter, the legs to bosses
@@ -43,10 +46,11 @@
 --                                ground the first shows) }, w, h (that box's) } or nil
 --   Floors.FloorOf(map, boss)    the floor a boss (by its place in the order) stands on, or nil
 --   Floors.RoomFloor(map, name)  the floor a room or a named part of the ground is on (the first that has it)
---   Floors.Spots(map)            { [floor] = { { index, x, y, met = "looted" | a part's name | nil } } }, { [boss]
---                                = true }: where every boss stands, by the data and by what was met in play
+--   Floors.Spots(map)            { [floor] = { { index, x, y, met = "looted" | a part's name | nil, rough } } },
+--                                { [boss] = true }: where every boss stands, by the data, by what was met in play,
+--                                and roughly by the routes
 --   Floors.Door(map)             floor, x, y: where you came in yourself (J.Door), on the floor that holds it; nil
---                                where the data has a way in, or you never came in
+--                                where the data has a way in (bar a rough one), or you never came in
 --   Floors.Label(map, floor, short)  what a floor goes by: its place's or its wing's name ("Cathedral 2" where
 --                                the wing has more floors than one), "Ground" and "Below 2" where some lie
 --                                under the ground, else "Floor 2"; short: its number alone
@@ -146,6 +150,9 @@ function Floors.Of(map)
 		return nil
 	end
 	found = {}
+	-- (A way in the data has, on any floor, stands for a rough one.)
+	local exact = false
+	for _, raw in ipairs(data) do exact = exact or raw.door ~= nil end
 	for i, raw in ipairs(data) do
 		local floor = { w = raw.w, h = raw.h, tiles = {}, bosses = {}, bare = {},
 			alone = raw.alone == 1, name = raw.name, under = raw.under == 1, wing = raw.wing }
@@ -173,6 +180,19 @@ function Floors.Of(map)
 		if raw.door then
 			local n = Numbers(raw.door, ":")
 			floor.door = { x = n[1], y = n[2] }
+		end
+		-- What the rough routes say of it: bosses nothing else places, and the way in.
+		floor.rough = {}
+		local rough = ns.data.dungeonRoutes and ns.data.dungeonRoutes[map] and ns.data.dungeonRoutes[map][i]
+		if rough then
+			for part in (rough.bosses or ""):gmatch("[^;]+") do
+				local n = Numbers(part, ":")
+				if #n == 3 then floor.rough[#floor.rough + 1] = { index = n[1], x = n[2], y = n[3], rough = true } end
+			end
+			if rough.door and not exact then
+				local n = Numbers(rough.door, ":")
+				floor.door = { x = n[1], y = n[2], rough = true }
+			end
 		end
 		-- Where it lies in the world (a place noted in play is set on it by this), and its parts' names.
 		local from = raw.from and Numbers(raw.from, ":") or NONE
@@ -390,6 +410,15 @@ function Floors.Spots(map)
 			end
 		end
 	end
+	-- (Roughly where the routes say, for a boss neither the data nor your play places.)
+	for i, floor in ipairs(all) do
+		for _, spot in ipairs(floor.rough) do
+			if not placed[spot.index] then
+				spots[i][#spots[i] + 1] = spot
+				placed[spot.index] = true
+			end
+		end
+	end
 	return spots, placed
 end
 
@@ -398,7 +427,7 @@ function Floors.Door(map)
 	local at = all and J.Door(map)
 	if not at then return nil end
 	for _, floor in ipairs(all) do
-		if floor.door then return nil end
+		if floor.door and not floor.door.rough then return nil end
 	end
 	local best, x, y, far
 	for i, floor in ipairs(all) do
@@ -846,12 +875,22 @@ function Floors.Pane(parent)
 		local book = J.Book(pane.map)
 		local cameFloor, cameX, cameY = Floors.Door(pane.map)
 		local function Marks(index, floor)
-			local wayIn = floor.door or (cameFloor == index and { x = cameX, y = cameY, came = true })
+			-- (Where you came in yourself stands for a rough way in, on whichever floor that is.)
+			local wayIn
+			if cameFloor then
+				wayIn = cameFloor == index and { x = cameX, y = cameY, came = true } or nil
+			else
+				wayIn = floor.door
+			end
 			if wayIn then
 				local mark = Put(floor.ox + wayIn.x, floor.oy + wayIn.y)
 				mark.index, mark.way, mark.floor, mark.name = nil, nil, index, "The way in"
 				mark.under = pane.door and ("From " .. pane.door) or nil
-				if wayIn.came then mark.under = (mark.under and (mark.under .. "\n") or "") .. "Where you came in" end
+				if wayIn.came then
+					mark.under = (mark.under and (mark.under .. "\n") or "") .. "Where you came in"
+				elseif wayIn.rough then
+					mark.under = (mark.under and (mark.under .. "\n") or "") .. "Roughly here"
+				end
 			end
 			for _, door in ipairs(floor.doors) do
 				local mark = Put(floor.ox + door.x, floor.oy + door.y)
@@ -879,7 +918,9 @@ function Floors.Pane(parent)
 					mark.under = mark.under .. "\nNext"
 				end
 				-- (One the data has no place for: where you met it, and how well that is known.)
-				if spot.met == "looted" then
+				if spot.rough then
+					mark.under = mark.under .. "\nRoughly here, from guides"
+				elseif spot.met == "looted" then
 					mark.under = mark.under .. "\nWhere you looted it"
 				elseif spot.met then
 					mark.under = mark.under .. "\nYou met it in " .. spot.met

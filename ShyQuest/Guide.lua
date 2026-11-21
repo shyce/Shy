@@ -916,6 +916,8 @@ end
 -- (ChainGone), its accept skipped, passed by where the player chose to go on from (saved.left), or handed in
 -- here never accepted; or so for a quest it needs first.
 local function Gone(guide, saved, quest, index, depth)
+	-- (Set aside while a vendor is out of what it needs, Stock.lua: what waits on it waits with it.)
+	if ns.Stock and not L.Done(quest) and ns.Stock.Aside(quest) then return true end
 	if L.Has(quest) or L.Done(quest) then return false end
 	if saved.dropped[quest] or ChainGone(quest, guide) then return true end
 	local asks = Asks(guide)
@@ -941,8 +943,11 @@ end
 local function Dropped(saved, element, index, guide)
 	local command = element.command
 	local list = Ids(element)
+	-- (A quest set aside while a vendor is out of what it needs, Stock.lua: its steps stand aside with it.)
+	local stock = ns.Stock
 	if command == "collect" then
 		local quest = list[3]
+		if quest and quest > 0 and stock and stock.Aside(quest) then return index end
 		if not quest or quest <= 0 or L.Has(quest) or L.Done(quest) then return nil end
 		local by = saved.dropped[quest]
 		if by and by ~= index then return by end
@@ -954,6 +959,7 @@ local function Dropped(saved, element, index, guide)
 	-- "Only if in the log" lines (element.held) are Judge's to answer.
 	if not QUEST[command] or element.held then return nil end
 	local id = list[1]
+	if id and stock and not L.Done(id) and stock.Aside(id) then return index end
 	if not id or L.Has(id) or L.Done(id) then return nil end
 	local by = saved.dropped[id]
 	if by and by ~= index then return by end
@@ -1121,10 +1127,20 @@ local function Place(element)
 	return at
 end
 
+-- Whether a step is ever this character's: its class, race, side and starting place fit (the level it waits
+-- for comes in time).
+local function Ours(step)
+	local cond = step.cond
+	if not cond or cond == "" then return true end
+	if not facts then ReadFacts() end
+	return AppliesAll((cond:gsub("!?%d+", "")))
+end
+
 -- A dungeon far from a guide. Its steps go into every guide it can be run from, even one that never comes
 -- near it (at that guide's head); when none of them lies within DETOUR_NEAR yards of any of the guide's own
--- steps, they are marked `far` (with the steps for when it is not run), and "At my level" leaves it out of
--- that guide (Wanted). guide.far: short name -> true; guide.detours: the indexes of its dungeons' steps.
+-- steps this character is ever given (another class's errand there brings it no nearer), they are marked
+-- `far` (with the steps for when it is not run), and "At my level" leaves it out of that guide (Wanted).
+-- guide.far: short name -> true; guide.detours: the indexes of its dungeons' steps.
 function FarDetours(guide)
 	local DETOUR_NEAR = 3000
 	guide.far, guide.detours = false, {}
@@ -1139,7 +1155,7 @@ function FarDetours(guide)
 			end
 		end
 		if short then marked[#marked + 1] = { step, short } end
-		local where = home
+		local where = Ours(step) and home or {}
 		if short and not alone then
 			where = theirs[short] or {}
 			theirs[short] = where
@@ -2879,6 +2895,17 @@ function G.BackTo(index)
 	local main = Head()
 	Reopen(Saved(guide), index, main and main.step.index)
 	Moved()
+	return true
+end
+
+-- Reopens a step of the current guide for the next build to come to: nothing is built now, so it can be asked
+-- for while the route is being built (Stock.lua).
+function G.Reopen(index)
+	local guide = G.current
+	if not guide or not guide.raw[index] then return false end
+	local main = Head()
+	Reopen(Saved(guide), index, main and main.step.index)
+	ns.Refresh()
 	return true
 end
 

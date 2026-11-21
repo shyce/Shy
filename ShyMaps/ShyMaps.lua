@@ -1,13 +1,13 @@
--- ShyMaps: the world map drawn by a view of its own inside the game's map window: no fog, smooth zoom
--- and pan, the view kept between opens, the places that matter and friends who use it.
+-- ShyMaps: the world map drawn by a view of its own in a window of its own (the map key's, while it is on): no
+-- fog, smooth zoom and pan, the view kept between opens, the places that matter and friends who use it.
 -- API (Shy.addons.Maps):
---   :IsOn()          the view is in use (else the game's own map shows)
+--   :IsOn()          the view is in use (else the game's own map is the map)
 --   :View()          the view while in use, else nil. It answers as the game's map canvas does:
 --                    GetCanvas(), GetCanvasContainer(), GetCanvasScale(), GetCanvasZoomPercent(), GetMapID(),
 --                    GetNormalizedCursorPosition(), GetPinFrameLevel(name), GetPinFrameLevelsManager(), IsShown()
 --                    A frame laid on its canvas stands on the view as one on the game's canvas would on
---                    the game's map (the game's canvas is out of sight while the view is in use). On the
---                    terrain look's world's map, which shows the ground alone, the canvas fades out.
+--                    the game's map. On the terrain look's world's map, which shows the ground alone, the
+--                    canvas fades out.
 --                    GetOverContainer(): where a note or key over the map's window goes. The view may lie
 --                    over the whole screen instead, faint and taking no mouse (the overlay, open while the
 --                    window is closed): the canvas goes with it, what is over the window stays there.
@@ -16,7 +16,7 @@
 --   :OnView(fn)      fn(why) when the view shows, changes map ("map"), zoom ("scale"), size ("size"), pans
 --                    ("pan"), opens ("open"), closes ("close") or is taken into use or given up ("use")
 --   :Open(map)       the open map goes to `map`; closed, it opens there next time
---   :MapMenu(root)   the map's menu while the view is in use (what shows on it), which the game's filter
+--   :MapMenu(root)   the map's menu while the view is in use (what shows on it), which the window's menu
 --                    button opens
 --   :Friends()       every friend online: { name, level, className, class, zone, map, x, y, placed }, on `map`
 --                    at x, y where they answered from, else at the middle of the zone the list gives
@@ -28,7 +28,7 @@
 --                    of its own): on a dungeon by its instance map (and one of its bosses, by its place in the
 --                    order), on every dungeon with none
 --   :Drops(item)     where an item drops: { { map, name (the dungeon's), boss (its name, nil for the rest of the
---                    dungeon), chance (in a hundred, or nil), source ("seen" | "classic") } }, or nil
+--                    dungeon), chance (in a hundred, or nil), source ("forever" | "seen" | "classic") } }, or nil
 -- Bus: SHY_MAPS (on): the view was taken into use or given up.
 
 local ADDON, ns = ...
@@ -67,7 +67,6 @@ local T = Shy:NewAddon(ADDON, {
 		notes = {},         -- { id, world, north, west, map, x, y, text, ink, at }
 		drawings = {},      -- { world, ink, north, west, north, west, ... }
 		overlay = false,    -- the map faintly over the whole screen while its window is closed, clicks passing through
-		window = true,      -- the map's key opens the map in a window of its own, sized from any edge (Window.lua)
 		windowScale = 1,    -- that window's scale
 		windowHome = 0,     -- the home the window was last made at (Window.lua's L.home): a size kept from before it is let go of
 		quietInside = false,   -- inside an instance, the map without friends, guild, boats, notes or other addons' marks
@@ -128,25 +127,17 @@ function T:Frame(map, points)
 	for _, point in ipairs(points or {}) do
 		flat[#flat + 1], flat[#flat + 2] = point.x, point.y
 	end
-	if View.Map() == map then return View.Frame(flat) end
-	-- (Another map: framed once the view stands on it, the frame after.)
-	View.Show(map)
-	C_Timer.After(0, function()
-		if View.Map() == map then View.Frame(flat) end
-	end)
-	return true
+	-- (Another map: shown whole, not as it was last left, and framed at once. Left drawn back, or with the view
+	-- following you elsewhere, it would be another map again by the frame after, and nothing framed.)
+	if View.Map() ~= map and not View.Show(map, "whole") then return false end
+	return View.Frame(flat)
 end
 
--- The map opened on `map` as you use it (Shy.Maps.Open): in its window of its own while that is your map, else the
--- view turned where the game's map is open already. False where the game's map is to open (it is not ours to open).
+-- The map opened on `map` as you use it (Shy.Maps.Open): in its window. False while the view is off (the game's map
+-- is then yours, and not ours to open).
 function T:ShowMap(map)
 	if not (self:IsOn() and ns.Window and ns.View) then return false end
-	if ns.Window.Shown() or WorldMapFrame:IsShown() then
-		if map then ns.View.Open(map) end
-		return true
-	end
-	if not self.db.window then return false end
-	ns.Window.Set(true)
+	if not ns.Window.Shown() then ns.Window.Set(true) end
 	if map then ns.View.Open(map) end
 	return true
 end
@@ -179,7 +170,7 @@ ns.SWITCHES = {
 	{ key = "coords", label = "Coordinates" },
 }
 
--- The map's one menu while the view is in use, on the game's filter button: ShyQuest's rows where it is
+-- The map's one menu while the view is in use, on the window's menu button: ShyQuest's rows where it is
 -- loaded, every layer, how unexplored ground looks, and the rest of the settings.
 function T:MapMenu(root)
 	if not self:IsOn() then return end
@@ -209,7 +200,6 @@ function T:MapMenu(root)
 		entry:SetEnabled(T.db.style ~= "terrain")
 	end
 	root:CreateDivider()
-	if ns.Window and ns.Window.MenuRow then ns.Window.MenuRow(root) end
 	root:CreateButton("All map settings", function() T:OpenOptions() end)
 end
 
@@ -304,6 +294,8 @@ function T:OnLoad()
 	self:Once("sharedOn", function(settings)
 		settings.friends, settings.share = true, true
 	end)
+	-- (The map's own window is the map now: the switch that chose between it and the game's is gone.)
+	self.db.window = nil
 	self:RegisterOptions(ns.CreateOptions())
 end
 
@@ -389,7 +381,7 @@ SlashCmdList.SHYMAPS = function(input)
 		print("  /shymaps  - open options")
 		print("  /shymaps on | off  - use this map or the default one")
 		print("  /shymaps overlay  - the map over the screen, or not")
-		print("  /shymaps window  - the map in a window of its own, or not")
+		print("  /shymaps window  - open or close the map")
 		print("  /shymaps dungeons [name]  - bosses and loot")
 		print("  /shymaps forget  - forget where every map was left")
 		print("  /shymaps friends  - who is on the list, asked, answering")

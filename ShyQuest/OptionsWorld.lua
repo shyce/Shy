@@ -65,11 +65,11 @@ function ns.MoreOptions(panel, group, y)
 	local telling = UI.Text(panel, "Tell my party in chat when I", 13, false, UI.colors.text)
 	At(telling, panel, RIGHT, y - 64)
 	local tells = {
-		{ "objectives", "finish an objective", "Sends a line like \"Gnoll Paw: 8/8 for [Patrolling Westfall]\"." },
+		{ "objectives", "finish an objective", "Sends a line like \"<Shy> Gnoll Paw: 8/8 for [Patrolling Westfall]\"." },
 		{ "starts", "loot an item that starts a quest", "Names the item and its quest. When solo, you get the line in your own chat instead." },
-		{ "accepted", "accept a quest", "Sends \"Accepted [quest]\"." },
-		{ "handedIn", "turn one in", "Sends \"Turned in [quest]\"." },
-		{ "abandoned", "abandon one", "Sends \"Abandoned [quest]\"." },
+		{ "accepted", "accept a quest", "Sends \"<Shy> Accepted [quest]\"." },
+		{ "handedIn", "turn one in", "Sends \"<Shy> Turned in [quest]\"." },
+		{ "abandoned", "abandon one", "Sends \"<Shy> Abandoned [quest]\"." },
 	}
 	for i, tell in ipairs(tells) do
 		At(group:Checkbox(panel, tell[2], Get("party", "tell", tell[1]), Set("party", "tell", tell[1]), { desc = tell[3] }),

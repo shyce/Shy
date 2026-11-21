@@ -521,6 +521,10 @@ local function Now(coming)
 		menu = Console.RowFit(Natural(_G.MicroMenu, MENU_NATURAL), now.map.width - 2 * Console.PAD, Range(System.MicroMenu, Enum.EditModeMicroMenuSetting.Size)),
 		bags = not now.bagsGone and now.bagsRow or nil,
 	}
+	-- As they stand: the size the layout in use keeps each row at. A setup writes it for the map as it was then,
+	-- and Arrange.lua lays the rows by it (Console.Column's `fit`), whatever would be written for the map now.
+	now.column.menu.stands = L.Held(System.MicroMenu, Enum.EditModeMicroMenuSetting.Size)
+	now.bagsRow.stands = L.Held(System.Bags, Enum.EditModeBagsSetting.Size)
 	-- The menu's drawer (Drawers.lua): with it on, a pull stands over the rows and, tucked, the column keeps
 	-- only the pull's room (the rows slide down out of it over what hangs below); pinned out they take
 	-- their room. The layout has pull and rows under the map and is written for the drawer tucked (a setup
@@ -1886,6 +1890,20 @@ end
 local function Forget() held = nil end
 L.Forget = Forget
 
+-- A size slider's value as the console's layout keeps it while it is the one in use, in percent (Stored's way
+-- back: steps counted up from the slider's least); nil while another layout is in use, or one without it.
+function L.Held(system, setting)
+	if setting == nil then return nil end
+	local info = Layouts()
+	local layout = info.layouts[info.activeLayout - Presets()]
+	local entry = IsMine(layout) and Find(layout, system) or nil
+	local value = entry and Value(entry, setting)
+	if type(value) ~= "number" then return nil end
+	local slider = Slider(system, setting)
+	if not slider.ConvertValue then return value end
+	return slider.minValue + value * (slider.stepSize or 1)
+end
+
 -- ShyCore's Shy.Role: the tank and healer layouts say whose screen this is while one is in use, so threat reads
 -- as theirs with no group role given. Told a frame later: the game may be applying a layout from inside a call.
 local function TellRole()
@@ -2513,6 +2531,8 @@ function L.SetUp(size, style, opts)
 	ns.char.barsAt = nil   -- and the tracked bars' home goes back to its planned place
 	local slim = L.Slim()
 	local now = Now(Furnish(step, opts.pieces ~= false, slim))
+	-- (The rows as the layout being written keeps them, not as the one before it did.)
+	now.column.menu.stands, now.bagsRow.stands = nil, nil
 	SlimDisplay(slim)
 	if opts.bags ~= nil then L.WithBags(now, opts.bags) end
 	if opts.drawer ~= nil then

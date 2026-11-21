@@ -41,7 +41,6 @@ local HUB = 400              -- yards: a hand-in this near brings the character 
 local BACK = 3               -- hand-ins to come back for that make an inn worth being home
 local SAME = 300             -- yards: home this near an inn is that inn
 local REDO = 400             -- yards walked before what the stone saves is worked out whole again
-local RUN = 7                -- yards a second on foot
 
 local put                    -- "Not now": what the stone was not used for
 
@@ -58,23 +57,24 @@ end
 -- Seconds from one place to another, a journey worked out whole once and kept while the journeys stand (R.forgotten
 -- counts a flight learned, a fall or water walked, the roads kept to, a carrying off). The same legs come round at
 -- every refresh of the guide's places. A journey that is settled is kept; one still being worked out is kept LOOSE
--- seconds as it stands, then asked again. Then whether it was settled.
+-- seconds as it stands, then asked again. Then whether it was settled, and whether it is known: the journey's
+-- own seconds, not the least a walk too long to work out can take (legs.rough) nor a guess where there is no way.
 local legs = { gen = -1, n = 0 }
 local LEGS_MOST = 600
 local LOOSE = 5
 local function Travel(continent, north, west, toNorth, toWest)
-	if legs.gen ~= R.forgotten or legs.n > LEGS_MOST then legs = { gen = R.forgotten, n = 0, loose = {} } end
+	if legs.gen ~= R.forgotten or legs.n > LEGS_MOST then legs = { gen = R.forgotten, n = 0, loose = {}, rough = {} } end
 	local key = ("%d:%.0f:%.0f>%.0f:%.0f"):format(continent, north, west, toNorth, toWest)
 	local seconds = legs[key]
-	if seconds then return seconds, true end
+	if seconds then return seconds, true, not legs.rough[key] end
 	local loose, now = legs.loose[key], GetTime()
-	if loose and now - loose.at < LOOSE then return loose.seconds, false end
+	if loose and now - loose.at < LOOSE then return loose.seconds, false, false end
 	local final, settled
 	seconds, final, settled = R.Travel(continent, north, west, toNorth, toWest)
 	if final or settled then
-		legs[key], legs.loose[key] = seconds, nil
+		legs[key], legs.loose[key], legs.rough[key] = seconds, nil, not final or nil
 		if not loose then legs.n = legs.n + 1 end
-		return seconds, true
+		return seconds, true, final == true
 	end
 	if loose then
 		loose.seconds, loose.at = seconds, now
@@ -82,7 +82,7 @@ local function Travel(continent, north, west, toNorth, toWest)
 		legs.loose[key] = { seconds = seconds, at = now }
 		legs.n = legs.n + 1
 	end
-	return seconds, false
+	return seconds, false, false
 end
 
 -- The nearest innkeeper of the character's side: { npc, map, x, y, yards }. Every innkeeper of the data is
@@ -184,16 +184,21 @@ local function Quit(root)
 end
 
 -- What the stone saves
--- Seconds sooner a place is reached from home than from another place, the cast taken off.
+-- Seconds sooner a place is reached from home than from another place, the cast taken off. Then whether that
+-- is known: both journeys settled, and the one from home its own seconds (the least it can take, taken from a
+-- walk that is known, is a saving nobody has). And whether both are settled: asking again gives the same.
 local function Saving(home, north, west, toNorth, toWest)
-	local walked = Travel(home.continent, north, west, toNorth, toWest)
-	local hearthed = Travel(home.continent, home.north, home.west, toNorth, toWest)
-	return walked - hearthed - CAST
+	local walked, settled = Travel(home.continent, north, west, toNorth, toWest)
+	local hearthed, landed, known = Travel(home.continent, home.north, home.west, toNorth, toWest)
+	settled = settled and landed
+	return walked - hearthed - CAST, settled and known, settled
 end
 -- What the stone saves on the way to the stop that leads, worked out once for that stop and home: each is two
 -- journeys worked out whole, and it was asked at every errand fitting (a kill, a loot). Again only for another
--- stop or home, somewhere else at once (R.Forget), or a good walk nearer or farther.
+-- stop or home, somewhere else at once (R.Forget), or a good walk nearer or farther. Then whether it is known
+-- (Saving): while a journey of it is being worked out it is not, nor kept, and is asked again (leadOpen).
 local leadSaved = {}
+local leadOpen
 local function LeadSaving(home, lead)
 	local key = home.name .. ":" .. lead.north .. ":" .. lead.west
 	local away = W.Between(W.north, W.west, lead.north, lead.west)
@@ -201,10 +206,12 @@ local function LeadSaving(home, lead)
 	local kept = leadSaved[key]
 	-- (Walking nearer or farther moves what the stone saves by the seconds of the walk: it is worked out whole,
 	-- two journeys, again every REDO yards, and between them moved by the walk.)
-	if kept and math.abs(away - kept.away) <= REDO then return kept.saved - (kept.away - away) / RUN end
-	local saved = Saving(home, W.north, W.west, lead.north, lead.west)
-	leadSaved[key] = { saved = saved, away = away }
-	return saved
+	-- (... at the character's pace: Shy.Way.Pace.)
+	if kept and math.abs(away - kept.away) <= REDO then return kept.saved - (kept.away - away) / Shy.Way.Pace(), kept.known end
+	local saved, known, settled = Saving(home, W.north, W.west, lead.north, lead.west)
+	leadOpen = not settled or nil
+	if settled then leadSaved[key] = { saved = saved, away = away, known = known } end
+	return saved, known
 end
 
 -- What lies ahead: the guide's next places, each with the seconds it takes. Read again whenever the guide is
@@ -278,10 +285,11 @@ local function Work(best, found, home, upTo)
 	while best.next <= #steps do
 		local step = steps[best.next]
 		if best.saved and step.walk - CAST < best.saved then break end
-		local hearthed, settled = Travel(home.continent, home.north, home.west, step.to.north, step.to.west)
+		local hearthed, settled, known = Travel(home.continent, home.north, home.west, step.to.north, step.to.west)
 		if not settled then best.loose = true end
 		local saved = step.walk - hearthed - CAST
-		if not best.saved or saved > best.saved or (saved == best.saved and step.order < best.order) then
+		-- (Only a way from home that is known is a use of the stone: Saving.)
+		if known and (not best.saved or saved > best.saved or (saved == best.saved and step.order < best.order)) then
 			best.saved, best.index, best.order = saved, step.to.index, step.order
 		end
 		best.next = best.next + 1
@@ -334,9 +342,19 @@ do
 	local function Again()
 		waiting = false
 		for _, best in pairs(way.best or {}) do Redo(best) end
+		-- (What the stone saves on the way to what leads was asked before its journeys were known: asked again.)
+		if leadOpen then
+			leadOpen = nil
+			ns.RefreshErrands()
+		end
 	end
 	Shy:On("SHY_TERRAIN", function(why)
 		if why ~= "found" or waiting then return end
+		if leadOpen then
+			waiting = true
+			C_Timer.After(LOOSE, Again)
+			return
+		end
 		for _, best in pairs(way.best or {}) do
 			if best.done and best.loose and not best.redo then
 				waiting = true
@@ -348,8 +366,9 @@ do
 end
 
 -- Seconds saved, the step it is before, and how many of the character's steps on that is; nil while it is being
--- worked out. Then whether the answer is loose: made of journeys still being worked out (after a reload, rough
--- walks where a flight will be found), and worked out again behind what shows.
+-- worked out, and where no place ahead has a way from home that is known. Then whether the answer is loose: made
+-- of journeys still being worked out (after a reload, rough walks where a flight will be found), and worked out
+-- again behind what shows. And true once it is worked out.
 local function Ahead(home)
 	local found, main = Way()
 	if not found then return nil end
@@ -367,7 +386,9 @@ local function Ahead(home)
 		Redo(best)
 	end
 	local away = best.index and (G.Number(best.index) or 0) - (G.Number(main.step.index) or 0) or nil
-	return best.saved, best.index, away, best.loose == true
+	-- (Worked out, with nothing saved: no place ahead has a way from home that is known. The last result says
+	-- it was worked out.)
+	return best.saved, best.index, away, best.loose == true, true
 end
 
 -- What to do with the stone now, for what leads:
@@ -385,8 +406,8 @@ local function Plan(lead)
 	local left = Cooling()
 	if left and left > WAIT then return nil end
 	if not (lead and lead.north and lead.continent == W.continent) then return nil end
-	local saved = LeadSaving(home, lead)
-	if saved < SAVES then return nil end
+	local saved, known = LeadSaving(home, lead)
+	if not known or saved < SAVES then return nil end
 	local what = lead and lead.who or "what comes next"
 	local best, index, away = Ahead(home)
 	if best and best >= SAVES and away and away > 0 and saved < best * BETTER then
@@ -485,11 +506,12 @@ local function Set(lead)
 	-- What the stone would save on the way ahead from here, over what it saves from home. Only on two whole
 	-- answers: with either still being worked out, or made of journeys that are (just after a reload), the
 	-- one that is ready would stand against nothing, and an inn be offered as home for a few seconds.
-	local fromHere, _, _, hereLoose = Ahead(there)
-	local fromHome, homeLoose
-	if home then fromHome, _, _, homeLoose = Ahead(home) end
-	local sure = fromHere ~= nil and not hereLoose and (not home or (fromHome ~= nil and not homeLoose))
-	local gain = sure and math.max(0, fromHere) - math.max(0, fromHome or 0) or 0
+	local fromHere, _, _, hereLoose, hereDone = Ahead(there)
+	local fromHome, homeLoose, homeDone
+	if home then fromHome, _, _, homeLoose, homeDone = Ahead(home) end
+	local sure = hereDone and not hereLoose and (not home or (homeDone and not homeLoose))
+	-- (From either, nothing where no way ahead is known from it: a home too far to reckon from saves nothing known.)
+	local gain = sure and math.max(0, fromHere or 0) - math.max(0, fromHome or 0) or 0
 	local back = inn.yards <= INN and Returns() or 0
 	if gain < REHOME and back < BACK then return nil end
 	return {

@@ -2,6 +2,8 @@
 -- floor (ShyDock's UnderSpan), its top a seam under it, everything in whole screen pixels. One height always: two
 -- bars split by a hairline, or one filling it, so the console is never laid out again when you start or stop
 -- watching a faction. Without the console it stands at the bottom of the screen's middle, as the game's bar did.
+-- It wears the theme's look as a slim piece does (the look's mini border), the bars inside the border: in by as
+-- much of it as leaves a bar room for its words, since the piece keeps its height in every look.
 --
 --   ns.Under.Room()      the height the console keeps for it (the piece and the seam under it), nil when not in use
 --   ns.Under.Refresh()   said again; ns.Under.Place() stood again (the console moved, the scale changed)
@@ -19,6 +21,7 @@ local K = {
 	text = 9,                -- the words' size
 	inset = 6,               -- from a bar's ends to its words
 	least = 3,               -- pixels: never thinner
+	thin = 7.5,              -- a bar inside a look's border keeps this much, in units: its words' room
 	seam = 4,                -- the gap under it, the console's seam
 	width = 1024,            -- without the console
 	hints = { { "left", "Shift: share" }, { "right", "Track" } },
@@ -103,10 +106,7 @@ end
 local function Build()
 	piece = CreateFrame("Frame", "ShyXPUnder", UIParent)
 	piece:SetFrameStrata("LOW")
-	piece.ground = piece:CreateTexture(nil, "BACKGROUND")
-	piece.ground:SetAllPoints()
-	UI.Paint(piece.ground, C.hud)
-	piece.edges = { Line(), Line(), Line(), Line() }
+	UI.Panel(piece, { hud = true, mini = true, slim = true, brackets = false, line = false })
 	piece.hairline = Line()
 	rows = { Row(), Row() }
 end
@@ -138,31 +138,29 @@ function U.Place()
 	piece:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
 	piece:SetSize(w, h)
 
-	local e = piece.edges
-	e[1]:ClearAllPoints(); e[1]:SetPoint("TOPLEFT"); e[1]:SetPoint("TOPRIGHT"); e[1]:SetHeight(px)
-	e[2]:ClearAllPoints(); e[2]:SetPoint("BOTTOMLEFT"); e[2]:SetPoint("BOTTOMRIGHT"); e[2]:SetHeight(px)
-	e[3]:ClearAllPoints(); e[3]:SetPoint("TOPLEFT"); e[3]:SetPoint("BOTTOMLEFT"); e[3]:SetWidth(px)
-	e[4]:ClearAllPoints(); e[4]:SetPoint("TOPRIGHT"); e[4]:SetPoint("BOTTOMRIGHT"); e[4]:SetWidth(px)
-
+	-- The bars inside the look's border, in whole pixels: a pixel at least, and no more than leaves a bar its words.
+	local border = UI.LookBorder(piece.shyLook)
+	local edge = math.max(1, math.min(math.floor(border / px + 0.5), bar + 1 - math.floor(K.thin / px + 0.5)))
+	local slim = bar + 1 - edge   -- a bar of two, in pixels
 	local one, two = rows[1], rows[2]
 	one.source, two.source = first, second
 	one:ClearAllPoints()
-	one:SetPoint("TOPLEFT", px, -px)
-	one:SetPoint("TOPRIGHT", -px, -px)
+	one:SetPoint("TOPLEFT", edge * px, -edge * px)
+	one:SetPoint("TOPRIGHT", -edge * px, -edge * px)
 	if second then
-		one:SetHeight(bar * px)
+		one:SetHeight(slim * px)
 		piece.hairline:ClearAllPoints()
-		piece.hairline:SetPoint("TOPLEFT", px, -(1 + bar) * px)
-		piece.hairline:SetPoint("TOPRIGHT", -px, -(1 + bar) * px)
+		piece.hairline:SetPoint("TOPLEFT", edge * px, -(edge + slim) * px)
+		piece.hairline:SetPoint("TOPRIGHT", -edge * px, -(edge + slim) * px)
 		piece.hairline:SetHeight(px)
 		piece.hairline:Show()
 		two:ClearAllPoints()
-		two:SetPoint("TOPLEFT", px, -(2 + bar) * px)
-		two:SetPoint("TOPRIGHT", -px, -(2 + bar) * px)
-		two:SetHeight(bar * px)
+		two:SetPoint("TOPLEFT", edge * px, -(edge + slim + 1) * px)
+		two:SetPoint("TOPRIGHT", -edge * px, -(edge + slim + 1) * px)
+		two:SetHeight(slim * px)
 		two:Show()
 	else
-		one:SetHeight((2 * bar + 1) * px)
+		one:SetHeight((2 * slim + 1) * px)
 		piece.hairline:Hide()
 		two:Hide()
 	end
@@ -196,5 +194,7 @@ function U.Start()
 	-- The console moved, or what the bars show changed (a faction watched or let go, the top level reached).
 	Shy:On("SHY_CONSOLE", U.Place)
 	Shy:On("SHY_XP_MODE", U.Place)
+	-- Another look, or its frame's weight: the bars stand inside its border.
+	Shy:On("SHY_THEME", U.Place)
 	U.Place()
 end

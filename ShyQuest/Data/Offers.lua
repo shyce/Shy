@@ -1,5 +1,5 @@
 -- Generated file. Do not edit by hand.
--- What 2903 quests give and ask for: money ^ items ^ choices ^ spell ^ what it asks for, in its own sentence.
+-- What 2905 quests give and ask for: money ^ items ^ choices ^ spell ^ what it asks for, in its own sentence.
 local _, ns = ...
 ns.data = ns.data or {}
 ns.data.offers = {
@@ -1476,6 +1476,7 @@ ns.data.offers = {
 [4161]="85^5482,5472:3^^^Collect 7 Small Spider Legs for Zarrin in Dolanaar.",
 [4181]="^^^^If you wish to learn more about Goblin Engineering, take the Manual of Engineering Disciplines to Nixx Sprocketspring in Gadgetzan.",
 [4182]="18450^^^^Slay 15 Black Broodlings, 10 Black Dragonspawn, 4 Black Wyrmkin and 1 Black Drake. Return to Helendis Riverhorn when the task is complete.",
+[4264]="17050^^^^You may have just stumbled on to something that Marshal Windsor would be interested in seeing. There may be hope, after all.",
 [4402]="50^11584:10^247840,247841,247846^^Bring Galgar 10 Cactus Apples. You remember him saying that they could be found near cactuses.",
 [4495]="^^^^Find Iverron by the cave to the north.",
 [4542]="175^^^^Bring the Urgent Message to Cliffwatcher Longhorn at Freewind Post.",
@@ -1761,6 +1762,7 @@ ns.data.offers = {
 [7321]="3000^3737,3729:3^^^Bring 10 pieces of Turtle Meat and some Soothing Spices to Christoph Jeffcoat in Tarren Mill.",
 [7383]="^^^^Fill the Amethyst Phial and bring it back to Corithras Moonrage in Dolanaar.",
 [7541]="15000^^18585,18586",
+[7701]="^^19128,19127,270113^^Deep within the Slag Pit of the Cauldron, in the Searing Gorge, you will find the traitorous Dark Iron dwarf named Overseer Maltorius. Slay Overseer Maltorius and take his head. Return the head to Lookout Captain Lolo Longstriker in the Searing Gorge for your reward.",
 [7788]="5500^^^^Enter Warsong Gulch and defeat the Horde, obtain a Warsong Gulch Mark of Honor, and return to Sentinel Farsong at the Silverwing Grove.",
 [7789]="5500^^^^Enter Warsong Gulch and defeat the Alliance, gain a Warsong Gulch Mark of Honor, and bring it to Captain Shatterskull at the Mor'shan Base Camp.",
 [7810]="^^^^Speak with Short John Mithril in the Stranglethorn Arena.",

@@ -192,7 +192,7 @@ local function PlaceKey(world, north, west)
 end
 
 -- The kind of a trail to no level or height in particular: kept to no road, or to them as Shy.Way.Roads() says.
-local PLAIN, ROADS = "nil:nil", { auto = "nil:nil:auto", always = "nil:nil:always" }
+local PLAIN, ROADS = "nil:nil", { high = "nil:nil:high", auto = "nil:nil:auto", always = "nil:nil:always" }
 
 function T.Trail(world, north, west, toNorth, toWest, level, up)
 	local key = PlaceKey(world, toNorth, toWest)

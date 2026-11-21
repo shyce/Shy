@@ -30,6 +30,10 @@ Shy.Way = {
 	Moves = function(...) return 0, nil, false, nil, 0, nil end,
 	Paths = Nothing,
 	SetPaths = Ignored,
+	-- (A runner's pace: who rides is ShyWay's to notice.)
+	Pace = function(...) return 7, false end,
+	Paced = function(seconds) return seconds end,
+	SetPace = Ignored,
 	Roads = function(...) return false end,
 	SetGuess = Ignored,
 	Mark = function(into)

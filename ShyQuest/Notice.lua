@@ -1,6 +1,7 @@
 -- Quest progress notices: completion sounds, party chat announcements, a chat line for an item
 -- that starts a quest, and the "Quests your guide skips" window.
--- Announcements go to a party only (not raids), never twice, and not during chat lockdown.
+-- Announcements go to a party only (not raids), never twice, and not during chat lockdown. Each is
+-- marked as an addon's line (Shy.Brand.Chat).
 
 local ADDON, ns = ...
 local T = ns.T
@@ -33,7 +34,7 @@ local function Say(kind, text)
 	if said[text] then return true end
 	if C_ChatInfo.InChatMessagingLockdown() then return false end
 	said[text] = true
-	C_ChatInfo.SendChatMessage(text, "PARTY")
+	C_ChatInfo.SendChatMessage(Shy.Brand.Chat(text), "PARTY")
 	return true
 end
 
@@ -192,10 +193,13 @@ local function Create()
 	off:EnableMouse(true)
 	off:Hide()
 	UI.Head(off, { size = "window", title = "Quests your guide skips", close = function() off:Hide() end })
+	-- (its words stand on a frame above the body, whose sheet would cover them)
+	local face = CreateFrame("Frame", nil, off)
+	face:SetAllPoints(off)
 	table.insert(UISpecialFrames, "ShyQuestOffGuide")
 
 	local function Lines(size, color)
-		local text = UI.Text(off, "", size, false, color)
+		local text = UI.Text(face, "", size, false, color)
 		text:SetWidth(INNER)
 		text:SetJustifyH("LEFT")
 		text:SetWordWrap(true)

@@ -466,7 +466,9 @@ end
 
 ns.AddPage({ key = "buy", label = "Buy", order = 1, Build = Build, Draw = Draw })
 -- (Exposed for inspection.)
-ns.BuyPage = { state = state, Parts = function() return list, card, search end, Browse = function() Browse() end }
+-- Pick: the item card on an item asked for from outside (T:Find).
+ns.BuyPage = { state = state, Parts = function() return list, card, search end, Browse = function() Browse() end,
+	Pick = function(item) Pick(item) end }
 
 -- What the house says.
 local events = CreateFrame("Frame")

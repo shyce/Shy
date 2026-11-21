@@ -298,23 +298,26 @@ function ns.CreateCard(parent, box)
 		-- (its body inside the size the screen's plan gives it: the rows give the room, UI.Body)
 		panel = { hud = true, facets = false }, body = true })
 	card.title = card.head.title
+	-- Everything drawn straight on the card: a frame of its own above the body, whose sheet would cover it.
+	local face = CreateFrame("Frame", nil, card)
+	face:SetAllPoints(card)
 	-- Room left in your bags, at the stats line's right: how many slots are free, in words (a bag's sign there would
 	-- read as another "looted"); gold when few, red when full (then nothing more is looted).
-	card.room = UI.Text(card, "", 11, false, C.dim)
+	card.room = UI.Text(face, "", 11, false, C.dim)
 	card.room:SetWordWrap(false)
-	card.clock = UI.Words(card, UI.NameFont(12))
-	card.clockGlyph = card:CreateTexture(nil, "ARTWORK")
+	card.clock = UI.Words(face, UI.NameFont(12))
+	card.clockGlyph = face:CreateTexture(nil, "ARTWORK")
 	card.clockGlyph:SetSize(12, 12)
 	Hover.Glyph(card.clockGlyph, "clock", 12)
 
 	-- The two figures, side by side, each with a small caption under it.
-	card.made = UI.Words(card, UI.NameFont(17))
-	card.madeSays = UI.Text(card, "MADE", 9, true, C.dim)
-	card.rate = UI.Words(card, UI.NameFont(17), C.hot, { justify = "RIGHT" })
-	card.rateSays = UI.Text(card, "AN HOUR", 9, true, C.dim)
+	card.made = UI.Words(face, UI.NameFont(17))
+	card.madeSays = UI.Text(face, "MADE", 9, true, C.dim)
+	card.rate = UI.Words(face, UI.NameFont(17), C.hot, { justify = "RIGHT" })
+	card.rateSays = UI.Text(face, "AN HOUR", 9, true, C.dim)
 	card.rateSays:SetJustifyH("RIGHT")
 	-- A light behind the figures when the session's worth goes up: gold, fading.
-	card.glow = card:CreateTexture(nil, "BACKGROUND", nil, 2)
+	card.glow = face:CreateTexture(nil, "BACKGROUND", nil, 2)
 	card.glow:SetTexture(Shy.Brand.GLOW)
 	card.glow:SetBlendMode("ADD")
 	card.glow:SetAlpha(0)
@@ -327,15 +330,15 @@ function ns.CreateCard(parent, box)
 	fade:SetSmoothing("OUT")
 
 	-- Kills and corpses (or catches): glyphs and words on one quiet line, a hairline over it.
-	card.rule = card:CreateTexture(nil, "ARTWORK")
+	card.rule = face:CreateTexture(nil, "ARTWORK")
 	card.rule:SetHeight(1)
 	UI.Paint(card.rule, C.rowEdge, 0.8)
 	card.stats = {}
 	for i = 1, 3 do
-		local glyph = card:CreateTexture(nil, "ARTWORK")
+		local glyph = face:CreateTexture(nil, "ARTWORK")
 		glyph:SetSize(13, 13)
 		UI.Tint(glyph, C.dim)
-		local words = UI.Text(card, "", 11, false, C.dim)
+		local words = UI.Text(face, "", 11, false, C.dim)
 		card.stats[i] = { glyph = glyph, words = words }
 	end
 
@@ -434,9 +437,9 @@ function ns.CreateCard(parent, box)
 	UI.Help(card.tools.stop, "Reset", "Clears the table and starts fresh. This session is saved in your past sessions.", { side = "CURSOR" })
 	card.foot:SetHeight(22)
 
-	card.quiet = UI.Text(card, "", 12, true, C.dim)
+	card.quiet = UI.Text(face, "", 12, true, C.dim)
 	card.quiet:SetJustifyH("CENTER")
-	card.quietLine = UI.Text(card, "", 11, false, C.dim)
+	card.quietLine = UI.Text(face, "", 11, false, C.dim)
 	card.quietLine:SetJustifyH("CENTER")
 
 	card.rows = {}

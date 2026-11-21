@@ -2056,9 +2056,13 @@ end
 --   UI.BodySheet(f, true, { l, t, r, b })   further in than that (the hub leaves its rail off the sheet)
 --   UI.BodySheet(f, false)                  none
 --   -> the sheet, or nil
+-- It is the content's, so it stops at the frame: never nearer the window's sides and foot than the look's
+-- border (UI.LookBorder), whose inner face it meets. It lies over the housing, and would cover the frame there.
+-- Laid again as the look or its options change (UI.SetLook).
 function UI.BodySheet(f, on, inset)
 	local body = f and f.shyBody
 	if not body then return nil end
+	body.shySheetOn, body.shySheetIn = on and true or false, on and inset or nil
 	if not on then
 		if body.shySheet then body.shySheet:Hide() end
 		return nil
@@ -2076,6 +2080,10 @@ function UI.BodySheet(f, on, inset)
 	if type(inset) == "table" then
 		l, t, r, b = inset[1] or l, inset[2] or t, inset[3] or r, inset[4] or b
 	end
+	-- (the body may stand in from the edge already, by the look's clearance: only what is left of the border)
+	local bl, _, br, bb = UI.LookBorder(f.shyLook)
+	local il, _, ir, ib = UI.BodyIn(f)
+	l, r, b = max(l, bl - il), max(r, br - ir), max(b, bb - ib)
 	sheet:ClearAllPoints()
 	sheet:SetPoint("TOPLEFT", body, "TOPLEFT", l, -t)
 	sheet:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -r, b)
@@ -2495,6 +2503,44 @@ function UI.LineMark(owner, line, color)
 	return mark
 end
 
+-- A row or line that opens something, lit the one way the family lights one: under the mouse a pane of the accent
+-- with a bar of it down its left; while it is the one being looked at (held: its page open, its ground lit on the
+-- map) the bar stays at full strength over a fainter pane, so what you clicked reads as the one shown.
+--   light = UI.RowLight(frame [, out [, host]])   out = { left, top, right, bottom }: how far past the frame it
+--                                                 reaches. host: the frame whose regions it is (a frame laid over
+--                                                 words that are its parent's: the light under them, not over)
+--   light:Set(over, held)
+--   UI.ROW_INSET   where a lit row's content starts, lit or not: past the bar with a little room after it
+local ROW_LIGHT = { over = 0.18, held = 0.10, bar = 2, barOver = 0.7, barHeld = 1, pad = 5 }
+UI.ROW_INSET = ROW_LIGHT.bar + ROW_LIGHT.pad
+function UI.RowLight(frame, out, host)
+	out = out or {}
+	local back = (host or frame):CreateTexture(nil, "BACKGROUND", nil, 2)
+	back:SetColorTexture(1, 1, 1, 1)
+	back:SetPoint("TOPLEFT", frame, "TOPLEFT", -(out.left or 0), out.top or 0)
+	back:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", out.right or 0, -(out.bottom or 0))
+	local bar = (host or frame):CreateTexture(nil, "BORDER", nil, 2)
+	bar:SetColorTexture(1, 1, 1, 1)
+	bar:SetWidth(ROW_LIGHT.bar)
+	bar:SetPoint("TOPLEFT", back, "TOPLEFT")
+	bar:SetPoint("BOTTOMLEFT", back, "BOTTOMLEFT")
+	back:Hide()
+	bar:Hide()
+	local light = { back = back, bar = bar }
+	-- (On a host, the frame's hiding does not hide them: they go with it.)
+	if host and host ~= frame then frame:HookScript("OnHide", function() light:Set(false, false) end) end
+	function light:Set(over, held)
+		self.over, self.held = over and true or false, held and true or false
+		local on = self.over or self.held
+		back:SetShown(on)
+		bar:SetShown(on)
+		if not on then return end
+		UI.Tint(back, Theme.Accent, self.over and ROW_LIGHT.over or ROW_LIGHT.held)
+		UI.Tint(bar, Theme.Accent, self.held and ROW_LIGHT.barHeld or ROW_LIGHT.barOver)
+	end
+	return light
+end
+
 function UI.LookLine(owner, line, look, strip)
 	UI.LineFit(line)
 	local zone = look and UI.LOOK_ZONES[look]
@@ -2700,6 +2746,9 @@ function UI.SetLook(f, look)
 		UI.LookDress(h, wear, { fill = f.shyBg, fitTo = h.fitTo, fitInset = h.fitInset, forged = h.forged, metal = f.shyMetal or Theme.skin.metal,
 			gloss = not f.shyHeadless and f.shyGloss or nil, line = f.shyLine, strip = f.shyStrip })
 		UI.PlaceBody(f)   -- its content clear of this look's work round the edge (UI.Body)
+		-- (and its sheet inside this look's frame)
+		local body = f.shyBody
+		if body and body.shySheetOn then UI.BodySheet(f, true, body.shySheetIn) end
 		UI.SetFill(f, f.shyFill)
 		if f.shyStrip then
 			-- The strip by look (UI.LookStrip), at the look's opacity as the fill is (a window's stays solid).
@@ -2837,6 +2886,9 @@ function UI.Panel(f, opts)
 			f.shyLook = UI.LookBuild(f, fit and fit.to or f, fit and fit.inset or { 0, 0, 0, 0 }, function(_, region) House(region) end)
 			f.shyLook.plate = true
 			f.shyLook.mini = opts.mini == true   -- the look's mini border (its own simpler, smaller make: h.mini)
+			-- A bar's housing (h.slim): long, and barely taller than a frame's corners. A look whose frame is sized by
+			-- the piece keeps it whole on one while its corners fit at all (Heritage).
+			f.shyLook.slim = opts.slim == true
 			if strip then
 				local lip = (opts.cap or opts.hud) and UI.HEAD.piece.lip or UI.HEAD.window.lip
 				f.shyLook.headStripTop = top
@@ -9216,7 +9268,9 @@ function UI.Window(opts)
 	if opts.grip and opts.grip.flow then
 		box.shyMade = { opts.width, opts.height }
 		local l, t, r, b = UI.BodyIn(box)
-		Shy.HUD.Resize(box, opts.width + l + r, opts.height + t + b)
+		-- (Docked `tall` beside a window that is there already: as tall as it from the first frame, before its grip
+		-- has hold of it.)
+		Shy.HUD.Resize(box, opts.width + l + r, Shy.HUD.DockTall(box) or opts.height + t + b)
 	else
 		UI.BodyFit(box, opts.width, opts.height)
 	end

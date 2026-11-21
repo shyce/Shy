@@ -1,11 +1,9 @@
 -- Getting about: a click into the zone under the mouse, a right click out a step (zoomed in, to the whole
 -- of the map shown; from the whole of it, to the map round it), a pin
--- dropped with Ctrl (or the game's pin button, or the bar's share button: Nav.PinNext), the zone under the
--- mouse lit with its name and levels,
--- and the breadcrumb, after the side switch (World | Dungeons, Sides.lua) that leads its row: the maps from the
--- world down to the one shown, each a split button (its words go
--- there, its caret lists the maps in it; on a map of floors, the last one lists the floors). The
--- game's own breadcrumb and floor list are faded under ours while the view is in use.
+-- dropped with Ctrl (or the bar's share button: Nav.PinNext), the zone under the mouse lit with its name and
+-- levels, and the breadcrumb on the window's strip, after the side switch (World | Dungeons, Sides.lua) that leads
+-- its row: the maps from the world down to the one shown, each a split button (its words go there, its caret
+-- lists the maps in it; on a map of floors, the last one lists the floors).
 
 local ADDON, ns = ...
 local T, View = ns.T, ns.View
@@ -21,7 +19,7 @@ local LIGHT_SPEED = 14
 local CRUMB_FONT = 11
 local CRUMB_INSET = 7       -- a crumb's words from its left edge
 local CRUMB_TALL = 20
-local CRUMB_Y = -5          -- the crumbs' line against the middle of the game's breadcrumb
+local CRUMB_Y = -5          -- the crumbs' line against the middle of the window's strip (the row's middle)
 local CRUMB_CARET = 1
 local SLASH = 10            -- room for the slash between two crumbs
 local SLASH_X = 0.5         -- nudged right: a crumb's words begin CRUMB_INSET in from its edge but end 6 short of it
@@ -36,10 +34,6 @@ local cursorPin = false
 
 -- Placing a pin
 
-local function PinButton()
-	return WorldMapFrame and WorldMapFrame.WorldMapTrackingPinButton
-end
-
 -- (Nav.PinNext: the next click on the map drops the pin, asked for from the bar's share button.)
 local pinNext = false
 
@@ -49,8 +43,7 @@ local nextClick
 local function CanPin()
 	if nextClick then return true end
 	if C_GameRules.IsGameRuleActive(Enum.GameRule.WorldMapTrackingPinDisabled) then return false end
-	local button = PinButton()
-	return pinNext or (button and button.isActive == true) or IsControlKeyDown()
+	return pinNext or IsControlKeyDown()
 end
 
 function Nav.Next(fn)
@@ -66,10 +59,10 @@ end
 function Nav.Pinning() return pinNext end
 
 local function DropPin(map, x, y)
+	local asked = pinNext
 	pinNext = false
 	if C_Map.CanSetUserWaypointOnMap(map) then
-		local button = PinButton()
-		PlaySound((button and button.isActive) and SOUNDKIT.UI_MAP_WAYPOINT_CLICK_TO_PLACE or SOUNDKIT.UI_MAP_WAYPOINT_CONTROL_CLICK)
+		PlaySound(asked and SOUNDKIT.UI_MAP_WAYPOINT_CLICK_TO_PLACE or SOUNDKIT.UI_MAP_WAYPOINT_CONTROL_CLICK)
 		Shy.Waypoint.Set(map, x, y, false)
 	else
 		UIErrorsFrame:AddMessage(MAP_PIN_INVALID_MAP, RED_FONT_COLOR:GetRGBA())
@@ -428,12 +421,11 @@ end
 
 -- The breadcrumb
 
-local row, more           -- our breadcrumb over the game's, and its overflow button
+local row, more           -- the breadcrumb, and its overflow button
 local sides               -- the side switch at the row's left (Sides.lua)
 local SIDES_GAP = 6       -- from it to the first crumb
 local crumbs = {}         -- pooled split buttons
 local slashes = {}
-local floorShield         -- over the game's floor list while it shows and ours stands in for it
 
 local function Kids(map)
 	local list = {}
@@ -655,9 +647,8 @@ function ns.BarRoomChanged()
 	row:SetPoint("BOTTOMRIGHT", View.Strip(), "BOTTOMRIGHT", -ns.BarRoom(), 0)
 end
 
--- The view moved into our window or back: the crumbs go with it, to the strip of the window holding it. (In ours
--- the side switch stands down: the journal turns over the game's window alone.)
-View.OnHost(function(ours)
+-- The view moved into the window or out of it: the crumbs go with it, to the strip of the window holding it.
+View.OnHost(function()
 	if not row then return end
 	local window = View.Window()
 	row:SetParent(window)
@@ -666,16 +657,15 @@ View.OnHost(function(ours)
 	row:ClearAllPoints()
 	row:SetPoint("TOPLEFT", View.Strip(), "TOPLEFT", 0, 0)
 	row:SetPoint("BOTTOMRIGHT", View.Strip(), "BOTTOMRIGHT", -ns.BarRoom(), 0)
-	if sides then sides:SetShown(not ours) end
 	Lay()
 end)
 
 local function BuildRow()
-	local bar = WorldMapFrame.NavBar
-	row = CreateFrame("Frame", nil, WorldMapFrame)
-	-- Over the game's bar, short of the look switch and the buttons before it at its right end (Controls.lua).
-	row:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
-	row:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -ns.BarRoom(), 0)
+	local strip = View.Strip()
+	row = CreateFrame("Frame", nil, View.Window())
+	-- On the window's strip, short of the look switch and the buttons before it at its right end (Controls.lua).
+	row:SetPoint("TOPLEFT", strip, "TOPLEFT", 0, 0)
+	row:SetPoint("BOTTOMRIGHT", strip, "BOTTOMRIGHT", -ns.BarRoom(), 0)
 	row:SetFrameLevel(View.Level("PIN_FRAME_LEVEL_TOPMOST") + 200)
 	row:EnableMouse(true)
 	more = UI.MenuButton(row, { font = UI.NameFont(CRUMB_FONT), height = CRUMB_TALL, inset = CRUMB_INSET, caretY = CRUMB_CARET,
@@ -692,24 +682,6 @@ local function BuildRow()
 		sides:SetPoint("LEFT", row, "LEFT", 0, CRUMB_Y)
 	end
 	row:SetScript("OnSizeChanged", Lay)
-
-	-- The game's floor list (one of its map's overlay buttons) stands for its own map, not ours: faded,
-	-- and covered while it shows so its menu never opens.
-	for _, frame in ipairs(WorldMapFrame.overlayFrames or {}) do
-		if frame.ShouldShowTrackingIconOnFloor then
-			floorShield = CreateFrame("Frame", nil, WorldMapFrame)
-			floorShield:SetFrameStrata(frame:GetFrameStrata())
-			floorShield:SetFrameLevel(frame:GetFrameLevel() + 10)
-			floorShield:SetAllPoints(frame)
-			floorShield:EnableMouse(true)
-			floorShield.of = frame
-			local function Cover() floorShield:SetShown(View.InUse() and frame:IsShown()) end
-			frame:HookScript("OnShow", Cover)
-			frame:HookScript("OnHide", Cover)
-			floorShield.Cover = Cover
-			Cover()
-		end
-	end
 end
 
 local function Use(on)
@@ -718,12 +690,7 @@ local function Use(on)
 		BuildRow()
 	end
 	if not row then return end
-	WorldMapFrame.NavBar:SetAlpha(on and 0 or 1)
 	row:SetShown(on)
-	if floorShield then
-		floorShield.of:SetAlpha(on and 0 or 1)
-		floorShield.Cover()
-	end
 	if not on and cursorPin then
 		cursorPin = false
 		ResetCursor()

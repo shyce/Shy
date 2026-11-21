@@ -8,8 +8,8 @@ local C = UI.colors
 
 local LEFT, RIGHT, COL, WIDE = 24, 334, 280, 590
 local MAX_REPLIES = 8
--- A group of three for the preview, with a tank and two damage dealers still wanted.
-local SAMPLE = { dungeon = "Deadmines", count = 3, size = 5, need = "tank, 2 DPS" }
+-- A group of two for the preview, a healer and a damage dealer, with a tank and two more still wanted.
+local SAMPLE = { dungeon = "Deadmines", count = 2, size = 5, need = "tank, 2 DPS", having = { tank = 0, healer = 1, dps = 1 } }
 local MISSING = { tank = 1, healer = 0, dps = 2 }
 local PEOPLE = {
 	{ name = "Ann", class = "WARRIOR", label = "TO A WARRIOR" },
@@ -127,11 +127,11 @@ function ns.CreateOptions()
 			group:Add(reset)
 			last = input
 		end
-		Template("ask", "Asking someone along", "When they can't fill any open role. {group} says how many of you there are, or nothing when you're alone.")
+		Template("ask", "Asking someone along", "When they can't fill any open role. {group} says how many of you there are and the roles you have, or nothing when you're alone.")
 		Template("askRole", "Asking for one role", "When one open role fits them, or you picked a role. {role} becomes \"a tank\", \"a healer\" or \"a dps\".")
 		Template("askChoice", "Offering two roles", "When two open roles fit them. {roles} becomes \"a tank or a dps\".")
 		Template("askFlexible", "Asking what they'd rather play", "When three open roles fit them, as for a druid. {choices} becomes \"tank, heal or dps\".")
-		Template("post", "Your chat post", "What Post sends to chat. {need} lists the roles still missing; {tally} is \"(3/5)\", or nothing when you're alone.")
+		Template("post", "Your chat post", "What Post sends to chat. {need} lists the roles still missing; {tally} is \"(2/5, have healer, DPS)\", or nothing when you're alone.")
 		Template("join", "Asking a group for a spot", "The whisper Ask to join sends. {myroles} is what you ticked as your roles.")
 
 		-- Replies: one-click lines in a conversation, each with what it does next.

@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffMaps|r
 ## Notes: The world map without fog, dungeon guides, and your friends on it |cff888888/shymaps|r
 ## Author: Shyce Cream
-## Version: 5.1.7
-## X-Date: 2026-11-18
+## Version: 5.2.0
+## X-Date: 2026-11-21
 ## IconTexture: Interface\AddOns\ShyMaps\Media\ShyMapsMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyWay, ShyQuest, ShyGear, ShyGroup
@@ -15,12 +15,15 @@ Data\Fog.lua
 Data\Overhead.lua
 Data\Travel.lua
 Data\Lod.lua
+Data\GapFills.lua
 Data\Seas.lua
 Data\Fishing.lua
 Data\Indoors.lua
 Data\Dungeons.lua
 Data\DungeonLoot.lua
+Data\DungeonsSeen.lua
 Data\DungeonFloors.lua
+Data\DungeonRoutes.lua
 Data\DungeonSets.lua
 View.lua
 Art.lua

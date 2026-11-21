@@ -5,7 +5,8 @@
 --   B.Ramp(u)                         -> r, g, b along the accent: 0 deep, 0.5 accent, 1 light
 --   B.Cycle(t)                        -> the ramp up and back as t counts cycles
 --   B.Icon(path, size)                -> inline icon markup, tinted with the accent
---   B.GetFont()                       -> the display font (Lilita One)
+--   B.Chat(text)                      -> a line an addon says in chat by itself: "<Shy> text"
+--   B.GetFont()                      -> the display font (Lilita One)
 --   B.CreateTitle(parent, "Tip", 32)  -> per-letter animated title
 --   B.CreateEmblem(parent, icon, 64)  -> icon over a pulsing glow, with a periodic sheen
 --   B.CreateLine(parent, w, h)        -> accent line with a glimmer; anchor both ends to stretch it
@@ -57,6 +58,13 @@ function B.Name(suffix)
 end
 
 B.Icon = Theme.IconMarkup
+
+-- A line an addon sends to other players by itself, marked as an addon's so nobody takes it for typed
+-- words. Plain text: sent chat carries no color or icon.
+B.CHAT = "<Shy> "
+function B.Chat(text)
+	return B.CHAT .. text
+end
 
 -- Preload the font so the first text measured with it has the right width.
 local preload = UIParent:CreateFontString(nil, "BACKGROUND")

@@ -263,18 +263,20 @@ end
 --   there. On another zone's map it is reckoned only where the ground between is known (W.Walked):
 --   across a zone's border the straight line crosses whatever divides the two (Valley of Trials is
 --   1,600 yards from the Crossroads, and a mountain range away).
+--   (A walk reckoned by its yards is as the character goes it, as R.Travel's are: Shy.Way.Paced.)
 local function Reach(map, x, y, yards)
-	if map == W.map then return yards / WALK end
+	local Paced = Shy.Way.Paced
+	if map == W.map then return Paced(yards / WALK) end
 	local town = Town(map)
 	local _, north, west = W.ToWorld(map, x, y)
 	if not town or not town.city then
 		local _, known = W.Walked(W.continent, W.north, W.west, north, west)
 		return known and R.Travel(W.continent, W.north, W.west, north, west) or nil
 	end
-	if yards <= AT_GATES then return yards / WALK end
+	if yards <= AT_GATES then return Paced(yards / WALK) end
 	local point = town.point
 	if not point then return R.Travel(W.continent, W.north, W.west, north, west) end
-	return R.Travel(W.continent, W.north, W.west, point.north, point.west) + W.Between(point.north, point.west, north, west) / WALK
+	return R.Travel(W.continent, W.north, W.west, point.north, point.west) + Paced(W.Between(point.north, point.west, north, west) / WALK)
 end
 
 -- The trainer of the player's class soonest reached (Reach): { npc, map, x, y, yards, seconds, spells }. Where

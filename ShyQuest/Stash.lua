@@ -807,6 +807,29 @@ local function Blocked(lead, rows, quests)
 	end
 end
 
+-- Something of what leads is done as it stands, with nothing the place holds: a quest to take, hand in or work
+-- on that none of it is for, at a step that counts none of it.
+local function Free(lead, rows, quests)
+	if not lead or Blocked({ kind = lead.kind, view = lead.view }, rows, quests) then return false end
+	for _, action in ipairs(lead.actions or NONE) do
+		if not action.done and not quests[action.id] then return true end
+	end
+	return false
+end
+
+-- A trip waits for what is done right here: the place is a walk off (past its `town` yards, and not asked
+-- for), and what leads stands within HERE.near yards with something to do that needs nothing from it (Free).
+-- You hand in what is in front of you before you are sent across the land; once that is done the place
+-- leads. (HERE.stay: one that waited goes on waiting a little farther out, so it does not come and go at the edge.)
+local HERE = { near = 100, stay = 1.5 }
+local function Waits(place, lead, yards, rows, quests)
+	local reach = HERE.near * (place.waited and HERE.stay or 1)
+	local on = yards > place.town and not R.Asked(place.errand) and lead ~= nil and lead.yards ~= nil and lead.yards <= reach
+		and Free(lead, rows, quests)
+	place.waited = on
+	return on
+end
+
 -- What a place holds that the road ahead can't do without, whatever leads now: the guide's way asks for the
 -- item, or hands its quest in, before it is next by a bank.
 local function Ahead(rows, road)
@@ -887,8 +910,9 @@ local PLACES = {
 }
 
 -- The stop at a place (R.AddErrand's), or nil. rows, quests: what it holds that is needed with you; put: what
--- could be put away there (the bank alone); road: the guide's way (nil: none followed). It goes first, and
--- only then is a stop at all, for one of these, the first that holds:
+-- could be put away there (the bank alone); road: the guide's way (nil: none followed). It goes first (but a
+-- trip there waits for what is done right where the player stands: Waits), and only then is a stop at all,
+-- for one of these, the first that holds:
 --   blocked   what leads can't be done without it: at any distance, fight or no fight, and not put off
 --   ahead     the road ahead needs it before it is next by a bank, and it is found nowhere else: the same
 --   quicker   what leads gathers, or the road ahead needs, can be got again, and going here now costs less
@@ -916,6 +940,8 @@ local function Stop(place, lead, at, yards, rows, quests, put, road)
 	local passing = why ~= nil or (not busy and R.Passing(place.errand, at.map, at.x, at.y, lead, nil, #take > 0 and WORTH or nil))
 	-- (Neither on the way nor what leads waits on: no stop, and no row to stand among the errands meanwhile.)
 	if not passing then return nil end
+	-- (A trip there stands behind what is done right here, and leads once it is.)
+	local waits = Waits(place, lead, yards, rows, quests)
 
 	local it = Them(take)
 	local lines = {}
@@ -978,7 +1004,8 @@ local function Stop(place, lead, at, yards, rows, quests, put, road)
 		strip = #take > 0 and place.strip or nil,
 		map = at.map, x = at.x, y = at.y, thing = at.npc, who = at.npc and at.npc.name or place.name,
 		mark = place.mark,
-		first = true,
+		first = not waits or nil,
+		waits = waits or nil,
 		-- Its hover: what to take out a quest at a time, the quest's name heading its things (side by side on
 		-- one line they wrap), then what to put away, and last, quiet, that the bank does it for you.
 		hover = function()

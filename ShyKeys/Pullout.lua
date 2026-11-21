@@ -88,21 +88,24 @@ local function MakeCard()
 		panel = { hud = true, brackets = false }, body = true })
 	-- The look keeps another clearance round the body: laid out again.
 	Shy:On("SHY_BODY", function(f) if f == box then box:Fill() end end)
-	box.level = UI.Text(box, "", 12, true, C.head)
+	-- What is written straight on the box stands on a frame above its body, whose sheet would cover it.
+	local face = CreateFrame("Frame", nil, box)
+	face:SetAllPoints(box)
+	box.level = UI.Text(face, "", 12, true, C.head)
 	box.train = CreateFrame("Frame", nil, box)
 	box.train.words = UI.Text(box.train, "", 11, false, C.alert)
 	box.train.words:SetPoint("TOPLEFT")
 	box.train.words:SetJustifyH("LEFT")
 	box.train:SetScript("OnEnter", function(self) if self.list then Keys.TrainingHover(self, self.list) end end)
 	box.train:SetScript("OnLeave", function(self) Shy.Hover.Hide(self) end)
-	box.tip = UI.Text(box, "", 11, false, C.dim)
-	box.keepCaption = UI.Text(box, "", 10, true, C.dim)
+	box.tip = UI.Text(face, "", 11, false, C.dim)
+	box.keepCaption = UI.Text(face, "", 10, true, C.dim)
 	box.keep = CardRow(box)
 	box.tip:SetJustifyH("LEFT")
 	box.lists = {}
 	for i, kind in ipairs({ "single", "cleave" }) do
 		local list = { kind = kind, rows = {} }
-		list.caption = UI.Text(box, i == 1 and "ONE ENEMY" or "SEVERAL ENEMIES", 10, true, C.dim)
+		list.caption = UI.Text(face, i == 1 and "ONE ENEMY" or "SEVERAL ENEMIES", 10, true, C.dim)
 		for n = 1, CARD.most do list.rows[n] = CardRow(box) end
 		box.lists[i] = list
 	end

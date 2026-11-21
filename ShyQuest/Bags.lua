@@ -1,7 +1,11 @@
 -- Bag space for quests.
 --   Vendor errand: with bags nearly full (LOW_SHARE of the slots or LOW_LEAST free), the nearest
 --     vendor is a stop before the guide's step when close by or on the way (R.Passing), else a
---     later row while within LISTED yards. Not when ShyBags finds nothing sellable.
+--     later row while within LISTED yards. With ShyBags the row makes room either way: a click
+--     opens the bags with the cheapest things lit, each to drop, until there is room again, and it
+--     says so; with no shop in reach (or nothing a shop would buy) it stands with no place to go
+--     to, for that click alone. Nobody is sent across the land to make room. Not when ShyBags
+--     finds nothing that could go.
 --   Shops: who really buys and sells is noted from the game's own windows and kept for the
 --     account. Nobody who showed no shop is a stop again.
 --   No room: when a quest's item or reward won't fit, or the game refuses a quest for bag space,
@@ -32,6 +36,7 @@ local TOLD_EVERY = 8         -- seconds between chat lines about bag space
 
 local free, total, stale = 0, 0, true
 local put = false            -- "Not now": no vendor stop until there is room again
+local shop                   -- the shop the row led to when last weighed out of a fight (false: none): a fight keeps it
 local told = -TOLD_EVERY
 
 local function Shy_Bags()
@@ -134,41 +139,74 @@ local function Find(lead)
 	if slots == 0 then return nil end
 	local low = Low(slots)
 	if open > low then
-		put = false
+		put, shop = false, nil
 		return nil
 	end
 	if put then return nil end
 	local shy = Shy_Bags()
-	if shy and not Sellable() then return nil end
-	local at, yards = Nearest()
-	if not at then return nil end
+	-- (With ShyBags: only while something in the bags could go, to a shop or dropped.)
+	if shy and not Cheapest() then return nil end
 	local busy = InCombatLockdown() or UnitOnTaxi("player") or UnitIsDeadOrGhost("player")
-	local passing = not busy and R.Passing("sell", at.map, at.x, at.y, lead, open == 0 and FULL_REACH or nil)
-	if not passing and yards > (open == 0 and LISTED_FULL or LISTED) then return nil end
-	local lines = { at.npc.title and ("%s, %s"):format(at.npc.name, at.npc.title) or at.npc.name }
-	-- What to sell isn't listed here: the menu sorts the bags by worth instead (ShyBags, Sort).
+	-- The shop it leads to: one in passing, or near enough for a row; and only while something would sell there.
+	local at, yards = Nearest()
+	local passing = at ~= nil and not busy and R.Passing("sell", at.map, at.x, at.y, lead, open == 0 and FULL_REACH or nil)
+	if busy and shop ~= nil then
+		-- (In a fight, on a flight or dead nothing is on the way: the shop it led to before stands, so the row
+		-- says the same through every pull.)
+		at = shop or nil
+	else
+		if at and ((not passing and yards > (open == 0 and LISTED_FULL or LISTED)) or (shy and not Sellable())) then at, passing = nil, false end
+		if not busy then shop = at or false end
+	end
+	-- (No shop in reach: a row all the same where a click can drop something. Without ShyBags there is none to open.)
+	if not at and not shy then return nil end
+	local who = at and (at.npc.title and ("%s, %s"):format(at.npc.name, at.npc.title) or at.npc.name) or nil
+	local left = open == 0 and "bags full" or ("%d slot%s left"):format(open, open == 1 and "" or "s")
+	local full = open == 0 and "BAGS FULL" or "BAGS NEARLY FULL"
+	-- What to sell isn't listed here: the menu sorts the bags by worth instead (ShyBags, Sort), and a click
+	-- opens the bags with the cheapest things lit, each to drop (ShyBags, MakeRoom), until there is room again.
 	local function Sort()
 		shy:Sort("worth")
 	end
+	local function Drop()
+		shy:MakeRoom({ need = low + 1, why = open == 0 and "Your bags are full" or "Your bags are nearly full" })
+	end
+	local title, caption, lines, todo
+	if not shy then
+		title, caption, lines = "Sell: " .. left, full .. "  \194\183  SELL HERE", { who }
+		todo = { { glyph = "coin", lit = true, text = "Sell what you don't need" } }
+	elseif at then
+		title, caption = "Make room: " .. left, full .. "  \194\183  SELL OR DROP"
+		lines = { who, "Sell here, or click to drop the cheapest" }
+		todo = { { glyph = "coin", lit = true, text = "Sell what you don't need" },
+			{ glyph = "bag", text = "Or click to drop the cheapest" } }
+	else
+		title, caption = "Make room: " .. left, full .. "  \194\183  DROP SOMETHING"
+		lines = { "No shop nearby", "Click to drop the cheapest" }
+		todo = { { glyph = "bag", lit = true, text = "Click to drop the cheapest" },
+			{ quiet = true, indent = 2, text = "No shop is near. Sell at the next one you pass." } }
+	end
+	todo[#todo + 1] = { quiet = true, indent = 2, text = "Quest items and rewards need a free slot." }
 	return {
-		title = open == 0 and "Sell: bags full" or ("Sell: %d slot%s left"):format(open, open == 1 and "" or "s"),
+		title = title,
 		lines = lines,
-		caption = open == 0 and "BAGS FULL  \194\183  SELL HERE" or "BAGS NEARLY FULL  \194\183  SELL HERE",
-		map = at.map, x = at.x, y = at.y, thing = at.npc, who = at.npc.name,
+		caption = caption,
+		map = at and at.map, x = at and at.x, y = at and at.y, thing = at and at.npc, who = at and at.npc.name,
 		mark = "sell",
 		first = passing or nil,
+		-- (With ShyBags a click makes room where you stand; the way to the shop is on the menu.)
+		click = shy and Drop or nil,
+		hint = shy and "Drop the cheapest" or nil,
 		hover = function()
 			return {
-				{ title = "To do", rows = {
-					{ glyph = "coin", lit = true, text = "Sell what you don't need" },
-					{ quiet = true, indent = 2, text = "Quest items and rewards need a free slot." },
-				} },
+				{ title = "To do", rows = todo },
 				{ title = "Room", rows = { { glyph = "bag", text = ("%d of %d slots free"):format(open, slots) } },
 					bar = { have = (slots - open) / slots } },
 			}
 		end,
 		tip = function(tip)
 			tip:AddLine(("%d of %d slots free."):format(open, slots), 1, 1, 1)
+			if shy then tip:AddLine(at and "Sell at a shop, or click to drop the cheapest." or "Click to drop the cheapest.", 1, 1, 1, true) end
 			tip:AddLine("Quest items and rewards need a free slot.", 0.6, 0.6, 0.6, true)
 		end,
 		menuHint = shy and "Sort bags by worth" or nil,
@@ -178,10 +216,12 @@ local function Find(lead)
 				put = true
 				ns.Refresh()
 			end)
-			root:CreateButton(("%s doesn't buy: find another"):format(at.npc.name), function()
-				D.NoteShop(at.npc.id, D.NO_SHOP, true)
-				ns.Refresh()
-			end)
+			if at then
+				root:CreateButton(("%s doesn't buy: find another"):format(at.npc.name), function()
+					D.NoteShop(at.npc.id, D.NO_SHOP, true)
+					ns.Refresh()
+				end)
+			end
 		end,
 	}
 end
@@ -443,7 +483,7 @@ ns.cardNotes = ns.cardNotes or {}
 table.insert(ns.cardNotes, Note)
 
 ns.CardSwitch("errands", function(root)
-	root:CreateCheckbox("Sell when bags are nearly full", function() return T.db.bags.sell end, function()
+	root:CreateCheckbox("Sell or drop when bags are nearly full", function() return T.db.bags.sell end, function()
 		T.db.bags.sell = not T.db.bags.sell
 		ns.Apply()
 	end)
@@ -456,4 +496,4 @@ ns.CardSwitch("suggestions", function(root)
 end)
 
 -- Guarded: the loaded Route.lua may predate R.AddErrand until the client restarts.
-if R and R.AddErrand then R.AddErrand("sell", Find, "Selling when bags fill") end
+if R and R.AddErrand then R.AddErrand("sell", Find, "Making room when bags fill") end

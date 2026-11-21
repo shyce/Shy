@@ -18,10 +18,10 @@
 --                            the game's own word for a quest in your log, else Classic's
 --   J.Cues(row)              { { key, words, color, mine } }: what a spell asks of a group (mine: of you)
 --   J.Loot(map, key)         key a boss's index or "trash": { { item, chance, source, kills, mine } }, the likeliest
---                            first. source: "seen" (by you or in the making of this data), "classic" (the Classic
---                            game's, which this one may differ from)
---   J.Others(map)            bosses the game's own list doesn't name, with what they drop: { { name, loot } } (none
---                            are known: the list the window reads, kept empty)
+--                            first. source: "forever" (recorded in this game by the players of another addon's
+--                            database), "seen" (by you or in the making of this data), "classic" (the Classic game's,
+--                            which this one may differ from)
+--   J.Others(map)            bosses the recorded drops name that the game's own list doesn't: { { name, loot } }
 --   J.Door(map)              where you came into the dungeon, as you last did by a loading screen: { north, west,
 --                            up }, or nil (DungeonSeen.lua notes it)
 --   J.Drops(item)            where an item drops (T:Drops)
@@ -29,6 +29,7 @@
 --   J.ByName(name)           the instance map of the dungeon of that name ("The Deadmines" is "Deadmines")
 --   J.Can(kind)              whether you know a spell that answers: "kick", "purge", "M", "C", "D", "P"
 --   J.Wanted(item) / J.Want(item, on)   the drops you starred
+--   J.CREDIT                 the credit the recorded drops are shown under
 
 local ADDON, ns = ...
 local T = ns.T
@@ -37,6 +38,9 @@ local C = UI.colors
 
 local J = {}
 ns.Dungeons = J
+
+-- (Shown wherever the journal lists its sources, as that data's license asks.)
+J.CREDIT = "Data from ForeverDB.net (https://foreverdb.net)"
 
 local NONE = {}
 local books = {}
@@ -279,7 +283,7 @@ end
 ---------------------------------------------------------------------------
 -- What drops
 ---------------------------------------------------------------------------
-local RANK = { seen = 2, classic = 1 }
+local RANK = { forever = 3, seen = 2, classic = 1 }
 function J.Loot(map, key)
 	local rows, by = {}, {}
 	local function Add(item, chance, source, kills)
@@ -294,8 +298,15 @@ function J.Loot(map, key)
 		end
 		return row
 	end
+	local seen = data.dungeonSeen and data.dungeonSeen[map]
+	local text = seen and seen[key]
+	for _, part in ipairs(text and Fields(text, ";") or NONE) do
+		local f = Fields(part, ":")
+		local item = tonumber(f[1])
+		if item then Add(item, tonumber(f[2]), "forever", tonumber(f[3])) end
+	end
 	local ours = data.dungeonLoot and data.dungeonLoot[map]
-	local text = ours and ours[key]
+	text = ours and ours[key]
 	for _, part in ipairs(text and Fields(text, ";") or NONE) do
 		local f = Fields(part, ":")
 		local item = tonumber(f[1])
@@ -347,7 +358,18 @@ function J.Rewards(quest, carried)
 end
 
 function J.Others(map)
-	return {}
+	local seen = data.dungeonSeen and data.dungeonSeen[map]
+	local out = {}
+	for _, other in ipairs(seen and seen.others or NONE) do
+		local rows = {}
+		for _, part in ipairs(Fields(other[2], ";")) do
+			local f = Fields(part, ":")
+			local item = tonumber(f[1])
+			if item then rows[#rows + 1] = { item = item, chance = tonumber(f[2]), source = "forever", kills = tonumber(f[3]) } end
+		end
+		out[#out + 1] = { name = other[1], loot = rows }
+	end
+	return out
 end
 
 function J.Door(map)

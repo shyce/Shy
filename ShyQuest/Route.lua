@@ -171,10 +171,12 @@ R.NearestSource = NearestSource
 -- for the time its trip (giver, each objective, ender) takes. Others keep their map pin.
 
 local TRIP = {
-	hard = 3,  -- a quest more than this many levels above the player is left for later
-	walk = 420,  -- yards a minute, on foot
+	hard = 2,  -- a quest more than this many levels above the player is left for later: what it sends you to
+	           -- fight is about its level, and three above is no fight to send anyone to (RULES.above)
 	long = 5000,  -- yards: too far for a quest of unknown XP
 }
+-- Yards a minute the character covers of a trip (Shy.Way.Pace: on foot, or riding once they ride).
+function TRIP.Walk() return Shy.Way.Pace() * 60 end
 local trips = {}             -- quest .. giver -> yards, or false for one that leaves the continent
 
 -- Nearest of `lists` of places to a world point: yards, north, west.
@@ -241,7 +243,7 @@ function R.Worth(quest, giver)
 		return true
 	end
 	-- A quest that unlocks others is worth it regardless.
-	if pays < trip / TRIP.walk * Fighting() and not L.Opens(quest) then
+	if pays < trip / TRIP.Walk() * Fighting() and not L.Opens(quest) then
 		return false, ("About %s of travel for %d XP"):format(W.Yards(trip), pays)
 	end
 	return true
@@ -261,7 +263,7 @@ local catching = { key = nil }
 local function Takes(quest)
 	local giver = NearestGiver(quest.starts)
 	local trip = giver and Trip(quest, giver) or 0
-	return L.Pays(quest), trip / TRIP.walk + CATCH_MINUTES
+	return L.Pays(quest), trip / TRIP.Walk() + CATCH_MINUTES
 end
 
 function R.Catching(quest)
@@ -315,7 +317,7 @@ local function RewardOf(item, npc)
 	return nil
 end
 
-function GoalPlaces(token, out, ground, from)
+function GoalPlaces(token, out, ground, from, every)
 	local needs
 	-- chance: the percent of kills an item drops from, where the data says.
 	local function Add(thing, how, chance, quest)
@@ -340,22 +342,77 @@ function GoalPlaces(token, out, ground, from)
 			for _, source in ipairs(item.sources) do
 				if source.chance and (not least or source.chance < least) then least = source.chance end
 			end
-			-- Every source, not only the best dropper: the nearest one is where to go.
+			-- Every source, not only the best dropper: the nearest one is where to go. But not a creature three or
+			-- more levels above the player while anything in reach gives it: however often it drops it, it is no
+			-- place to fight (with none in reach, all stay: the quest is too high for now, and the route says so).
+			-- Nor an elite, a rare or a boss while an ordinary one drops it (a rare stands up again a day after it
+			-- falls).
+			local found, near, known = {}, false, false
+			local function Above(thing) return (thing.maxLevel or 0) > L.Level() + RULES.above end
+			local function Ranked(thing) return (thing.rank or 0) > 0 end
+			-- What is in reach (ordinary, and no more than RULES.above over the player) stands in for those too
+			-- high by their level whatever is known of its chance, wherever it stands (`near`): it is listed as
+			-- giving the thing, and the others can't be fought at all. (Kept where they stand nearer, they win:
+			-- a 38 among the Badlands' Buzzards was sent to its Giant Buzzards, and with those out, to the Black
+			-- Slayers of the Blasted Lands.) For an elite, a rare or a boss it stands in only where it is known
+			-- to drop the thing (`known`): a chance measured, however small, where any dropper has one. One
+			-- listed with no chance is a guess, and a guess sends nobody away from a fight they can have:
+			-- Teremus the Devourer stays for the sphere no ogre is measured dropping, once he is in reach.
+			local measured = false
+			for _, source in ipairs(item.sources) do
+				if source.kind == "n" and source.chance then measured = true end
+			end
+			local function Stands(how, chance) return how ~= "drops" or not measured or (chance ~= nil and chance > 0) end
+			local function Found(thing, how, chance, quest, fought)
+				local above, ranked = fought and Above(thing), fought and Ranked(thing)
+				found[#found + 1] = { thing, how, chance, quest, above, ranked }
+				if not above and not ranked then
+					near = true
+					known = known or Stands(how, how == "drops" and chance or nil)
+				end
+			end
 			for _, source in ipairs(item.sources) do
 				local thing = D.Thing(source.kind, source.id)
-				if thing and (source.kind ~= "v" or L.Friendly(thing)) and not (source.kind == "n" and D.Dropless(source.id, item.id)) then
+				-- (Not a vendor seen with none left, or not to sell it: Stock.lua.)
+				local out = source.kind == "v" and ns.Stock ~= nil and ns.Stock.Out(source.id, item.id)
+				if thing and not out and (source.kind ~= "v" or L.Friendly(thing)) and not (source.kind == "n" and D.Dropless(source.id, item.id)) then
 					local gives = source.kind == "n" and not source.chance and (thing.gives or thing.takes) ~= nil
 					local how = source.kind == "v" and "sells" or source.kind == "o" and "holds" or gives and "gives" or "drops"
-					Add(thing, how, source.chance or (how == "drops" and least) or nil, gives and RewardOf(item, source.id) or nil)
+					-- (A creature is in reach by its level whatever it is said to give; only a shop is not fought.)
+					Found(thing, how, source.chance, gives and RewardOf(item, source.id) or nil, source.kind == "n" and how ~= "sells")
+					if how == "drops" and not source.chance then found[#found][3] = least end
 				end
 			end
 			for _, id in ipairs(item.more or {}) do
 				local npc = not D.Dropless(id, item.id) and D.Npc(id)
-				if npc then Add(npc, "drops", least) end
+				if npc then
+					Found(npc, "drops", nil, nil, true)
+					found[#found][3] = least
+				end
+			end
+			for _, each in ipairs(found) do
+				if every or not ((near and each[5]) or (known and each[6])) then Add(each[1], each[2], each[3], each[4]) end
 			end
 		end
 	end
 end
+
+-- How high what a stop's work is done on stands, when that is a fight out of the player's reach: a creature three
+-- or more levels above them (RULES.above), by the higher of the levels it comes in. nil for what is in reach, and
+-- for someone to talk to: one of the player's own side alone, or one who gives or takes quests (the data has a
+-- goal to "speak with" someone as a creature like any other, and Tirion Fordring is 61).
+local function Steep(source)
+	if not source or not source.id or (source.how ~= "kill" and source.how ~= "drops") then return nil end
+	local npc = D.Npc(source.id)
+	if not npc or (npc.maxLevel or 0) <= L.Level() + RULES.above then return nil end
+	if npc.gives or npc.takes or (npc.side ~= "" and npc.side == L.Side()) then return nil end
+	return npc.maxLevel
+end
+-- (Where such a stop leads all the same, nothing else being left to do, the card's leading row says what it is.)
+ns.cardNotes = ns.cardNotes or {}
+table.insert(ns.cardNotes, function(stop)
+	if stop.steep then return ("Level %d fight: %d above you"):format(stop.steep, stop.steep - L.Level()) end
+end)
 
 -- Areas
 -- A thing's spawns stand in areas, as the map circles them: spawns within AREA.link yards of one
@@ -387,10 +444,12 @@ local AREA = { link = 300,   -- yards: spawns this near one another are one area
 	heart = 120,             -- yards: the spawns this near one count toward how thick the work is round it
 	camp = 150,              -- yards: a camp is worked this far round its heart, and hearts stand this far apart
 	respawn = 300,           -- seconds before a spawn killed or picked stands again
-	stride = 7,              -- yards a second on foot: what a second's work is worth in walking
 	stay = 450,              -- yards: standing on an area's ground, its camps this near are where the player is
 	leave = 0.5,             -- ... and a camp of the same elsewhere leads once it costs under this share of staying
 	walked = 3 }             -- the cheapest camps whose way over the ground is asked for (W.Walked)
+-- What a second's work or waiting is worth in yards of the way there: the character's pace (Shy.Way.Pace: a
+-- runner's, or their mount's once they ride, when a longer way round is worth more of a wait).
+function AREA.Stride() return (Shy.Way.Pace()) end
 -- (Seconds a kill takes, and a thing used, picked up or bought; kills an item is reckoned at, at most.
 -- What work takes, below, reckons with the same.)
 -- What a goal costs: seconds, and how many of a thing.
@@ -407,7 +466,7 @@ local EFFORT = {
 	-- sources is the one reckoned with.
 	crowd = 1.5,  -- times as long to find the next one, with other players about
 	asked = 8,  -- how many a quest not in the log is taken to ask of each (one of a creature that stands alone)
-	stride = 7,  -- yards a second on foot
+	stride = 7,  -- yards a second on foot (from one spawn to the next nobody rides)
 	apart = 300,  -- yards from one spawn to the next, at most: farther is another place
 }
 
@@ -690,7 +749,9 @@ end
 -- and a lone rare (one camp of one, the wait for it to stand again each time) beats a camp only when it
 -- really is quicker.
 --   Yields(lists, solid, inner, asks, groups): by list, the yards (as walking) its work takes over the best
---   of its group's (groups: by list, what it gives; lists with none, and anything not ground, are 0).
+--   of its group's (groups: by list, what it gives; lists with none are 0). Ground and the fights and loot at
+--   exact places alike (two Fey Dragons and a rare among them are each a spawn or two, and the rare drops it 1 in
+--   100); not someone to buy from or talk to.
 local function Base(ground, inner, ask)
 	local set = Areas(ground)
 	if set.n == 0 then return nil end
@@ -703,13 +764,17 @@ local function Yields(lists, solid, inner, asks, groups)
 	local bases, best = {}, {}
 	for index, ground in ipairs(lists) do
 		local group = groups[index]
-		if group ~= nil and solid[index] then
-			local base = Base(ground, inner and inner[index], asks and asks[index])
+		-- (Of what is not ground, only work at exact places: the fights and loot there. Someone to buy it from or
+		-- talk to is no work of that kind, and is weighed by the walk alone, as ever.)
+		local ask = asks and asks[index]
+		if group ~= nil and (solid[index] or (ask and ask.each == EFFORT.fight)) then
+			local base = Base(ground, solid[index] and inner and inner[index] or nil, ask)
 			bases[index] = base
 			if base and (not best[group] or base < best[group]) then best[group] = base end
 		end
 	end
-	for index, base in pairs(bases) do extra[index] = (base - best[groups[index]]) * AREA.stride end
+	local stride = AREA.Stride()
+	for index, base in pairs(bases) do extra[index] = (base - best[groups[index]]) * stride end
 	return extra
 end
 
@@ -733,6 +798,7 @@ local function Stand(lists, key, solid, inner, asks, groups)
 	local north, west = W.north, W.west
 	local hold = stood[key]
 	local extra = Yields(lists, solid, inner, asks, groups)
+	local stride = AREA.Stride()
 	local all = AREA.weighed     -- of the ground: each camp as it would be gone to, and what it costs
 	local spare = AREA.spare
 	for index = #all, 1, -1 do
@@ -759,7 +825,7 @@ local function Stand(lists, key, solid, inner, asks, groups)
 			-- the one quick to do is no reason to go to it first: only the walk and the waiting are.
 			local ask = asks and asks[index] or Asks()
 			local base = Takes(camps.most, ask.need, ask.each)
-			local function Over(supply) return (Takes(supply, ask.need, ask.each) - base) * AREA.stride end
+			local function Over(supply) return (Takes(supply, ask.need, ask.each) - base) * stride end
 			priced[index] = function(at, atWest) return Over(Supply(set, camps, at, atWest)) end
 			local best = {}          -- by area: its cheapest camp
 			areas = areas + set.areas
@@ -808,11 +874,13 @@ local function Stand(lists, key, solid, inner, asks, groups)
 				end
 			end
 		else
+			-- (Someone or somewhere: the nearest, its work over its group's best as walking, Yields.)
 			for area = 1, set.areas do
 				local i = spot[area]
 				local each = { list = index, ground = ground, set = set, area = area, map = set.map[i], x = set.x[i], y = set.y[i],
 					yards = math.sqrt(far[area]) }
-				if not point or each.yards < point.yards then point = each end
+				each.cost = each.yards + (extra[index] or 0)
+				if not point or each.cost < point.cost then point = each end
 				wasPoint = wasPoint or (hold ~= nil and hold.ground == ground and hold.area == area and not hold.camp)
 			end
 		end
@@ -864,7 +932,8 @@ local function Stand(lists, key, solid, inner, asks, groups)
 		pick = kept
 	end
 	-- Someone or somewhere nearer than the ground is where to go (kept, as a camp is).
-	if point and (not pick or point.yards * (wasPoint and AREA.better or 1) < pick.yards * (wasPoint and 1 or AREA.better)) then pick = point end
+	local function Weighed(each) return each.yards + (extra[each.list] or 0) end
+	if point and (not pick or Weighed(point) * (wasPoint and AREA.better or 1) < Weighed(pick) * (wasPoint and 1 or AREA.better)) then pick = point end
 	if not pick then return nil end
 	if not hold then
 		if standing > 400 then
@@ -1280,6 +1349,13 @@ local function Whereabouts(id, objective, ground)
 					GoalPlaces(token, lists, ground, from)
 					GoalNames(token, names)
 				end
+				-- Nowhere known for what it asks: where it was seen to advance in this game (D.GoalSeen), as ground
+				-- it is looted on.
+				local seen = #lists == before and D.GoalSeen(id, index)
+				if seen and #seen > 0 then
+					lists[#lists + 1] = seen
+					if from then from[#lists] = { name = (goal.text or ""):gsub(":?%s*%d+/%d+%s*$", ""), how = "loot", quest = id } end
+				end
 				-- Each list knows its quest and objective (Ground.lua keys a row of its key by them), and
 				-- whether the objective is found only at exact places (pinned: the map then stands a
 				-- pointer on each and draws no ground round them).
@@ -1311,10 +1387,11 @@ function R.Ground(id, objective)
 	return Whereabouts(id, objective, true)
 end
 
--- For one goal token ({ kind, id }): the lists, no names, and what each list is.
-function R.GroundOf(token)
+-- For one goal token ({ kind, id }): the lists, no names, and what each list is. every: droppers of any level (the
+-- farm's own rule weighs them: Farmables), not only those in the player's reach (GoalPlaces).
+function R.GroundOf(token, every)
 	local lists, from = {}, {}
-	GoalPlaces(token, lists, true, from)
+	GoalPlaces(token, lists, true, from, every)
 	local pinned = Pinned(lists, from, 1, #lists) or nil
 	for i = 1, #lists do from[i].pinned = pinned end
 	return lists, {}, from
@@ -1354,7 +1431,7 @@ local FARM = { above = 3, least = 25, hard = { [1] = true, [2] = true, [3] = tru
 -- What you could farm an item from, at a pass: 1 plain creatures, 2 hard ones too, 3 things that hold it. Its
 -- spawn lists and what each is (as R.GroundOf gives them).
 local function Farmables(item, pass)
-	local lists, _, from = R.GroundOf({ kind = "i", id = item })
+	local lists, _, from = R.GroundOf({ kind = "i", id = item }, true)
 	local level = L.Level()
 	local keep, kept = {}, {}
 	for i, what in ipairs(from) do
@@ -1567,7 +1644,7 @@ function R.SourceRanks(id, index)
 		if base then
 			local set, least = Areas(ground), math.huge
 			for k = 1, set.n do least = math.min(least, (set.north[k] - W.north) ^ 2 + (set.west[k] - W.west) ^ 2) end
-			local cost = base * AREA.stride + (W.Known() and math.sqrt(least) or 0)
+			local cost = base * AREA.Stride() + (W.Known() and math.sqrt(least) or 0)
 			if not costs[what.id] or cost < costs[what.id] then costs[what.id] = cost end
 		end
 	end
@@ -1767,6 +1844,8 @@ local function Build()
 				end
 				-- A vendor stop gets the "buy" mark (Marks.lua); `seller` is the vendor's id (Plates.lua).
 				if stop.source and stop.source.how == "sells" then stop.mark, stop.seller = "buy", stop.source.id end
+				-- A fight out of the player's reach waits behind the rest of the route (R.Build): how high it is.
+				stop.steep = Steep(stop.source)
 				stop.shape = shape
 				return stop
 			end)
@@ -2611,6 +2690,8 @@ end
 
 local function Detour(stop, lead, grind)
 	stop, lead = Entered(stop), Entered(lead)
+	-- (A fight out of reach never goes before the guide's step: Steep.)
+	if stop.steep then return false end
 	local strict = T.db.guide.nearby == false
 	if grind and not strict and stop.kind == "pickup" and stop.actions[1].held then return true end   -- in the bags already
 	if not stop.yards or not stop.north then return false end
@@ -2821,7 +2902,7 @@ end
 -- land; rides between guide steps are the guide's. The journey to a stop is kept while it is about as quick
 -- as any other (Journey's lead), so the card doesn't turn from one way to another and back.
 local FLIGHT = {
-	walkSpeed = 7,  -- yards a second, where no way over the ground is known
+	walkSpeed = 7,  -- yards a second on foot, where no way over the ground is known
 	masterReach = 150,  -- yards from a flight point within which its flight master is looked for
 }
 local Way = Shy.Way
@@ -2875,7 +2956,8 @@ R.FlightPoints, R.FlightMaster = Points, Master
 function R.Travel(continent, north, west, toNorth, toWest)
 	local journey, state = Way.Journey(Way.Place(continent, north, west), Way.Place(continent, toNorth, toWest))
 	if journey then return journey.seconds, state == nil, state ~= "working" end
-	return W.Walked(continent, north, west, toNorth, toWest) / FLIGHT.walkSpeed, false, state ~= "working"
+	-- (No journey: the walk's yards, as the character goes them.)
+	return Way.Paced(W.Walked(continent, north, west, toNorth, toWest) / FLIGHT.walkSpeed), false, state ~= "working"
 end
 
 -- How a ride's stop reads on the card: where it is boarded, its heading and its strip. What each is called
@@ -2949,8 +3031,10 @@ end
 
 R.ERRAND_FLY = 800   -- yards (straight): a leading errand farther than this is given a journey (a flight)
 R.journeyKept = {}   -- by stop (Key): { journey, the place it is to, its level and height, where it was from }
+R.journeysOpen = nil -- true while a journey of the route as last built was still being worked out (ShyQuest.lua builds it again)
 R.JOURNEY_SLACK = 100 -- yards farther from the stop than when its journey was worked out before it is again
 local function WithJourneys(route)
+	R.journeysOpen = nil
 	if not W.Known() or UnitOnTaxi("player") then
 		journeys = {}
 		return route
@@ -2997,10 +3081,17 @@ local function WithJourneys(route)
 				and kept.origin == origin and away <= (kept.away or 0) + R.JOURNEY_SLACK then
 				journey = kept.journey
 			else
-				journey = Way.Journey(here, Way.Place(stop.continent, stop.north, stop.west, { level = level, up = up }),
+				local state
+				journey, state = Way.Journey(here, Way.Place(stop.continent, stop.north, stop.west, { level = level, up = up }),
 					{ lead = journeys[key] })
-				R.journeyKept[key] = { journey = journey, toN = stop.north, toW = stop.west, level = level, up = up,
-					fromN = fromN, fromW = fromW, away = away, origin = origin }
+				-- (One still being worked out is the quickest known so far, not yet the journey: never kept, and
+				-- the route is built again once more is known, R.journeysOpen.)
+				if state == "working" then
+					R.journeyKept[key], R.journeysOpen = nil, true
+				else
+					R.journeyKept[key] = { journey = journey, toN = stop.north, toW = stop.west, level = level, up = up,
+						fromN = fromN, fromW = fromW, away = away, origin = origin }
+				end
 			end
 			Shy.Clock("route: journeys"):Lap(debugprofilestop() - from)
 			if journey then
@@ -3065,6 +3156,8 @@ end)
 --         mark          the NPC's sign (Marks.lua SIGN: "sell", "train"), also on their nameplate
 --         first         goes before the guide's step (see R.Passing, which says when a place is
 --                       worth going to now); otherwise after it
+--         waits         never before what leads this time, though it went first the last time or led: it
+--                       waits for what is done right where the player stands (Stash.lua: a trip to the bank)
 --         away          it carries the character off (the hearthstone): among those that go first it is
 --                       the last, after everything there is to do on this side of it
 --         lands         where it sets the character down ({ continent, north, west }): the rides to what
@@ -3292,6 +3385,8 @@ local function Errands(lead)
 			-- (The errand that leads waits for nothing: it stays first, whatever builds the route again, until
 			-- it is done or no longer offered. The rest wait their turn behind it.)
 			if R.errandLed == id then goesFirst = true end
+			-- (One that waits for what is done right here stands behind it, however it went the last time.)
+			if stop.waits then goesFirst = false end
 			if stop.urgent then
 				urgent[#urgent + 1] = stop
 			elseif goesFirst then
@@ -3618,7 +3713,7 @@ local function Picks(stops)
 	return out
 end
 
--- A dungeon run leads (Run.lua): the route is its steps alone.
+-- A dungeon run leads (Run.lua): the route is its steps, and where you send yourself (R.Build).
 function R.Running()
 	local G = ns.Guide
 	return G.current ~= nil and G.current.run ~= nil and ns.Following()
@@ -3637,12 +3732,23 @@ function R.Build()
 		for _, action in ipairs(stop.view.actions) do led[action.id] = true end
 	end
 	tick = debugprofilestop()
-	-- A dungeon run (Run.lua) is a mode of its own: its steps alone, and what can't wait (the way back to your
-	-- body, a flight under way, the legs of a journey). No quest nearby, errand, place of your own or zone joins it.
+	-- A dungeon run (Run.lua) is a mode of its own: its steps, where you send yourself (your own route, Plan.lua:
+	-- the way to the dungeon's door, something found, a spot set on the map, a quest picked; and the quest you
+	-- singled out) and what can't wait
+	-- (the way back to your body, a flight under way, the legs of a journey). No quest nearby, errand or zone
+	-- joins it.
 	local run = R.Running()
-	local nearby = run and {} or WithoutGuided(Build(), guided)
+	-- (A quest you picked or singled out is found among the nearby stops: during a run they are worked out only
+	-- for one, and of them only that quest's stop stays, below.)
+	local quests = not run or R.Singled() ~= 0
+	for _, entry in ipairs(run and ns.Plan and ns.Plan.List and ns.Plan.List() or {}) do
+		if entry.quest then quests = true end
+	end
+	local nearby = quests and WithoutGuided(Build(), guided) or {}
 	-- The quests you picked (Plan.lua) go with your route, in its order: their stops leave the rest's.
 	local picks = Picks(nearby)
+	-- (During a run, the rest of them only for Order to find the one you singled out among.)
+	if run and R.Singled() == 0 then nearby = {} end
 	-- (What you set aside is left out until a reload: R.Skip.)
 	for i = #nearby, 1, -1 do
 		local kept = R.Unskipped(nearby[i])
@@ -3659,6 +3765,20 @@ function R.Build()
 		nearby = WithoutExtras(nearby)
 	end
 	local route = Order(nearby, led)
+	-- A fight out of the player's reach (Steep) waits behind everything else the route has, in the order it had:
+	-- nobody is led to what is three or more levels above them while there is anything else to do. One the
+	-- player singled out is theirs to judge.
+	local waits = {}
+	for i = #route, 1, -1 do
+		if route[i].steep and not route[i].chosen then table.insert(waits, 1, table.remove(route, i)) end
+	end
+	for _, stop in ipairs(waits) do route[#route + 1] = stop end
+	if run then
+		-- (Of the quests nearby a run keeps the one you singled out, where it leads.)
+		for i = #route, 1, -1 do
+			if not route[i].chosen then table.remove(route, i) end
+		end
+	end
 	Shy.Clock("route: nearby stops"):Lap(debugprofilestop() - tick)
 	-- The guide leads, after a singled-out stop and any detours.
 	tick = debugprofilestop()
@@ -3714,7 +3834,8 @@ function R.Build()
 	-- were weighed against what the guide or the nearest stop would lead to; ahead of your route goes only one
 	-- you stand at or pass on the way to its first stop (YourWay), the rest after it.
 	tick = debugprofilestop()
-	local own = not run and ns.Plan and ns.Plan.Stops(function(entry) return picks[entry.quest] end) or {}
+	-- (During a dungeon run too: where you send yourself leads whatever the card is showing.)
+	local own = ns.Plan and ns.Plan.Stops(function(entry) return picks[entry.quest] end) or {}
 	local ahead = {}
 	if own[1] then now, ahead = YourWay(now, own[1]) end
 	for i, stop in ipairs(later) do table.insert(route, after + i - 1, stop) end
@@ -4130,7 +4251,10 @@ end
 -- A journey kept (R.journeyKept) is of the flights known and what the character can do: a flight point
 -- learned, a fall that can be slowed or water walked on, or the roads kept to make it another one.
 Shy:On("SHY_TERRAIN", function(why)
-	if why == "flights" or why == "moves" or why == "roads" then R.Forget() end
+	if why == "flights" or why == "moves" or why == "roads" or why == "pace" then R.Forget() end
+	-- A flight point learned: the stop sending you for it goes, and the ways by it are built (on the next pulse).
+	-- (The character's pace changed, a first mount: a flight their riding beats goes as well.)
+	if why == "flights" or why == "pace" then ns.RefreshRoute() end
 end)
 -- ... and of where you are: a loading screen, or somewhere else at once (the stone, a portal: R.LEAP yards
 -- between two looks) makes every kept journey and nearest place another one. Walking on into the next zone

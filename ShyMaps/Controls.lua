@@ -1,17 +1,15 @@
 -- The map's own controls, each where it belongs, so the map's top is left to the names:
---   the look (the drawn map or the terrain) on the black bar at the top right, between our breadcrumb
---   and the game's filter button, whose menu is ours while the view is in use (T:MapMenu: what shows on
---   the map, all in one place);
---   the corner plate in the bottom right, beside the quest log's toggle, the quests' key having the left
---   one and the same panel. Its row at the foot: your coordinates at its left, a press on them bringing the map
+--   the look (the drawn map or the terrain) on the black row at the top right, between the breadcrumb
+--   and the window's menu button (T:MapMenu: what shows on the map, all in one place);
+--   the corner plate in the bottom right, beside the quests' toggle (Window.lua), the quests' key having the
+--   left one and the same panel. Its row at the foot: your coordinates at its left, a press on them bringing the map
 --   to where you are (dim when you're on another map, whose name their hover gives); and at its right how the
 --   map follows you, Off | Follow | Smart: the map stays wherever you put it; you in its middle as you move; or
 --   you in sight with a little of your way ahead (View.lua). Over it, only while there is something to say:
 --     "Keep it here", offered while the following view was moved by hand far enough that you're out of
 --       sight: a press turns the following off, so the map stays where you put it;
 --     the mouse's coordinates, opening at the top while the mouse is on the map.
---   Coordinates in tenths as the game's setting asks. The game's own read its hidden map, so they are
---   faded while the view is in use.
+--   Coordinates in tenths as the game's setting asks.
 -- Other addons' buttons stand on the bar too, left of the look switch, each a square plate of its own:
 --   T:BarButton(key, { art = file, size = 12, order = 0, tip = "Find" (none: no hover, for a button plain to anyone), text = "...", hints = {...},
 --                      click = function(button) end, lit = function() return on end, made = function(button) end })
@@ -27,8 +25,8 @@ local T, View = ns.T, ns.View
 local UI = Shy.UI
 local C = UI.colors
 
--- The look switch, on the bar: the filter's plate line (11 under the bar's top, 22 tall) and 4 short of
--- that plate, which the game stands 10 past the bar's right end (and ShySkin's plate 5 inside that).
+-- The look switch, on the row: hung BAR_X, BAR_Y past the top right of the window's strip (Window.lua stands the
+-- strip so the switch is in the row's middle, a gap short of the menu's plate).
 local TALL = 22
 local LOOK_W = 56           -- each half
 local BAR_X, BAR_Y = 11, -11
@@ -58,7 +56,6 @@ local READ = 0.05           -- seconds between readings
 
 local bar, looks, plate, follow, you, keep, mouse
 local readIn = 0
-local gameCoords
 local elsewhere             -- the name of your map while it isn't the one shown
 
 local function Look(style)
@@ -99,7 +96,7 @@ end
 -- Other addons' buttons on the bar: a plate like the switch's, the picture pressed in it as a half is.
 local function Slot(slot)
 	local opts = slot.opts
-	local plate = CreateFrame("Frame", nil, WorldMapFrame)
+	local plate = CreateFrame("Frame", nil, View.Window())
 	plate:SetFrameLevel(bar:GetFrameLevel())
 	plate:SetSize(TALL, TALL)
 	UI.Skin(plate, C.bgHot)
@@ -140,7 +137,7 @@ local function Slots()
 		-- (One in the map's menu has no plate on the bar: ns.MenuTools.)
 		if not slot.opts.menu then
 			if not slot.plate then Slot(slot) end
-			-- (On the window holding the view: the game's, or ours.)
+			-- (On the window holding the view, or out of sight with it.)
 			slot.plate:SetParent(window)
 			slot.plate:SetFrameStrata(window:GetFrameStrata())
 			slot.plate:SetFrameLevel(bar:GetFrameLevel())
@@ -170,7 +167,7 @@ function T:BarButton(key, opts)
 	if ns.BarRoomChanged then ns.BarRoomChanged() end
 end
 
--- The view moved into our window or back: the bar goes with it, to the strip of the window holding it.
+-- The view moved into the window or out of it: the bar goes with it, to the strip of the window holding it.
 View.OnHost(function()
 	if not bar then return end
 	local window = View.Window()
@@ -239,19 +236,13 @@ local function Width()
 	readIn = 0
 end
 
--- Beside the quest log's toggle while it shows (the windowed map), else in the corner. The game stands
--- the toggle 2 in from the canvas's right edge.
+-- Beside the quests' toggle while there is one (it stands as far in from the corner as the coordinates), else in
+-- the corner.
 local function Stand()
 	if not plate then return end
-	-- (In ShyMaps' own window: its quests' toggle, as far in from the corner as the coordinates.)
-	local own = View.Own() and ns.Window and ns.Window.Toggle and ns.Window.Toggle()
-	local toggle = own or WorldMapFrame.SidePanelToggle
+	local toggle = ns.Window and ns.Window.Toggle and ns.Window.Toggle()
 	local right = INSET
-	if own and own:IsShown() then
-		right = INSET + own:GetWidth() + BESIDE
-	elseif toggle and toggle:IsShown() then
-		right = 2 + toggle:GetWidth() + BESIDE
-	end
+	if toggle and toggle:IsShown() then right = INSET + toggle:GetWidth() + BESIDE end
 	-- (Offsets are the plate's own, smaller, units: kept in screen terms.)
 	local k = Shy.Maps.OVER
 	plate:ClearAllPoints()
@@ -330,17 +321,6 @@ local function Build()
 	looks[2]:SetPoint("LEFT", looks[1], "RIGHT", 0, 0)
 	Slots()
 
-	-- The game's filter: its menu is ours while the view is in use, written fresh at each open. Pressed
-	-- again, ours closes (UI.Menu toggles on its owner).
-	local filter = WorldMapFrame.WorldMapTrackingOptionsButton
-	if filter then
-		hooksecurefunc(filter, "OpenMenu", function(self)
-			if not (View.InUse() and self:IsEnabled()) then return end
-			Menu.GetManager():CloseMenus()
-			UI.DropMenu(self, function(root) T:MapMenu(root) end)
-		end)
-	end
-
 	-- The corner plate, over the window (never on the overlay). A row comes into view as the plate opens over it.
 	plate = CreateFrame("Frame", nil, View.Chrome())
 	plate:SetFrameLevel(View.Level("PIN_FRAME_LEVEL_TOPMOST") + 150)
@@ -402,14 +382,6 @@ local function Build()
 	plate.follow, plate.you, plate.keep, plate.mouse = follow, you, keep, mouse
 
 	Stand()
-	local toggle = WorldMapFrame.SidePanelToggle
-	if toggle then
-		toggle:HookScript("OnShow", Stand)
-		toggle:HookScript("OnHide", Stand)
-	end
-	for _, frame in ipairs(WorldMapFrame.overlayFrames or {}) do
-		if frame.PlayerCoords and frame.CursorCoords then gameCoords = frame end
-	end
 	Paint()
 end
 
@@ -425,9 +397,11 @@ ns.Layer({
 			plate:SetShown(on)
 			Stand()
 		end
-		if gameCoords then gameCoords:SetAlpha(on and 0 or 1) end
 	end,
-	Open = Paint,
+	Open = function()
+		Stand()
+		Paint()
+	end,
 	Tick = function(dt)
 		-- (On the overlay the plate stays with the closed window.)
 		if View.Overlaid() then return end

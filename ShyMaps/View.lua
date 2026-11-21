@@ -1,8 +1,6 @@
--- The view: the map drawn by frames of our own, laid over the game's canvas inside its map window. The
--- game's canvas is faded and lies under the view, which takes the mouse: nothing of the game's map is
--- called or written from here, so its pins are never made from addon code (the game refuses that). The
--- window, the quest log, the buttons over the map and the keys stay the game's; when the game turns its
--- map (a quest picked in the log) the view follows.
+-- The view: the map drawn by frames of our own, in the map's window (Window.lua, View.Host). Nothing of the
+-- game's map is called or written from here, so its pins are never made from addon code (the game refuses
+-- that); the game's own map window is left as it is, its canvas the game's.
 --
 -- The overlay (T.db.overlay): while the window is closed, the same view lies faintly over the whole
 -- screen, under everything else, and takes no mouse: its port moves onto a cover of the screen's size,
@@ -11,7 +9,7 @@
 -- (T.db.overlayMarks), so it reads on a map the world shows through. It keeps you in its very middle and
 -- turns to your zone as you walk out of the one shown. The window opening takes
 -- the view back; closing, it goes onto the overlay again. What stands over the window (its controls,
--- other addons' notes: View.Chrome()) stays with the window.
+-- other addons' notes: View.Chrome()) stays with the window. With neither, the view rests out of sight.
 --
 -- The canvas is a frame of the map art's size (art pixels), scaled by `s` and placed in the port (the
 -- game's canvas area) so that the art point cx, cy (shares of the art) stands in the port's middle. The
@@ -72,6 +70,7 @@ local FOCUS = {             -- a focus (View.Focus)
 	EDGE = 0.5,             -- ... and this much darker at the port's edges
 	REACH = 0.22,           -- ... the edges' shade reaching this share of the port in
 }
+local REST = { 800, 600 }   -- the size the view keeps out of sight, while no window holds it
 local OVERLAY = {
 	HUSH = 0.25,            -- seconds between looks over the overlay for frames that would take the mouse
 	ZONE_LOOK = 1,          -- seconds between asks, on the overlay, whether you have walked off the map shown
@@ -111,7 +110,8 @@ local focus = {                -- one thing on the map looked at alone (View.Foc
 	veil = nil,                -- over the land, under every pin: its shade in a focus
 }
 local using, open = false, false
-local own                   -- { box, well, strip } while our window holds the view; nil: the game's window does
+local own                   -- { box, well, strip } while the map's window holds the view; nil while it is closed
+local rest                  -- out of sight: where the view and what stands over the window wait while it is closed
 local laid = {                 -- the overlay
 	on = false,                -- the port lies on the cover
 	over = nil,                -- a cover of its own over the map's, for what stands on the map: faded less
@@ -1493,9 +1493,12 @@ local function Let(button)
 end
 
 local function Build()
-	local scroll = WorldMapFrame.ScrollContainer
-	port = CreateFrame("Frame", nil, WorldMapFrame)
-	port:SetAllPoints(scroll)
+	rest = CreateFrame("Frame", nil, UIParent)
+	rest:SetSize(REST[1], REST[2])
+	rest:SetPoint("CENTER")
+	rest:Hide()
+	port = CreateFrame("Frame", nil, rest)
+	port:SetAllPoints(rest)
 	port:SetFrameLevel(LEVEL)
 	port:SetClipsChildren(true)
 	port:EnableMouse(true)
@@ -1551,8 +1554,8 @@ local function Build()
 	veil:Hide()
 	focus.veil = veil
 	-- What stands over the window: over the map area, the window's own (the port may leave for the overlay).
-	chrome = CreateFrame("Frame", nil, WorldMapFrame)
-	chrome:SetAllPoints(scroll)
+	chrome = CreateFrame("Frame", nil, rest)
+	chrome:SetAllPoints(rest)
 	chrome:SetFrameLevel(LEVEL)
 	chrome:EnableMouse(false)
 	chrome:Hide()
@@ -1615,9 +1618,7 @@ local function Build()
 	end)
 end
 
--- The game's window
-
-local toggleLevel   -- the game's quest log toggle's own level, kept while it is raised over the view
+-- The window
 
 local function Opened()
 	if not using then return end
@@ -1682,31 +1683,23 @@ local function Closed()
 	end
 end
 
--- The game turned its own map while open: a quest picked in the log, a link followed. (Closed, its map
--- is none of the overlay's business.)
-local function Turned()
-	if laid.on or own or not (using and open) then return end
-	local id = WorldMapFrame:GetMapID()
-	if id and id ~= map then View.Show(id) end
-end
-
--- The window of our own (Window.lua): while it is open the view lives in it, what stands over the map with it, and
--- the bar and the crumbs on its strip (each told through View.OnHost). The game's window keeps its own as ever.
+-- The map's window (Window.lua): while it is open the view lives in it, what stands over the map with it, and the
+-- bar and the crumbs on its strip (each told through View.OnHost). While it is closed they wait out of sight.
 local hosts = {}
 
 function View.OnHost(fn) hosts[#hosts + 1] = fn end
--- Where the bar and the crumbs go now: the strip of the window holding the view (the game's NavBar, or ours).
-function View.Strip() return own and own.strip or WorldMapFrame.NavBar end
--- The window holding the view: ours (its box) while it is, else the game's.
-function View.Window() return own and own.box or WorldMapFrame end
+-- Where the bar and the crumbs go now: the strip of the window holding the view, or out of sight.
+function View.Strip() return own and own.strip or rest end
+-- The window holding the view (its box), or out of sight while it is closed.
+function View.Window() return own and own.box or rest end
 function View.Own() return own ~= nil end
 
 local function Chrome()
-	local well = own and own.well or WorldMapFrame.ScrollContainer
-	chrome:SetParent(own and own.box or WorldMapFrame)
+	local window = own and own.box or rest
+	chrome:SetParent(window)
 	chrome:ClearAllPoints()
-	chrome:SetAllPoints(well)
-	chrome:SetFrameStrata((own and own.box or WorldMapFrame):GetFrameStrata())
+	chrome:SetAllPoints(own and own.well or rest)
+	chrome:SetFrameStrata(window:GetFrameStrata())
 	chrome:SetFrameLevel(LEVEL)
 	for _, fn in ipairs(hosts) do
 		local ok, err = pcall(fn, own ~= nil)
@@ -1719,11 +1712,11 @@ end
 -- The port onto the overlay's cover (the whole screen, low, kept from the mouse), or back into its window.
 local function Lodge(on)
 	laid.on = on
-	local window = own and own.box or WorldMapFrame
+	local window = own and own.box or rest
 	local home = on and cover or window
 	port:SetParent(home)
 	port:ClearAllPoints()
-	port:SetAllPoints(on and cover or (own and own.well) or WorldMapFrame.ScrollContainer)
+	port:SetAllPoints(on and cover or (own and own.well) or rest)
 	port:SetFrameStrata(home:GetFrameStrata())
 	port:SetFrameLevel(LEVEL)
 	-- What stands on the map goes onto the cover over the map's, and back onto the canvas: still laid over
@@ -1751,7 +1744,7 @@ end
 local function Home()
 	if not port then return end
 	Fade()
-	local want = using and T.db.overlay == true and not WorldMapFrame:IsShown() and not own
+	local want = using and T.db.overlay == true and not own
 	if want == laid.on then return end
 	if want then
 		Lodge(true)
@@ -1762,21 +1755,8 @@ local function Home()
 	end
 end
 
--- The window opening takes the view back from the overlay; closing, it goes onto the overlay again. (While our
--- window holds the view the game's comes and goes as it will: the view is ours till it closes.)
-local function Shown()
-	if own then return end
-	if laid.on then Home() end
-	Opened()
-end
-
-local function Hidden()
-	if laid.on or own then return end
-	Closed()
-	Home()
-end
-
--- Our window opened (box, its well and strip) or closed (nil): the view moves into it, or back.
+-- The map's window opened (box, its well and strip) or closed (nil): the view moves into it, or onto the overlay
+-- or out of sight.
 function View.Host(to)
 	if not port or (to and own and own.box == to.box) or (not to and not own) then return end
 	if open then Closed() end
@@ -1785,7 +1765,7 @@ function View.Host(to)
 	Lodge(false)
 	Chrome()
 	if not using then return end
-	if own or WorldMapFrame:IsShown() then Opened() else Home() end
+	if own then Opened() else Home() end
 end
 
 local function Use(on)
@@ -1802,21 +1782,10 @@ local function Use(on)
 		Chrome()
 	end
 	chrome:SetShown(on)
-	WorldMapFrame.ScrollContainer:SetAlpha(on and 0 or 1)
-	local toggle = WorldMapFrame.SidePanelToggle
-	if toggle then
-		if on then
-			toggleLevel = toggleLevel or toggle:GetFrameLevel()
-			toggle:SetFrameLevel(LEVEL + 400)
-		elseif toggleLevel then
-			toggle:SetFrameLevel(toggleLevel)
-			toggleLevel = nil
-		end
-	end
 	port:SetShown(on)
 	if not on then loading = nil end
 	Tell("use")
-	if on and (WorldMapFrame:IsShown() or own) then
+	if on and own then
 		Opened()
 	elseif on then
 		Home()
@@ -1826,20 +1795,8 @@ local function Use(on)
 	Shy:Fire("SHY_MAPS", on)
 end
 
-local hooked = false
-local function Ready()
-	if hooked then return true end
-	if not (WorldMapFrame and WorldMapFrame.ScrollContainer) then return false end
-	hooked = true
-	Build()
-	WorldMapFrame:HookScript("OnShow", Shown)
-	WorldMapFrame:HookScript("OnHide", Hidden)
-	hooksecurefunc(WorldMapFrame, "OnMapChanged", Turned)
-	return true
-end
-
 local function Apply()
-	if not Ready() then return end
+	if not port then Build() end
 	Use(T.db.on == true)
 	Home()
 end
@@ -1847,15 +1804,10 @@ end
 ns.OnApply(Apply)
 
 local events = CreateFrame("Frame")
-events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("GLOBAL_MOUSE_UP")
-events:SetScript("OnEvent", function(_, event, name)
-	if event == "ADDON_LOADED" then
-		if name == "Blizzard_WorldMap" and T.db then Apply() end
-	elseif drag and name == "LeftButton" then
-		-- This client sometimes never tells a frame its button came up.
-		Let("LeftButton")
-	end
+events:SetScript("OnEvent", function(_, _, name)
+	-- This client sometimes never tells a frame its button came up.
+	if drag and name == "LeftButton" then Let("LeftButton") end
 end)
 
 -- As the game's map canvas answers (Shy.addons.Maps:View()).

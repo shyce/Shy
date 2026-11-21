@@ -32,6 +32,32 @@ script summons, where creatures stand, loot, bosses, fishing levels
     GNU General Public License, version 3. The game content in it belongs
     to Blizzard Entertainment.
 
+What drops in this game, as its players recorded it: in the dungeons,
+and what quests ask for
+(ShyMaps, ShyQuest)
+    Data from ForeverDB.net (https://foreverdb.net)
+    ForeverDB, by ForeverDB.net: its players' recorded drops. GNU General
+    Public License, version 3, with an attribution term (section 7(b)):
+    the data keeps its first line, and its notices ship beside it
+    (ShyMaps\Data\DungeonsSeen-LICENSE.txt, -NOTICE.txt, -COPYING.txt;
+    ShyQuest\Data\QuestsSeen-LICENSE.txt, -NOTICE.txt, -COPYING.txt).
+
+Rough boss places and routes of the newest dungeons
+(ShyMaps)
+    ForeverDungeonRoutes, by Checkov23
+    https://github.com/Checkov23/ForeverDungeonRoutes
+    Its author's own rough routes, placed by hand from guides and videos.
+    MIT License, Copyright (c) 2026 Checkov23: its license is beside the
+    data (ShyMaps\Data\DungeonRoutes-LICENSE.txt).
+
+The painted land between the zones on the drawn map
+(ShyMaps)
+    OpenMap, by the OpenMap contributors
+    https://www.curseforge.com/wow/addons/openmap
+    Its painted fills of the land no zone map covers (ShyMaps\Media\GapFill).
+    MIT License, Copyright (c) 2026 OpenMap contributors: its license is
+    beside the data (ShyMaps\Data\GapFills-LICENSE.txt).
+
 Fonts (ShyCore\Media)
     Nunito, Nunito Sans, Noto, Lilita One, Bangers, Saira Stencil One,
     Staatliches, New Rocker and Rye, from Google Fonts

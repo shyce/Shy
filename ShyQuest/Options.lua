@@ -135,6 +135,8 @@ T:Settings({
 		desc = "The quest window gets a button for each item or spell the step uses and each NPC it names. Bind the first of each in Key Bindings." },
 	{ key = "guide.marks", label = "Mark who I target", sub = true, enabled = Buttoned, words = "raid marker star skull moon",
 		desc = "Targeting from a button also sets a raid marker, while you're solo." },
+	{ key = "guide.scan", label = "Rare alert", enabled = Guided, words = "rare scan creature warning",
+		desc = "A warning sound and a line in chat when a creature your step waits for shows up." },
 	{ key = "guide.gossip", label = "Auto pick gossip options", enabled = Guided, apply = AtUse,
 		desc = "Picks the gossip option the step needs. Hold Shift to choose yourself." },
 	{ key = "guide.takeFlights", label = "Auto take flights", enabled = Guided, apply = AtUse,

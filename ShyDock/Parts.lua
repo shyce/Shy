@@ -48,8 +48,9 @@ P.GUIDE, P.OBJECTIVES = 270, 140
 P.TOP_LEFT = { x = 16, y = -16 }
 -- Cells in the micro menu's row, tiles in the bags', rows of raid frames drawn.
 P.MENU_CELLS, P.BAG_TILES, P.RAID_ROWS = 10, 5, 2
--- The pet bar: ten buttons at half size, a seam over the housing's right end (Layout.lua, End).
-P.PET_BUTTONS, P.PET_SIZE, P.PET_GAP = 10, 22.5, 1
+-- The pet bar: its buttons in their housing, over the housing's right end (Layout.lua, End; Console.PET).
+P.PET_BUTTONS, P.PET_SIZE, P.PET_GAP, P.PET_PAD = ns.Console.PET.count, ns.Console.PET.button, ns.Console.PET.gap,
+	ns.Console.PET.pad
 -- The cockpit's labelled outlines: its rect's key, the label, and whether it is the accent's.
 P.COCKPIT = {
 	{ "box", "Cooldown manager", "cockpit", true }, { "cast", "Cast bar", "cast" }, { "buffs", "Tracked buffs", "tracked" },
@@ -603,7 +604,8 @@ function P.List(g, now, c, s)
 		end
 		if role.threat then Rect("threat", role.threat, { label = "Threat meter", piece = s.threat, faint = true }) end
 		local petW = P.PET_BUTTONS * P.PET_SIZE + (P.PET_BUTTONS - 1) * P.PET_GAP
-		Add("petbar", -petW / 2, g.petBar, petW / 2, g.petBar + P.PET_SIZE, { label = "Pet bar", cells = P.PET_BUTTONS, faint = true })
+		local foot = g.petBar + P.PET_PAD
+		Add("petbar", -petW / 2, foot, petW / 2, foot + P.PET_SIZE, { label = "Pet bar", cells = P.PET_BUTTONS, faint = true })
 	elseif s.threat then
 		-- Classic: a meter window standing on the damage meter (P.Threat)
 		local l, b, r, t = P.Threat(g, now, s.threat)
@@ -635,7 +637,8 @@ function P.List(g, now, c, s)
 	-- The pet bar: over the housing's right end, clear of the plates and what rises over them
 	if not role then
 		local petW = P.PET_BUTTONS * P.PET_SIZE + (P.PET_BUTTONS - 1) * P.PET_GAP
-		Add("petbar", g.width / 2 - petW, h.top + now.rise, g.width / 2, h.top + now.rise + P.PET_SIZE, { label = "Pet bar", cells = P.PET_BUTTONS, faint = true })
+		local right, foot = g.width / 2 - P.PET_PAD, h.top + now.rise + P.PET_PAD
+		Add("petbar", right - petW, foot, right, foot + P.PET_SIZE, { label = "Pet bar", cells = P.PET_BUTTONS, faint = true })
 	end
 
 	-- The cockpit (drawn by Picker.lua; here its labelled outlines)

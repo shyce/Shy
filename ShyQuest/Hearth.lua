@@ -179,7 +179,7 @@ local function Quit(root)
 	root:CreateButton("Stop asking about the hearthstone", function()
 		T.db.hearth.on = false
 		ns.Apply()
-	end)
+	end):SetSub("Turn it back on under Errands")
 end
 
 -- What the stone saves

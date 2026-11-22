@@ -324,7 +324,7 @@ local function Quit(root)
 	root:CreateButton("Stop asking about healing potions", function()
 		T.db.supplies.carry.heal = 0
 		ns.Apply()
-	end)
+	end):SetSub("Turn it back on under Errands")
 end
 
 -- The trainer as a route errand (R.AddErrand), or nil.

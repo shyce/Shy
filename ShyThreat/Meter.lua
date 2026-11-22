@@ -624,33 +624,7 @@ function M.Menu(root)
 		end)
 	end
 	root:CreateDivider()
-	local rows = root:CreateButton("Rows at first")
-	for _, n in ipairs({ 4, 6, 8, 10 }) do
-		rows:CreateRadio(tostring(n), function() return db.rows == n end, function()
-			db.rows = n
-			ns.Apply()
-		end)
-	end
-	root:CreateCheckbox("Pets", function() return db.pets end, function()
-		db.pets = not db.pets
-		ns.Apply()
-	end)
-	root:CreateCheckbox("Follow your mouseover", function() return db.hover end, function()
-		db.hover = not db.hover
-		ns.Apply()
-	end)
-	root:CreateCheckbox("Warn near the pull", function() return db.warn end, function()
-		db.warn = not db.warn
-		ns.Apply()
-	end)
-	root:CreateDivider()
-	root:CreateButton("Show a made-up fight", M.Try)
 	root:CreateButton("Settings", function() T:OpenOptions() end)
-	root:CreateButton("Hide the meter", function()
-		db.on = false
-		ns.Apply()
-		T:Print("threat meter hidden. Turn it back on with /shy threat")
-	end)
 end
 
 function M.Start()

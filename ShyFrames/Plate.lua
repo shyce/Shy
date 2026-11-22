@@ -1191,18 +1191,19 @@ function Plate:BuildRole()
 	self.role = glyph
 end
 
--- The name starts after the role's picture when there is one. Both stand on the texts' line (a layout's `lift`
--- over the health bar's middle).
+-- The name starts after what leads it when that shows: the role's picture, or a pet's mood (`lead`, Mood.lua).
+-- Both stand on the texts' line (a layout's `lift` over the health bar's middle).
 function Plate:ArrangeName()
 	local name, segs = self.texts.name, self.healthSegs
 	local lift = self.layout.lift or 0
-	if self.role then
-		self.role:ClearAllPoints()
-		self.role:SetPoint("LEFT", self.bars.health, "LEFT", L.TEXT_INSET + (self.clearL or 0), lift)
+	local lead = self.lead or self.role
+	if lead then
+		lead:ClearAllPoints()
+		lead:SetPoint("LEFT", self.bars.health, "LEFT", L.TEXT_INSET + (self.clearL or 0), lift)
 	end
 	name:ClearAllPoints()
-	if self.role and self.role:IsShown() then
-		name:SetPoint("LEFT", self.role, "RIGHT", 3, 0)
+	if lead and lead:IsShown() then
+		name:SetPoint("LEFT", lead, "RIGHT", 3, 0)
 	else
 		name:SetPoint("LEFT", self.bars.health, "LEFT", L.TEXT_INSET + (self.clearL or 0), lift)
 	end

@@ -21,7 +21,9 @@ local T = Shy:NewAddon(ADDON, {
 		-- Each kind's picture: "none", "class", "face" (2D) or "head" (3D); the style, "ours" (set into the frame) or
 		-- "blizzard" (round in a ring, like the game's); that ring's color, "steel", "accent" or "class" (Portrait.lua).
 		-- In the round, your level and your target's in a small circle of their own on the picture (`level`).
-		portrait = { pair = "none", small = "none", party = "none", style = "ours", ring = "steel", level = true },
+		-- By default the classic silhouette: heads in rings on you, your target, your pet and focus, faces on the party.
+		portrait = { pair = "head", small = "head", party = "face", style = "blizzard", ring = "steel", level = true },
+		mood = true,           -- a hunter's pet wears its mood on its frame (Mood.lua)
 		hurtOnly = true,       -- your health's numbers show only once you're hurt (Plate:HurtOnly)
 		height = "game",       -- your frame and your target's: "game" (as tall as the game's) or "compact" (L.HEIGHTS)
 		-- The health's words: "smart" (what you'd read: your own health, what a friend is missing, an enemy's
@@ -128,7 +130,20 @@ function T:Apply()
 	if ns.RefreshOptions then ns.RefreshOptions() end
 end
 
+-- Portraits left as they first came (none anywhere, set into the frame) take today's defaults, once. Any one of
+-- them picked keeps them all as they are.
+function ns.NewPortraits(db)
+	if db.portraitsMoved then return end
+	db.portraitsMoved = true
+	local p = db.portrait
+	if p.pair == "none" and p.small == "none" and p.party == "none" and p.style == "ours" then
+		local d = T.defaults.portrait
+		p.pair, p.small, p.party, p.style = d.pair, d.small, d.party, d.style
+	end
+end
+
 function T:OnLogin()
+	ns.NewPortraits(self.db)
 	started = true
 	ns.Frames.Start()
 	ns.Place.Start()

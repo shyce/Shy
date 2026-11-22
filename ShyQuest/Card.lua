@@ -2931,6 +2931,7 @@ local function QuestMenus(root, stop, heading)
 		if action.kind == "pickup" then
 			if stop.kind ~= "guide" then
 				entry = Row(root, "Never suggest " .. action.title, "hide", function() ns.HideQuest(action.id, action.title) end)
+				entry:SetSub("Bring it back in Settings, under Hidden quests")
 			end
 		elseif L.Has(action.id) then
 			entry = QuestMenu(root, action.id, action.title, stop)
@@ -3038,6 +3039,7 @@ local function StopMenu(root, stop)
 			later:CreateButton("For a couple of hours", function() ns.Snooze(dungeon, "hours") end)
 			later:CreateButton("Until level " .. until_, function() ns.Snooze(dungeon, "level", until_) end)
 			later:CreateButton("For good: skip its quests", function() ns.Snooze(dungeon, "off") end)
+				:SetSub("Turn it back on in Settings, under Dungeon quests")
 		end
 		for _, link in ipairs(stop.view.links or {}) do
 			Row(root, "Copy the link: " .. link.text, "link", function() UI.ShowCopyBox("A link from your guide", link.url) end)
@@ -3133,50 +3135,6 @@ local function CardMenu(root)
 		end
 	end
 
-	-- What the card lists and shows.
-	local shows = root:CreateButton("What the window shows")
-	shows:SetSub("Steps listed, pickups, buttons, the arrow")
-	shows:SetIcon(Glyph("shows"))
-	local steps = shows:CreateButton("Steps listed")
-	for count = 1, MAX_ROWS do
-		steps:CreateRadio(tostring(count), function() return T.db.card.rows == count end, function()
-			T.db.card.rows = count
-			ns.Apply()
-		end)
-	end
-	if levelling then
-		shows:CreateCheckbox("Include quests to pick up", function() return T.db.pickups end, function()
-			T.db.pickups = not T.db.pickups
-			ns.Apply()
-		end)
-		shows:CreateCheckbox("Nearby quests before the guide step", function() return T.db.guide.nearby ~= false end, function()
-			T.db.guide.nearby = T.db.guide.nearby == false
-			ns.Apply()
-		end)
-	end
-	if G.current and not G.finished then
-		-- GuideButtons.lua's strip
-		local buttons = shows:CreateButton("Target and use buttons")
-		local function Flag(label, key)
-			buttons:CreateCheckbox(label, function() return T.db.guide[key] ~= false end, function()
-				T.db.guide[key] = T.db.guide[key] == false
-				ns.Apply()
-			end)
-		end
-		Flag("Show them here", "buttons")
-		Flag("Mark who I target", "marks")
-		Flag("Alert when a rare is up", "scan")
-	end
-	if ns.Arrow then
-		shows:CreateCheckbox("Waypoint arrow follows my steps", function() return ns.Arrow.Following() end, function()
-			ns.Arrow.Toggle()
-		end)
-	end
-	shows:CreateCheckbox("Hide during combat", function() return T.db.card.hideInCombat end, function()
-		T.db.card.hideInCombat = not T.db.card.hideInCombat
-		ns.Apply()
-	end)
-
 	-- What the route adds on its own, and what the card speaks up about (registered by the files that do it).
 	-- Without levelling help only the errands for the quests you have and getting back to life are left.
 	local errands = root:CreateButton("Errands")
@@ -3190,11 +3148,6 @@ local function CardMenu(root)
 
 	root:CreateDivider()
 	Row(root, "Settings", "options", function() T:OpenOptions() end)
-	Row(root, "Hide this window", "hide", function()
-		T.db.card.shown = false
-		ns.Apply()
-		T:Print("quest window hidden, and the game's tracker is back. Turn it on again with /shy quest window.")
-	end)
 end
 
 local function RowMenu(root, row)

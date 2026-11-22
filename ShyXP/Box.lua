@@ -305,26 +305,9 @@ local function BoxMenu(root)
 		db.style = "compact"
 		ns.Refresh()
 	end)
-	local stats = root:CreateButton("Stats shown")
-	local rep = S.Mode() == "rep"
-	local switches = rep and db.repTiles or db.tiles
-	for _, def in ipairs(rep and ns.REP_TILES or ns.TILES) do
-		stats:CreateCheckbox(def.label, function() return switches[def.key] end, function()
-			switches[def.key] = not switches[def.key]
-			ns.Refresh()
-		end)
-	end
-	root:CreateCheckbox("Hide in combat", function() return db.hideInCombat end, function()
-		db.hideInCombat = not db.hideInCombat
-		ns.Refresh()
-	end)
 	root:CreateDivider()
 	root:CreateButton("Share my progress", ns.Share)
 	root:CreateButton("Settings", function() T:OpenOptions() end)
-	local move = root:CreateButton("Move the bars")
-	for _, place in ipairs(ns.Places()) do
-		if place.value ~= "box" then move:CreateButton(place.text, function() ns.SetPlace(place.value) end) end
-	end
 end
 
 function ns.SetupBox()

@@ -94,11 +94,6 @@ function Pl.Init()
 	end)
 	Shy.HUD.Manage(box, box, function(root)
 		root:CreateButton("Open ShyGroup", Open)
-		root:CreateButton("Hide this box", function()
-			T.db.pill = false
-			T:Apply()
-			T:Print("run status hidden. Turn it back on in the settings: /shy group status")
-		end)
 	end)
 	box:SetScript("OnEnter", function(self)
 		UI.SetBorder(self, C.hot)
@@ -126,12 +121,6 @@ function Pl.Init()
 				root:CreateButton("Who list", function() ns.Listing.OpenWho() end)
 				root:CreateButton("Default Group Finder", function() ns.Listing.OpenBlizzard() end)
 			end
-			root:CreateDivider()
-			root:CreateButton("Hide this button", function()
-				T.db.minimap = false
-				T:Apply()
-				T:Print("minimap button hidden. Turn it back on in the settings: /shy group minimap")
-			end)
 		end)
 	end
 
@@ -208,10 +197,6 @@ function Pl.Init()
 			menu = function(root)
 				root:CreateButton("Open ShyGroup", Open)
 				if run then root:CreateButton("Finish the run", function() Run.Stop() end) end
-				root:CreateButton("Hide this notice", function()
-					T.db.pill = false
-					T:Apply()
-				end)
 			end,
 		})
 	end

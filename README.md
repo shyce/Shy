@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.2.3" src="https://img.shields.io/badge/version-5.2.3-29b3ff"></a>
+  <a href="CHANGELOG.md"><img alt="version 5.2.4" src="https://img.shields.io/badge/version-5.2.4-29b3ff"></a>
   <img alt="released 21 Nov 2026" src="https://img.shields.io/badge/released-21_Nov_2026-4a5568">
-  <img alt="tests 37,719 passed" src="https://img.shields.io/badge/tests-37%2C719_passed-4ade80">
+  <img alt="tests 37,743 passed" src="https://img.shields.io/badge/tests-37%2C743_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,24 +93,14 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.2.3
+## What's new in 5.2.4
+
+### Added
+- **ShyFrames:** A hunter's pet shows its mood on its frame. Portraits in rings are the default now
 
 ### Changed
-- **ShyDock:** Request Stop on a flight sits in the extra ability's slot over your character
-- **ShyQuest:** Errands no longer pull your route. Right-click one to take it and it leads until it's done
-- **ShySkin:** The Shy button in the game menu opens Shy's home page
-
-### Fixed
-- **ShyBags:** Characters in your bag list showed the first two letters of the surname. They show your name's first letter and the surname's now
-- **ShyCore:** A switch you can't change now showed in your accent color. It's pale grey now, so it reads as locked
-- **ShyCore:** Your settings and layouts could split in two early in a session. They stay together now
-- **ShyQuest:** Errand lines in your quest list sat cramped against what follows. They have room now
-- **ShyQuest:** You got asked to switch guides in zones you were only passing through. It stays quiet on the way to your next step now
-- **ShyQuest:** Gray quests your guide sends you for were skipped. They're accepted now, even with Gray quests too off
-- **ShyQuest:** The crate at Three Corners and its twin in the Barrens sent you to a bank, auction house or mailbox. They don't now
-
-### Removed
-- **ShyDock:** You can't take a box out of the deck anymore. Boxes in the deck stay in it
+- **Menus:** Right-click menus on the quest window, XP box, threat meter and others are shorter. Settings you change rarely live in Settings now
+- **ShyDock:** Your pet bar has a slim frame of its own now. The buttons are bigger and sit clear of the bars
 
 [Every release](CHANGELOG.md)
 

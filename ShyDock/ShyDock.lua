@@ -80,6 +80,7 @@ function T:Apply()
 	if not started then return end
 	ns.Housing.Apply()
 	ns.Rack.Apply()
+	if ns.PetBar then ns.PetBar.Apply() end
 	ns.Cockpit.Apply()
 	if ns.Swing then ns.Swing.Apply() end
 	if ns.Pieces then ns.Pieces.Apply() end
@@ -116,6 +117,7 @@ function T:OnLogin()
 	started = true
 	ns.Housing.Start()
 	ns.Rack.Start()
+	if ns.PetBar then ns.PetBar.Start() end   -- (a new file: loaded once the client restarts)
 	ns.Cockpit.Start()
 	ns.Deck.Start()
 	ns.Arrange.Start()

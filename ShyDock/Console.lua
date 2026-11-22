@@ -135,7 +135,10 @@ C.ROLE_BASE, C.ROLE_LEAST = 1080, 0.85   -- the board's screen height; the least
 function C.RoleScale(height)
 	return max(C.ROLE_LEAST, (height or C.ROLE_BASE) / C.ROLE_BASE)
 end
-C.PET_BAR = 22.5               -- the pet bar's height (ten buttons at half size: Parts.lua draws it so)
+-- The pet bar: ten buttons at the icon size (of the game's 45), `gap` apart, in a slim housing of the theme's
+-- `pad` round them (PetBar.lua). PET_BAR is the row it takes, housing and all.
+C.PET = { count = 10, icon = 60, button = 27, gap = 2, pad = 4 }
+C.PET_BAR = C.PET.button + 2 * C.PET.pad
 C.SHELF = C.SEAM             -- between the floor and what lies under it
 C.DECK = 270                 -- deck width
 C.RACK_COLUMNS, C.RACK_ROWS = 2, 6

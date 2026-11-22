@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.2.4 (21 Nov 2026)
+
+### Added
+- **ShyFrames:** A hunter's pet shows its mood on its frame. Portraits in rings are the default now
+
+### Changed
+- **Menus:** Right-click menus on the quest window, XP box, threat meter and others are shorter. Settings you change rarely live in Settings now
+- **ShyDock:** Your pet bar has a slim frame of its own now. The buttons are bigger and sit clear of the bars
+
 ## 5.2.3 (21 Nov 2026)
 
 ### Changed

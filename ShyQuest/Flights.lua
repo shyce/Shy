@@ -87,7 +87,7 @@ local function Find(lead)
 			root:CreateButton("Stop asking about flight points", function()
 				T.db.flights.on = false
 				ns.Apply()
-			end)
+			end):SetSub("Turn it back on under Errands")
 		end,
 	}
 end

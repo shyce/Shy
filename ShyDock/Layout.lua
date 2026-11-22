@@ -66,7 +66,6 @@ local Bar, BarSetting = Enum.EditModeActionBarSystemIndices, Enum.EditModeAction
 local Chat, Meter = Enum.EditModeChatFrameSetting, Enum.EditModeDamageMeterSetting
 local Character = Enum.EditModeLayoutType.Character
 
-local SMALL = 50            -- pet bar icon size, percent
 L.OVER = 13                 -- minimum rise of what ShyFrames builds onto its plates' top edges (see Now)
 local CLEAR = Console.SEAM  -- gap between the housing (or plates) and what sits on them
 -- Above the cockpit: offsets of the default swing timers, and of the extra ability over them.
@@ -672,16 +671,18 @@ local function Row(index, row, more, fades)
 	}
 end
 
--- A small bar above one end of the housing (side -1 left, 1 right); in a layout by role, the pet and stance row
--- under the bars, in their middle (Console.Build's g.petBar).
+-- The pet bar above one end of the housing (side -1 left, 1 right); in a layout by role, the pet and stance row
+-- under the bars, in their middle (Console.Build's g.petBar). Its own housing's room round it (Console.PET.pad).
 local function End(index, side)
+	local pet = Console.PET
 	return {
 		system = System.ActionBar, index = index,
 		place = function(g, now)
-			if g.petBar then return "BOTTOM", "BOTTOM", 0, g.petBar end
-			return side < 0 and "BOTTOMLEFT" or "BOTTOMRIGHT", "BOTTOM", side * g.width / 2, g.housing.top + now.rise
+			if g.petBar then return "BOTTOM", "BOTTOM", 0, g.petBar + pet.pad end
+			return side < 0 and "BOTTOMLEFT" or "BOTTOMRIGHT", "BOTTOM", side * (g.width / 2 - pet.pad),
+				g.housing.top + now.rise + pet.pad
 		end,
-		settings = function() return BarSettings(SMALL, 2) end,
+		settings = function() return BarSettings(pet.icon, pet.gap) end,
 	}
 end
 

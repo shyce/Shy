@@ -102,8 +102,11 @@ local function Build(plate)
 end
 
 -- The ring's color: steel (glass under a look's own ring), your color, or the unit's class where it can be read.
+-- A hunter's pet that isn't happy wears its mood instead (Mood.lua).
 local function RingColor(box, unit)
 	if box.look and box.look:Worn() then return GLASS end
+	local mood = ns.Mood and ns.Mood.Ring(unit)
+	if mood then return mood end
 	local pick = T.db.portrait.ring
 	if pick == "accent" then return { Theme.Accent() } end
 	if pick == "class" and unit then
@@ -486,6 +489,12 @@ function P.Level(plate)
 	badge.dial:SetVertexColor(c[1], c[2], c[3])
 	if not badge:IsShown() then badge:Show() end
 	return true
+end
+
+-- The ring's color asked again (a pet's mood changed).
+function P.Retint(plate)
+	local box = plate.portrait
+	if box and box.ringed and box.col:IsShown() then Tint(box, plate.unit) end
 end
 
 -- The ring's colors follow the theme.

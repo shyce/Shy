@@ -809,7 +809,7 @@ local function Check(lead)
 				root:CreateButton(("Stop asking for %s"):format(pick.plan.word), function()
 					T.db.supplies.carry[pick.plan.key] = 0
 					ns.Apply()
-				end)
+				end):SetSub("Turn it back on under Errands")
 			end
 		end,
 	}

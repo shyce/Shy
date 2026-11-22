@@ -69,7 +69,7 @@ T:Settings({
 		desc = "Pick the console's layout and size, bars that grow as you level, and how big your cooldowns are." },
 
 	{ section = "Console" },
-	{ key = "housing", label = "Bar housing", words = "gryphons frame action bars steel",
+	{ key = "housing", label = "Bar housing", words = "gryphons frame action bars steel pet bar",
 		desc = "A steel frame sits behind your action bars and follows them when you move them. It hides the main bar's gryphons." },
 	{ key = "arrange", label = "Arrange around the console", enabled = Active, words = "boxes pieces spots homes",
 		desc = "Everything else on your screen gets a spot around the console. Anything you moved stays where you put it." },

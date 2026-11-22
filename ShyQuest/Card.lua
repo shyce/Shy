@@ -31,7 +31,7 @@ local TAG, DIAL_TAG = 14, 13         -- what a place is for, over its pin: its s
 local PIN_TAG_X, PIN_TAG_Y = 9, 5   -- ... and of a pin's: over the lower right of the pin's head, the pin's point showing under it
 local PIN_SEAT = 14                  -- a pin's middle under its row's top: its head comes up to the top of the title's letters
 local MARK_SEAT = 10                -- a mark's middle under a title alone: level with the title's middle, so it stays inside the row
-local BARE_ROW = 20                  -- a mark alone on a line (an errand in the tray): the line's height, the mark its middle (the hover lights the line evenly round it)
+local BARE_ROW = 24                  -- a mark alone on a line (an errand in the tray): the line's height, the mark its middle (the hover lights the line evenly round it)
 local HERE = 32                      -- the emblem that fills the dial on the ground where the lead is done (its picture's 64 texel cell)
 local LEAD_HEAD = 33                 -- the lead's title and caption; GuideButtons.lua's strip docks under them
 local ROW_HEAD = 16                  -- a later stop's title
@@ -1123,9 +1123,9 @@ end
 
 -- How far under the row's top its node stands (row.seat): a pin's head comes up to the top of the
 -- title's letters; a mark over lines sits between the title and them, and a mark under a title alone
--- (and an errand's, alone on its line in the tray) is level with the title's middle, inside the row.
+-- is level with the title's middle, inside the row. alone "bare": an errand's in the tray, on its line's middle.
 function Node.Seat(row, alone)
-	local seat = row.pin:IsShown() and PIN_SEAT or alone and MARK_SEAT or row.node
+	local seat = row.pin:IsShown() and PIN_SEAT or alone == "bare" and BARE_ROW / 2 or alone and MARK_SEAT or row.node
 	if row.seat == seat then return end
 	row.seat = seat
 	row.pin:ClearAllPoints()
@@ -1949,8 +1949,8 @@ function ns.CreateCard(parent, onResize)
 					guided = guided + 1
 					stops[#stops + 1] = stop
 				end
-			elseif i > 1 and stop.kind == "errand" and not stop.first and not stop.urgent then
-				-- Not on the way: no stop of the road, and it takes none of the steps asked for.
+			elseif i > 1 and stop.kind == "errand" and not stop.taken and not stop.urgent then
+				-- Not taken: no stop of the road, and it takes none of the steps asked for.
 				if #tray < room then tray[#tray + 1] = stop end
 			else
 				total = total + 1
@@ -2126,7 +2126,7 @@ function ns.CreateCard(parent, onResize)
 		level = level ~= "" and ("  " .. level) or ""
 		Far(row, true)
 		Node.Show(row, stop, place, bare)
-		if bare then Node.Seat(row, true) end
+		if bare then Node.Seat(row, "bare") end
 		-- An errand's line: its title and how far, centered on the line's middle with its sign (the hover lights
 		-- the line evenly round them); a stop's title hangs from the top over its lines.
 		if row.bare ~= (bare and true or false) then
@@ -2165,7 +2165,7 @@ function ns.CreateCard(parent, onResize)
 				Blank(row.lines[i])
 			end
 		end
-		Node.Seat(row, bare or at == ROW_HEAD)
+		Node.Seat(row, bare and "bare" or at == ROW_HEAD)
 		-- As tall as its lines, and as its node: a pin to its point, with what it is for over its lower
 		-- right to that; an errand in the tray is its one line.
 		local node = row.tagged and PIN_SEAT + PIN_TAG_Y + TAG / 2 + 1 or row.pin:IsShown() and PIN_SEAT + PIN / 2 + 1 or ZONE.row
@@ -2665,7 +2665,8 @@ function ns.CreateCard(parent, onResize)
 
 		-- The rest of the log, a line a zone, at the body's foot; the body then takes its room, and ShyXP's strip
 		-- stands under it.
-		if trayLast and folds[1] then y = y + 4 end
+		-- (The errands' marks reach their line's foot: what follows, or the card's own, keeps a little off them.)
+		if trayLast then y = y + 4 end
 		y = Zones(self, folds, y, RowFor)
 		local strip = ns.XP.Strip(self)
 		y = bodyTop + Body(self, bodyTop, y, strip and ns.XP.Height() + 4 or 6)
@@ -2994,6 +2995,14 @@ local function FloorMenu(root, stop)
 	end
 end
 
+-- What a right-click does with an errand: it leads only when you take it. nil: not one to take (what
+-- can't wait, or one you asked for or chose, whose menu has its own way back).
+function ns.TakeHint(stop)
+	if not (stop and stop.kind == "errand") or stop.urgent or stop.yours or R.Asked(stop.errand) then return nil end
+	if stop.taken then return "Back to my route" end
+	return stop.map and "Take me there" or "Do this now"
+end
+
 -- A row's menu is StopMenu then CardMenu; GuideWindow.lua's rows put their own entries over CardMenu
 -- through card.manage.
 local function StopMenu(root, stop)
@@ -3037,6 +3046,11 @@ local function StopMenu(root, stop)
 	elseif stop.kind == "fly" then
 		Row(root, "Point the way", "point", function() PointTheWay(stop) end)
 	elseif stop.kind == "errand" or stop.kind == "way" then
+		-- An errand leads only when you take it. One you asked for has its own way back (stop.menu).
+		local take = ns.TakeHint(stop)
+		if take then
+			Row(root, take, stop.taken and "back" or "route", function() R.Take(stop, not stop.taken) end)
+		end
 		-- One click puts an errand away for good; the card's Errands menu brings it back.
 		if stop.kind == "errand" and R.CanHush(stop.errand) then
 			Row(root, "Stop showing this", "hide", function() R.Hush(stop.errand, true) end):SetSub("Turn it back on under Errands")

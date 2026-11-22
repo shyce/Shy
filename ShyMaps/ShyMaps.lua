@@ -288,7 +288,7 @@ end
 function ns.Me()
 	local name, surname = UnitNameUnmodified("player")
 	if surname and surname ~= "" then name = (name or "?") .. " " .. surname end
-	return (name or "?") .. "@" .. (GetNormalizedRealmName() or "")
+	return (name or "?") .. "@" .. (Shy.Realm(true) or "")
 end
 
 function T:OnLoad()

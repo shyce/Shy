@@ -1088,7 +1088,7 @@ local function Record(kind, thing, offered)
 	for _, id in ipairs(C_QuestLog.GetAllCompletedQuestIDs()) do
 		if not issecretvalue(id) then mine[#mine + 1] = id end
 	end
-	local count, snapshot, who, giver = #mine, nil, UnitName("player") .. "-" .. GetRealmName(), kind .. thing.id
+	local count, snapshot, who, giver = #mine, nil, UnitName("player") .. "-" .. (Shy.Realm() or ""), kind .. thing.id
 	for _, id in ipairs(thing.gives or NONE) do
 		local quest = D.Quest(id)
 		if quest and not L.Has(id) and not L.Done(id) then

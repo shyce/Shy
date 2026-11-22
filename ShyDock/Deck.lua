@@ -5,8 +5,8 @@
 -- child, one strata under the docked boxes, which hide their own edge and fill
 -- (HUD's `docked`) and have no mover of their own: in layout mode the deck's mover
 -- covers the whole column, so the stack moves as one piece. A box becomes a tab
--- through the `toggle` it hands Shy.HUD.Create; its menu offers to take it out of
--- the deck and to put it back. Arrange.lua places the base and sizes the column (D.Stand).
+-- through the `toggle` it hands Shy.HUD.Create. A box in the deck stays in it: it has no
+-- place of its own while the deck is on. Arrange.lua places the base and sizes the column (D.Stand).
 -- The level is the guide's (ShyQuest's strip on its card), never the deck's.
 
 local ADDON, ns = ...
@@ -31,7 +31,6 @@ local base, column
 local up = false
 local tabs = {}
 local seams = {}                        -- hairlines between docked boxes
-local held = {}                         -- the boxes shown last, for the menus
 
 -- Tabs
 
@@ -145,34 +144,14 @@ local function ShowTabs(boxes)
 	end
 end
 
--- A box's way out of the deck and back, in its own menu and the deck's.
-local function Ways(root, box)
-	local label = box.toggle and box.toggle.label or box.title
-	if Shy.HUD.IsPlaced(box) then
-		root:CreateButton("Put " .. label:lower() .. " back in the deck", function()
-			Shy.HUD.Forget(box)
-			ns.Arrange.Soon()
-		end)
-	else
-		root:CreateButton("Take " .. label:lower() .. " out of the deck", function()
-			Shy.HUD.Release(box)
-			ns.Arrange.Soon()
-		end)
-	end
-end
-
--- Show the deck with a tab for each of `boxes` (left to right); `docked` are the ones that stack
--- in it. Returns the base for those to stack on, or nil with no boxes.
-function D.Show(boxes, docked)
+-- Show the deck with a tab for each of `boxes` (left to right). Returns the base for the boxes it holds to
+-- stack on, or nil with no boxes.
+function D.Show(boxes)
 	if #boxes == 0 then
 		D.Hide()
 		return nil
 	end
 	ShowTabs(boxes)
-	held = docked
-	for _, box in ipairs(docked) do
-		if not box.more then box.more = function(root) Ways(root, box) end end
-	end
 	up = true
 	Shy.HUD.Update(base)
 	return base
@@ -233,7 +212,6 @@ function D.Hide()
 end
 
 local function Menu(root)
-	for _, box in ipairs(held) do Ways(root, box) end
 	root:CreateButton("Console settings", function() T:OpenOptions() end)
 end
 

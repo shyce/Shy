@@ -104,7 +104,7 @@ T:Settings({
 	{ key = "giver.turnIn", label = "Turn in finished quests", sub = true, enabled = Giving, apply = AtUse,
 		desc = "Turns in and takes the reward. You pick when there's a choice." },
 	{ key = "giver.gray", label = "Gray quests too", sub = true, enabled = Giving, apply = AtUse,
-		desc = "Also accepts quests too low to give XP." },
+		desc = "Also accepts gray quests your guide doesn't send you for." },
 	{ key = "giver.again", label = "Repeatable quests too", sub = true, enabled = Giving, apply = AtUse,
 		desc = "Also turns in repeatables that take items from you each time." },
 

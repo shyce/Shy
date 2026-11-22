@@ -251,7 +251,7 @@ local function Trip(item, record)
 		caption = ("FOR %s  \194\183  BUY AT AUCTION"):format(quest:upper()),
 		map = at.map, x = at.x, y = at.y, thing = at.npc, who = at.npc.name,
 		mark = "buy",
-		first = true,
+		yours = true,                -- (You chose it: it leads.)
 		hover = function()
 			return { { title = "To buy", rows = { { icon = C_Item.GetItemIconByID(item), glyph = "coin", text = name, right = Price(item),
 				rightColor = UI.colors.dim } } } }

@@ -23,8 +23,9 @@
 -- Placed always: the three bottom bars, chat and the meter. The systems in
 -- PLACES are placed only while they are where Blizzard (or an earlier run)
 -- put them; one the player moved is left alone. On this client the XP bar,
--- stance, pet and possess bars and the leave-vehicle button are stacked on the
--- main bar, so they have to move with it.
+-- stance, pet and possess bars are stacked on the main bar, so they have to
+-- move with it. The leave-vehicle button (Request Stop on a flight) takes the
+-- extra ability's slot over the cockpit.
 --
 -- The cockpit (L.Cockpit; drawn by Cockpit.lua) seats the personal resource
 -- display, the cooldown viewers, the stance bar and the cast bar under the
@@ -74,6 +75,7 @@ local SWING, SWING_STEP, EXTRA = 32, 20, 28
 -- over what the cockpit mounts there, an encounter's bar a gap over it. The game hangs the button in a
 -- frame 120 tall: the button's foot is EXTRA_DROP over the frame's.
 local EXTRA_BUTTON, EXTRA_SCALE, EXTRA_OVER, EXTRA_GAP, EXTRA_DROP = 52, 0.85, 12, 8, 30
+local LEAVE = 32            -- the game's Request Stop (Leave Vehicle) button, seated in that slot
 -- The cockpit's box. Gems (essential cooldowns) and combo blades are half out of
 -- its top edge; the first row of small tiles (stances, utility cooldowns) is half
 -- out of its bottom. A second row of utility cooldowns hangs under that one.
@@ -1663,9 +1665,14 @@ local PLACES = {
 	Under(Enum.EditModeStatusTrackingBarSystemIndices.StatusTrackingBar1, function() return 0 end),
 	Under(Enum.EditModeStatusTrackingBarSystemIndices.StatusTrackingBar2, function(now) return now.second end),
 	End(Bar.PetActionBar, 1),
+	-- Request Stop on a flight, Leave Vehicle in one: the extra ability's slot over the cockpit (L.Over),
+	-- centred in it. Over your character in every layout. The two never show together.
 	{
 		system = System.VehicleLeaveButton,
-		place = function(g, now) return "BOTTOMLEFT", "BOTTOM", -g.width / 2, g.housing.top + now.rise end,
+		place = function(_, now)
+			local over = L.Over(Cockpit(now), true)
+			return "BOTTOM", "BOTTOM", over.x, over.foot + (over.button[4] - over.button[2] - LEAVE) / 2
+		end,
 	},
 	Rack(1),
 	Rack(-1),

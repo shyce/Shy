@@ -521,6 +521,28 @@ do
 		return guid:match("^Player%-(%d+)%-")
 	end
 
+	local function Named(text)
+		return type(text) == "string" and not issecretvalue(text) and text ~= ""
+	end
+
+	-- Your realm's name ("CAMWOW US2 Realm 4 PvP"; normalized: as a full name writes it, "CAMWOWUS2Realm4PvP").
+	-- A moment into a session the game may still give an empty one. Then it's the name the game gave before
+	-- for this realm, to any character of yours, kept for the account (ShyCoreDB.realms). nil until either is known.
+	function Shy.Realm(normalized)
+		local db, id = ShyCoreDB, Shy.RealmOf(UnitGUID("player"))
+		local name, short = GetRealmName(), GetNormalizedRealmName()
+		if Named(name) and Named(short) then
+			if db and id then
+				db.realms = db.realms or {}
+				local kept = db.realms[id]
+				if not (kept and kept[1] == name and kept[2] == short) then db.realms[id] = { name, short } end
+			end
+			return normalized and short or name
+		end
+		local kept = db and id and db.realms and db.realms[id]
+		return kept and kept[normalized and 2 or 1] or nil
+	end
+
 	function Shy.SameServer(guid, c, ruleset)
 		local theirs, mine = Shy.RealmOf(guid), Shy.RealmOf(UnitGUID("player"))
 		if theirs and mine and theirs ~= mine then return false end
@@ -873,7 +895,25 @@ end
 function P.Character()
 	local name, surname = UnitName("player")
 	if surname and surname ~= "" then name = name .. Constants.CharacterNameSeparatorConsts.CHARACTERNAME_SURNAME_SEPARATOR .. surname end
-	return name .. " - " .. GetRealmName()
+	return name .. " - " .. (Shy.Realm() or "")
+end
+
+-- Kept under this character's name with the realm left off (a session's first moment, before the game said it,
+-- with no name of it kept yet): moved under the whole name. Where both are kept, the whole name's stands.
+local NAMED = { { "uses" }, { "held" }, { "lineups" }, { "lineupMarks" }, { "voice", "heard" }, { "setup", "chars" } }
+function P.Fold()
+	local realm, db = Shy.Realm(), ShyCoreDB
+	if not (realm and db) then return end
+	local me = P.Character()
+	local stray = me:sub(1, #me - #realm)
+	for _, path in ipairs(NAMED) do
+		local t = db
+		for _, key in ipairs(path) do t = type(t) == "table" and t[key] or nil end
+		if type(t) == "table" and t[stray] ~= nil then
+			if t[me] == nil then t[me] = t[stray] end
+			t[stray] = nil
+		end
+	end
 end
 
 function P.Current()
@@ -1556,6 +1596,7 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")   -- (by now the game has said the realm's name: P.Fold)
 events:RegisterEvent("CHAT_MSG_ADDON")
 events:RegisterEvent("BN_CHAT_MSG_ADDON")
 events:SetScript("OnEvent", function(_, event, ...)
@@ -1566,6 +1607,11 @@ events:SetScript("OnEvent", function(_, event, ...)
 			a.isNew = _G[a.savedVariables] == nil   -- nothing was ever saved for it on this account
 			_G[a.savedVariables] = _G[a.savedVariables] or {}
 			if ShyCoreDB then Store().seen[a.name] = true end
+			-- (Before any profile is picked: what was kept under a name with no realm is this character's.)
+			if a == Shy.core then
+				local folded, why = pcall(P.Fold)
+				if not folded then geterrorhandler()(why) end
+			end
 			-- Must run before a.db is set; under pcall so a profile error can't stop the addon loading.
 			local ok, err = pcall(Pour, a)
 			if not ok then geterrorhandler()(err) end
@@ -1585,6 +1631,9 @@ events:SetScript("OnEvent", function(_, event, ...)
 		local ok, err = pcall(Settle)
 		if not ok then geterrorhandler()(err) end
 		ok, err = pcall(Classed)
+		if not ok then geterrorhandler()(err) end
+	elseif event == "PLAYER_ENTERING_WORLD" then
+		local ok, err = pcall(P.Fold)
 		if not ok then geterrorhandler()(err) end
 	elseif event == "CHAT_MSG_ADDON" then
 		local prefix, text, channel, sender = ...

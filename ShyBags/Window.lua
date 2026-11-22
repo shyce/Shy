@@ -403,15 +403,20 @@ end
 
 -- Character rail
 
--- The first two letters of the surname (else the name), upper-cased; UTF-8 characters are kept whole.
-local function Initials(c)
-	local from = (c.surname and c.surname ~= "") and c.surname or c.name
+-- The first letters of a word, as many as `count`; UTF-8 characters are kept whole.
+local function Letters(word, count)
 	local letters = {}
-	for letter in from:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+	for letter in word:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
 		letters[#letters + 1] = letter
-		if #letters == 2 then break end
+		if #letters == count then break end
 	end
-	return table.concat(letters):upper()
+	return table.concat(letters)
+end
+
+-- The name's first letter and the surname's, upper-cased. With no surname, the name's first two.
+local function Initials(c)
+	if c.surname and c.surname ~= "" then return (Letters(c.name, 1) .. Letters(c.surname, 1)):upper() end
+	return Letters(c.name, 2):upper()
 end
 
 -- Characters as UI.Menu rows.

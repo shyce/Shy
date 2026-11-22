@@ -360,6 +360,19 @@ function ns.OffGuide(show, reason)
 	off:Show()
 end
 
+-- Whether you're only passing through this zone on the way to your guide's step: the route boards a ride here,
+-- or the step is a short walk off (a flight to the next zone over can be quicker than the road).
+local PASSING = 1000         -- yards: the guide's step this near is where you're headed
+local function Passing(map)
+	for _, stop in ipairs(R.stops) do
+		if stop.kind == "fly" and stop.map == map then return true end
+		if stop.kind == "guide" and not stop.side then
+			return stop.yards ~= nil and stop.yards <= PASSING
+		end
+	end
+	return false
+end
+
 -- Asks once out of combat and off a flight.
 local waiting = false
 local function Ask()
@@ -382,6 +395,10 @@ local function Ask()
 		if #kept == 0 then return end
 		reason.quests = kept
 	elseif reason.zone ~= W.map or ns.char.zones[reason.zone] ~= nil then
+		return
+	elseif Passing(reason.zone) then
+		-- (Landed on the way: asked again only when you next come into it.)
+		asked[reason.zone] = nil
 		return
 	end
 	ns.OffGuide(true, reason)
@@ -412,7 +429,7 @@ local function OnZone()
 	for _, view in ipairs(G.Upcoming(FAR)) do
 		if view.map == map then return end
 	end
-	if Others(map, true) < NEW_ZONE then return end
+	if Others(map, true) < NEW_ZONE or Passing(map) then return end
 	asked[map] = true
 	want = { zone = map }
 	AskSoon(0)

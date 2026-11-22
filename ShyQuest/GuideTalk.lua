@@ -562,6 +562,26 @@ local function ByHand(quest)
 	return quest ~= nil and T:GuideWants(quest) == "leave"
 end
 
+-- A guide step on the card picks this quest up. Its optional steps count: they offer gray quests still worth their XP.
+local function Sent(quest)
+	local route = ns.Route
+	for _, list in ipairs({ route.stops, route.offered }) do
+		for _, stop in ipairs(list) do
+			if stop.kind == "guide" then
+				for _, action in ipairs(stop.actions) do
+					if action.kind == "pickup" and action.id == quest then return true end
+				end
+			end
+		end
+	end
+	return false
+end
+
+-- Gray quests wait for "Gray quests too", unless your guide sends you for one.
+local function LeftGray(quest, trivial)
+	return trivial == true and not T.db.giver.gray and not Sent(quest)
+end
+
 -- Guide-only mode: a quest off the guide is left to the player, reported once.
 local function OffGuide(quest)
 	if quest == nil or T.GuideSkips == nil or not T:GuideSkips(quest) then return false end
@@ -655,7 +675,7 @@ function PickGossip()
 	if giver.accept then
 		for _, q in ipairs(C_GossipInfo.GetAvailableQuests()) do
 			local quest = q.questID
-			if not issecretvalue(quest) and (giver.gray or not q.isTrivial) and (giver.again or not q.repeatable) and not Held(quest)
+			if not issecretvalue(quest) and not LeftGray(quest, q.isTrivial) and (giver.again or not q.repeatable) and not Held(quest)
 				and not Never("accept", quest) and not ByHand(quest) and not OffGuide(quest) then
 				Ask("pick", quest)
 				return C_GossipInfo.SelectAvailableQuest(quest)
@@ -682,7 +702,7 @@ function PickGreeting()
 	if giver.accept then
 		for i = 1, GetNumAvailableQuests() do
 			local isTrivial, _, isRepeatable, _, quest = GetAvailableQuestInfo(i)
-			if (giver.gray or not isTrivial) and (giver.again or not isRepeatable) and not Held(quest)
+			if not LeftGray(quest, isTrivial) and (giver.again or not isRepeatable) and not Held(quest)
 				and not Never("accept", quest) and not ByHand(quest) and not OffGuide(quest) then
 				Ask("pick", quest)
 				return SelectAvailableQuest(i)
@@ -730,7 +750,7 @@ local function AtDetail()
 	if Paused() or not giver.accept or quest == 0 or Stranger("questnpc") or TurnedAway() then return end
 	-- Auto-accepted by the client, or a repeat page for a quest just accepted.
 	if QuestGetAutoAccept() or Held(quest) then return PutAway(quest) end
-	if not giver.gray and C_QuestLog.IsQuestTrivial(quest) then return end
+	if LeftGray(quest, C_QuestLog.IsQuestTrivial(quest)) then return end
 	if not giver.again and C_QuestLog.IsRepeatableQuest(quest) then return end
 	if Never("accept", quest) or ByHand(quest) or OffGuide(quest) or Already("accept", quest) then return end
 	Ask("accept", quest)

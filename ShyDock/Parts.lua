@@ -643,8 +643,8 @@ function P.List(g, now, c, s)
 		for _, def in ipairs(P.COCKPIT) do
 			Rect(def[3], c.rects[def[1]], { label = def[2], group = true, accent = def[4] })
 		end
-		-- Over it: the slot an extra ability comes up in (Layout.Over), there only while there is one.
-		Rect("extra", ns.Layout.Over(c).button, { label = "Extra ability", faint = true })
+		-- Over it: the slot an extra ability comes up in (Layout.Over), and Request Stop on a flight. Each comes and goes.
+		Rect("extra", ns.Layout.Over(c).button, { label = "Extra ability, Request Stop", faint = true })
 	end
 
 	-- The system column: the minimap, the buffs left of it, the rows under it, the guide and the objectives

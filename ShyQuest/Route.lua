@@ -3165,10 +3165,12 @@ end)
 --         thing, who    the NPC, for the map
 --         with          other NPCs to speak to at the same place: { npc, ... }, marked and targeted too
 --         mark          the NPC's sign (Marks.lua SIGN: "sell", "train"), also on their nameplate
---         first         goes before the guide's step (see R.Passing, which says when a place is
---                       worth going to now); otherwise after it
---         waits         never before what leads this time, though it went first the last time or led: it
---                       waits for what is done right where the player stands (Stash.lua: a trip to the bank)
+--         first         worth doing now (see R.Passing, which says when a place is worth going to):
+--                       it heads the card's errands. It never moves the route. Only an errand you
+--                       take (R.Take) or asked for (R.Ask) goes before the guide's step.
+--         yours         you chose it in its own menu (Stock.lua: the auction house): it leads as if taken
+--         waits         never before what leads this time, though you took it: it waits for what is
+--                       done right where the player stands (Stash.lua: a trip to the bank)
 --         away          it carries the character off (the hearthstone): among those that go first it is
 --                       the last, after everything there is to do on this side of it
 --         lands         where it sets the character down ({ continent, north, west }): the rides to what
@@ -3186,7 +3188,7 @@ end)
 --       back to life) can't be put away.
 local ERRAND_NEAR = 120      -- yards: an errand this near is done now
 local errands, errandIds, errandNames = {}, {}, {}
-local ranFirst = {}          -- errand ids that went first last time
+local ranFirst = {}          -- errand ids that were worth doing now last time
 local errandsFound = false   -- the last build had an errand: a fight can hold it back or take it off
 
 function R.AddErrand(id, find, name)
@@ -3333,7 +3335,7 @@ function R.Passing(id, map, x, y, lead, reach, worth, strong)
 	if not map or not W.Known() then return false end
 	local yards = W.Walk(map, x, y)
 	if not yards then return false end
-	if R.Asked(id) then return true, yards end
+	if R.Asked(id) or R.errandLed == id then return true, yards end
 	local hold = ranFirst[id] and RULES.stay or 1
 	if yards <= (reach or ERRAND_NEAR) * hold then return true, yards end
 	local continent, north, west = W.ToWorld(map, x, y)
@@ -3353,14 +3355,16 @@ function R.Passing(id, map, x, y, lead, reach, worth, strong)
 	return false, yards
 end
 
--- Returns the errands that go first (nearest first), the rest, and those that lead everything.
--- R.held: the route is chosen again only for a walk (ShyQuest.lua). Then an errand goes first just as it
--- did the last time, and the one that led still leads: two near ones would trade the lead at every step.
+-- Returns the errands that go first, the rest, and those that lead everything.
+-- Only what you took or asked for goes first. The rest are the card's errands: what is worth doing now
+-- on top, then the nearest. R.held: the route is chosen again only for a walk (ShyQuest.lua). Then what
+-- was worth doing now still is, so two near ones don't trade places at every step.
 -- Without levelling help only the ALWAYS errands are asked for.
 local function Errands(lead)
 	local first, rest, now, urgent = {}, {}, {}, {}
 	local was, held = ranFirst, R.held and ranFirst ~= nil
 	local levelling = ns.Levelling()
+	local order, count = {}, 0   -- stop -> the order found in; id -> true: found
 	for _, id in ipairs(errandIds) do
 		-- pcall: one finder's error must not break the route. (Each timed on its own: the task manager names the slow one.)
 		local tick = debugprofilestop()
@@ -3391,17 +3395,20 @@ local function Errands(lead)
 			if stop.map then
 				Place(stop, stop.map, stop.x, stop.y, W.Known() and W.Walk(stop.map, stop.x, stop.y) or nil)
 			end
-			local goesFirst = stop.first
-			if held then goesFirst = was[id] == true end
-			-- (The errand that leads waits for nothing: it stays first, whatever builds the route again, until
-			-- it is done or no longer offered. The rest wait their turn behind it.)
-			if R.errandLed == id then goesFirst = true end
-			-- (One that waits for what is done right here stands behind it, however it went the last time.)
-			if stop.waits then goesFirst = false end
+			local soon = stop.first == true
+			if held then soon = was[id] == true end
+			if soon then now[id] = true end
+			stop.soon = soon or nil
+			-- (What you took leads until it is done or no longer offered. What you asked for leads too.)
+			local taken = stop.yours or R.errandLed == id or R.Asked(id) ~= nil
+			-- (One that waits for what is done right here stands behind it.)
+			if stop.waits then taken = false end
+			stop.taken = taken or nil
+			count = count + 1
+			order[stop], order[id] = count, true
 			if stop.urgent then
 				urgent[#urgent + 1] = stop
-			elseif goesFirst then
-				now[id] = true
+			elseif taken then
 				first[#first + 1] = stop
 			else
 				rest[#rest + 1] = stop
@@ -3409,6 +3416,12 @@ local function Errands(lead)
 		end
 	end
 	ranFirst = now
+	table.sort(rest, function(a, b)
+		if (a.soon == true) ~= (b.soon == true) then return a.soon == true end
+		local ay, by = a.yards or 0, b.yards or 0
+		if ay ~= by then return ay < by end
+		return order[a] < order[b]
+	end)
 	local led = R.errandLed
 	table.sort(first, function(a, b)
 		-- (What carries the character off waits for every other errand that goes first: they are on this
@@ -3417,7 +3430,8 @@ local function Errands(lead)
 		if led and (a.errand == led) ~= (b.errand == led) then return a.errand == led end
 		return (a.yards or 0) < (b.yards or 0)
 	end)
-	R.errandLed = first[1] and first[1].errand or nil
+	-- (What you took is let go once its finder has nothing more: it's done. Not in a fight, where most have nothing.)
+	if led and not order[led] and not InCombatLockdown() then R.errandLed = nil end
 	return first, rest, urgent
 end
 
@@ -4175,11 +4189,18 @@ function R.PickOf(stop)
 	return actions[1]
 end
 
+-- Taking an errand: it leads the route until it's done, or you let it go (taken false). The arrow points there.
+function R.Take(stop, taken)
+	if not (stop and stop.kind == "errand") then return end
+	R.errandLed = taken ~= false and stop.errand or nil
+	if taken ~= false and stop.map then Waypoint(stop) end
+	ns.Refresh()
+end
+
 -- A click on a quest's stop puts it on your route, on top (Plan.lua); a second click takes it off. The lead
 -- stop, guide steps, flights and errands are never put there: a click only points the way or runs them.
 function R.Go(stop)
-	-- (Your own pick: the errand that led lets it go first; an errand picked is the one that leads now.)
-	R.errandLed = stop.kind == "errand" and stop.errand or nil
+	-- (Your own pick goes before the errand you took. A click on an errand only points the way: R.Take leads.)
 	if stop.kind == "guide" then
 		local tracked = false
 		for _, action in ipairs(stop.actions) do

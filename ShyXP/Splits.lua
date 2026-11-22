@@ -229,7 +229,7 @@ function Splits.Start()
 	run = T.db.runs[guid] or { levels = {} }
 	T.db.runs[guid] = run
 	local _, class = UnitClass("player")
-	run.name, run.class, run.realm = UnitName("player"), class, GetRealmName()
+	run.name, run.class, run.realm = UnitName("player"), class, Shy.Realm() or run.realm
 	lastXP, lastMax, lastLevel = S.Progress()
 	-- A level met with no record began before the run was kept, its time partial: unless nothing of it is had yet.
 	if not run.levels[lastLevel] then Level(lastLevel).whole = lastXP == 0 or nil end

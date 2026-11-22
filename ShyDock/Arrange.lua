@@ -617,7 +617,7 @@ end
 -- if the player moved the base, the boxes stack there and y is returned unused.
 local function Deck(x, y)
 	local boxes = Boxes(DECK)
-	local base = ns.Deck.Show(Boxes(TABS), boxes)
+	local base = ns.Deck.Show(Boxes(TABS))
 	if not base then return y end
 	local scale = base:GetScale()
 	local free
@@ -631,10 +631,12 @@ local function Deck(x, y)
 	y = y + base:GetHeight() * scale
 	local top, edges = y, {}
 	for _, box in ipairs(boxes) do
+		-- (A box in the deck has no place of its own: one kept from before, when a box could be taken out, is let go.)
+		if HUD.IsPlaced(box) then HUD.Forget(box) end
 		local docked
 		if towing then
-			docked = not HUD.IsPlaced(box)
-			if docked then HUD.Attach(box, base, "BOTTOMLEFT", "BOTTOMLEFT", 0, (y - floor) / box:GetScale()) end
+			docked = true
+			HUD.Attach(box, base, "BOTTOMLEFT", "BOTTOMLEFT", 0, (y - floor) / box:GetScale())
 		else
 			docked = Home(box, { "BOTTOMLEFT", "BOTTOM", x, y })
 		end
@@ -697,7 +699,7 @@ function T:DeckRoom(box)
 	if not columnRoom or not base then return nil end
 	local room = columnRoom - (base:GetHeight() + ns.Deck.Head()) * base:GetScale()
 	for _, other in ipairs(Boxes(DECK)) do
-		if other ~= box and not HUD.IsPlaced(other) and other:IsShown() then room = room - other:GetHeight() * other:GetScale() end
+		if other ~= box and other:IsShown() then room = room - other:GetHeight() * other:GetScale() end
 	end
 	return math.max(200, room / box:GetScale())
 end
@@ -739,7 +741,7 @@ local function Stack()
 	columnRoom = T.db.deck and panelLeft and panelBottom - COLUMN_GAP - rowsTall - (TRACKER_MIN + COLUMN_GAP) - columnFoot or nil
 	if panelLeft then
 		local foot
-		local base = T.db.deck and ns.Deck.Show(Boxes(TABS), Boxes(DECK))
+		local base = T.db.deck and ns.Deck.Show(Boxes(TABS))
 		if base then
 			-- The deck's height is summed first, so its foot is known before it is stood (Deck stacks up from it).
 			local width = panelRight - panelLeft
@@ -748,19 +750,11 @@ local function Stack()
 			-- (Its header's height depends on whether a box shows in it: the closed deck is the header alone.)
 			local tall, open = base:GetHeight() * scale, false
 			for _, box in ipairs(Boxes(DECK)) do
-				if HUD.IsPlaced(box) then
-					-- Out of the deck, where the player has it: its own width again.
-					if fitted[box] then
-						HUD.Fit(box, fitted[box], true)
-						fitted[box] = nil
-					end
-				else
-					fitted[box] = fitted[box] or box:GetWidth()
-					HUD.Fit(box, width / box:GetScale())
-					if box:IsShown() then
-						tall = tall + box:GetHeight() * box:GetScale()
-						open = true
-					end
+				fitted[box] = fitted[box] or box:GetWidth()
+				HUD.Fit(box, width / box:GetScale())
+				if box:IsShown() then
+					tall = tall + box:GetHeight() * box:GetScale()
+					open = true
 				end
 			end
 			tall = tall + ns.Deck.Head(open) * scale

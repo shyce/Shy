@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.2.2" src="https://img.shields.io/badge/version-5.2.2-29b3ff"></a>
+  <a href="CHANGELOG.md"><img alt="version 5.2.3" src="https://img.shields.io/badge/version-5.2.3-29b3ff"></a>
   <img alt="released 21 Nov 2026" src="https://img.shields.io/badge/released-21_Nov_2026-4a5568">
-  <img alt="tests 37,691 passed" src="https://img.shields.io/badge/tests-37%2C691_passed-4ade80">
+  <img alt="tests 37,719 passed" src="https://img.shields.io/badge/tests-37%2C719_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,22 +93,24 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.2.2
-
-### Added
-- **ShyBags:** Hover the gold button to see every character's gold on your realm. It also shows who has gold waiting in the mail
-- **ShyBags:** The bag bar has a reagent bag slot. Dropping a bag on a worn one swaps them, even from inside it
-- **ShyCore:** Any window docks to any other, on any side. Windows docked to one host line up past each other
+## What's new in 5.2.3
 
 ### Changed
-- **ShyBags:** Your character list and gold show only the characters on your realm. On a PvP realm that means your side too
-- **ShyBags:** Your other characters are listed highest level first, then by gold. The one you're playing stays on top
-- **ShyBags:** A character's hover on the bag rail opens to the left, clear of your bags
-- **ShyBags:** You can size the mail, auction and gold windows. Mail letters show what they hold. Hovering the footer buttons says what they open
-- **ShyQuest:** The guide asks you to talk to a flight master once so it learns your flight paths. It no longer says you may need ones you have
+- **ShyDock:** Request Stop on a flight sits in the extra ability's slot over your character
+- **ShyQuest:** Errands no longer pull your route. Right-click one to take it and it leads until it's done
+- **ShySkin:** The Shy button in the game menu opens Shy's home page
 
 ### Fixed
-- **ShyBags:** The gold list could pick the wrong side on a PvP realm before the game named it. It keeps to your character's own realm now
+- **ShyBags:** Characters in your bag list showed the first two letters of the surname. They show your name's first letter and the surname's now
+- **ShyCore:** A switch you can't change now showed in your accent color. It's pale grey now, so it reads as locked
+- **ShyCore:** Your settings and layouts could split in two early in a session. They stay together now
+- **ShyQuest:** Errand lines in your quest list sat cramped against what follows. They have room now
+- **ShyQuest:** You got asked to switch guides in zones you were only passing through. It stays quiet on the way to your next step now
+- **ShyQuest:** Gray quests your guide sends you for were skipped. They're accepted now, even with Gray quests too off
+- **ShyQuest:** The crate at Three Corners and its twin in the Barrens sent you to a bank, auction house or mailbox. They don't now
+
+### Removed
+- **ShyDock:** You can't take a box out of the deck anymore. Boxes in the deck stay in it
 
 [Every release](CHANGELOG.md)
 

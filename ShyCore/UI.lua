@@ -7982,8 +7982,9 @@ end
 
 -- Switch: an on/off pill made of the slider's pieces. Its groove fills with the accent as the steel knob
 -- slides across, the knob carries the accent's dot while on, and it lights and glows under the mouse as the
--- slider's does. Off, it is grey all through: groove, knob and glow carry none of the accent's hue. The
--- label is only used as the hover title.
+-- slider's does. Off, it is grey all through: groove, knob and glow carry none of the accent's hue. Dimmed (not
+-- to be changed now) it carries none either way: on is a pale grey fill, so it reads as locked in any accent,
+-- a ramp's too. The label is only used as the hover title.
 -- The pill, and the knob's diameter; SPEED: it runs across in a seventh of a second.
 local SWITCH = { W = 36, H = 18, KNOB = 14, SPEED = 7 }
 
@@ -8018,12 +8019,13 @@ function UI.Switch(parent, label, get, set, opts)
 		return function()
 			local r, g, bl = color[1], color[2], color[3]
 			local y = 0.299 * r + 0.587 * g + 0.114 * bl
-			return Blend(y, y, y, r, g, bl, run and b.pos or 0)
+			return Blend(y, y, y, r, g, bl, (run and not b.dimmed) and b.pos or 0)
 		end
 	end
 	local tone = {
 		inset = Hueless(Theme.skin.inset), glow = Hueless(Theme.light),
 		metal = Hueless(Theme.skin.metal, true), lit = Hueless(Theme.skin.lit, true),
+		locked = Hueless(Theme.skin.lit),
 	}
 	local groove = Groove(0, tone.inset)
 	local fill = Groove(1, Theme.Accent)
@@ -8042,7 +8044,7 @@ function UI.Switch(parent, label, get, set, opts)
 	halo:SetPoint("CENTER", knob, "CENTER")
 	dot:SetPoint("CENTER", knob, "CENTER")
 	UI.Concentric(knob, dot)
-	b.groove, b.knob, b.halo = groove[3], knob, halo
+	b.groove, b.fill, b.knob, b.halo = groove[3], fill[3], knob, halo
 
 	-- glow: the side the glow is tinted for (the accent once the knob is past the middle, grey light before).
 	local over, held, glow = false, false, nil
@@ -8057,7 +8059,18 @@ function UI.Switch(parent, label, get, set, opts)
 		end
 		halo:SetAlpha(not lit and 0 or (held and 0.7 or 0.45))
 	end
+	-- The fill and the dot: the accent, or the pale grey while dimmed. (A tint sets the alpha: Place sets it after.)
+	local worn
+	local function Wear()
+		local locked = b.dimmed and true or false
+		if locked == worn then return end
+		worn = locked
+		local color = locked and tone.locked or Theme.Accent
+		for _, t in ipairs(fill) do Theme.Tint(t, color, 1) end
+		Theme.Tint(dot, color, 1)
+	end
 	local function Place(pos)
+		Wear()
 		b.pos = pos
 		knob:SetPoint("CENTER", b, "LEFT", cap + pos * (SWITCH.W - 2 * cap), 0)
 		for _, t in ipairs(fill) do t:SetAlpha(pos) end
@@ -8081,6 +8094,7 @@ function UI.Switch(parent, label, get, set, opts)
 			if self:IsVisible() then self:SetScript("OnUpdate", Run) else Place(self.target) end
 		end
 		SetDimmed(self, not IsEnabled(opts))
+		if (self.dimmed and true or false) ~= worn then Place(self.pos) end
 		Look()
 	end
 	b:SetScript("OnClick", function(self)

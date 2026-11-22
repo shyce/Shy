@@ -1,5 +1,24 @@
 # Changelog
 
+## 5.2.3 (21 Nov 2026)
+
+### Changed
+- **ShyDock:** Request Stop on a flight sits in the extra ability's slot over your character
+- **ShyQuest:** Errands no longer pull your route. Right-click one to take it and it leads until it's done
+- **ShySkin:** The Shy button in the game menu opens Shy's home page
+
+### Fixed
+- **ShyBags:** Characters in your bag list showed the first two letters of the surname. They show your name's first letter and the surname's now
+- **ShyCore:** A switch you can't change now showed in your accent color. It's pale grey now, so it reads as locked
+- **ShyCore:** Your settings and layouts could split in two early in a session. They stay together now
+- **ShyQuest:** Errand lines in your quest list sat cramped against what follows. They have room now
+- **ShyQuest:** You got asked to switch guides in zones you were only passing through. It stays quiet on the way to your next step now
+- **ShyQuest:** Gray quests your guide sends you for were skipped. They're accepted now, even with Gray quests too off
+- **ShyQuest:** The crate at Three Corners and its twin in the Barrens sent you to a bank, auction house or mailbox. They don't now
+
+### Removed
+- **ShyDock:** You can't take a box out of the deck anymore. Boxes in the deck stay in it
+
 ## 5.2.2 (21 Nov 2026)
 
 ### Added

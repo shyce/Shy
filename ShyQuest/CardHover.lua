@@ -506,7 +506,7 @@ local function Whole(stop, lead, way)
 		sections[#sections + 1] = Pays(handIns)
 		content.hints = { { "left", stop.manual and "Mark done" or "Point the way" }, { "right", "Done, skip, back" } }
 	elseif stop.kind == "errand" then
-		content.strip = stop.strip or (stop.first and "On your way" or "Close by")
+		content.strip = stop.strip or (stop.taken and "On your way" or stop.soon and "Worth doing now" or "Errand")
 		content.note = stop.caption
 		content.title = stop.title
 		content.sub, content.subHot = stop.lines and stop.lines[1], true
@@ -521,7 +521,8 @@ local function Whole(stop, lead, way)
 		end
 		sections[#sections + 1] = Where(stop, Said(content))
 		content.hints = { { "left", stop.hint or (stop.map and "Point the way" or "Open") } }
-		if stop.menu or R.CanHush(stop.errand) then content.hints[2] = { "right", stop.menuHint or "Not now, turn off" } end
+		local take = ns.TakeHint(stop)
+		if take or stop.menu or R.CanHush(stop.errand) then content.hints[2] = { "right", stop.menuHint or take or "Not now, turn off" } end
 	elseif stop.kind == "way" then
 		-- A stop of your own route (Plan.lua): where it is.
 		content.strip, content.note = "Your route", stop.caption
@@ -1384,7 +1385,7 @@ local function RowHints(stop)
 	if stop.kind == "guide" then return { { "left", "Pin step" }, { "right", "Point the way, done, skip" } } end
 	if stop.kind == "errand" then
 		-- An errand with a click of its own keeps it (Card.lua).
-		return { { "left", stop.click and (stop.hint or "Open") or "Pin" }, { "right", stop.menuHint or "Point the way" } }
+		return { { "left", stop.click and (stop.hint or "Open") or "Pin" }, { "right", stop.menuHint or ns.TakeHint(stop) or "Point the way" } }
 	end
 	if stop.kind == "fly" then return { { "left", "Pin" }, { "right", "Point the way" } } end
 	if stop.kind == "way" then return { { "left", "Pin" }, { "right", "Route" } } end

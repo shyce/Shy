@@ -218,9 +218,32 @@ local function LayoutKey()
 	local layout = info.layouts[index - presets]
 	if not layout then return nil end
 	if layout.layoutType == Enum.EditModeLayoutType.Character then
-		return "character:" .. UnitName("player") .. "-" .. GetNormalizedRealmName() .. ":" .. layout.layoutName
+		-- (Not before the realm's name is known: a key without it would be a second layout of this character's.)
+		local realm = Shy.Realm(true)
+		if not realm then return nil end
+		return "character:" .. UnitName("player") .. "-" .. realm .. ":" .. layout.layoutName
 	end
 	return "account:" .. layout.layoutName
+end
+
+-- This character's layouts kept with the realm left off (a session's first moment, before the game said it): each
+-- moved under its whole key. Where both are kept, the whole key's stands.
+local function Fold()
+	local realm = Shy.Realm(true)
+	if not realm then return end
+	local layouts, name = core.db.layouts, UnitName("player")
+	local stray = "character:" .. name .. "-:"
+	local found = {}
+	for key in pairs(layouts) do
+		if key:sub(1, #stray) == stray then found[#found + 1] = key end
+	end
+	for _, key in ipairs(found) do
+		local whole = "character:" .. name .. "-" .. realm .. ":" .. key:sub(#stray + 1)
+		if key ~= current then
+			if layouts[whole] == nil then layouts[whole] = layouts[key] end
+			layouts[key] = nil
+		end
+	end
 end
 
 local function Snap(key, data)
@@ -229,6 +252,7 @@ end
 
 function E.Follow()
 	local key = LayoutKey()
+	if key == current then Fold() end
 	if not key or key == current then return end
 	local layouts = core.db.layouts
 	local was = core.db.hud
@@ -248,6 +272,7 @@ function E.Follow()
 		core.db.hud = now
 		Act.ApplyAll()
 	end
+	Fold()
 end
 
 -- Puts back every layout changed since Edit Mode last saved, as Edit Mode does with its own.
@@ -279,6 +304,7 @@ end
 Shy:On("SHY_LOGIN", Start)
 local events = CreateFrame("Frame")
 events:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")   -- (the realm's name may come only now: LayoutKey)
 events:SetScript("OnEvent", function()
 	if core.db.layouts then E.Follow() end
 end)

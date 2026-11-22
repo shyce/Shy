@@ -334,9 +334,11 @@ local function Hints(pin)
 		first[2] = pin.picked and "Hide quest givers" or "Show quest givers"
 		return { first, { "right", stop.chosen and "Let the route choose" or "Head there" } }
 	end
-	if stop.kind == "errand" or stop.kind == "way" then return { { "right", "Point the way" } } end
+	-- (A step or an errand is taken as on the card: ns.TakeHint. A ride or your own place, the route goes by already.)
+	local take = ns.TakeHint and ns.TakeHint(stop)
+	if stop.kind == "errand" or stop.kind == "way" then return { take and { "right", take } or nil } end
 	if stop.party then return { first } end
-	if stop.kind == "guide" or stop.kind == "fly" then return { first, { "right", "Point the way" } } end
+	if stop.kind == "guide" or stop.kind == "fly" then return { first, take and { "right", take } or nil } end
 	return { first, { "right", stop.chosen and "Remove from my route" or "Go here next" } }
 end
 
@@ -366,9 +368,13 @@ local function NewPin(parent, size, mini)
 			-- Kept with its light: the hover stays and says the whole of it, with what to do about it (CardHover.lua).
 			if ns.CardHover and ns.CardHover.KeepPin then ns.CardHover.KeepPin(self, on) end
 		elseif button == "RightButton" and not self.stop.party then
-			-- As Hints says: the arrow for a guide step, flight or errand; the route for a quest or zone.
+			-- As Hints says: a step or an errand is taken; a quest or zone goes on the route.
 			local kind = self.stop.kind
-			if kind == "guide" or kind == "fly" or kind == "errand" or kind == "way" then ns.PointTheWay(self.stop) else R.Go(self.stop) end
+			if kind == "guide" or kind == "errand" then
+				if ns.TakeHint and ns.TakeHint(self.stop) then ns.TakeStop(self.stop) end
+			elseif kind ~= "fly" and kind ~= "way" then
+				R.Go(self.stop)
+			end
 		end
 		if over.pin == self and self.stop then
 			Tips.ShowStop(self, self.stop, "RIGHT", Hints(self), mini)
@@ -692,8 +698,9 @@ end
 -- someone walking it does. path.first[i]: the first of them that belongs to the way's point i (a point
 -- left out: those of the next one kept). path.depth[i]: the level each is on (Segment's
 -- depth): -1 under ground, 1 a level up, 0 on the ground. path.fall[i], path.water[i]: how much of the
--- stretch ending at each is a slowed fall off a cliff or walked on water (Shy.Maps.Ribbon's xs.fall,
--- xs.water), from the way's drops and, while water is walked on, its swum points.
+-- stretch ending at each is a slowed fall off a cliff or crosses water (Shy.Maps.Ribbon's xs.fall,
+-- xs.water), from the way's drops and its swum points. A swim is drawn as water too: a plain line over
+-- the sea reads as a boat.
 local function Smoothed(path, way, toNorth, toWest)
 	if path.way == way then return path end
 	path.way = way
@@ -712,8 +719,7 @@ local function Smoothed(path, way, toNorth, toWest)
 	-- The way's stretch ending at its point i: (fall, water).
 	local function Air(i)
 		if i < 2 or i > way.n then return 0, 0 end
-		local wet = 0
-		if way.water then wet = (Wet(i - 1) and Wet(i)) and 1 or (Wet(i - 1) or Wet(i)) and 0.5 or 0 end
+		local wet = (Wet(i - 1) and Wet(i)) and 1 or (Wet(i - 1) or Wet(i)) and 0.5 or 0
 		return (way.drop and way.drop[i]) and 1 or 0, wet
 	end
 	fall[1], water[1] = 0, 0
@@ -1230,6 +1236,15 @@ local function LayYou()
 		end
 	end
 	Finish(youPen)
+end
+
+-- The stop the arrow was pointed at (the card's "Point the way") when that is a stop of the route other than the
+-- one that leads, or nil: both maps' trail runs to it, as the arrow does.
+function you.Pointed()
+	local target = ns.Arrow and ns.Arrow.Target()
+	local stop = target and not target.lead and target.about
+	if not (stop and stop.north and stop.kind ~= "zone") or stop == R.stops[1] then return nil end
+	return stop
 end
 
 -- Whether the trail stands as it was laid: the player where they were, the same place led to and the same
@@ -2555,8 +2570,10 @@ local function LayMap(zooming)
 	-- The leading stop always has a pin: if nothing above covers it, it gets its own lit mark, or
 	-- the trail runs to the game's marker for that quest (where the stop is on it: one that stands on
 	-- the nearest ground of its own, lead.stands, is somewhere else).
-	if not heading then
-		local lead = R.stops[1]
+	-- A stop the arrow was pointed at takes the trail, whatever leads.
+	local pointed = you.Pointed()
+	if not heading or pointed then
+		local lead = pointed or R.stops[1]
 		local x, y
 		if lead and lead.kind ~= "zone" and lead.north and not Inside(lead) then x, y = PlaceOnMap(lead) end
 		led = x and lead or nil
@@ -3014,6 +3031,11 @@ local miniHeading                -- the leading pin
 local walkPen                    -- draws the walkers' ways on the minimap
 local miniWalks = {}             -- their stretches on this continent: { north = {}, west = {}, lit, color }
 local miniView                   -- the minimap's range in yards when its pins were last chosen
+
+-- The stop the minimap's trail runs to, as last chosen: the lead, or a stop the arrow was pointed at.
+function ns.TrailTo()
+	return miniHeading and miniHeading.stop or nil
+end
 local miniScale, miniGrow = 1, 1 -- pin scale (the setting times miniGrow), and growth with zoom (PIN.miniGrow)
 local miniAt = { stale = true }  -- what the minimap was last laid for; .stale: chosen again since
 local ChooseMini
@@ -3500,9 +3522,11 @@ local function DrawMini()
 			-- A chosen stop leads whatever else is lit.
 			if group.lit and (not miniHeading or group.stop.chosen) then miniHeading = pin end
 		end
-		-- The leading stop always has a pin: its own mark if nothing above covers it.
-		local lead = R.stops[1]
-		if not miniHeading and lead and lead.kind ~= "zone" and lead.north then
+		-- The leading stop always has a pin: its own mark if nothing above covers it. A stop the arrow was pointed
+		-- at takes the trail instead.
+		local pointed = you.Pointed()
+		local lead = pointed or R.stops[1]
+		if (pointed or not miniHeading) and lead and lead.kind ~= "zone" and lead.north then
 			lead.key = lead.key or ("lead" .. lead.kind .. (lead.actions[1] and lead.actions[1].id or ""))
 			miniHeading = Pin(lead, ns.StopMark(lead), true)
 		end

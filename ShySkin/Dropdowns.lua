@@ -17,6 +17,8 @@
 -- row, not the rail).
 -- A row's places are counted from the menu's edge as ours are: the rows start the menu's inset in (its style's
 -- GetInset), so a place in a row is the menu's less that.
+-- The options dropdowns (the game's settings) make their rows from a template of their own, with none of those
+-- pieces: words only, the chosen row's in gold. The housing dresses those as it watches the menu (Plain).
 -- Switched off, a menu already open keeps its look until it closes.
 
 local ADDON, ns = ...
@@ -25,15 +27,18 @@ local Theme = Shy.Theme
 local GLYPH = Shy.Skin.GLYPH
 local C = UI.colors
 local R = UI.MENU_ROW
+local abs, min, max = math.abs, math.min, math.max
 
 local FONT, TITLE = 11, 10   -- a row's words and a title's, as UI.Menu's rows and headings
 local WASH = 0.2             -- the accent's wash on the row under the mouse, as UI.Menu's
 local CARET = 10             -- a submenu's caret
 local INSET = { left = 16, top = 10, right = 16, bottom = 10 }   -- a menu style's, if it has none to give
 local TICK = "common-dropdown-icon-"   -- the game's art for a chosen mark starts so (its empty box's doesn't)
+local PLAIN = "WowMenuDropdownHighlightButtonTemplate"   -- the options dropdowns' rows: words only
 
 local M
 local houses = setmetatable({}, { __mode = "k" })   -- menu -> our housing round its rows
+local chosen = setmetatable({}, { __mode = "k" })   -- a plain row -> whether the game drew it chosen
 
 local function On()
 	return M and M.on
@@ -45,6 +50,17 @@ local function Inset(menu)
 	return type(inset) == "table" and inset or INSET
 end
 
+-- The menu a row stands in: its parent, or in a menu that scrolls, the menu round the scroll box holding it.
+local function MenuOf(row)
+	local parent = row:GetParent()
+	local menu = parent
+	for _ = 1, 4 do
+		if not menu or menu.isMenuProxy then break end
+		menu = menu:GetParent()
+	end
+	return menu and menu.isMenuProxy and menu or parent
+end
+
 -- The game's dropdown a menu was opened from: a root menu's owner; a submenu's through the row it hangs from (it
 -- is anchored to that row before its own rows are made).
 local function Dropdown(menu)
@@ -54,7 +70,7 @@ local function Dropdown(menu)
 		if type(owner) ~= "table" then owner = nil end
 		if owner and not owner.GetElementDescription then return owner end
 		local row = owner or select(2, menu:GetPoint(1))
-		menu = row and row.GetElementDescription and row:GetParent() or nil
+		menu = row and row.GetElementDescription and MenuOf(row) or nil
 	end
 end
 
@@ -66,7 +82,7 @@ end
 -- A row's places, counted from its own left (the menu's edge less the inset): the rail's middle, where its words
 -- start, where the rail ends. The rail is wider in a menu whose rows wear glyphs, as UI.Menu's.
 local function Places(frame)
-	local menu = frame:GetParent()
+	local menu = MenuOf(frame)
 	local left, rail = Inset(menu).left, Icons(menu) and R.railIcons or R.rail
 	return R.edge + rail / 2 - left, R.edge + rail + R.inset - left, R.edge + rail - left
 end
@@ -89,7 +105,7 @@ end
 -- The row's glyph on the rail's middle, when its dropdown gives one for its words (or its data); a piece of the
 -- row's own (the compositor's), so it goes back to the game's pool with the row. Returns it.
 local function Icon(frame, words)
-	local icons = Icons(frame:GetParent())
+	local icons = Icons(MenuOf(frame))
 	if not icons then return nil end
 	local description = frame.GetElementDescription and frame:GetElementDescription()
 	if not words and description then words = MenuUtil.GetElementText(description) end
@@ -182,32 +198,90 @@ local function Arrow(frame)
 	t:SetVertexColor(dim[1], dim[2], dim[3])
 end
 
--- The row under the mouse, lit as ours: the fill lifted, an accent wash fading to the right, from the housing's
--- edge to its edge (rail included). A disabled row, a title and a divider stay unlit.
-local function Hover(house)
-	local menu = house:GetParent()
-	local over
-	for _, child in ipairs({ menu:GetChildren() }) do
-		if child ~= house and child.GetElementDescription and child:IsObjectType("Button") and child:IsShown()
-			and child:IsEnabled() and child:IsMouseOver() then
-			over = child
-			break
+local function Near(r, g, b, color)
+	return abs(r - color[1]) < 0.02 and abs(g - color[2]) < 0.02 and abs(b - color[3]) < 0.02
+end
+
+-- A plain row (the options dropdowns'): its words in our font and ink, starting past the rail, and no wash of the
+-- game's under the mouse. Its words are put in by the template's own code, so this runs as the housing watches:
+-- in full when the game has put the row together (again), its words back in the game's font. Whether it is
+-- chosen is read then, from the game's gold, before our ink covers it.
+local function Plain(row)
+	local text, font = row.Text, UI.NameFont(FONT)
+	if text:GetFontObject() ~= font then
+		local r, g, b = text:GetTextColor()
+		chosen[row] = Near(r, g, b, { NORMAL_FONT_COLOR:GetRGB() })
+		text:SetFontObject(font)
+		text:ClearAllPoints()
+		text:SetPoint("LEFT", row, "LEFT", select(2, Places(row)), 0)
+	end
+	-- The game inks the words again as the mouse comes and goes.
+	local ink, r, g, b = row:IsEnabled() and C.text or C.dim, text:GetTextColor()
+	if not Near(r, g, b, ink) then text:SetTextColor(ink[1], ink[2], ink[3]) end
+	if row.HighlightBGTex:GetAlpha() > 0 then row.HighlightBGTex:SetAlpha(0) end
+end
+
+-- The scroll box of a menu that scrolls, while it does.
+local function Box(menu)
+	local box = rawget(menu, "ScrollBox")
+	return box and box:IsShown() and box or nil
+end
+
+-- The menu's rows in sight: its own, or while it scrolls, those the scroll box's view holds.
+local function Rows(menu, house)
+	local rows = {}
+	local function Take(...)
+		for i = 1, select("#", ...) do
+			local row = select(i, ...)
+			if row ~= house and row.GetElementDescription and row:IsVisible() then rows[#rows + 1] = row end
 		end
 	end
+	Take(menu:GetChildren())
+	local box = Box(menu)
+	if box then
+		for _, holder in ipairs({ box:GetScrollTarget():GetChildren() }) do Take(holder:GetChildren()) end
+	end
+	return rows
+end
+
+-- Stands a texture of the housing's across a row's height: from x to the housing's edge, or (no width) centered
+-- at x. In a menu that scrolls, only what is in the box's sight: a row half out is lit only up to its edge.
+local function Across(house, t, row, x, wide)
+	local top, bottom, from = row:GetTop(), row:GetBottom(), house:GetTop()
+	if not (top and bottom and from) then return t:Hide() end
+	local box = Box(house:GetParent())
+	local high, low = box and box:GetTop(), box and box:GetBottom()
+	t:ClearAllPoints()
+	if wide then
+		if high and low then top, bottom = min(top, high), max(bottom, low) end
+		if top <= bottom then return t:Hide() end
+		t:SetPoint("TOPLEFT", house, "TOPLEFT", x, top - from)
+		t:SetPoint("BOTTOMRIGHT", house, "TOPRIGHT", -x, bottom - from)
+	else
+		local mid = (top + bottom) / 2
+		if high and low and (mid > high or mid < low) then return t:Hide() end
+		t:SetPoint("CENTER", house, "TOPLEFT", x, mid - from)
+	end
+	t:Show()
+end
+
+-- The housing watching its menu: the plain rows dressed (Plain), the chosen one's check on the rail, and the row
+-- under the mouse lit as ours: the fill lifted, an accent wash fading to the right, from the housing's edge to its
+-- edge (rail included). A disabled row, a title and a divider stay unlit.
+local function Watch(house)
+	local over, mark
+	for _, row in ipairs(Rows(house:GetParent(), house)) do
+		if row.frameTemplateOrFrameType == PLAIN and row.Text and row.HighlightBGTex then
+			Plain(row)
+			if chosen[row] then mark = row end
+		end
+		if not over and row:IsObjectType("Button") and row:IsEnabled() and row:IsMouseOver() then over = row end
+	end
 	local lit = house.lit
-	if not over then
-		lit.fill:Hide()
-		lit.wash:Hide()
-		return
-	end
-	local top, bottom, from = over:GetTop(), over:GetBottom(), house:GetTop()
-	if not (top and bottom and from) then return end
 	for _, t in ipairs({ lit.fill, lit.wash }) do
-		t:ClearAllPoints()
-		t:SetPoint("TOPLEFT", house, "TOPLEFT", R.edge, top - from)
-		t:SetPoint("BOTTOMRIGHT", house, "TOPRIGHT", -R.edge, bottom - from)
-		t:Show()
+		if over then Across(house, t, over, R.edge, true) else t:Hide() end
 	end
+	if mark then Across(house, house.tick, mark, R.edge + house.rail:GetWidth() / 2) else house.tick:Hide() end
 end
 
 local function Light(house)
@@ -217,8 +291,9 @@ local function Light(house)
 end
 
 -- The housing, fitted round the rows: R.pad and the edge over the first and under the last, the rows' tail past
--- their end, the rail from the edge. A frame of ours a level over the menu's own (its background faded under it)
--- and under the rows (the game stands them 20 over it).
+-- their end, the rail from the edge. A frame of ours at the menu's own level (its background faded) and under
+-- the rows (the game stands them 20 over it). In a menu that scrolls, the box and its bar stand a level over the
+-- menu, so they stay over the housing; the bar wears ours.
 local function House(menu)
 	local house = houses[menu]
 	if not On() then
@@ -239,18 +314,26 @@ local function House(menu)
 		wash:SetColorTexture(1, 1, 1, 1)
 		house.lit = { fill = fill, wash = wash }
 		house.rail = parts.rail
-		house:SetScript("OnUpdate", Hover)
+		local tick = house:CreateTexture(nil, "ARTWORK")
+		tick:SetTexture(GLYPH.tick)
+		tick:SetSize(R.check, R.check)
+		house.tick = tick
+		house:SetScript("OnUpdate", Watch)
 		houses[menu] = house
 	end
 	-- The rail as wide as the rows were laid out for (wider when they wear glyphs).
 	house.rail:SetWidth(Icons(menu) and R.railIcons or R.rail)
+	local light = Theme.light
+	house.tick:SetVertexColor(light[1], light[2], light[3])
 	local inset, room = Inset(menu), R.edge + 1
 	house:ClearAllPoints()
 	house:SetPoint("TOPLEFT", menu, "TOPLEFT", 0, -(inset.top - room))
 	house:SetPoint("BOTTOMRIGHT", menu, "BOTTOMRIGHT", -(inset.right - R.edge - R.inset), inset.bottom - room)
-	house:SetFrameLevel(menu:GetFrameLevel() + 1)
+	house:SetFrameLevel(menu:GetFrameLevel())
+	local bar = rawget(menu, "ScrollBar")
+	if bar and bar.Track and bar.Track.Thumb then ns.ScrollBar(M.kit, bar) end
 	Light(house)
-	Hover(house)
+	Watch(house)
 	house:Show()
 	for _, region in ipairs({ menu:GetRegions() }) do region:SetAlpha(0) end
 end

@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffTweaks|r
 ## Notes: Auto-repair, sell junk, skip gossip and dozens more small time-savers |cff888888/shy tweaks|r
 ## Author: Shyce Cream
-## Version: 5.2.5
+## Version: 5.2.7
 ## X-Date: 2026-11-22
 ## IconTexture: Interface\AddOns\ShyTweaks\Media\ShyTweaksMarkColor
 ## Dependencies: ShyCore

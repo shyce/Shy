@@ -39,7 +39,7 @@ local COLS = {
 local FLAG_X = 716
 -- What each column says, for its hover.
 local MEANS = {
-	name = "Every Shy addon the game has loaded.",
+	name = "Every " .. Shy.Brand.FAMILY .. " addon the game has loaded.",
 	share = "How much of each frame it takes right now, counted the way the game's addon list does.",
 	now = "Milliseconds it takes each frame, averaged over the last 60 frames.",
 	avg = "Milliseconds it takes each frame, on average since login.",

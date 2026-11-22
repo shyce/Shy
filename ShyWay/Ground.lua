@@ -3246,8 +3246,8 @@ end
 -- whichever node they are in (a place has no height, and whoever stands there may be a yard from a wall,
 -- or behind a counter that is spoken to over); else every tier of its node (row, col: Stand's). on: of
 -- those, the ones of that look where there are any. A floor of a cell round it counts only when it stands
--- about as high as one of the place's own (Tier.BESIDE): the water at the foot of a cliff is not a way of
--- arriving on the cliff. up: the height the goal stands at, where it is known; of the place's own floors,
+-- about as high as one of the place's own (Tier.BESIDE), and water never does round a place on land: the
+-- sea under a pier's end is not a way of arriving on the pier. up: the height the goal stands at, where it is known; of the place's own floors,
 -- only those that near it (Tier.UP_NEAR) where there are any: the top of a tower, not the hall at its foot.
 function Tier.Goals(data, ground, row, col, north, west, on, up)
 	local keys, seen = {}, {}
@@ -3255,6 +3255,9 @@ function Tier.Goals(data, ground, row, col, north, west, on, up)
 		local cellRow, cellCol = CellAt(data, north, west)
 		local heights, land, wet
 		local aimed = up ~= nil and Tier.Near(ground, cellRow, cellCol, up)
+		-- (Stood on dry, that high: no water is the place, under it or round it. The sea under a pier's end
+		-- may be as near its height as the deck.)
+		local dry = aimed and Tier.Near(ground, cellRow, cellCol, up, true)
 		-- (None of the place's own floors that high, but one of a cell round it: someone behind a counter,
 		-- spoken to from the floor in front of it; someone in a shop the floors don't know, two cells from the
 		-- hall's. Of all those cells, as far out as the nearest that has one (Tier.NearRound, as Pocket.Floors
@@ -3274,7 +3277,7 @@ function Tier.Goals(data, ground, row, col, north, west, on, up)
 							for k = 0, Floors(tile, cell) - 1 do
 								local _, swum, _, look, height = Floor(tile, cell, k)
 								local high = height and up and math.abs(height - up) <= Tier.UP_NEAR
-								local off = (aimed and own and not high) or (round_ and not high)
+								local off = (aimed and own and not high) or (round_ and not high) or (dry and swum)
 								if not (on ~= nil and look ~= on) and not off then
 									local beside = true
 									if not own and heights and #heights > 0 then
@@ -3284,9 +3287,10 @@ function Tier.Goals(data, ground, row, col, north, west, on, up)
 												if each and math.abs(each - height) <= Tier.BESIDE then near = true end
 											end
 										end
-										-- Water under a cliff often keeps no height of its own. It is not the
-										-- place when the place itself is on land.
-										if swum and land and not wet then beside = near
+										-- Water round a place on land is not the place, however near its height:
+										-- the sea under a pier's end, the lake at a cliff's foot. Nothing climbs
+										-- out of it there.
+										if swum and land and not wet then beside = false
 										elseif height then beside = near end
 									end
 									if beside then
@@ -3309,6 +3313,21 @@ function Tier.Goals(data, ground, row, col, north, west, on, up)
 						end
 					end
 				end
+			end
+		end
+		-- (A tier may hold a few cells of a pier and the sea round them, its place in the sea: reached by a
+		-- swim. Stood on dry, a tier whose place is dry is the place where there is one.)
+		if dry then
+			local kept = 0
+			for index = 1, #keys do
+				local key = keys[index]
+				if not select(3, Tier.Place(data, key)) then
+					kept = kept + 1
+					keys[index], keys[kept] = keys[kept], key
+				end
+			end
+			if kept > 0 then
+				for index = #keys, kept + 1, -1 do keys[index] = nil end
 			end
 		end
 	end
@@ -3350,12 +3369,12 @@ function Tier.Goals(data, ground, row, col, north, west, on, up)
 	return keys
 end
 
--- Whether a cell has a floor within Tier.UP_NEAR yards of the height `up`.
-function Tier.Near(ground, row, col, up)
+-- Whether a cell has a floor within Tier.UP_NEAR yards of the height `up` (dry: one that is walked).
+function Tier.Near(ground, row, col, up, dry)
 	local tile, cell = CellIn(ground, row, col)
 	for k = 0, Floors(tile, cell) - 1 do
-		local height = select(5, Floor(tile, cell, k))
-		if height and math.abs(height - up) <= Tier.UP_NEAR then return true end
+		local _, swum, _, _, height = Floor(tile, cell, k)
+		if height and math.abs(height - up) <= Tier.UP_NEAR and not (dry and swum) then return true end
 	end
 	return false
 end
@@ -3978,6 +3997,19 @@ function Pocket.Floors(data, ground, north, west, into, level, up)
 				if kept > 0 then break end
 			end
 		end
+		-- Of those, the ones stood on dry where there are any: not the sea under a pier's end (Tier.Goals).
+		local dry = 0
+		for index = 1, kept do
+			local id = into[index]
+			local cell = id % FSTRIDE
+			local r, c = floor(cell / CSTRIDE), cell % CSTRIDE
+			local _, swum = Floor(CellIn(ground, r, c), (r % CELLS) * CELLS + c % CELLS, floor(id / FSTRIDE))
+			if not swum then
+				dry = dry + 1
+				into[index], into[dry] = into[dry], id
+			end
+		end
+		if dry > 0 then kept = dry end
 		if kept > 0 then count = kept end
 	end
 	return count

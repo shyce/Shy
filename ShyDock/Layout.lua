@@ -59,7 +59,8 @@ local floor, max, min, abs = math.floor, math.max, math.min, math.abs
 local L = {}
 ns.Layout = L
 
-L.NAME = "Shy"
+L.NAME = Shy.Brand.FAMILY   -- our Edit Mode layout's name
+L.WAS = Shy.Brand.OLD      -- what it was called before: still ours, renamed as it's written
 
 local System = Enum.EditModeSystem
 local Bar, BarSetting = Enum.EditModeActionBarSystemIndices, Enum.EditModeActionBarSetting
@@ -1858,7 +1859,7 @@ end
 local function Presets() return Enum.EditModePresetLayoutsMeta.NumValues end
 
 local function IsMine(layout)
-	return layout and layout.layoutName == L.NAME and layout.layoutType == Character
+	return layout and (layout.layoutName == L.NAME or layout.layoutName == L.WAS) and layout.layoutType == Character
 end
 
 -- Index of our layout in the saved list, or nil.
@@ -2519,6 +2520,7 @@ function L.SetUp(size, style, opts)
 	local layout, index
 	if again then
 		layout = saved[mine]
+		layout.layoutName = L.NAME
 	else
 		-- Copy the active layout: a preset or one of the player's.
 		local source = active <= presets and EditModePresetLayoutManager:GetCopyOfPresetLayouts()[active]

@@ -175,13 +175,6 @@ local function Minutes(seconds)
 	return ("%d min"):format(math.floor(seconds / 60 + 0.5))
 end
 
-local function Quit(root)
-	root:CreateButton("Stop asking about the hearthstone", function()
-		T.db.hearth.on = false
-		ns.Apply()
-	end):SetSub("Turn it back on under Errands")
-end
-
 -- What the stone saves
 -- Seconds sooner a place is reached from home than from another place, the cast taken off. Then whether that
 -- is known: both journeys settled, and the one from home its own seconds (the least it can take, taken from a
@@ -434,6 +427,7 @@ local function Use(lead)
 		caption = waiting and "HEARTHSTONE  \194\183  NEARLY READY" or "HEARTHSTONE  \194\183  THE SHORT WAY",
 		mark = "home",
 		first = not Busy() or nil,
+		route = true,            -- (The guide's own "hearth" steps count as done: this is the way now.)
 		away = true,             -- (Whatever else goes first is done before it: a bank, a trainer, a vendor here.)
 		lands = lands,
 		wait = waiting and left or nil,
@@ -446,7 +440,6 @@ local function Use(lead)
 				put = what
 				ns.Refresh()
 			end)
-			Quit(root)
 		end,
 	}
 end
@@ -521,7 +514,9 @@ local function Set(lead)
 		caption = "INN  \194\183  SET YOUR HEARTHSTONE",
 		mark = "home",
 		map = inn.map, x = inn.x, y = inn.y, thing = inn.npc, who = inn.npc.name,
-		first = not busy or nil,
+		-- (In passing or standing in it: part of the way, as the guide's "set your hearthstone" steps were.)
+		first = (not busy and (passing or inn.yards <= INN)) or nil,
+		route = true,
 		tip = function(tip)
 			tip:AddLine((name and name ~= "") and ("Your hearthstone is set to %s."):format(name) or "Your hearthstone isn't set.",
 				0.6, 0.6, 0.6, true)
@@ -531,7 +526,6 @@ local function Set(lead)
 				Inns()[inn.npc.id] = true
 				ns.Refresh()
 			end)
-			Quit(root)
 		end,
 	}
 end
@@ -569,7 +563,7 @@ events:SetScript("OnEvent", function(_, event)
 	ns.Refresh()
 end)
 
-ns.CardSwitch("errands", function(root)
+ns.CardSwitch("route", function(root)
 	root:CreateCheckbox("Hearth when it saves time", function() return T.db.hearth.on end, function()
 		T.db.hearth.on = not T.db.hearth.on
 		ns.Apply()

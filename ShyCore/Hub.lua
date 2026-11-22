@@ -48,11 +48,11 @@ local max = math.max
 local Hub = {}
 Shy.Hub = Hub
 
--- The game's own Options list Shy once: a page whose button opens the window.
+-- The game's own Options list ShyUI once: a page whose button opens the window.
 local door = CreateFrame("Frame")
 door:Hide()
 local function DoorName()
-	return B.Icon(core.mark, 16) .. " " .. B.Gradient("Shy")
+	return B.Icon(core.mark, 16) .. " " .. B.Name()
 end
 Shy.category = Settings.RegisterCanvasLayoutCategory(door, DoorName())
 Settings.RegisterAddOnCategory(Shy.category)
@@ -681,7 +681,7 @@ end
 
 local function Create()
 	local box = UI.Window({
-		id = "shyhub", name = "ShyHubWindow", title = "Shy", width = W.WIDTH, height = W.HEIGHT,
+		id = "shyhub", name = "ShyHubWindow", title = B.FAMILY, width = W.WIDTH, height = W.HEIGHT,
 		grip = { flow = Lay, min = { W.WIDTH, W.HEIGHT }, max = { W.WIDTH - W.PAGE + W.MOST } },
 		-- (lent, the guest may keep it out of sight a while, open still: a fight while setting up)
 		point = { "CENTER", "CENTER", 0, 30 }, strata = "HIGH", maximize = true,
@@ -1371,7 +1371,7 @@ end)
 
 local function MyAddons()
 	local out = {}
-	for _, a in ipairs(Shy.order) do out[#out + 1] = "Shy" .. a.suffix .. " " .. (a.version or "?") end
+	for _, a in ipairs(Shy.order) do out[#out + 1] = a.name .. " " .. (a.version or "?") end
 	return table.concat(out, ", ")
 end
 
@@ -1447,7 +1447,7 @@ function Shy.Secrets(on)
 	table.insert(lines, 1, head)
 	table.insert(lines, 2, "")
 	local text = table.concat(lines, "\n")
-	UI.ShowCopyBox("Shy: addon limits", text)
+	UI.ShowCopyBox(B.FAMILY .. ": addon limits", text)
 	return text
 end
 Shy.Command("secrets", nil, function() Shy.Secrets() end)

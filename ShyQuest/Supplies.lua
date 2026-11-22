@@ -5,7 +5,8 @@
 --     combat and with no vendor, bank, mail, trade or craft open, over the fights fought while
 --     carrying some; a guess by class and talents until enough are seen), times the fights before
 --     the next vendor on the way (the guide's places, else the log's quests). Short of what those
---     fights take is running low.
+--     fights take is running low. A caster's water is a stack at least (CASTER_WATER).
+--   Topping up: not low, but short of TOP_UP of the carry, in a town with a seller: a row to top up there.
 --   Counted: food, drink and potions the character can use that restore at least GOOD of a full
 --     bar, or of the best sold for the level when that is less; a weaker one for its share of that.
 --     A reagent counts while one of its spells is known and no later rank has replaced it.
@@ -72,6 +73,8 @@ local LEAST_FIGHTS = 20      -- enough for this many whatever lies ahead
 local MOST_FIGHTS = 150      -- fights ahead reckoned with, at most
 local LOG_FIGHTS = 60        -- ... with no guide: about an hour's
 local LEAST_CARRY, MOST_CARRY = 10, 80
+local CASTER_WATER = 20      -- a class that lives on its mana carries a stack of water at least
+local TOP_UP = 0.5           -- in a town with a seller, short of this share of the carry: a row to top up
 local TOWN = 300             -- yards: a place this near a seller is a stop to restock at
 local AHEAD = 40             -- guide places looked at for the fights ahead
 local AGAIN = 30             -- seconds the fights ahead are kept while the guide's place stays
@@ -387,7 +390,9 @@ local function Auto(key, item)
 		if rate <= 0 then return 0 end
 		local fights = Ahead(key)
 		local carry = math.ceil(rate * math.max(fights, LEAST_FIGHTS) * MARGIN / 5) * 5
-		return math.min(MOST_CARRY, math.max(LEAST_CARRY, carry)), math.ceil(rate * fights)
+		-- (A caster's water: a stack at least, however little it was seen to drink. A dry spell is a dead caster.)
+		local least = (key == "water" and Role() == "caster") and CASTER_WATER or LEAST_CARRY
+		return math.min(MOST_CARRY, math.max(least, carry)), math.ceil(rate * fights)
 	elseif key == "heal" then
 		return level >= 10 and 5 or 0
 	elseif key == "mana" then
@@ -451,7 +456,8 @@ local function Work()
 	-- (Gold that crosses a price weighed here lets this go: worked out again at the next fitting.)
 	local weighs = ns.Weighed("supplies", Supplies.Stale)
 	local budget, kept = Budget(weighs)
-	state = { level = level, budget = budget, kept = kept, weighs = weighs, plans = {}, wants = {}, checks = {}, picked = {}, checked = {} }
+	state = { level = level, budget = budget, kept = kept, weighs = weighs, plans = {}, wants = {}, checks = {}, tops = {}, picked = {},
+		checked = {}, topped = {} }
 
 	local held = {}
 	for bag = BACKPACK, LAST_BAG do
@@ -518,6 +524,9 @@ local function Work()
 		if plan.have <= plan.low then
 			local list = plan.limited and state.checks or state.wants
 			list[#list + 1] = plan
+		elseif (plan.kind == "food" or plan.kind == "water") and plan.have < plan.carry * TOP_UP then
+			-- (Not low yet, but well short: worth topping up while a seller is right there.)
+			state.tops[#state.tops + 1] = plan
 		end
 	end
 end
@@ -681,13 +690,15 @@ local function Find(lead)
 	if not T.db.supplies.on then return nil end
 	local now = Supplies.Now()
 	if not now then return nil end
-	if #now.wants == 0 then
+	if #now.wants == 0 and #now.tops == 0 then
 		put = false
 		return nil
 	end
 	if put then return nil end
-	local at, yards, picks = Nearest(now, now.wants, now.picked)
-	if not at then return nil end
+	-- Nothing low: only topping up, and only in a town with a seller (TOWN yards). A suggestion, never a lead.
+	local topping = #now.wants == 0
+	local at, yards, picks = Nearest(now, topping and now.tops or now.wants, topping and now.topped or now.picked)
+	if not at or (topping and yards > TOWN) then return nil end
 	local out = false
 	for _, pick in ipairs(picks) do
 		if pick.plan.have == 0 and (pick.plan.kind == "food" or pick.plan.kind == "water") then out = true end
@@ -698,7 +709,11 @@ local function Find(lead)
 
 	local first = picks[1]
 	local title, caption
-	if #picks == 1 then
+	if topping then
+		local plan = first.plan
+		title = #picks == 1 and ("Top up %s: %d of %d"):format(plan.word, plan.have, plan.carry) or ("Top up %s and %s"):format(plan.word, picks[2].plan.word)
+		caption = "IN TOWN  \194\183  TOP UP HERE"
+	elseif #picks == 1 then
 		local plan = first.plan
 		local left = (plan.all or plan.have) == 0 and "none left" or plan.have == 0 and "only weak left" or (plan.have .. " left")
 		title = ("Buy %s: %s"):format(plan.word, left)
@@ -717,6 +732,7 @@ local function Find(lead)
 		caption = caption or "RUNNING LOW  \194\183  BUY HERE",
 		map = at.map, x = at.x, y = at.y, thing = at.npc, who = at.npc.name,
 		mark = "buy",
+		-- (Topping up is worth doing here and now, among the errands; it never leads.)
 		first = passing or nil,
 		hover = function()
 			local buy, bags, fights = {}, {}, nil

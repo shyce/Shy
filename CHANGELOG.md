@@ -1,5 +1,29 @@
 # Changelog
 
+## 5.2.7 (22 Nov 2026)
+
+### Added
+- **ShyQuest:** The card tells you about a long swim ahead. A swim is drawn as water on the map now, so it doesn't look like a boat
+
+### Fixed
+- **ShyQuest:** The boat step sent you into the sea. It's on the end of the pier now, and flight points nobody can learn are gone
+- **ShyQuest:** You were sent to the Gurubashi Arena chest and other PvP quests. They're left out of your route now
+
+## 5.2.6 (22 Nov 2026)
+
+### Added
+- **ShyQuest:** A /way you type is a stop on your route now. The card turns ice blue while it leads, and it's gone once you reach it or clear it
+- **ShyQuest:** Right-click any guide step to do it now. Pick it from the card, the map or the guide window, and 'Back to my route' returns you
+- **ShyQuest:** A what's new window opens after an update. It lists what changed since you last played
+
+### Changed
+- **ShyCore:** The family is called ShyUI now. Addon lists and chat lines use the new name
+- **ShyQuest:** A step you took turns the card gold. It says 'Back to guide', and it's still there after a reload
+
+### Fixed
+- **ShyQuest:** Library book quests sent you back to where the book lay. They send you to the librarian now
+- **ShySkin:** The game's settings dropdowns showed plain, unstyled rows. They wear your theme now
+
 ## 5.2.5 (22 Nov 2026)
 
 ### Added

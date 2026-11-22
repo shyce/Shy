@@ -371,6 +371,7 @@ end
 --   UI.SetLook(frame, look)        dress a UI.Panel in a look (nil: the theme's again; false: none, an inner piece)
 --   UI.SetAccent(frame, color)     its look's parts in your color wear `color` instead, for what the piece means (a
 --                                  yell's red on a chat bubble); nil: the theme's again
+--   UI.SetWash(frame, color, alpha)   a wash of a meaning color over the whole piece, content and all (nil: none)
 --   UI.LookTail(h), UI.LookEdges(h)   a tail off its foot in the look's own make; the regions drawing its edge
 --   UI.LookCard(parent, w, look, opts)   a card showing a housing in that look over a scene (setup, the hub)
 --   UI.LookArt                     the files and measures, for whoever draws a housing as a picture
@@ -2445,7 +2446,11 @@ local ramped = setmetatable({}, { __mode = "k" })
 -- the line being painted in the accent.
 local WHITE_LINE = { 1, 1, 1, 1 }
 local function Ramp(line)
-	if line.shyAccent then return Theme.Paint(line, line.shyAccent) end   -- a sample's own accent, one color
+	if line.shyAccent then
+		-- A sample's own accent, one color. (A ramp laid before stays in the corners' colors under a paint: gone first.)
+		line:SetVertexColor(1, 1, 1, 1)
+		return Theme.Paint(line, line.shyAccent)
+	end
 	if Theme.Gradient() then return Theme.Paint(line, Theme.Accent) end
 	Theme.Paint(line, WHITE_LINE)
 	line:SetGradient("HORIZONTAL", CreateColor(B.Ramp(0)), CreateColor(B.Ramp(1)))
@@ -2742,12 +2747,50 @@ function UI.SetAccent(f, color)
 	if type(color) == "table" then
 		accent = function() return color[1], color[2], color[3] end
 	end
+	local was = f.shyAccent or Theme.Accent
 	f.shyAccent = accent
 	local h = f.shyLook
-	if h then
-		h.accent = accent
-		UI.SetLook(f, f.shyLookFixed)
+	if h then h.accent = accent end
+	-- What took the accent as it was made (the brackets, a look's own line and trim) wears the new one, and what
+	-- asks for it through a function of its own asks again (Theme.Rewear).
+	for _, region in ipairs(f.shyHousing or {}) do Theme.Rewear(region, was, accent or Theme.Accent) end
+	-- The line under the header: one color, or the theme's ramp (Ramp); a look's flare over it.
+	local line = f.shyLine
+	if line then
+		line.shyAccent = accent
+		Ramp(line)
+		for _, t in ipairs(line.shyFlare or {}) do
+			t.shyAccent = accent
+			Flare(t, flares[t])
+		end
 	end
+	if h then UI.SetLook(f, f.shyLookFixed) end
+end
+
+-- A wash of a meaning color over the whole of a piece, its content too: a state anyone tells at a glance (the quest
+-- card while you've taken a step out of your guide's order). A frame of its own over the piece's, taking no clicks.
+-- nil takes it away. Asking again for the color it has changes nothing.
+local WASH = { alpha = 0.15, over = 30 }   -- how strong; how many frame levels over the piece it lies
+function UI.SetWash(f, color, alpha)
+	local wash = f.shyWash
+	if not color then
+		if wash then wash:Hide() end
+		return
+	end
+	if not wash then
+		wash = CreateFrame("Frame", nil, f)
+		wash:SetAllPoints()
+		wash:EnableMouse(false)
+		wash.fill = wash:CreateTexture(nil, "OVERLAY")
+		wash.fill:SetAllPoints()
+		f.shyWash = wash
+	end
+	wash:SetFrameLevel(f:GetFrameLevel() + WASH.over)
+	if wash.color ~= color or wash.alpha ~= alpha then
+		wash.color, wash.alpha = color, alpha
+		Theme.Paint(wash.fill, color, alpha or WASH.alpha)
+	end
+	wash:Show()
 end
 
 function UI.SetLook(f, look)
@@ -3085,8 +3128,19 @@ end
 --                   pin's name): the font object brings its outline ("OUTLINE"), a fine shadow under it, no look's
 --                   effect, and no ink unless `color` is given (their owner colors them as they change)
 -- Words on a face of their own color (a button, a caption, a paper) are inked for it: UI.FaceInk, UI.Letter.
+-- Coins sit level with the digits of whichever string of ours they land on (UI.MoneyFit, read off that string
+-- as the words are set). A price is often made before its string is known, so the string fits it.
+-- (Set first, before any other wrap of SetText: Theme's effect wraps over this one.)
+local function FitsCoins(fs)
+	local set = fs.SetText
+	fs.SetText = function(self, text, ...)
+		return set(self, UI.MoneyFit(text, self), ...)
+	end
+end
+
 function UI.Text(parent, text, size, brand, color)
 	local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	FitsCoins(fs)
 	if brand then Theme.Face(fs, size or 14)   -- Shy's own words: the theme's font, following it
 	elseif size then fs:SetFont((GameFontHighlight:GetFont()), size, "") end
 	fs:SetShadowOffset(1, -1)
@@ -3103,6 +3157,7 @@ local WORLD_SHADOW = 0.8   -- under outlined words over the world: a fine shadow
 function UI.Words(parent, font, color, opts)
 	opts = opts or {}
 	local fs = parent:CreateFontString(nil, opts.layer or "OVERLAY")
+	FitsCoins(fs)
 	if type(font) == "number" then fs:SetFont(Shy.FONT_ROUNDED, font, "") else fs:SetFontObject(font) end
 	fs:SetJustifyH(opts.justify or "LEFT")
 	if opts.wrap == false then fs:SetWordWrap(false) end
@@ -5830,6 +5885,11 @@ local function MenuRow(index)
 			if item.back then
 				menu.source = table.remove(menu.trail)
 			else
+				if item.later then
+					local rows = item.items.rows
+					item.items = item.later()
+					item.items.rows = item.items.rows or rows
+				end
 				menu.trail[#menu.trail + 1] = menu.source
 				local list = { { text = item.text, back = true }, { divider = true } }
 				for _, child in ipairs(item.items) do list[#list + 1] = child end
@@ -6336,6 +6396,7 @@ end
 --   entry:SetIcon(file)                       -- a picture before the words (buttons only)
 --   entry:SetRightClick()                     -- a right click runs it too: onClick(item, owner, mouseButton)
 --   entry:SetScrollMode(height)               -- submenu height before it scrolls
+--   entry:SetLater(function(entry) ... end)   -- the submenu is written as it opens (one costly to work out)
 --
 -- A menu written by several hands (a window's rows, then the addon's, then the box's) is tidied before it
 -- opens: a section heading with nothing under it goes, and so do dividers that would stand at an end or
@@ -6415,6 +6476,17 @@ local function Tidy(list)
 	while out[#out] and out[#out].divider do out[#out] = nil end
 	for index = 1, #list do list[index] = out[index] end
 	return list
+end
+
+-- A submenu written as it opens: write(entry) fills it as it would be filled at once, each time it is opened.
+-- For one that is costly to work out, so the menu it stands in opens at once.
+function Entries:SetLater(write)
+	ListOf(self)
+	self.item.later = function()
+		local list = {}
+		write(setmetatable({ list = list }, Entries))
+		return Tidy(list)
+	end
 end
 
 local function Written(owner, write, side, opts)

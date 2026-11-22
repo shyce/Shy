@@ -329,10 +329,6 @@ local function Find(lead)
 				Mine().skip = UnitLevel("player")
 				if R.Asked("weapons") then R.Ask("weapons", nil) else ns.Refresh() end
 			end)
-			root:CreateButton("Stop asking about weapon skills", function()
-				T.db.weapons.on = false
-				ns.Apply()
-			end):SetSub("Turn it back on under Errands")
 		end,
 	}
 end

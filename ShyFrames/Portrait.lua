@@ -475,7 +475,7 @@ end
 -- (ShyCore's DialSmall, drawn for it) on the round picture's lower edge, toward the frame's end, the level in its
 -- difficulty's color. Your frame and your target's only. -> whether the level shows there (the class line then leaves
 -- it out).
--- The number stands on the circle's middle to the pixel: measured, its width and height in whole screen pixels, and
+-- The number stands on the circle's middle to the pixel: measured, its digits' run and its height in whole screen pixels, and
 -- the circle's middle laid on a pixel's edge or its middle as they ask, so the two share one middle exactly (the
 -- ring isn't snapped to the grid: UI.Concentric). `shadow`: words over the world wear a drop shadow this far right and
 -- down (UI.Words' world shadow); half of it is moved back, so the ink with its shadow is what is centred.
@@ -518,22 +518,26 @@ function P.Level(plate)
 	-- In whole screen pixels where the frame stands (a unit each where they can't be read).
 	local scale, factor = plate.owner:GetEffectiveScale(), PixelUtil.GetPixelToUIUnitFactor()
 	local per = (not issecretvalue(scale) and scale and scale > 0 and factor and factor > 0) and scale / factor or 1
-	local w, h = word:GetUnboundedStringWidth(), word:GetStringHeight()
-	if issecretvalue(w) or issecretvalue(h) or not w or not h then w, h = 0, 0 end
-	local wp, hp = math.floor(w * per + 0.5), math.floor(h * per + 0.5)
+	-- Across, by the digits' own run (Theme.Run), begun where the outline lets them (Theme.Lead): the string's box runs
+	-- on past its last digit, and set by the box "24" stood two pixels left.
+	local run = Theme.Run(word) or 0
+	local h = word:GetStringHeight()
+	if issecretvalue(h) or not h then h = 0 end
+	local wp, hp = math.floor(run * per + 0.5), math.floor(h * per + 0.5)
+	local leadp = math.floor(Theme.Lead(word) * per + 0.5)
 	local half = BADGE.shadow / 2
 	-- The ink's middle over the line's: its capitals' (UI.NameLift, less the family's own shadow allowance), with
 	-- half this shadow.
 	local liftp = math.floor((UI.NameLift(BADGE.font) - 0.5 + half) * per + 0.5)
 	local cx = (math.floor(x * per + 0.5) + (wp % 2) * 0.5) / per
 	local cy = (math.floor(y * per + 0.5) + (hp % 2) * 0.5) / per
-	local key = cx .. ":" .. cy .. ":" .. wp .. ":" .. hp .. ":" .. tostring(mirrored)
+	local key = cx .. ":" .. cy .. ":" .. wp .. ":" .. hp .. ":" .. leadp .. ":" .. tostring(mirrored)
 	if badge.at ~= key then
 		badge.at = key
 		badge:ClearAllPoints()
 		badge:SetPoint("CENTER", plate.owner, mirrored and "TOPRIGHT" or "TOPLEFT", mirrored and -cx or cx, -cy)
 		word:ClearAllPoints()
-		word:SetPoint("TOPLEFT", badge, "CENTER", (-wp / 2 - math.floor(half * per + 0.5)) / per, (hp / 2 + liftp) / per)
+		word:SetPoint("TOPLEFT", badge, "CENTER", (-wp / 2 - leadp - math.floor(half * per + 0.5)) / per, (hp / 2 + liftp) / per)
 	end
 	local c = badge.look:Worn() and GLASS or Theme.skin.metal
 	badge.dial:SetVertexColor(c[1], c[2], c[3])

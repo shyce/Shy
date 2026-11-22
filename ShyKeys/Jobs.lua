@@ -193,8 +193,11 @@ end
 Keys.Kind = Kind
 
 -- The best of each kind in the bags that the character is of a level to use: kind -> item. The best is the one
--- that asks the highest level; of two that ask the same, one that was conjured (it costs nothing, and is gone
--- when you log out), then the better made.
+-- that asks the highest level, where what was conjured counts CONJURED levels higher: it costs nothing and is
+-- gone when you log out, so a mage's water goes first against what you bought a tier up (Conjured Fresh Water
+-- before Melon Juice), and what you bought is left for when it runs out. Two tiers down it is too weak to.
+-- Of two the same, the better made.
+local CONJURED = 10
 local function Bags()
 	local best, rank = {}, {}
 	local level = UnitLevel("player")
@@ -228,7 +231,7 @@ local function Bags()
 				local _, _, _, worth, need = C_Item.GetItemInfo(item)
 				need = need or 0
 				if need <= level then
-					local value = need * 10000 + (conjured[item] and 5000 or 0) + (worth or 0)
+					local value = (need + (conjured[item] and CONJURED or 0)) * 10000 + (conjured[item] and 5000 or 0) + (worth or 0)
 					if not rank[kind] or value > rank[kind] then best[kind], rank[kind] = item, value end
 				end
 			end

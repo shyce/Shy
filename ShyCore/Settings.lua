@@ -276,7 +276,7 @@ local function Model()
 		group.title = addon.internal and "General" or addon.suffix
 		group.tagline = addon.internal and "What every addon shares." or addon.tagline
 		group.mark = addon.mark
-		group.where = (addon.internal and "Shy general" or ("Shy" .. addon.suffix .. " " .. addon.suffix))
+		group.where = (addon.internal and (Shy.Brand.FAMILY .. " " .. Shy.Brand.OLD .. " general") or (addon.name .. " " .. addon.suffix))
 		group.entries = {}
 		local section
 		for _, e in ipairs(told.entries) do

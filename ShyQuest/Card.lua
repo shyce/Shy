@@ -1257,6 +1257,29 @@ function ns.CreateCard(parent, onResize)
 			or "No earlier step."
 	end, function(_, glyph) glyph:SetPoint("CENTER", 2, 0) end)   -- both glyphs lean toward the count
 
+	-- While you've taken a step out of your guide's order (R.TakeStep), the pager and the count make way for this,
+	-- in gold as the card is then (Gild): one press back to the step your guide is on.
+	local home = CreateFrame("Button", nil, card)
+	home:SetFrameLevel(card:GetFrameLevel() + 4)   -- over the title bar's own click
+	home.text = UI.Text(home, "Back to guide", 10, true)
+	home.text:SetPoint("CENTER", 0, 0)
+	home:SetScript("OnEnter", function(self)
+		local place, of = R.GuidePlace()
+		UI.Tip(self, "Back to guide", place and ("You took a step out of order. Your guide is on step %d."):format(G.Number(place, of))
+			or "You took a step out of order. This puts your guide's order back.", { side = "TOP" })
+	end)
+	home:SetScript("OnLeave", function(self) UI.TipHide(self) end)
+	home:SetScript("OnMouseUp", function(self, mouse)
+		if mouse ~= "LeftButton" or (card.wasDragged and card.wasDragged()) then return end
+		UI.TipHide(self, true)
+		if card.guideStop and card.guideStop.taken then R.TakeStep(card.guideStop, false) end
+	end)
+	-- (The make hooks the scripts above: set none after it.)
+	UI.ButtonFace(home)
+	home:SetTone(C.alert)
+	home:Hide()
+	card.home = home
+
 	-- The step count between them is the whole guide's switch: a click lists every step of your guide with your
 	-- progress, another only the steps ahead; its plate stays lit while every step is listed. The count stands on
 	-- it, so the plate is the digits' own. (Only the on-screen card has the list, so the preview's count is words
@@ -1825,8 +1848,24 @@ function ns.CreateCard(parent, onResize)
 		UI.PanelHead(self, not on)
 		-- Docked, the deck is the housing: the card wears no look of its own; alone, the theme's again.
 		if on then UI.SetLook(self, false) else UI.SetLook(self, nil) end
+		self:Gild()
 		if self.all then self:Fill(self.all) end
 	end
+
+	-- The card's color while it leads you somewhere off your guide's order (Head: self.tint): gold for a step you
+	-- took, ice blue for a place you sent yourself to. A wash over the whole card, so anyone can tell at a glance,
+	-- and the housing you see in it: the deck's column while the card is docked and on screen there (the deck shows
+	-- one tab at a time), else the card's own. Off it goes elsewhere.
+	function card:Gild()
+		local housing = self.column or self
+		if self.gilt and self.gilt ~= housing then UI.SetAccent(self.gilt, nil) end
+		self.gilt = housing
+		local tint = self:IsVisible() and self.tint or nil
+		UI.SetAccent(housing, tint)
+		UI.SetWash(self, tint)
+	end
+	card:HookScript("OnShow", function(self) self:Gild() end)
+	card:HookScript("OnHide", function(self) self:Gild() end)
 
 	-- The header: the pager round the count, at the right of the card's own strip or of the deck's.
 	-- Whether the card follows a leveling guide (guide mode), or just lists the quests (zone mode).
@@ -1839,7 +1878,11 @@ function ns.CreateCard(parent, onResize)
 		-- Steps and the whole guide are for following one: in zone mode the header has neither. The step count is
 		-- the whole guide's switch where there is a list to show (not the preview's, nor a dungeon run's).
 		local mode = self.list ~= nil and Following() and not G.current.run
-		self.steps:SetShown(guided)
+		-- A step you took out of your guide's order: the pager and the count make way for "Back to guide", and the card is
+		-- in gold (Gild) until you're back on your route.
+		local took = guided and self.guideStop.taken == true
+		local paged = guided and not took
+		self.steps:SetShown(paged)
 		self.steps:EnableMouse(mode)
 		self.steps:Turn(mode and self.full)
 		if guided then
@@ -1848,6 +1891,12 @@ function ns.CreateCard(parent, onResize)
 		else
 			self.count:SetText("")
 		end
+		-- (Gold for a step you took; ice blue, as its marks are, while a place of your route leads: a /way, a pin on
+		-- the map, a place found or shared. Only the card on screen: the options' sample shows no route.)
+		local heading = self.list ~= nil and R.Heading() or nil
+		self.took = took
+		self.tint = took and C.alert or (heading and heading.kind == "way" and ns.MARK.gem) or nil
+		self:Gild()
 		self.skip:ClearAllPoints()
 		self.count:ClearAllPoints()
 		-- On the middle of the header the card stands in: its own, or the deck's.
@@ -1860,13 +1909,23 @@ function ns.CreateCard(parent, onResize)
 		else
 			UI.OnHead(self.count, "RIGHT", host, "RIGHT", -PAD)
 		end
-		self.back:SetShown(guided)
-		self.skip:SetShown(guided)
-		-- The finder's lens stands before the pager, or before the count where there is none. Only the
-		-- on-screen card has it, as with the chevron.
+		self.back:SetShown(paged)
+		self.skip:SetShown(paged)
+		local home = self.home
+		if home then
+			home:SetShown(took)
+			if took then
+				home:SetSize(math.ceil(home.text:GetStringWidth()) + 14, PAGER + 3)
+				home:ClearAllPoints()
+				UI.OnHead(home, "RIGHT", host, "RIGHT", -PAD + 2)
+			end
+		end
+		-- The finder's lens stands before the pager (or "Back to guide"), or before the count where there is none. Only
+		-- the on-screen card has it, as with the chevron.
 		local words = self.count:GetText()
 		self.find:ClearAllPoints()
-		self.find:SetPoint("RIGHT", guided and self.back or self.count, "LEFT", (guided or (words and words ~= "")) and -4 or 0, 0)
+		self.find:SetPoint("RIGHT", (took and home) or (guided and self.back) or self.count, "LEFT",
+			(guided or (words and words ~= "")) and -4 or 0, 0)
 		self.find:SetShown(self.list ~= nil and ns.Find ~= nil)
 		self.notes:ClearAllPoints()
 		self.notes:SetPoint("RIGHT", self.find, "LEFT", -2, 0)
@@ -1900,6 +1959,11 @@ function ns.CreateCard(parent, onResize)
 			return ns.Run and ns.Run.Caption(G.current) or G.current and G.current.name:upper() or "YOUR GUIDE"
 		elseif stop and stop.kind == "guide" and stop.view.guide.run and ns.Run then
 			return ns.Run.Caption(stop.view.guide, stop.view.step.index)
+		elseif stop and stop.kind == "guide" and stop.taken then
+			-- A step you took, in the gold the count and the back arrow wear (Head): where your guide waits.
+			local place, of = R.GuidePlace()
+			local back = place and place ~= stop.view.step.index and G.Number(place, of)
+			return back and ("YOU TOOK THIS  \194\183  GUIDE ON STEP %d"):format(back) or "YOU TOOK THIS STEP", C.alert
 		elseif stop and stop.kind == "guide" and stop.here then
 			return "RIGHT HERE  \194\183  FROM YOUR GUIDE"
 		elseif stop and stop.kind == "guide" then
@@ -2324,6 +2388,7 @@ function ns.CreateCard(parent, onResize)
 			if self.list then ns.GuideList.Hide(self) end
 			timer:Hide()
 			local guide
+			-- (Its first guide step: the one you took, if you did. TakenFirst puts it first.)
 			for _, each in ipairs(all) do
 				if each.kind == "guide" and not each.sample then
 					guide = each
@@ -2390,10 +2455,11 @@ function ns.CreateCard(parent, onResize)
 		self.dockAt = y + LEAD_HEAD
 
 		-- The guide's main step, wherever it is on the card (a side step or a nearby stop may lead):
-		-- the pager always acts on it.
+		-- the pager always acts on it. A step you took is that step while it's taken.
 		local guide
 		for _, each in ipairs(stops) do
-			if each.kind == "guide" and not each.sample and (not guide or (guide.side and not each.side)) then guide = each end
+			if each.kind == "guide" and not each.sample and not (guide and guide.taken)
+				and (not guide or each.taken or (guide.side and not each.side)) then guide = each end
 		end
 		self.guideStop = guide
 		local guided = guide ~= nil
@@ -2406,8 +2472,9 @@ function ns.CreateCard(parent, onResize)
 		local railEnds = #ahead > 0 and 0 or last   -- the row the rail ends at; 0: it runs on into the places ahead
 
 		local here, hereColor = Here(self, stop)
-		Say(self.caption, here or Caption(self, stop))
-		UI.Ink(self.caption, hereColor or C.dim)
+		local said, saidColor = Caption(self, stop)
+		Say(self.caption, here or said)
+		UI.Ink(self.caption, hereColor or (not here and saidColor) or C.dim)
 		self.caption:SetShown(stop ~= nil)
 		self.pick:SetShown(self.full and G.current ~= nil and stop ~= nil and not stop.urgent)
 		Node.Mine(first, stop)
@@ -2792,13 +2859,14 @@ end
 -- "Point the way" everywhere it is offered: the arrow (Arrow.lua), or without it the game's super-track.
 function ns.PointTheWay(stop)
 	if ns.Arrow then ns.Arrow.ToStop(stop) else R.Go(stop) end
+	-- (Both maps' trail goes where the arrow points: Pins.lua.)
+	if ns.ApplyPins then ns.ApplyPins(true) end
 end
-local PointTheWay = ns.PointTheWay
 
 -- The right-click menu, in sections. First the row's own, under a heading naming what it stands for
--- (the step, the errand, the quests): the way there, done or skipped, a group for it, its quests. Then
--- "Card": where to be taken, the guide, what the card shows, the errands it adds on its own, the
--- options, hiding it. The box's own (size, lock, place) follow under "Window" (Shy.HUD). A file that
+-- (the step, the errand, the quests): what changes your route (take it, go here next, done, skipped),
+-- a group for it, its quests. Then "Card": where to be taken, the guide, the errands it adds on its own,
+-- the options. The box's own (size, lock, place) follow under "Window" (Shy.HUD). A file that
 -- adds a switch registers it through ns.CardSwitch(section, write) (ShyQuest.lua): section "errands"
 -- (what the route adds on its own), "suggestions" (what the card speaks up about) or "offers" ("Take
 -- me to"). Section headings with nothing under them are dropped by the menu itself.
@@ -2997,11 +3065,26 @@ local function FloorMenu(root, stop)
 end
 
 -- What a right-click does with an errand: it leads only when you take it. nil: not one to take (what
--- can't wait, or one you asked for or chose, whose menu has its own way back).
+-- can't wait, one you asked for or chose, or part of the way that leads now: each menu has its own way back).
+-- A step of the guide is taken the same way: one the route doesn't lead with now can go first (R.TakeStep).
 function ns.TakeHint(stop)
+	if stop and stop.kind == "guide" and not stop.offered then
+		if stop.taken then return "Back to my route" end
+		local heading = R.Heading()
+		local leads = heading and heading.kind == "guide" and heading.view.step.index == stop.view.step.index
+			and heading.view.guide == stop.view.guide
+		if leads then return nil end
+		return stop.map and "Take me there" or "Do this now"
+	end
 	if not (stop and stop.kind == "errand") or stop.urgent or stop.yours or R.Asked(stop.errand) then return nil end
+	if stop.route and stop.soon and R.errandLed ~= stop.errand then return nil end
 	if stop.taken then return "Back to my route" end
 	return stop.map and "Take me there" or "Do this now"
+end
+
+-- What the hint above says, done: the errand or the step leads, or lets go.
+function ns.TakeStop(stop)
+	if stop.kind == "guide" then R.TakeStep(stop, not stop.taken) else R.Take(stop, not stop.taken) end
 end
 
 -- A row's menu is StopMenu then CardMenu; GuideWindow.lua's rows put their own entries over CardMenu
@@ -3010,9 +3093,12 @@ local function StopMenu(root, stop)
 	if not stop or stop.sample then return end
 	local heading = Heading(stop)
 	if heading then root:CreateSection(heading) end
+	-- (No "Point the way": the route says where you go, and the arrow and both maps follow it. To change where,
+	-- change the route: take a step or an errand, put a quest on next, tick or skip a step.)
 	if stop.kind == "guide" then
 		local index = stop.view.step.index
-		Row(root, "Point the way", "point", function() PointTheWay(stop) end)
+		local take = ns.TakeHint(stop)
+		if take then Row(root, take, stop.taken and "back" or "route", function() ns.TakeStop(stop) end) end
 		Row(root, "This step is done", "done", function() G.MarkDone(index, true, stop.view.guide) end)
 		Row(root, "Skip this step", "skip", function() G.Skip(index, stop.view.guide) end)
 		-- A quest the step takes that its giver doesn't offer (an object with nothing to give opens no window, so
@@ -3022,7 +3108,6 @@ local function StopMenu(root, stop)
 				Row(root, "Not offered? Skip " .. (D.Name("quests", line.id) or "it"), "skip", function() ns.NotOffered(line.id) end)
 			end
 		end
-		Row(root, "Back a step", "back", function() G.Back() end):SetEnabled(G.CanBack())
 		-- A dungeon step: ShyGroup can recruit for it, and it can be put off until you're ready.
 		local dungeon = ns.Detour(G.Dungeon(index, stop.view.guide))
 		if ns.CanRecruit(dungeon) then
@@ -3045,23 +3130,19 @@ local function StopMenu(root, stop)
 			Row(root, "Copy the link: " .. link.text, "link", function() UI.ShowCopyBox("A link from your guide", link.url) end)
 		end
 		QuestMenus(root, stop, heading)
-	elseif stop.kind == "fly" then
-		Row(root, "Point the way", "point", function() PointTheWay(stop) end)
 	elseif stop.kind == "errand" or stop.kind == "way" then
 		-- An errand leads only when you take it. One you asked for has its own way back (stop.menu).
 		local take = ns.TakeHint(stop)
 		if take then
-			Row(root, take, stop.taken and "back" or "route", function() R.Take(stop, not stop.taken) end)
+			Row(root, take, stop.taken and "back" or "route", function() ns.TakeStop(stop) end)
 		end
 		-- One click puts an errand away for good; the card's Errands menu brings it back.
 		if stop.kind == "errand" and R.CanHush(stop.errand) then
 			Row(root, "Stop showing this", "hide", function() R.Hush(stop.errand, true) end):SetSub("Turn it back on under Errands")
 		end
-		if stop.map then Row(root, "Point the way", "point", function() PointTheWay(stop) end) end
 		if stop.menu then stop.menu(root) end
-	else
+	elseif stop.kind ~= "fly" then
 		Row(root, stop.chosen and "Remove from my route" or "Go here next", stop.chosen and "hide" or "route", function() R.Go(stop) end)
-		if stop.map then Row(root, "Point the way", "point", function() PointTheWay(stop) end) end
 		QuestMenus(root, stop, heading)
 	end
 	-- Any stop with a place can go to someone as a route of theirs.
@@ -3095,11 +3176,6 @@ local function CardMenu(root)
 		for _, quest in ipairs(groups) do QuestMenu(menu, quest.id, quest.title, quest.stop) end
 	end
 
-	-- The game's quest log, on the map.
-	local log = root:CreateButton("Quest log", function() ToggleQuestLog() end)
-	log:SetSub("All your quests, on the map")
-	log:SetIcon(Glyph("log"))
-
 	-- At the top level the guide, pickups, zones and errands (levelling help) are this character's to take back;
 	-- without them the Guide entry is left out, and Errands keeps what still acts.
 	if ns.AtTop() then
@@ -3113,26 +3189,29 @@ local function CardMenu(root)
 		local guide = root:CreateButton("Guide")
 		guide:SetSub("Pick a guide, find your place, see what it skips")
 		guide:SetIcon(Glyph("guide"))
-		guide:CreateCheckbox("Follow a leveling guide", function() return T:QuestStyle() == "guide" end, function()
-			T:SetQuestStyle(T:QuestStyle() == "guide" and "zone" or "guide")
+		-- (Written as it opens: the picker reads every guide's steps to say where you are in each.)
+		guide:SetLater(function(guide)
+			guide:CreateCheckbox("Follow a leveling guide", function() return T:QuestStyle() == "guide" end, function()
+				T:SetQuestStyle(T:QuestStyle() == "guide" and "zone" or "guide")
+			end)
+			if T:QuestStyle() == "guide" and G.current ~= nil then
+				guide:CreateCheckbox("Show the whole guide", function() return ns.char.guideFull == true end, function()
+					ns.ToggleGuideWindow()
+				end)
+			end
+			if ns.GuideList then
+				guide:CreateDivider()
+				ns.GuideList.Menu(guide)
+			end
+			if G.current and not G.finished then
+				guide:CreateDivider()
+				guide:CreateCheckbox("This zone's other quests too", function() return R.Extras() end, function()
+					if W.map then ns.char.zones[W.map] = not R.Extras() end
+					ns.Apply()
+				end)
+				guide:CreateButton("Quests my guide skips...", function() ns.OffGuide(true) end)
+			end
 		end)
-		if T:QuestStyle() == "guide" and G.current ~= nil then
-			guide:CreateCheckbox("Show the whole guide", function() return ns.char.guideFull == true end, function()
-				ns.ToggleGuideWindow()
-			end)
-		end
-		if ns.GuideList then
-			guide:CreateDivider()
-			ns.GuideList.Menu(guide)
-		end
-		if G.current and not G.finished then
-			guide:CreateDivider()
-			guide:CreateCheckbox("This zone's other quests too", function() return R.Extras() end, function()
-				if W.map then ns.char.zones[W.map] = not R.Extras() end
-				ns.Apply()
-			end)
-			guide:CreateButton("Quests my guide skips...", function() ns.OffGuide(true) end)
-		end
 	end
 
 	-- What the route adds on its own, and what the card speaks up about (registered by the files that do it).
@@ -3141,6 +3220,9 @@ local function CardMenu(root)
 	errands:SetSub(levelling and "Stops added for you: vendors, trainers, flights"
 		or "Stops added for you: your bank, the mailbox")
 	errands:SetIcon(Glyph("errands"))
+	-- (What leads on its own when it's worth it: the hearthstone, flight paths, a quest item from the bank.)
+	errands:CreateSection("On your route")
+	Switches(errands, "route", not levelling)
 	errands:CreateSection("Errands")
 	Switches(errands, "errands", not levelling)
 	errands:CreateSection("Suggestions")

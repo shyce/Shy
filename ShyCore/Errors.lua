@@ -425,7 +425,7 @@ end
 
 function E.Report()
 	local lines = {
-		"Shy error report",
+		Shy.Brand.FAMILY .. " error report",
 		Client(),
 		("Written %s, session %d. The game's error window: %s."):format(When(GetServerTime()), bag.session or 0, bag.popup and "on" or "off"),
 		-- With the game's taint log on, this client reports errors that aren't.
@@ -456,13 +456,13 @@ end
 function E.EntryText(key)
 	local entry = byKey[key]
 	if not entry then return "" end
-	local lines = { "Shy error", Client(), "" }
+	local lines = { Shy.Brand.FAMILY .. " error", Client(), "" }
 	Told(lines, entry)
 	return table.concat(lines, "\n")
 end
 
 function E.CopyAll()
-	Shy.UI.ShowCopyBox("Shy: errors", E.Report())
+	Shy.UI.ShowCopyBox(Shy.Brand.FAMILY .. ": errors", E.Report())
 end
 
 -- The window: the entries down the left, newest first; the one picked on the right, whole. Built the
@@ -756,7 +756,7 @@ local function Create()
 	end)
 	clear:SetPoint("RIGHT", 0, 0)
 	local copy = UI.Button(head, "Copy", 70, function()
-		if picked then Shy.UI.ShowCopyBox("Shy: error", E.EntryText(picked)) end
+		if picked then Shy.UI.ShowCopyBox(Shy.Brand.FAMILY .. ": error", E.EntryText(picked)) end
 	end)
 	copy:SetPoint("RIGHT", clear, "LEFT", -8, 0)
 	head.name:SetPoint("RIGHT", copy, "LEFT", -12, 0)

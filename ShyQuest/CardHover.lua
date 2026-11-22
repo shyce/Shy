@@ -504,7 +504,7 @@ local function Whole(stop, lead, way)
 		for _, section in ipairs(Story(open)) do sections[#sections + 1] = section end
 		sections[#sections + 1] = Where(stop, Said(content))
 		sections[#sections + 1] = Pays(handIns)
-		content.hints = { { "left", stop.manual and "Mark done" or "Point the way" }, { "right", "Done, skip, back" } }
+		content.hints = { { "left", stop.manual and "Mark done" or "Point the way" }, { "right", "Done, skip" } }
 	elseif stop.kind == "errand" then
 		content.strip = stop.strip or (stop.taken and "On your way" or stop.soon and "Worth doing now" or "Errand")
 		content.note = stop.caption
@@ -1281,8 +1281,9 @@ end
 --   a quest's stop the route chose                      go here next (on top of your route: Plan.lua's stack),
 --                                                       or skip it (R.Skip: set aside in zone mode, gone with a guide)
 --   a quest set aside                                   include it again (R.Include)
---   a step of the guide                                 point the way, or skip the step
---   an errand, a ride                                   point the way; an errand can wait (R.Skip)
+--   a step of the guide                                 take me there (or back to my route), or skip the step
+--   an errand                                           take me there (or back), or not now (R.Skip)
+--   a ride                                              nothing: the route goes by it already
 --   a pin standing for several                          nothing: closer in, each is a pin of its own
 local function RouteBlocks(stop)
 	-- (A pin standing for several has no one place to go to: closer in, each is a pin of its own.)
@@ -1291,8 +1292,10 @@ local function RouteBlocks(stop)
 	local function Act(text, click, primary, tone)
 		return { text = text, click = click, primary = primary or nil, tone = tone, close = true }
 	end
-	local function Point() ns.PointTheWay(stop) end
 	local function Skip() R.Skip(stop) end
+	-- (Taking it: the route leads there, as the menu's "Take me there" does. Card.lua, ns.TakeHint.)
+	local take = ns.TakeHint and ns.TakeHint(stop)
+	local taking = take and Act(take, function() ns.TakeStop(stop) end, true)
 	-- Yours: where it stands on your route, and off it again.
 	local entry = stop.way or stop.picked
 	if not entry and plan and (kind == "pickup" or kind == "turnin" or kind == "goal") then
@@ -1316,11 +1319,11 @@ local function RouteBlocks(stop)
 	end
 	if kind == "guide" then
 		local view = stop.view
-		return { { actions = { Act("Point the way", Point, true),
-			Act("Skip step", function() G.Skip(view.step.index, view.guide) end) } } }
+		local skip = Act("Skip step", function() G.Skip(view.step.index, view.guide) end)
+		return { { actions = taking and { taking, skip } or { skip } } }
 	end
-	if kind == "errand" then return { { actions = { Act("Point the way", Point, true), Act("Not now", Skip) } } } end
-	if kind == "fly" then return { { actions = { Act("Point the way", Point, true) } } } end
+	if kind == "errand" then return { { actions = taking and { taking, Act("Not now", Skip) } or { Act("Not now", Skip) } } } end
+	if kind == "fly" then return {} end
 	if not (kind == "pickup" or kind == "turnin" or kind == "goal") then return {} end
 	if ns.StopMood(stop) == "aside" then
 		return { { rows = { { glyph = "note", quiet = true, text = "You set this aside" } } },
@@ -1379,15 +1382,16 @@ end
 -- the hover; the menu has the rest.
 local function RowHints(stop)
 	if ns.OpensQuest and ns.OpensQuest(stop) then
-		return { { "left", "Open quest" }, { "right", stop.kind == "guide" and "Point the way, done, skip"
+		return { { "left", "Open quest" }, { "right", stop.kind == "guide" and "Done, skip"
 			or stop.chosen and "Remove from my route" or "Go here next" } }
 	end
-	if stop.kind == "guide" then return { { "left", "Pin step" }, { "right", "Point the way, done, skip" } } end
+	if stop.kind == "guide" then return { { "left", "Pin step" }, { "right", ns.TakeHint(stop) or "Done, skip" } } end
 	if stop.kind == "errand" then
-		-- An errand with a click of its own keeps it (Card.lua).
-		return { { "left", stop.click and (stop.hint or "Open") or "Pin" }, { "right", stop.menuHint or ns.TakeHint(stop) or "Point the way" } }
+		-- An errand with a click of its own keeps it (Card.lua). Its right-click: what its menu does first.
+		local right = stop.menuHint or ns.TakeHint(stop)
+		return { { "left", stop.click and (stop.hint or "Open") or "Pin" }, right and { "right", right } or nil }
 	end
-	if stop.kind == "fly" then return { { "left", "Pin" }, { "right", "Point the way" } } end
+	if stop.kind == "fly" then return { { "left", "Pin" } } end
 	if stop.kind == "way" then return { { "left", "Pin" }, { "right", "Route" } } end
 	return { { "left", "Pin" }, { "right", stop.chosen and "Remove from my route" or "Go here next" } }
 end

@@ -120,7 +120,7 @@ local function ShowTip(owner, side, draggable)
 	end
 	local menu = not Shy.MinimapFolding() and "Right-click lists your addons."
 		or (tracked and "Right-click: your addons, the task manager." or "Right-click: tracking, your addons, the task manager.")
-	UI.Tip(owner, "Shy", draggable and ("Click opens /shy. " .. menu .. " The mouse wheel sets the volume.")
+	UI.Tip(owner, Shy.Brand.FAMILY, draggable and ("Click opens /shy. " .. menu .. " The mouse wheel sets the volume.")
 		or ("Click opens /shy. " .. menu), {
 		side = side,
 		note = draggable and Loudness() or (n == 1 and "1 addon" or (n .. " addons")),

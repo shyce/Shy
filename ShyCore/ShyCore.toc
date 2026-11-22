@@ -1,9 +1,9 @@
 ## Interface: 16001
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffCore|r
-## Notes: The look, layout and setup every Shy addon shares |cff888888/shy|r
+## Notes: The look, layout and setup every ShyUI addon shares |cff888888/shy|r
 ## Author: Shyce Cream
-## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r
-## Version: 5.2.5
+## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffUI|r
+## Version: 5.2.7
 ## X-Date: 2026-11-22
 ## IconTexture: Interface\AddOns\ShyCore\Media\ShyCoreMarkColor
 ## SavedVariables: ShyCoreDB
@@ -52,6 +52,7 @@ Maps.lua
 Trip.lua
 Way.lua
 Setup.lua
+News.lua
 Chooser.lua
 Immersion.lua
 Screen.lua

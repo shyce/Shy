@@ -1893,15 +1893,19 @@ local function Build()
 			-- (Zone mode offers no dungeon quest: those are for a guide or a dungeon run. Nor is one of a dungeon
 			-- that is put off offered.)
 			local dungeon = (zoneMode and quest.flags:find("d", 1, true) ~= nil) or ns.PutOff(quest.id)
-			if dungeon then
+				-- (Nor a PvP quest: a battleground's, or the arena's fought-over chest. A guide's own step still takes one.)
+				or quest.flags:find("p", 1, true) ~= nil
+			-- (A class quest its own row covers, this version or another town's, is taken from the row: ClassQuests.lua.)
+			local row = own and ns.ClassQuests and ns.ClassQuests.Covers(quest.id)
+			if dungeon or row then
 				-- left out
 			elseif giver and giver.yards and not gray and (own or R.Worth(quest, giver)) then
 				local action = { kind = "pickup", id = quest.id, title = quest.name, level = quest.level, own = own }
 				Add(giver.kind .. giver.thing.id, action, function()
 					return Place({ who = giver.thing.name, thing = giver.thing }, giver.map, giver.x, giver.y, giver.yards, giver.dungeon)
 				end)
-			elseif not giver then
-				-- Starts from an item: go to its nearest source.
+			elseif not giver and not gray and (own or R.Worth(quest)) then
+				-- Starts from an item: go to its nearest source. (Held to the same level as a giver's quest.)
 				local source = NearestSource(quest)
 				if source and source.yards then
 					local action = { kind = "pickup", id = quest.id, title = quest.name, level = quest.level,
@@ -2317,25 +2321,39 @@ end
 -- which the map marks but the route doesn't lead to.
 local aim                    -- { step, number }: the step task the player asked the way to (R.Aim)
 
-local function GuideStops(offered)
+-- `taken`: the step you took (R.StepTaken). One the guide isn't on, behind or ahead, joins its live steps first.
+local function GuideStops(offered, taken)
 	local stops = {}
 	local kept = false       -- the aimed task is still to do
 	local near = {}          -- steps redirected this time (NearerPlace)
-	for _, entry in ipairs(offered and G.offered or G.active) do
+	local entries = offered and G.offered or G.active
+	if not offered and taken and taken.guide == G.current then
+		local live = false
+		for _, entry in ipairs(entries) do
+			if entry.step.index == taken.index and (entry.guide or G.current) == taken.guide then live = true end
+		end
+		local extra = not live and G.Entry(taken.index)
+		if extra then
+			extra.taken = true
+			entries = { extra }
+			for _, entry in ipairs(G.active) do entries[#entries + 1] = entry end
+		end
+	end
+	for _, entry in ipairs(entries) do
 		local view = G.Describe(entry.guide or G.current, entry.step, entry.parts, nil, entry.ghosts)
 		local stop = { kind = "guide", view = view, who = view.who, side = entry.side, manual = entry.manual, first = entry.first,
-			needed = entry.needed, catch = entry.catch, offered = offered or nil, actions = {} }
+			needed = entry.needed, catch = entry.catch, offered = offered or nil, taken = entry.taken, actions = {} }
 		for _, action in ipairs(view.actions) do
 			if not action.done then stop.actions[#stop.actions + 1] = action end
 		end
 		stop.map, stop.x, stop.y = view.map, view.x, view.y
-		stop.continent, stop.north, stop.west = view.continent, view.north, view.west
+		stop.continent, stop.north, stop.west, stop.up = view.continent, view.north, view.west, view.up
 		local task = not offered and aim and aim.step == entry.step.index and aim.number
 		for _, line in ipairs(task and view.lines or {}) do
 			if line.number == task and line.at and line.can and not line.done then
 				local at = line.at
 				stop.map, stop.x, stop.y = at.map, at.x, at.y
-				stop.continent, stop.north, stop.west = at.continent, at.north, at.west
+				stop.continent, stop.north, stop.west, stop.up = at.continent, at.north, at.west, at.up
 				stop.aimed = task
 				stop.led, stop.who = task, G.Who(view, task)
 			end
@@ -2371,6 +2389,78 @@ function R.Aim(stop, number)
 	local index = stop.view.step.index
 	if aim and aim.step == index and aim.number == number then aim = nil else aim = { step = index, number = number } end
 	ns.Refresh()
+end
+
+-- The step of the guide you took (R.TakeStep): { guide, index }, or nil. Kept for the character (ns.char.taken:
+-- the guide's key and the step's id), so it outlasts a reload and an update of the guide. A dungeon run keeps it
+-- for after. Another guide, or the step gone from it, lets it go.
+function R.StepTaken()
+	local kept = ns.char and ns.char.taken
+	if type(kept) ~= "table" then return nil end
+	local guide = G.current
+	if not guide or guide.run then return nil end
+	-- (A step along the way can be an earlier guide's: G.active has it.)
+	if G.KeyOf(guide) ~= kept.key then
+		for _, entry in ipairs(G.active) do
+			if entry.guide and G.KeyOf(entry.guide) == kept.key then guide = entry.guide break end
+		end
+	end
+	local index = G.KeyOf(guide) == kept.key and G.StepOf(kept.id, guide)
+	if not index then
+		ns.char.taken = nil
+		return nil
+	end
+	-- (from: the guide was on it already when you took it, over an errand or a quest on the way.)
+	return { guide = guide, index = index, from = kept.from == kept.id }
+end
+
+-- The step your guide is on itself, whatever leads: its first live step that isn't along the way. nil: none.
+function R.GuidePlace()
+	for _, entry in ipairs(G.active) do
+		if not entry.side then return entry.step.index, entry.guide or G.current end
+	end
+end
+
+-- The step you took leads the guide's steps and goes before any quest on the way. Done, skipped, or come to by
+-- the guide itself, there is nothing taken any more and the guide's order is back.
+local function TakenFirst(guided, taken)
+	if not taken then return end
+	for i, stop in ipairs(guided) do
+		if stop.taken then return end   -- (not one of the live steps: put first already, GuideStops)
+		if stop.view.step.index == taken.index and (stop.view.guide or G.current) == taken.guide then
+			if i == 1 and not stop.side and not taken.from then
+				ns.char.taken = nil
+				return
+			end
+			stop.taken = true
+			table.insert(guided, 1, table.remove(guided, i))
+			return
+		end
+	end
+	ns.char.taken = nil
+end
+
+-- Taking a step of the guide (taken false: back to the guide's order). The route leads there, and the
+-- arrow and both maps with it. An errand you took or a quest you singled out lets go: you're doing this now.
+function R.TakeStep(stop, taken)
+	if not (stop and stop.kind == "guide") then return end
+	if taken == false then
+		ns.char.taken = nil
+	else
+		local guide = stop.view.guide or G.current
+		local id = G.StepId(stop.view.step.index, guide)
+		if not id then return end
+		local place, of = R.GuidePlace()
+		ns.char.taken = { key = G.KeyOf(guide), id = id, from = place and G.StepId(place, of) or nil }
+		local errand = R.errandLed
+		if errand then
+			R.errandLed = nil
+			if ns.Arrow and ns.Arrow.Let then ns.Arrow.Let("errand:" .. tostring(errand)) end
+		end
+		ns.char.singled = nil
+	end
+	ns.Refresh()
+	if ns.ApplyPins then ns.ApplyPins(true) end
 end
 
 -- Removes from the nearby stops what the guide's live steps already cover.
@@ -2825,7 +2915,7 @@ local function HereFirst(guided)
 	local lead = guided[1]
 	local first, rest, now = {}, {}, {}
 	for i, stop in ipairs(guided) do
-		if i > 1 and Here(stop, lead) then
+		if i > 1 and not lead.taken and Here(stop, lead) then
 			stop.here = true
 			now[stop.view.step.index] = true
 			first[#first + 1] = stop
@@ -3173,6 +3263,10 @@ end)
 --         first         worth doing now (see R.Passing, which says when a place is worth going to):
 --                       it heads the card's errands. It never moves the route. Only an errand you
 --                       take (R.Take) or asked for (R.Ask) goes before the guide's step.
+--         route         part of the way, not a suggestion: worth doing now (`first`), it leads as if taken. For
+--                       what stands in for a guide's own step (the hearthstone, a home inn, a flight path:
+--                       their steps count as done meanwhile), and what the lead can't be done without (a quest
+--                       item in the bank, a class quest in the town you're in)
 --         yours         you chose it in its own menu (Stock.lua: the auction house): it leads as if taken
 --         waits         never before what leads this time, though you took it: it waits for what is
 --                       done right where the player stands (Stash.lua: a trip to the bank)
@@ -3210,6 +3304,11 @@ end
 
 function R.CanHush(id)
 	return id ~= nil and errandNames[id] ~= nil
+end
+
+-- What an errand is called where it can be turned back on ("Class trainer"), or nil.
+function R.ErrandName(id)
+	return errandNames[id]
 end
 
 function R.Hush(id, hushed)
@@ -3368,6 +3467,7 @@ end
 local function Errands(lead)
 	local first, rest, now, urgent = {}, {}, {}, {}
 	local was, held = ranFirst, R.held and ranFirst ~= nil
+	local stepTaken = R.StepTaken() ~= nil   -- (a step you took goes before what leads only for being worth it)
 	local levelling = ns.Levelling()
 	local order, count = {}, 0   -- stop -> the order found in; id -> true: found
 	for _, id in ipairs(errandIds) do
@@ -3404,8 +3504,10 @@ local function Errands(lead)
 			if held then soon = was[id] == true end
 			if soon then now[id] = true end
 			stop.soon = soon or nil
-			-- (What you took leads until it is done or no longer offered. What you asked for leads too.)
-			local taken = stop.yours or R.errandLed == id or R.Asked(id) ~= nil
+			-- (What you took leads until it is done or no longer offered. What you asked for leads too, and what is
+			-- part of the way while it is worth doing now.)
+			-- (A step of the guide you took goes before what would lead only for being worth it.)
+			local taken = stop.yours or R.errandLed == id or R.Asked(id) ~= nil or (stop.route and soon and not stepTaken)
 			-- (One that waits for what is done right here stands behind it.)
 			if stop.waits then taken = false end
 			stop.taken = taken or nil
@@ -3754,7 +3856,9 @@ function R.Build()
 	R.built = (R.built or 0) + 1
 	errandsFound = false
 	local tick = debugprofilestop()
-	local guided = GuideStops()
+	local took = R.StepTaken()
+	local guided = GuideStops(false, took)
+	TakenFirst(guided, took)
 	Shy.Clock("route: guide stops"):Lap(debugprofilestop() - tick)
 	-- Quests of the live steps: super-tracking one must not add a second stop above the step.
 	local led = {}
@@ -3816,7 +3920,7 @@ function R.Build()
 	local lead = guided[1]
 	local went = {}
 	ahead = nil
-	if lead and not lead.side then
+	if lead and not lead.side and not lead.taken then
 		local grind = OnlyGrind(lead)
 		local first, rest = {}, {}
 		for i = at, #route do
@@ -3870,8 +3974,13 @@ function R.Build()
 	if own[1] then now, ahead = YourWay(now, own[1]) end
 	for i, stop in ipairs(later) do table.insert(route, after + i - 1, stop) end
 	for i, stop in ipairs(now) do table.insert(route, head + i - 1, stop) end
-	for i, stop in ipairs(own) do table.insert(route, i, stop) end
-	for i, stop in ipairs(ahead) do table.insert(route, i, stop) end
+	-- (A step of the guide you took is the latest choice: your route goes on after it.)
+	local base = 0
+	for i, stop in ipairs(lead and lead.taken and route or {}) do
+		if stop == lead then base = i break end
+	end
+	for i, stop in ipairs(own) do table.insert(route, base + i, stop) end
+	for i, stop in ipairs(ahead) do table.insert(route, base + i, stop) end
 	Shy.Clock("route: your plan"):Lap(debugprofilestop() - tick)
 	tick = debugprofilestop()
 	local zoned = run and route or AddZones(route)
@@ -4181,8 +4290,9 @@ end
 -- The arrow points at a stop (Arrow.lua). The game's own map pin is not set: it would stand over the stop's mark
 -- and take its clicks (a click on the game's pin clears it), and the route's numbered places, its trail and the
 -- arrow say all it would. Your own pin, set on the map, is yours (Plan.lua).
-local function Waypoint(stop)
-	if stop.map and ns.Arrow and ns.Arrow.ToStop then ns.Arrow.ToStop(stop) end
+-- owner, release: as Arrow.lua's A.Let has them (a waypoint the route set, and what taking it away lets go).
+local function Waypoint(stop, owner, release)
+	if stop.map and ns.Arrow and ns.Arrow.ToStop then ns.Arrow.ToStop(stop, owner, release) end
 end
 
 -- The quest a stop puts on your route (R.Go): its first that isn't one to pick up, else its first. nil: none.
@@ -4194,12 +4304,31 @@ function R.PickOf(stop)
 	return actions[1]
 end
 
--- Taking an errand: it leads the route until it's done, or you let it go (taken false). The arrow points there.
+-- Taking an errand: it leads the route until it's done, or you let it go (taken false). The arrow points there, by a
+-- waypoint the errand owns: taken away (the arrow's "Remove waypoint", hiding it, /way clear), the errand is let go
+-- too; let go here, its waypoint goes, and a waypoint of yours stays. The maps' trail follows (Pins.lua).
 function R.Take(stop, taken)
 	if not (stop and stop.kind == "errand") then return end
-	R.errandLed = taken ~= false and stop.errand or nil
-	if taken ~= false and stop.map then Waypoint(stop) end
+	local id = stop.errand
+	local owner = "errand:" .. tostring(id)
+	if taken ~= false then
+		R.errandLed = id
+		if stop.map then
+			Waypoint(stop, owner, function()
+				-- (The waypoint is gone already: only the route lets go.)
+				if R.errandLed == id then
+					R.errandLed = nil
+					ns.Refresh()
+					if ns.ApplyPins then ns.ApplyPins(true) end
+				end
+			end)
+		end
+	else
+		if R.errandLed == id then R.errandLed = nil end
+		if ns.Arrow and ns.Arrow.Let then ns.Arrow.Let(owner) end
+	end
 	ns.Refresh()
+	if ns.ApplyPins then ns.ApplyPins(true) end
 end
 
 -- A click on a quest's stop puts it on your route, on top (Plan.lua); a second click takes it off. The lead

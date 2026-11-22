@@ -82,11 +82,15 @@ local function RowMenu(root, row)
 	for _, link in ipairs(view.links or {}) do
 		Row("Copy the link: " .. link.text, "link", function() UI.ShowCopyBox("A link from your guide", link.url) end)
 	end
-	if view.x then
-		Row("Point the way", "point", function()
-			ns.PointTheWay({ kind = "guide", view = view, actions = view.actions, map = view.map, x = view.x, y = view.y })
-		end)
+	-- Any step still to do is taken as on the card (Card.lua, ns.TakeHint): the route leads there, behind the
+	-- guide's place or ahead of it, and "Back to my route" brings the guide's place back.
+	local stop
+	for _, each in ipairs(ns.Route.stops) do
+		if each.kind == "guide" and each.view.step.index == index and (each.view.guide or G.current) == G.current then stop = each break end
 	end
+	if not stop and state == "todo" then stop = { kind = "guide", view = view, map = view.map } end
+	local take = stop and ns.TakeHint(stop)
+	if take then Row(take, stop.taken and "back" or "route", function() ns.TakeStop(stop) end) end
 	root:CreateDivider()
 end
 
@@ -148,6 +152,11 @@ local function FillRow(row, index, view, state)
 	elseif live and side then
 		tag = "along the way"
 	end
+	-- The step you took, in the gold the card wears for it (Card.lua, Head).
+	local taken = ns.Route.StepTaken and ns.Route.StepTaken()
+	local took = taken ~= nil and taken.guide == G.current and taken.index == index
+	if took then tag = "you took this" end
+	UI.Ink(row.tag, took and C.alert or C.dim)
 	row.tag:SetText(tag)
 	row.title:SetWidth(INNER - NUMBER - 6 - (tag ~= "" and (row.tag:GetStringWidth() + 8) or 0))
 

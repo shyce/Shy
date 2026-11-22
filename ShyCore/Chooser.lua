@@ -579,7 +579,7 @@ function Parts.color(parent, width)
 	mode:SetPoint("TOPLEFT")
 	local hue = UI.Slider(solid, "Hue", 0, 359, 1, function() return (HSL()) end, function(v) Move(1, v) end,
 		{ width = COL, format = function(v) return v .. "\194\176" end, color = Making,
-			desc = "Hue of the accent color. " .. Theme.SAPPHIRE .. "\194\176 matches the Shy logo." })
+			desc = "Hue of the accent color. " .. Theme.SAPPHIRE .. "\194\176 matches the " .. Shy.Brand.FAMILY .. " logo." })
 	hue:SetPoint("TOPLEFT", COL + COL_GAP, 0)
 	-- Under the hue, every hue at the saturation and lightness in use.
 	local strip = CreateFrame("Frame", nil, solid)

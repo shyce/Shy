@@ -11,7 +11,7 @@ local Credits = {}
 Shy.Credits = Credits
 
 Credits.HEAD = "Sources"
-Credits.LEAD = "Shy is free software under the GNU GPL, version 3. World of Warcraft and its art belong to Blizzard."
+Credits.LEAD = Shy.Brand.FAMILY .. " is free software under the GNU GPL, version 3. World of Warcraft and its art belong to Blizzard."
 
 -- name, by whom (or nil), what it gives Shy, its license, its link (or nil).
 Credits.WORKS = {

@@ -9,7 +9,10 @@
 --   Glide.Coming(continent, north, west [, level, up]) -> one anywhere ahead that saves WORTH: { kind, spell,
 --     name, icon, text, saves }
 --   Glide.Saves(continent, north, west) -> seconds the way saves over one with neither, or nil
--- The card's leading row says it (ns.cardNotes), and so do the arrow and the row's hover.
+--   Glide.Swim(continent, north, west [, level, up]) -> seconds of swimming still ahead on that trail, and
+--     the share of what is left of it they are; nil while water is walked on (then Ahead says it)
+-- The card's leading row says it (ns.cardNotes), and so do the arrow and the row's hover. A long swim
+-- ahead is said there too: a line over the sea reads as a boat otherwise.
 -- A known spell with no reagent in any bag can't be counted on. Then the auction house is an errand
 -- when it is on the way (no vendor in the data sells either reagent), unless the bank holds some,
 -- in which case the bank's row says so.
@@ -25,6 +28,9 @@ ns.Glide = Glide
 
 local NEAR = 60              -- yards from where a drop or the water begins: time to cast
 local RUN = 7                -- yards a second running
+local SWIM = 4.7222          -- yards a second swimming
+local SWIM_SAID = 90         -- seconds of swimming ahead, at the least, for the card to say it
+local SWIM_MOST = 0.5        -- share of the way left that is swum, at the least, for it to be how you get there
 local LASTS = 0.4            -- a spell that lasts less is cast nearer: no more than this share of it spent running there
 local WORTH = 30             -- seconds: a saving under this is not said
 local AGAIN = 10             -- seconds before a saving not worked out is asked again
@@ -71,16 +77,42 @@ local function Find(way, at, north, west)
 	return nil
 end
 
-function Glide.Ahead(continent, north, west, level, up)
+-- The trail the maps draw to a place, the point of it walked toward and where the player is; nil while
+-- it isn't known, aboard something or dead. (ShyWay keeps it, so asking again costs nothing.)
+local function Trail(continent, north, west, level, up)
 	if not (north and W.Known()) or continent ~= W.continent then return nil end
 	if ns.Carried() or UnitIsDeadOrGhost("player") then return nil end
-	local hereNorth, hereWest = W.Here()
-	-- (The trail the maps draw: ShyWay keeps it, so asking again costs nothing.)
 	local way, at = W.Way(continent, north, west, level, up)
 	if not (way and type(at) == "number") then return nil end
+	local hereNorth, hereWest = W.Here()
+	return way, at, hereNorth, hereWest
+end
+
+function Glide.Ahead(continent, north, west, level, up)
+	local way, at, hereNorth, hereWest = Trail(continent, north, west, level, up)
+	if not way then return nil end
 	local kind, spell, yards = Find(way, at, hereNorth, hereWest)
 	if kind and spell then return { kind = kind, spell = spell, yards = yards } end
 	return nil
+end
+
+-- A stretch is swum where both its ends are in water, half where one is (as the maps draw it).
+function Glide.Swim(continent, north, west, level, up)
+	local way, at, hereNorth, hereWest = Trail(continent, north, west, level, up)
+	if not way or way.water then return nil end
+	local swum, dry = 0, 0
+	local fromNorth, fromWest, fromWet = hereNorth, hereWest, Wet(way, math.max(1, at - 1))
+	for i = math.max(2, at), way.n do
+		local toNorth, toWest, toWet = way[i * 3 - 2], way[i * 3 - 1], Wet(way, i)
+		local yards = W.Between(fromNorth, fromWest, toNorth, toWest)
+		local wet = (fromWet and toWet) and 1 or (fromWet or toWet) and 0.5 or 0
+		swum, dry = swum + yards * wet, dry + yards * (1 - wet)
+		fromNorth, fromWest, fromWet = toNorth, toWest, toWet
+	end
+	local seconds = swum / SWIM
+	local whole = seconds + dry / RUN
+	if seconds <= 0 or whole <= 0 then return nil end
+	return seconds, seconds / whole
 end
 
 -- Seconds the way to a place saves over one that neither falls slowed nor walks on water, worked out once
@@ -189,6 +221,11 @@ local function Note(stop)
 	local coming = Glide.Coming(stop.continent, stop.north, stop.west, level, up)
 	if coming then
 		return { text = coming.text, color = C.dim, icon = coming.icon, right = Glide.SavesText(coming.saves), rightColor = C.good }
+	end
+	local swim, share = Glide.Swim(stop.continent, stop.north, stop.west, level, up)
+	if swim and swim >= SWIM_SAID then
+		local minutes = math.floor(swim / 60 + 0.5)
+		return { text = (share >= SWIM_MOST and "A %d min swim to get there" or "A %d min swim on the way"):format(minutes), color = C.text }
 	end
 	return nil
 end

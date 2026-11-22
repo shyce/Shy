@@ -320,13 +320,6 @@ local function Points(points)
 	return whole == 1 and "1 point" or whole .. " points"
 end
 
-local function Quit(root)
-	root:CreateButton("Stop asking about healing potions", function()
-		T.db.supplies.carry.heal = 0
-		ns.Apply()
-	end):SetSub("Turn it back on under Errands")
-end
-
 -- The trainer as a route errand (R.AddErrand), or nil.
 local function Train(lead)
 	local weighs = ns.Weighed("aidtrain")
@@ -380,7 +373,6 @@ local function Train(lead)
 				Mine().skip = now.level
 				ns.Refresh()
 			end)
-			Quit(root)
 		end,
 	}
 end
@@ -437,7 +429,6 @@ local function Make()
 				put = key
 				ns.Refresh()
 			end)
-			if not forSkill then Quit(root) end
 		end,
 	}
 end
@@ -478,7 +469,6 @@ local function Herb(lead)
 		tip = function(tip)
 			for _, each in ipairs(buy) do tip:AddLine(("%d %s"):format(each.count, Name(each.id)), 1, 1, 1) end
 		end,
-		menu = Quit,
 	}
 end
 

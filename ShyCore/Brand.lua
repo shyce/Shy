@@ -1,11 +1,14 @@
 -- Shy.Brand: branded text, titles, emblems, lines and the login splash.
 --
 --   B.Name("Tip")                     -> "Shy" in the accent ramp + white suffix (escape codes)
+--   B.Name()                          -> the family's own name, ShyUI ("UI" stands in for the suffix)
+--   B.Plain("Tip"), B.Plain()         -> the same names as plain words
+--   B.FAMILY, B.STEM, B.OLD           -> "ShyUI", "Shy", and the family's name before
 --   B.Gradient(text)                  -> any text in the accent ramp, deep to light
 --   B.Ramp(u)                         -> r, g, b along the accent: 0 deep, 0.5 accent, 1 light
 --   B.Cycle(t)                        -> the ramp up and back as t counts cycles
 --   B.Icon(path, size)                -> inline icon markup, tinted with the accent
---   B.Chat(text)                      -> a line an addon says in chat by itself: "<Shy> text"
+--   B.Chat(text)                      -> a line an addon says in chat by itself: "<ShyUI> text"
 --   B.GetFont()                      -> the display font (Lilita One)
 --   B.CreateTitle(parent, "Tip", 32)  -> per-letter animated title
 --   B.CreateEmblem(parent, icon, 64)  -> icon over a pulsing glow, with a periodic sheen
@@ -53,15 +56,38 @@ function B.Gradient(text)
 	return concat(out)
 end
 
+-- Names. Every word of the brand is here; nothing else spells it out.
+-- The family is ShyUI, easy to search for. An addon keeps its own name (ShyQuest).
+B.STEM = "Shy"                 -- the lit part every name starts with
+local FAMILY_SUFFIX = "UI"
+B.FAMILY = B.STEM .. FAMILY_SUFFIX
+B.OLD = B.STEM                 -- the family's name before: what it wrote into the game's lists then is still its own
+
+-- What follows the stem: an addon's name, or the family's (with any words after it: " layout").
+local function Suffix(suffix)
+	if not suffix or suffix == "" or suffix:sub(1, 1) == " " then return FAMILY_SUFFIX .. (suffix or "") end
+	return suffix
+end
+
 function B.Name(suffix)
-	return B.Gradient("Shy") .. "|cffffffff" .. (suffix or "") .. "|r"
+	return B.Gradient(B.STEM) .. "|cffffffff" .. Suffix(suffix) .. "|r"
+end
+
+-- The same name as plain words, for text that carries no color (copy boxes, tooltips' titles, buttons).
+function B.Plain(suffix)
+	return B.STEM .. Suffix(suffix)
+end
+
+-- The house preset wears the family's name.
+for _, preset in ipairs(Theme.PRESETS) do
+	if preset.house then preset.name = B.FAMILY end
 end
 
 B.Icon = Theme.IconMarkup
 
 -- A line an addon sends to other players by itself, marked as an addon's so nobody takes it for typed
 -- words. Plain text: sent chat carries no color or icon.
-B.CHAT = "<Shy> "
+B.CHAT = "<" .. B.FAMILY .. "> "
 function B.Chat(text)
 	return B.CHAT .. text
 end
@@ -69,7 +95,7 @@ end
 -- Preload the font so the first text measured with it has the right width.
 local preload = UIParent:CreateFontString(nil, "BACKGROUND")
 preload:SetFont(Shy.FONT, 14, "")
-preload:SetText("Shy")
+preload:SetText(B.FAMILY)
 preload:Hide()
 
 function B.GetFont()
@@ -96,14 +122,14 @@ function B.CreateTitle(parent, suffix, size)
 	local f = CreateFrame("Frame", nil, parent)
 	local font = B.GetFont()
 	f.letters, f.colors = {}, {}
-	for ch in ("Shy" .. (suffix or "")):gmatch(UTF8_CHAR) do
+	for ch in B.Plain(suffix):gmatch(UTF8_CHAR) do
 		local fs = f:CreateFontString(nil, "OVERLAY")
 		fs:SetFont(font, size, "OUTLINE")
 		fs:SetShadowOffset(0, -2)
 		fs:SetText(ch)
 		local i = #f.letters + 1
 		f.letters[i] = fs
-		f.colors[i] = i <= 3 and Theme.ramp[i] or ICE   -- theme tables by reference: they change in place
+		f.colors[i] = i <= #B.STEM and Theme.ramp[i] or ICE   -- theme tables by reference: they change in place
 	end
 	local function Layout()
 		local x = 0

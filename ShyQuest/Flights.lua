@@ -76,23 +76,18 @@ local function Find(lead)
 		mark = "flight",
 		map = at.map, x = at.x, y = at.y, thing = at.npc, who = at.npc.name,
 		first = passing or nil,
+		route = true,            -- (The guide's own "get the flight path" steps count as done: this is them now.)
 		tip = function(tip) tip:AddLine(words.tip, 0.6, 0.6, 0.6, true) end,
-		menu = function(root)
-			if words ~= WORDS.unread then
-				root:CreateButton("Not this one", function()
-					Skipped()[point.key] = true
-					ns.Refresh()
-				end)
-			end
-			root:CreateButton("Stop asking about flight points", function()
-				T.db.flights.on = false
-				ns.Apply()
-			end):SetSub("Turn it back on under Errands")
-		end,
+		menu = words ~= WORDS.unread and function(root)
+			root:CreateButton("Not this one", function()
+				Skipped()[point.key] = true
+				ns.Refresh()
+			end)
+		end or nil,
 	}
 end
 
-ns.CardSwitch("errands", function(root)
+ns.CardSwitch("route", function(root)
 	root:CreateCheckbox("Flight paths along the way", function() return T.db.flights.on end, function()
 		T.db.flights.on = not T.db.flights.on
 		ns.Apply()

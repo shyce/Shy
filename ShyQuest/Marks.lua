@@ -471,6 +471,8 @@ end
 -- (stop.tone: a ghost's body) is marked as an objective of that kind.
 function ns.StopMark(stop)
 	if stop.tone then return "goal" end
+	-- (An errand that is a quest to pick up wears a quest giver's mark: ClassQuests.lua's row.)
+	if stop.mark == "pickup" then return "pickup" end
 	return SIGN[stop.mark] and stop.mark or stop.kind
 end
 

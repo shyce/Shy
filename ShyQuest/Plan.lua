@@ -130,16 +130,27 @@ local function ClearMapWaypoint()
 	end
 end
 
+-- The arrow's target a stop owns (a /way: Plan.Way, Arrow.lua) goes with the stop, however it leaves the route.
+function Plan.Owner(stop)
+	return "plan:" .. tostring(stop.id)
+end
+local function Gone(stop)
+	if not (stop and ns.Arrow and ns.Arrow.Let) then return end
+	clearing = true   -- (the pin it takes with it is this stop's: nothing more goes for it)
+	ns.Arrow.Let(Plan.Owner(stop))
+	clearing = false
+end
+
 -- The stop a place makes, put into the route at `at` (none: on top, where it leads), without telling anyone yet.
 local function Put(place, at)
 	local plan = Saved()
 	local stops = plan.stops
 	local was = Plan.Has(place.map, place.x, place.y)
-	if was then table.remove(stops, was) end
+	if was then Gone(table.remove(stops, was)) end
 	-- (The world map holds one waypoint: setting another moves its stop.)
 	if place.from == "map" then
 		for i = #stops, 1, -1 do
-			if stops[i].from == "map" then table.remove(stops, i) end
+			if stops[i].from == "map" then Gone(table.remove(stops, i)) end
 		end
 	end
 	local stop = { id = plan.next or 1, title = place.title or "Waypoint", where = Where(place), map = place.map,
@@ -185,7 +196,27 @@ function Plan.Remove(i)
 	if not stop then return end
 	table.remove(stops, i)
 	if stop.from == "map" then ClearMapWaypoint() end
+	Gone(stop)
 	Changed()
+end
+
+-- The stop with this id leaves the route (the arrow's waypoint for it taken away: Arrow.lua).
+function Plan.Drop(id)
+	for i, stop in ipairs(Plan.List()) do
+		if stop.id == id then return Plan.Remove(i) end
+	end
+end
+
+-- A /way: the place on your route as the map's waypoint (a new one moves it), the pin set there first, so the
+-- game's word of it finds the stop already made. The arrow points at it, owned by the stop (Plan.Owner).
+function Plan.Way(place)
+	if not (place and place.map and place.x and place.y) then return nil end
+	if C_Map.CanSetUserWaypointOnMap(place.map) then
+		clearing = true
+		Shy.Waypoint.Set(place.map, place.x / UNITS, place.y / UNITS)
+		clearing = false
+	end
+	return Plan.Go({ map = place.map, x = place.x, y = place.y, title = place.title, from = "map" })
 end
 
 function Plan.Move(from, to)
@@ -200,11 +231,14 @@ end
 
 function Plan.Clear()
 	local had = false
-	for _, stop in ipairs(Plan.List()) do
+	local was = {}
+	for i, stop in ipairs(Plan.List()) do
 		if stop.from == "map" then had = true end
+		was[i] = stop
 	end
 	wipe(Plan.List())
 	if had then ClearMapWaypoint() end
+	for _, stop in ipairs(was) do Gone(stop) end
 	Changed()
 end
 
@@ -327,6 +361,7 @@ function Plan.Stops(live)
 		if continent == W.continent and W.Between(W.north, W.west, north, west) <= ARRIVE then
 			table.remove(stops, 1)
 			if lead.from == "map" then ClearMapWaypoint() end
+			Gone(lead)
 			for _, fn in ipairs(watchers) do fn() end
 		end
 	end
@@ -446,6 +481,7 @@ function Plan.EndFarm(item)
 			table.remove(stops, i)
 			gone = true
 			if stop.from == "map" then ClearMapWaypoint() end
+			Gone(stop)
 		end
 	end
 	if gone then Changed() end
@@ -483,7 +519,7 @@ events:SetScript("OnEvent", function(_, event, quest)
 	local stops = Plan.List()
 	for i = #stops, 1, -1 do
 		if stops[i].from == "map" then
-			table.remove(stops, i)
+			Gone(table.remove(stops, i))
 			Changed()
 		end
 	end

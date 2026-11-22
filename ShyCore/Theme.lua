@@ -95,10 +95,11 @@
 -- Presets: a whole theme at once, its look, accent, bars' fill, slots' finish and health's color picked to go
 -- together (the setup's theme section and the hub offer them). Nothing of a preset is kept but its parts: the
 -- preset worn is the one whose parts are all worn now, else "own".
---   Theme.PRESETS                -- { key, name, desc, look, accent, bar, slot, health, gradient, options }; accent a
+--   Theme.PRESETS                -- { key, name, desc, look, accent, bar, slot, health, gradient, options, house }; accent a
 --                                -- Theme.Picks() value, bar a Skin.BARS key, slot a Slot.STYLES key ("auto": the look's
 --                                -- own), gradient a Theme.GRADIENTS key (with accent "gradient"), nil for one color;
---                                -- options its look's options (the rest at their defaults)
+--                                -- options its look's options (the rest at their defaults); house the family's
+--                                -- own, named by Shy.Brand
 --   Theme.PresetPicks()          -> the dropdown's items: every preset, then "Your own"
 --   Theme.PresetWorn(parts)      -> the key of the preset `parts` (or what is worn now) matches, or "own"
 --   Theme.PresetParts(key)       -> a copy of that preset's parts, nil for none
@@ -1454,6 +1455,16 @@ function Theme.Paint(texture, ...) Wear("paint", texture, ...) end
 function Theme.Tint(texture, ...) Wear("tint", texture, ...) end
 function Theme.Ink(fontString, ...) Wear("ink", fontString, ...) end
 
+-- A region worn again as it is: a color it was worn in by a function is asked again. One worn in `from` (a
+-- color, or the accent function a piece took as it was made) wears `to` in its place, its alpha kept: what a
+-- housing took its accent from follows UI.SetAccent. Nothing for a region the theme doesn't wear.
+function Theme.Rewear(region, from, to)
+	local w = worn[region]
+	if not w then return end
+	if from ~= nil and w.color == from then w.color, w.accent = to, to == Theme.Accent end
+	Lay(region, w)
+end
+
 local function Near(a, b)
 	return type(a) == "number" and not issecretvalue(a) and abs(a - b) < 0.006
 end
@@ -2020,7 +2031,7 @@ end
 -- Presets
 
 Theme.PRESETS = {
-	{ key = "shy", name = "Shy", desc = "The default: forged steel in your class color.",
+	{ key = "shy", house = true, desc = "The default: forged steel in your class color.",
 		look = "forged", accent = "class", bar = "auto", slot = "auto", health = "class" },
 	{ key = "monster", name = "Monster", desc = "Black hide, venom veins creeping in from its corners, a scar under every title.",
 		look = "stitched", accent = "venom", bar = "auto", slot = "auto", health = "accent", options = { leather = "scaled" } },

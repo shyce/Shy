@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffKeys|r
 ## Notes: Your class on your keys, laid out once for every level |cff888888/shy keys|r
 ## Author: Shyce Cream
-## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r
-## Version: 5.2.5
+## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffUI|r
+## Version: 5.2.7
 ## X-Date: 2026-11-22
 ## IconTexture: Interface\AddOns\ShyKeys\Media\ShyKeysMarkColor
 ## Dependencies: ShyCore

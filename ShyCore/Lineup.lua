@@ -15,7 +15,8 @@ local P = Shy.Profiles
 local L = {}
 Shy.Lineup = L
 
-local PREFIX = "Shy - "      -- our layouts' names; any one of them under this class is ours to replace
+local PREFIX = Shy.Brand.FAMILY .. " - "   -- our layouts' names; any one of them under this class is ours to replace
+local WAS = Shy.Brand.OLD .. " - "         -- what they were called before: still ours, renamed as they're written
 local FORMAT, ENCODING = 5, 1   -- the game's save format and encoding we write
 
 -- The game's save fields (CooldownViewerSettingsDataStoreSerialization.lua).
@@ -26,6 +27,14 @@ local function Mine()
 	local db = ShyCoreDB
 	db.lineups = db.lineups or {}
 	return db.lineups
+end
+
+-- The build part of one of our layouts' names, or nil for a name that isn't ours.
+local function Ours(name)
+	if type(name) ~= "string" then return end
+	for _, prefix in ipairs({ PREFIX, WAS }) do
+		if name:sub(1, #prefix) == prefix then return name:sub(#prefix + 1) end
+	end
 end
 
 -- What was last written for each character, as Mark gives it: a lineup made otherwise since is rewritten.
@@ -147,9 +156,10 @@ function L.Refresh()
 	local tag = select(3, UnitClass("player")) * 10 + spec
 	local active = (data[ACTIVE] or {})[tag]
 	local known = active and (data[NAMES] or {})[active]
-	if type(known) ~= "string" or known:sub(1, #PREFIX) ~= PREFIX then return end
+	local name = Ours(known)
+	if not name then return end
 	if Marks()[P.Character()] == Mark(Layout(lineup)) then return end
-	if L.Write(build, known:sub(#PREFIX + 1)) then
+	if L.Write(build, name) then
 		Shy.Reload("Your cooldown manager is laid out for your build. Reload to see it.")
 	end
 end
@@ -185,8 +195,7 @@ function L.Write(build, name)
 	-- Our earlier lineup gives up its place; its id is kept for the new one.
 	local id
 	for layoutID in pairs(mine) do
-		local known = names[layoutID]
-		if type(known) == "string" and known:sub(1, #PREFIX) == PREFIX then
+		if Ours(names[layoutID]) then
 			mine[layoutID], names[layoutID] = nil, nil
 			id = id or layoutID
 		end

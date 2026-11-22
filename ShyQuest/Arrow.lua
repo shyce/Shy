@@ -400,11 +400,35 @@ function A.Clear()
 	if A.Following() and not was.lead then ToLead() end
 end
 
+-- Who set the waypoint. One of yours (a /way, a pin on the map, a place shared with you) has no owner: it is
+-- yours alone, and taking it away changes nothing else. One ShyQuest set for something on your route has its
+-- owner ("errand:bank") and what letting it go means there (`release`): an errand you took is let go when you
+-- take its waypoint away, so the route and the arrow never tell two stories.
+--   A.Let(owner)   the owner is done with it (the errand let go, or done): its waypoint goes, nothing else
+local function Released()
+	local release = target and target.release
+	if target then target.release = nil end
+	return release
+end
+
+function A.Let(owner)
+	if not (owner and target and target.owner == owner) then return end
+	target.release = nil
+	A.Clear()
+end
+
+-- Taken away by you: the waypoint goes, and what it stood for on your route with it.
+local function Dropped()
+	local release = Released()
+	A.Clear()
+	if release then release() end
+end
+
 -- Puts the arrow away for good: following stops too.
 local function PutAway()
 	ns.char.arrow = nil
 	held = nil
-	A.Clear()
+	Dropped()
 	if ns.ApplyCard then ns.ApplyCard() end
 end
 
@@ -426,13 +450,18 @@ local function Yours()
 	if stop > 0 or own then return stop, own end
 end
 
--- Taken away: its stop leaves the route (and the map's pin with it), and the arrow goes back to what leads.
+-- Taken away: its stop leaves the route (and the map's pin with it), what it stood for is let go (Dropped), and the
+-- arrow goes back to what leads.
 local function RemoveWaypoint()
 	local stop, own = Yours()
 	if not stop then return end
-	if own then A.Clear() end
-	if stop > 0 then ns.Plan.Remove(stop) end
+	-- (By the stop itself, not its place in the list: letting the arrow go may have taken it off already.)
+	local entry = stop > 0 and ns.Plan.List()[stop] or nil
+	if own then Dropped() end
+	local at = entry and ns.Plan.IndexOf(entry)
+	if at then ns.Plan.Remove(at) end
 end
+A.Remove = RemoveWaypoint
 
 local function Menu(root)
 	if Yours() then root:CreateButton("Remove waypoint", RemoveWaypoint) end
@@ -460,7 +489,8 @@ local function Step(d, elapsed, write)
 	-- A target that follows a route stop stays until the route drops the stop.
 	if yards and yards <= ARRIVED and not target.following then
 		local name = target.title
-		A.Clear()
+		-- (Reached: what it stood for on your route is done with too, a /way's stop with it.)
+		Dropped()
 		T:Print(("reached |cffffffff%s|r, arrow hidden."):format(name))
 	end
 end
@@ -965,7 +995,10 @@ end
 --   holding: it takes the arrow for a while only, so a /way's saved target and its pin on the map stay.
 function A.Point(place)
 	if not (place and place.map and place.x and place.y) then return false end
-	if OurPin() and not place.holding then Shy.Waypoint.Clear() end
+	-- (The pin set for the last place goes; one already on this place stays: clearing it would take its stop off your
+	-- route, Plan.lua, and setting it again make another.)
+	local same = target and target.map == place.map and math.abs(target.x - place.x) < 2 and math.abs(target.y - place.y) < 2
+	if OurPin() and not place.holding and not same then Shy.Waypoint.Clear() end
 	-- (A stop's own world position, where it has one: the way the maps keep to it goes by that.)
 	local continent, north, west = place.continent, place.north, place.west
 	if not north then continent, north, west = W.ToWorld(place.map, place.x, place.y) end
@@ -975,12 +1008,13 @@ function A.Point(place)
 	target = {
 		map = place.map, x = place.x, y = place.y, title = place.title or "Waypoint",
 		key = place.key, about = place.about, following = place.following, typed = place.typed, lead = place.lead, among = place.among, found = place.found,
+		owner = place.owner, release = place.release,
 		sign = sign, hue = hue, mark = mark, tone = place.tone, leading = place.leading,
 		continent = continent, north = north, west = west, floor = place.floor, up = place.up,
 	}
 	-- A typed target is saved and set as the map's user waypoint.
 	if not place.holding then
-		ns.char.way = place.typed and { map = place.map, x = place.x, y = place.y, title = target.title } or nil
+		ns.char.way = place.typed and { map = place.map, x = place.x, y = place.y, title = target.title, plan = place.plan } or nil
 	end
 	if place.typed and Shy.Waypoint.Set(place.map, place.x / UNITS, place.y / UNITS) then
 		target.pin = true
@@ -1014,7 +1048,8 @@ local function Placed(stop)
 end
 
 -- A route stop is followed; any other stop (a later guide step, a map pin) is pointed at where it is now.
-function A.ToStop(stop)
+-- owner, release: who set it and what taking it away lets go (see A.Let); none: pointed at by hand.
+function A.ToStop(stop, owner, release)
 	local map, x, y = Placed(stop)
 	if not map then return false end
 	local key = Key(stop)
@@ -1024,7 +1059,7 @@ function A.ToStop(stop)
 	local leading = Leading(stop)
 	return A.Point({ map = map, x = x, y = y, title = Named(stop, leading), key = key, about = following and stop or nil, following = following, leading = leading,
 		among = following and stop.among or nil, found = R.Found(stop), sign = sign, hue = hue, mark = mark, tone = tone,
-		continent = stop.continent, north = stop.north, west = stop.west, floor = floor, up = up })
+		continent = stop.continent, north = stop.north, west = stop.west, floor = floor, up = up, owner = owner, release = release })
 end
 
 -- Points at the stop the quest window is heading for. With nothing there to point at, the arrow
@@ -1179,6 +1214,22 @@ local function Usage()
 	print("  /way clear  - hide the arrow")
 end
 
+-- The route's stop with this id, if it is still there.
+local function Planned(id)
+	for _, stop in ipairs(ns.Plan and ns.Plan.List() or {}) do
+		if stop.id == id then return stop end
+	end
+end
+
+-- A /way's target owned by its stop on your route (Plan.Way): the stop leaving lets the arrow go (Plan's own
+-- A.Let), and the arrow's waypoint taken away takes the stop off (release).
+local function Owned(place, id)
+	if not id then return place end
+	place.plan, place.owner = id, ns.Plan.Owner({ id = id })
+	place.release = function() ns.Plan.Drop(id) end
+	return place
+end
+
 function A.Command(text)
 	text = strtrim(text or "")
 	local word = text:lower()
@@ -1215,7 +1266,10 @@ function A.Command(text)
 		return
 	end
 	local x, y = math.floor(way.x * 100 + 0.5), math.floor(way.y * 100 + 0.5)
-	A.Point({ map = map, x = x, y = y, title = way.name or ("%s %.1f, %.1f"):format(W.MapName(map) or "Map", way.x, way.y), typed = true })
+	local title = way.name or ("%s %.1f, %.1f"):format(W.MapName(map) or "Map", way.x, way.y)
+	-- One waypoint, on your route and in the arrow: either taken away, reached or replaced, both go (Plan.Way).
+	local stop = ns.Plan and ns.Plan.Way({ map = map, x = x, y = y, title = title })
+	A.Point(Owned({ map = map, x = x, y = y, title = title, typed = true }, stop and stop.id))
 	local yards = Yards()
 	T:Print(("arrow set to |cffffffff%s|r%s. Drag to move, |cff888888/way clear|r to hide."):format(
 		target.title, yards and (", " .. W.Yards(yards) .. " from here") or ""))
@@ -1239,8 +1293,12 @@ end)
 Shy:On("SHY_LOGIN", function()
 	if not box then Build() end
 	local way = ns.char and ns.char.way
+	-- (A /way whose stop left the route meanwhile is gone with it.)
+	if type(way) == "table" and way.plan and not (ns.Plan and Planned(way.plan)) then
+		ns.char.way, way = nil, nil
+	end
 	if type(way) == "table" and way.map and way.x and way.y then
-		A.Point({ map = way.map, x = way.x, y = way.y, title = way.title, typed = true })
+		A.Point(Owned({ map = way.map, x = way.x, y = way.y, title = way.title, typed = true }, way.plan))
 	elseif A.Following() then
 		ToLead()
 	end

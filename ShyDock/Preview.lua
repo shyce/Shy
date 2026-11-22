@@ -1129,7 +1129,7 @@ function P.Section(parent, width)
 			Say(C.dim, "You're in combat. You can change the console after the fight.")
 		elseif not active then
 			Say(C.dim, L.Exists() and "You're on your own Edit Mode layout. Set up switches back to the console, with a reload."
-				or "Not set up on this character. Set up adds a layout named \"Shy\" and keeps yours, with a reload.")
+				or ("Not set up on this character. Set up adds a layout named \"" .. L.NAME .. "\" and keeps yours, with a reload."))
 		elseif custom then
 			Say(C.alert, change and "You changed this layout yourself. Set up lays out your pick and your changes go, with a reload."
 				or "You changed this layout yourself. Put it back lays it out fresh and your changes go, with a reload.")

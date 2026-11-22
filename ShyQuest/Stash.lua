@@ -1006,6 +1006,9 @@ local function Stop(place, lead, at, yards, rows, quests, put, road)
 		mark = place.mark,
 		first = not waits or nil,
 		waits = waits or nil,
+		-- (What leads can't be done without it, or the way ahead needs it before the next bank: part of the way.
+		-- Quicker, or only in passing: a suggestion.)
+		route = (why == "blocked" or why == "ahead") or nil,
 		-- Its hover: what to take out a quest at a time, the quest's name heading its things (side by side on
 		-- one line they wrap), then what to put away, and last, quiet, that the bank does it for you.
 		hover = function()
@@ -1388,11 +1391,13 @@ end
 ns.cardNotes = ns.cardNotes or {}
 table.insert(ns.cardNotes, Note)
 
-ns.CardSwitch("errands", function(root)
+ns.CardSwitch("route", function(root)
 	root:CreateCheckbox("Fetch quest items from bank and mailbox", function() return T.db.stash.take end, function()
 		T.db.stash.take = not T.db.stash.take
 		ns.Apply()
 	end)
+end, true)
+ns.CardSwitch("errands", function(root)
 	root:CreateCheckbox("Put away what quests need later", function() return T.db.stash.away end, function()
 		T.db.stash.away = not T.db.stash.away
 		ns.Apply()

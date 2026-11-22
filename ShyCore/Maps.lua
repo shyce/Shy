@@ -18,8 +18,8 @@
 --        the first and fine at the last, in `color` (the trail's, Maps.TrailColor, for none) in a crisp dark case
 --        (Maps.CASE) with a comet running along it (Shine);
 --        xs.depth[i]: point i's level;
---        xs.fall[i], xs.water[i]: how much of the stretch ending at point i is a slowed fall or walked on
---        water, 0 to 1 (Maps.AIR)
+--        xs.fall[i], xs.water[i]: how much of the stretch ending at point i is a slowed fall or crosses
+--        water (swum or walked on), 0 to 1 (Maps.AIR)
 --   Shy.Maps.Shine(pen, now)                              -- runs the comet on: call it every frame
 --   Shy.Maps.Start(pen, x, y, head) -> stray              -- a trail laid once (on a plate that slides) begins
 --        where the player at (x, y) now is, clear of a circle `head` round them: the pieces behind are out of
@@ -129,7 +129,7 @@ Maps.DEPTH = { overHalo = 0.45, shade = 0.7, shadow = 1.5, wide = 0.2, edge = 0.
 -- the edge, the stroke `pale` of the way to white and `thin` of its width.
 Maps.BELOW = { edge = 0.25, glow = 0.42, spread = 7, pale = 0.28, thin = 0.86 }
 -- A stretch of a ribbon not walked on the ground (Ribbon's xs.fall and xs.water): a fall slowed off a cliff
--- turns toward the pale of the open sky and fines down, a contrail; water walked on turns partly toward
+-- turns toward the pale of the open sky and fines down, a contrail; water crossed turns partly toward
 -- the sea's glass. `share` of the way to the color, the stroke's width times `thin`.
 Maps.AIR = { fall = { color = { 0.84, 0.94, 1.00 }, share = 0.85, thin = 0.6 }, water = { color = { 0.40, 0.86, 0.92 }, share = 0.55, thin = 1.12 } }
 

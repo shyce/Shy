@@ -217,13 +217,17 @@ end
 
 -- Which ride's line the character at (north, west) on `world` is on: the one that leads to its end soonest
 -- from there, of those that don't end here (and, carried, of those that run the way they go). Standing
--- on open water (decked), only a boat's, and only within a ship's length of where it halts: a pier's end
--- stands over water too, and no one stands on open water under a zeppelin.
+-- on open water (decked), only a boat's, and only within a ship's length of where it halts (its line's
+-- first point: its stop is on the pier): a pier's end stands over water too, and no one stands on open
+-- water under a zeppelin.
+local function Halted(ride, world, north, west)
+	local halt = ride.line and ride.line[1]
+	return halt ~= nil and halt[1] == world and math.sqrt((halt[2] - north) ^ 2 + (halt[3] - west) ^ 2) <= AT_DECK
+end
 local function Which(world, north, west, dn, dw, decked)
 	local best, bestK, bestAt, bestYards
 	for _, ride in ipairs(T.Rides()) do
-		local deck = not decked or (ride.by == "boat" and ride.from.world == world
-			and math.sqrt((ride.from.north - north) ^ 2 + (ride.from.west - west) ^ 2) <= AT_DECK)
+		local deck = not decked or (ride.by == "boat" and Halted(ride, world, north, west))
 		if ride.line and deck then
 			local made = Line(ride)
 			for k, stretch in ipairs(made) do

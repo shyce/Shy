@@ -251,7 +251,6 @@ local function QuestKey(opening)
 		quest:QuestList(true)
 	end
 end
-
 -- The secure buttons, one for the map's keys and one for the quest log's: each click is the game window's close
 -- button's (armed out of a fight once the window is loaded; a left click, the one it answers), and our window opens
 -- after it, or closes where it was the one open.

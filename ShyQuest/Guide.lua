@@ -1351,6 +1351,110 @@ local LATCH = {
 -- Passed to the checks in GuideChecks.lua; one table, refilled per call.
 local env = {}
 
+-- A quest that comes in several versions, one from each town, can be only a walk to who gives another of them:
+-- Divine Grace from Goldshire is "Speak to Laurena in Stormwind", and Laurena gives her own. Taking the walk is
+-- worth it only from nearer its giver. Nearer her, its step is passed over, and hers is taken in its own step.
+-- Only where this guide has a step for her version that applies to you: the quest is never left out.
+local Walk = { quests = {} }
+
+-- What a quest is a walk to: { to = the NPC it ends with, from = { NPCs who give it }, other = the version that
+-- NPC gives }, or false. A walk: nothing to do in it but go, and taking it shuts out the other.
+function Walk.Of(quest)
+	local known = Walk.quests[quest]
+	if known ~= nil then return known end
+	known = false
+	local q = D.Quest(quest)
+	if q and q.exclusive and #q.goals == 0 and #q.trigger == 0 then
+		local ends, from = {}, {}
+		for _, token in ipairs(q.ends) do
+			if token.kind == "n" then ends[token.id] = true end
+		end
+		for _, token in ipairs(q.starts) do
+			if token.kind == "n" then from[#from + 1] = token.id end
+		end
+		for _, other in ipairs(q.exclusive) do
+			local o = D.Quest(other)
+			for _, token in ipairs(o and o.starts or NONE) do
+				if not known and token.kind == "n" and ends[token.id] and #from > 0 then
+					known = { to = token.id, from = from, other = other }
+				end
+			end
+		end
+	end
+	Walk.quests[quest] = known
+	return known
+end
+
+-- The steps of a guide that take each quest, read once off its raw steps (not parsed: a guide is thousands).
+function Walk.Takes(guide, quest)
+	local at = guide.takesAt
+	if not at then
+		at = {}
+		for index, raw in ipairs(guide.raw) do
+			if type(raw) == "string" then
+				for digits in raw:gmatch('type="accept",quest=(%d+)') do
+					local id = tonumber(digits)
+					at[id] = at[id] or {}
+					table.insert(at[id], index)
+				end
+			end
+		end
+		guide.takesAt = at
+	end
+	return at[quest] or NONE
+end
+
+-- Yards from you to the nearest place of an NPC on your continent; nil where none is, or yours isn't known.
+function Walk.Yards(npc)
+	if not (W.continent and W.north) then return nil end
+	local record = D.Npc(npc)
+	local least
+	for _, place in ipairs(record and record.places or NONE) do
+		if not place.dungeon then
+			for i = 1, #place.points - 1, 2 do
+				local continent, north, west = W.ToWorld(place.map, place.points[i], place.points[i + 1])
+				if continent == W.continent and north then
+					local yards = W.Between(W.north, W.west, north, west)
+					if not least or yards < least then least = yards end
+				end
+			end
+		end
+	end
+	return least
+end
+
+-- A step that runs alongside the guide's own (sticky, or beside another).
+function Walk.Beside(step)
+	for _, tag in ipairs(step.tags) do
+		if tag.name == "sticky" or tag.name == "completewith" then return true end
+	end
+	return false
+end
+
+-- Whether a quest's step (at `index`) is to be passed over now: a walk, with its other version taken in a step of
+-- this guide that applies to you and is still to come (after it, or alongside), and you nearer who gives that than
+-- who gives the walk.
+function Walk.Skip(guide, quest, index)
+	local walk = Walk.Of(quest)
+	if not walk then return false end
+	local mine = false
+	for _, at in ipairs(Walk.Takes(guide, walk.other)) do
+		local step = Step(guide, at)
+		if step and Wanted(step) and (at > index or Walk.Beside(step)) then
+			mine = true
+			break
+		end
+	end
+	if not mine then return false end
+	local there = Walk.Yards(walk.to)
+	if not there then return false end
+	for _, giver in ipairs(walk.from) do
+		local here = Walk.Yards(giver)
+		if here and here <= there then return false end
+	end
+	return true
+end
+
 -- Judges one element. Returns "skip" (the step doesn't apply), "done" (the step is over), or
 -- isTask, isDone.
 local function Judge(guide, step, number, element, latched)
@@ -1363,7 +1467,12 @@ local function Judge(guide, step, number, element, latched)
 		local list = Args(element)
 		local needs = (tonumber(list[2]) or 0) % 4 >= 2 and tonumber(list[3]) or nil
 		-- L.Holds is false for a failed quest, so it reads as still to accept.
-		return true, id ~= nil and (L.Holds(id) or L.Done(id) or (needs ~= nil and not L.Done(needs)))
+		local done = id ~= nil and (L.Holds(id) or L.Done(id) or (needs ~= nil and not L.Done(needs)))
+		-- A class quest is taken from its own row, at the nearest giver (ClassQuests.lua): the step is no stop.
+		if id and not done and ns.ClassQuests and ns.ClassQuests.Takes(id) then return true, true end
+		-- A walk to who gives her own version, and you nearer her (Walk).
+		if id and not done and Walk.Skip(guide, id, step.index) then return "skip" end
+		return true, done
 	elseif command == "turnin" then
 		if element.held and id then
 			-- ".turnin -414": done without the quest. ".turnin -414,2": also until it is complete.
@@ -3510,21 +3619,37 @@ function G.Describe(guide, step, parts, whole, ghosts)
 		view.map, view.north, view.west, view.continent = at.map, at.north, at.west, at.continent
 		view.x, view.y = at.x, at.y
 	end
-	-- A boat's step sits on the dock the boat leaves from. If you're already across the water, the step
-	-- moves to where the boat lands. You aren't sent to the far dock to sail back.
+	-- A boat's step sits where you board the boat: on the end of the pier, at its height (the guide has the
+	-- spot it halts at, in the sea beside it). If you're already across the water, the step moves to where
+	-- the boat lands. You aren't sent to the far dock to sail back.
 	local far = view.north and W.continent and view.continent ~= W.continent
-	for _, line in ipairs(far and view.lines or NOTHING) do
-		local landing = line.command == "zone" and line.can and not line.done and G.RideInto(view, MapOf(strtrim(line.spec or "")))
-		if landing and landing.world == W.continent then
-			view.map, view.north, view.west, view.continent = landing.map, landing.north, landing.west, landing.world
-			view.x, view.y = math.floor(landing.x * UNITS + 0.5), math.floor(landing.y * UNITS + 0.5)
+	for _, line in ipairs(view.north and view.lines or NOTHING) do
+		local landing, boarding
+		if line.command == "zone" and line.can and not line.done then landing, boarding = G.RideInto(view, MapOf(strtrim(line.spec or ""))) end
+		local onto = (far and landing and landing.world == W.continent and landing) or (not far and boarding)
+		if onto and onto.x then
+			-- (Boarded: on the step's own map still, a few yards from where the guide put it.)
+			local x, y = onto == boarding and W.ToMap(view.map, onto.world, onto.north, onto.west)
+			if x then
+				view.x, view.y = x, y
+			else
+				view.map, view.x, view.y = onto.map, math.floor(onto.x * UNITS + 0.5), math.floor(onto.y * UNITS + 0.5)
+			end
+			view.north, view.west, view.continent, view.up = onto.north, onto.west, onto.world, onto.up
+			if line.at then
+				local at = {}
+				for key, value in pairs(line.at) do at[key] = value end
+				at.map, at.x, at.y, at.continent, at.north, at.west, at.up = view.map, view.x, view.y, view.continent, view.north, view.west, view.up
+				line.at = at
+			end
 			break
 		end
 	end
 	return view
 end
 
--- Where the ride from a step's place lands on a map. nil if your side has no ride from there to that map.
+-- Where the ride from a step's place lands on a map, then where it is boarded. nil if your side has no ride
+-- from there to that map.
 local RIDE_NEAR = 60         -- yards. A step this close to a ride's start belongs to that ride.
 function G.RideInto(view, map)
 	if not (map and Shy.Way.Rides) then return nil end
@@ -3533,7 +3658,7 @@ function G.RideInto(view, map)
 		local from, to = ride.from, ride.to
 		if to.map == map and to.x and from.world == view.continent and (ride.whose == "" or side == "" or ride.whose:find(side, 1, true))
 			and (from.north - view.north) ^ 2 + (from.west - view.west) ^ 2 <= RIDE_NEAR * RIDE_NEAR then
-			return to
+			return to, from
 		end
 	end
 end
@@ -3602,6 +3727,31 @@ function G.View(index)
 		end
 	end
 	return view, state
+end
+
+-- A step of the current guide still to do, as a live one is ({ guide, step, parts }): what the route leads to
+-- when you take a step the guide isn't on (Route.lua, R.TakeStep). nil: no such step, or nothing to do there.
+function G.Entry(index)
+	local guide = G.current
+	local step = guide and Step(guide, index)
+	if not step or not Wanted(step) then return nil end
+	local state, parts = Evaluate(guide, step)
+	if state ~= "todo" then return nil end
+	return { guide = guide, step = step, parts = parts }
+end
+
+-- What a step is kept by: the guide's key, and the step's id, which stays its own when the guide is updated.
+-- StepOf: the index that id has now (nil: the step is gone).
+function G.KeyOf(guide)
+	return guide and Key(guide) or nil
+end
+function G.StepId(index, guide)
+	guide = guide or G.current
+	return guide and IdOf(guide, index) or nil
+end
+function G.StepOf(id, guide)
+	guide = guide or G.current
+	return guide and id ~= nil and Whereabouts(guide)[id] or nil
 end
 
 function G.Count()

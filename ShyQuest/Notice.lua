@@ -435,12 +435,13 @@ local function OnZone()
 	AskSoon(0)
 end
 
--- Whether the card takes this quest: the route has it to pick up, you kept it, or the guide picks it up
--- within its next AHEAD steps.
+-- Whether the card takes this quest: the route has it to pick up, you kept it, the guide picks it up within its
+-- next AHEAD steps, or it's a class quest the card's own row has (ClassQuests.lua: any town's version of it).
 local AHEAD = 12
 function T:GuideTakes(quest)
 	if quest == nil then return false end
 	if R.Takes(quest) or ns.char.kept[quest] then return true end
+	if ns.ClassQuests and ns.ClassQuests.Covers(quest) then return true end
 	for _, view in ipairs(G.Upcoming(AHEAD)) do
 		for _, action in ipairs(view.actions) do
 			if action.kind == "pickup" and action.id == quest then return true end

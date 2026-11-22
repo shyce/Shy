@@ -1,14 +1,14 @@
-Shy
+ShyUI
 Copyright (C) 2026 Shyce Cream
 
-Shy is free software: you can share it and change it under the terms of the
-GNU General Public License, version 3, as published by the Free Software
+ShyUI is free software: you can share it and change it under the terms of
+the GNU General Public License, version 3, as published by the Free Software
 Foundation. It comes with no warranty. The license is LICENSE.txt in every
-Shy folder.
+ShyUI addon's folder.
 
 World of Warcraft, its art, its names and its game data belong to Blizzard
-Entertainment. Shy is not made or endorsed by Blizzard. The game's own art
-that Shy shows is read from your game, or drawn from it, and is shown only
+Entertainment. ShyUI is not made or endorsed by Blizzard. The game's own art
+that ShyUI shows is read from your game, or drawn from it, and is shown only
 inside the game.
 
 
@@ -21,7 +21,7 @@ Quests, the people who give them and where things are
     https://github.com/Questie/QuestieDB
     https://github.com/Questie/Questie
     Taken under the GNU General Public License, version 3, as their
-    LICENSE.md allows. Shy is not Questie and carries neither its name nor
+    LICENSE.md allows. ShyUI is not Questie and carries neither its name nor
     its logo.
 
 The world database of a Classic server: escorts and their paths, who a

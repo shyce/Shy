@@ -62,7 +62,7 @@ function D.Words()
 	if not Shy.DataBuilds then return nil end
 	local late = #D.Late()
 	if late > 0 then return Plural(late, "1 data set", "data sets") .. " not yet checked", C.alert end
-	if D.Newer() then return "Shy " .. D.Version() .. " is from before this game update", C.alert end
+	if D.Newer() then return Shy.Brand.FAMILY .. " " .. D.Version() .. " is from before this game update", C.alert end
 	return "Data matches this game", C.dim
 end
 
@@ -73,7 +73,7 @@ local function Names(late)
 end
 
 function D.Copy()
-	local lines = { "Shy " .. D.Version(), "Checked on game build " .. D.Checked(), "Game: build " .. D.Game(), "" }
+	local lines = { Shy.Brand.FAMILY .. " " .. D.Version(), "Checked on game build " .. D.Checked(), "Game: build " .. D.Game(), "" }
 	local late = D.Late()
 	for _, set in ipairs(late) do
 		lines[#lines + 1] = ("%s (%s): not yet checked"):format(set.name, set.addon)
@@ -101,8 +101,8 @@ local function Notice()
 	N.Post("data", {
 		order = 20, glyph = "note", color = C.alert, count = #late > 0 and #late or 1,
 		title = #late > 0 and (Plural(#late, "Data not yet checked", "data sets not yet checked"))
-			or ("Game updated since Shy " .. D.Version()),
-		note = "Shy " .. D.Version(),
+			or ("Game updated since " .. Shy.Brand.FAMILY .. " " .. D.Version()),
+		note = Shy.Brand.FAMILY .. " " .. D.Version(),
 		says = table.concat(says, "\n\n") .. "\n\nClick copies the list. Right-click hides it until the game updates.",
 		click = function() D.Copy() end,
 		menu = function(root)

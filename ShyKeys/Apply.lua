@@ -48,6 +48,16 @@ function Keys.Apply(addon, jobs, opts)
 		if not wanted[name] then Drop(name) end
 	end
 	Moved(made, before, opts)
+	-- Asked for by you (Keys.Run: the command, the button): a key you took off every bar comes back. One you moved
+	-- to another button stays there. (Laid out on its own, at a level or a talent, it stays off as you left it.)
+	if Keys.asked then
+		for name, slots in pairs(pinned) do
+			if #slots == 0 then
+				pinned[name] = nil
+				result.back = (result.back or 0) + 1
+			end
+		end
+	end
 	-- (the key bindings it is first laid out on: the ones you chose it for, where a key that does nothing may be bound)
 	if before.layout == nil and before.set == nil then before.set = select(2, HotState()) end
 	before.layout = LAYOUT   -- (from here on, a macro off its button was moved by you)
@@ -446,7 +456,10 @@ function Keys.Run(addon, jobs, opts, asked)
 			return
 		end
 	end
-	local result, why, space = Keys.Lay(addon, jobs, opts)
+	Keys.asked = true
+	local ok, result, why, space = pcall(Keys.Lay, addon, jobs, opts)
+	Keys.asked = nil
+	if not ok then error(result, 0) end
 	if why == "macros" then
 		addon:Print(("your keys aren't laid out: they need %d macros and there is room for %d. Delete %d you don't use, this character's or the account's, then lay them out. Nothing was changed."):format(
 			space.need, space.need - space.short, space.short))
@@ -483,6 +496,10 @@ function Keys.Run(addon, jobs, opts, asked)
 	end
 	if result.cleared > 0 then
 		print(("  %d keys that had nothing to do yet were taken off again."):format(result.cleared))
+	end
+	if (result.back or 0) > 0 then
+		print(result.back == 1 and "  A key you'd taken off your bars is back."
+			or ("  %d keys you'd taken off your bars are back."):format(result.back))
 	end
 	if result.kept > 0 then
 		print(("  %d keys you moved stay where you put them."):format(result.kept))

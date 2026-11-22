@@ -649,6 +649,8 @@ local function Preferred(stop)
 	local ground = Shy.Way
 	local mine = Mine(stop)
 	if mine then return mine, (W.Height(stop, nil, mine)) end
+	-- (A stop that knows its own height: a boat's, on the end of its pier.)
+	if stop.up then return nil, stop.up end
 	local halls = W.Halls(stop)
 	local up, look, far = W.Height(stop)
 	-- In a city's halls, skip a height that belongs to the mountain above.

@@ -13,7 +13,7 @@
 --
 --   side     quest: "" anyone, "A", "H", or race IDs ("1/3/95"). NPC: factions it is friendly to ("A", "H", "AH").
 --   starts   n<npc>, o<object>, i<item>          ends   n<npc>, o<object>
---   flags    r repeatable, h never offered (or not in the game yet), g raid, d dungeon
+--   flags    r repeatable, h never offered (or not in the game yet), g raid, d dungeon, p PvP
 --   goals    c<npc> kill, o<object> use, i<item> collect, k<npc>/<npc> kill any of,
 --            s<item> an item the quest needs but doesn't count
 --   sources  n<npc>:<percent> drops it, o<object> contains it, v<npc> sells it

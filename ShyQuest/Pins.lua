@@ -1414,6 +1414,18 @@ local function Walkers(stop, lit, into)
 	end
 	for _, each in ipairs(stop.members or { stop }) do
 		Add(each.thing)
+		-- A quest's objective: whoever walks among those it is got from (ns.WalkersOf).
+		for _, action in ipairs(each.actions or {}) do
+			if action.kind == "goal" then
+				for index, goal in ipairs(L.Goals(action.id)) do
+					if not goal.finished and (not each.objective or each.objective == index) then
+						for _, token in ipairs(L.Asked(goal)) do
+							for _, walker in ipairs(ns.WalkersOf(token)) do Add(walker.npc, walker.kill) end
+						end
+					end
+				end
+			end
+		end
 		for _, action in ipairs(each.actions or {}) do
 			if action.kind ~= "turnin" then Escorted(action.id) end
 		end
@@ -1430,6 +1442,33 @@ local function Walkers(stop, lit, into)
 			if line.id and not line.done and (line.command == "accept" or line.command == "complete") then Escorted(line.id) end
 		end
 	end
+end
+
+-- Those who walk among whom an objective's thing is got from: { { npc, kill }, ... }. A creature to kill; for an item,
+-- each creature that drops it (the Defias Messenger and his message) or hands it over (kill false). Most have
+-- none: kept by thing, as an item may have hundreds of droppers. (On the addon's table: this file has no local
+-- to spare.)
+do
+local walkersOf = { c = {}, i = {}, none = {} }
+function ns.WalkersOf(token)
+	local kind = (token.kind == "s" or token.kind == "i") and "i" or token.kind == "c" and "c" or nil
+	if not kind or not token.id then return walkersOf.none end
+	local known = walkersOf[kind][token.id]
+	if known then return known end
+	known = {}
+	if kind == "c" then
+		local npc = D.Npc(token.id)
+		if npc and npc.walk then known[1] = { npc = npc, kill = true } end
+	else
+		local item = D.Item(token.id)
+		for _, source in ipairs(item and item.sources or {}) do
+			local npc = source.kind == "n" and D.Npc(source.id)
+			if npc and npc.walk then known[#known + 1] = { npc = npc, kill = source.chance ~= nil or not (npc.gives or npc.takes) } end
+		end
+	end
+	walkersOf[kind][token.id] = known
+	return known
+end
 end
 
 -- A walker's color among `walkers` (Walkers): the ground's for its kind.

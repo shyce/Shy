@@ -3048,6 +3048,7 @@ local function WithJourneys(route)
 	R.journeysOpen = nil
 	if not W.Known() or UnitOnTaxi("player") then
 		journeys = {}
+		for _, stop in ipairs(route) do stop.finding = nil end
 		return route
 	end
 	local guided = false
@@ -3070,6 +3071,8 @@ local function WithJourneys(route)
 		-- an errand near enough to walk to is walked to.)
 		local leadingErrand = stop.kind == "errand" and #out == 0 and stop.north
 			and W.Between(W.north, W.west, stop.north, stop.west) > R.ERRAND_FLY
+		-- (stop.finding: its way is still being worked out. The arrow says so in the head.)
+		stop.finding = nil
 		if on and stop.north and (stop.kind ~= "zone" or stop.chosen) and (stop.kind ~= "errand" or leadingErrand)
 			and not (stop.kind == "guide" and last == "guide") then
 			local from = debugprofilestop()
@@ -3099,6 +3102,7 @@ local function WithJourneys(route)
 				-- the route is built again once more is known, R.journeysOpen.)
 				if state == "working" then
 					R.journeyKept[key], R.journeysOpen = nil, true
+					stop.finding = true
 				else
 					R.journeyKept[key] = { journey = journey, toN = stop.north, toW = stop.west, level = level, up = up,
 						fromN = fromN, fromW = fromW, away = away, origin = origin }
@@ -3116,6 +3120,7 @@ local function WithJourneys(route)
 						ride.color = stop.color
 						-- (Whose ride it is: R.RefitErrands keeps it with that stop.)
 						ride.toward = R.Ident(stop)
+						ride.finding = stop.finding
 						out[#out + 1] = ride
 					end
 				end

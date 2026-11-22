@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffBags|r
 ## Notes: Every character's bags, bank and mail in one window you can search |cff888888/shy bags|r
 ## Author: Shyce Cream
-## Version: 5.2.4
-## X-Date: 2026-11-21
+## Version: 5.2.5
+## X-Date: 2026-11-22
 ## IconTexture: Interface\AddOns\ShyBags\Media\ShyBagsMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyGear

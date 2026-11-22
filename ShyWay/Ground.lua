@@ -1567,7 +1567,10 @@ local function Answer(search, north, west, wait, key)
 			local entered = Pocket.Enter(search, wait)
 			if entered == "working" then return nil, entered end
 			if entered then return Answer(search, north, west, wait, key) end
-			return Pocket.Out(search, north, west, row, col, wait, node)
+			local seconds, state, more, at, out = Pocket.Out(search, north, west, row, col, wait, node)
+			if seconds or state then return seconds, state, more, at, out end
+			-- (No way out either: they aren't on that floor. From the one they're likely on, Tier.Reseat.)
+			return Tier.Stranded(search, north, west, wait, key)
 		end
 		Steer(search, node)
 		if wait then
@@ -1603,7 +1606,7 @@ local function Answer(search, north, west, wait, key)
 				if least then return nil, "far", floor(least / SPAN) * TICK / (search.roads and Tier.ROAD_OFF or 1) end
 				return nil
 			end
-			if search.done then return nil end
+			if search.done then return Tier.Stranded(search, north, west, wait, key) end
 			pending[search] = true
 			driver:Show()
 			-- Asked from a step further on than it is known from, as someone walking does: by way of the
@@ -4686,6 +4689,64 @@ function Tier.Indoors(ground, into, count, indoors)
 		end
 	end
 	return kept > 0 and kept or count
+end
+
+-- Someone on a floor no way leaves, with no way out of it found, isn't on it. It's the terrain under a
+-- city's streets showing through a gap, or a scrap of a shop the nodes cut off. The game tells no height,
+-- so the floor they're likely on is picked from those a few yards round them that lead somewhere. What
+-- stands round them says how high (Tier.guess). In a city you're inside of, it's the halls. Otherwise the
+-- height of the floor they were taken for, then the nearest. Returns its tier's key, or nil.
+Tier.RESEAT = 3                -- cells round the spot looked in, each way (some 12 yards)
+Tier.RESEAT_PULL = 2           -- yards along the ground one yard of height off the guess weighs
+Tier.RESEAT_WEAK = 0.25        -- ... off the height they were taken for, where nothing is guessed
+Tier.RESEAT_HALLS = 40         -- yards a floor that isn't the halls weighs, in a city you're inside of
+Tier.reseated = {}
+function Tier.Reseat(world, data, north, west)
+	local last = Tier.reseated
+	if last.world == world and last.north == north and last.west == west and last.data == data then return last.key end
+	local ground = GroundOf(world, data)
+	if not ground then return nil end
+	local guess = Tier.guess and Tier.guess(world, north, west)
+	local inside = Tier.Inside()
+	local taken = not guess and rider.world == world and rider.floor and FloorHeight(data, ground, rider.floor)
+	local row, col = CellAt(data, north, west)
+	local best, onto
+	for r = row - Tier.RESEAT, row + Tier.RESEAT do
+		for c = col - Tier.RESEAT, col + Tier.RESEAT do
+			local tile, at = CellIn(ground, r, c)
+			local count = Floors(tile, at)
+			if count > 0 then
+				local nodeRow, nodeCol = floor(r / 8), floor(c / 8)
+				local n, text, spot = Tier.Of(data, nodeRow, nodeCol)
+				local cellNorth, cellWest = CellPlace(data, r, c)
+				local far = sqrt((cellNorth - north) ^ 2 + (cellWest - west) ^ 2)
+				for k = 0, count - 1 do
+					local _, swum, _, look, _, _, _, steep = Floor(tile, at, k)
+					local id = k * FSTRIDE + r * CSTRIDE + c
+					local key = (n > 1 and Tier.OfFloor(data, ground, nodeRow, nodeCol, n, text, spot, id) or 0) * Tier.SPAN
+						+ nodeRow * STRIDE + nodeCol
+					local up = not swum and not steep and n > 0 and select(3, What(data, key)) and FloorHeight(data, ground, id)
+					if up then
+						local weight = far + (guess and math.abs(up - guess) * Tier.RESEAT_PULL or 0)
+							+ (taken and math.abs(up - taken) * Tier.RESEAT_WEAK or 0)
+							+ (inside and look ~= T.UNDER and Tier.RESEAT_HALLS or 0)
+						if not best or weight < best then best, onto = weight, key end
+					end
+				end
+			end
+		end
+	end
+	last.world, last.north, last.west, last.data, last.key = world, north, west, data, onto
+	return onto
+end
+
+-- A way asked from someone on a floor that leads nowhere: as from the floor they're likely on (Tier.Reseat).
+-- Not again from that one (key: it was a floor already).
+function Tier.Stranded(search, north, west, wait, key)
+	if key or not search.world then return nil end
+	local onto = Tier.Reseat(search.world, search.data, north, west)
+	if not onto then return nil end
+	return Answer(search, north, west, wait, onto)
 end
 
 -- The level a floor is on (T.GROUND, T.UNDER, T.ABOVE).

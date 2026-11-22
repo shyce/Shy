@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.2.5 (22 Nov 2026)
+
+### Added
+- **ShyQuest:** While the way to your next stop is still being worked out, the head shows a spinner on its ring. It flares when the way is found
+
+### Fixed
+- **ShyFrames:** 3D heads stayed solid while the HUD faded out. They fade with their frames now
+- **ShyQuest:** Creatures that walk about weren't shown when a quest needed them or what they drop. They show on the map now
+- **ShyWay:** In Stormwind you could be put on the wrong floor and sent to Lakeshire and back. You get a walk to where you're going now
+- **Windows:** Two windows docked side by side could hang from each other and jump around. They stay put now
+
 ## 5.2.4 (21 Nov 2026)
 
 ### Added

@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.2.4" src="https://img.shields.io/badge/version-5.2.4-29b3ff"></a>
-  <img alt="released 21 Nov 2026" src="https://img.shields.io/badge/released-21_Nov_2026-4a5568">
-  <img alt="tests 37,743 passed" src="https://img.shields.io/badge/tests-37%2C743_passed-4ade80">
+  <a href="CHANGELOG.md"><img alt="version 5.2.5" src="https://img.shields.io/badge/version-5.2.5-29b3ff"></a>
+  <img alt="released 22 Nov 2026" src="https://img.shields.io/badge/released-22_Nov_2026-4a5568">
+  <img alt="tests 37,791 passed" src="https://img.shields.io/badge/tests-37%2C791_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,14 +93,16 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.2.4
+## What's new in 5.2.5
 
 ### Added
-- **ShyFrames:** A hunter's pet shows its mood on its frame. Portraits in rings are the default now
+- **ShyQuest:** While the way to your next stop is still being worked out, the head shows a spinner on its ring. It flares when the way is found
 
-### Changed
-- **Menus:** Right-click menus on the quest window, XP box, threat meter and others are shorter. Settings you change rarely live in Settings now
-- **ShyDock:** Your pet bar has a slim frame of its own now. The buttons are bigger and sit clear of the bars
+### Fixed
+- **ShyFrames:** 3D heads stayed solid while the HUD faded out. They fade with their frames now
+- **ShyQuest:** Creatures that walk about weren't shown when a quest needed them or what they drop. They show on the map now
+- **ShyWay:** In Stormwind you could be put on the wrong floor and sent to Lakeshire and back. You get a walk to where you're going now
+- **Windows:** Two windows docked side by side could hang from each other and jump around. They stay put now
 
 [Every release](CHANGELOG.md)
 

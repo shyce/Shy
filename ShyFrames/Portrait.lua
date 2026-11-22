@@ -160,6 +160,17 @@ P.Strips = Strips
 
 local Camera
 
+-- A model takes no alpha from its frames. So a head is given its frame's own, or it stays solid while the HUD fades.
+local function SeeThrough(model)
+	local a = model:GetEffectiveAlpha()
+	if not issecretvalue(a) and a ~= model.shyAlpha then
+		model.shyAlpha = a
+		model:SetModelAlpha(a)
+		return true
+	end
+	return false
+end
+
 -- The heads the style draws: one filling the square, or one a band of the circle. Made once each, and kept.
 local function Heads(plate, box)
 	local key = box.ringed and "round" or "square"
@@ -340,7 +351,45 @@ function Camera(model)
 	model:SetRotation(0)
 	model:SetLight(true, Light())
 	model:FreezeAnimation(0, 0, 0)
+	model.shyAlpha = nil   -- (a new model may come in solid)
+	SeeThrough(model)
 end
+
+-- A head's models given its frame's alpha (SeeThrough) where it changed.
+local function Fade(box)
+	local set = box.headShown and box.heads[box.ringed and "round" or "square"]
+	if not set then return false end
+	local changed = false
+	for i = 1, set.count do
+		if SeeThrough(set[i]) then changed = true end
+	end
+	return changed
+end
+
+-- Every frame while something fades the HUD (the idle fade, or your frame's own out of a fight), and until the
+-- heads stop changing.
+local follow = CreateFrame("Frame")
+local function Fading()
+	local hud, fader = Shy.Immersion, ns.Fader
+	return (hud ~= nil and hud.Faded ~= nil and hud.Faded() == true) or (fader ~= nil and fader.Busy())
+end
+local followed = Shy.Clocked("ShyFrames portrait fade", function()
+	local changed = false
+	for _, frame in ipairs(ns.Frames and ns.Frames.list or {}) do
+		local box = frame.plate and frame.plate.portrait
+		if box and box.col:IsShown() and Fade(box) then changed = true end
+	end
+	if not changed and not Fading() then follow:SetScript("OnUpdate", nil) end
+end)
+function P.Follow()
+	follow:SetScript("OnUpdate", followed)
+end
+-- Whether the heads are being followed.
+function P.Following()
+	return follow:GetScript("OnUpdate") ~= nil
+end
+P.FollowStep = followed
+Shy:On("SHY_IMMERSION_FADE", P.Follow)
 
 -- Whether the head is drawn: the game answers false, or nothing to be read, when it can't be.
 local function Head(plate, box, unit)
@@ -419,6 +468,7 @@ function P.Draw(plate)
 		box.headShown = head
 		box.icon:SetShown(not head)
 	end
+	if head then Fade(box) end
 end
 
 -- The level in a circle of its own (T.db.portrait.level), as the game's frames of old held it: the family's small dial

@@ -53,6 +53,11 @@
 --       title = "...", titleColor = color,  -- the plate's words (a function returning text is read each frame)
 --       under = "...", underColor = color,
 --       right = "38s",                      -- optional: at the end of the title's line, in its make (a time left)
+--       busy = true,                        -- optional (or a function, read each frame): what it says is still being
+--                                           -- worked out. A comet of its light runs round the circle's ring, a glow
+--                                           -- breathes behind it, and what is in the circle and the line under the
+--                                           -- title go quiet, as a guess. Once done, the whole ring flares and all
+--                                           -- comes back. Done within a moment, nothing shows
 --       click = function(button) end,       -- optional: a click on the circle or the plate
 --       menu = function(root) end,          -- optional: its right click
 --       hover = function(owner) end,        -- optional: its hover
@@ -138,6 +143,11 @@ local FLARE = 0.7           -- seconds a new notice's light takes, up and down
 local PULSE, SWELL = 1.1, 0.4   -- a beating voice: seconds a beat, and the share of it its swell takes
 local REST, HOT = 0.7, 1    -- a light's alpha at rest and under the mouse
 local EVERY = 0.25          -- seconds between reading where you are
+-- A voice's `busy` in the circle: the spinner's comet at the arc's size, so it runs on the steel ring. Seconds
+-- before it shows, to come and go, a turn, a breath of the glow behind it, and the flare once done; what is in the
+-- circle and the line under the title meanwhile (their alpha). state: nil, "wait", "spin" or "flare"; at: when it
+-- came to that; k: how far in it stands (0 to 1), as last put.
+local BUSY = { wait = 0.3, fade = 0.3, turn = 1.4, breath = 2.2, flare = 0.7, inside = 0.55, guess = 0.5, at = 0, k = 0, lit = 0 }
 -- A notice whose time is up: seconds its slide up out of the plate takes, how far it rises (the plate cuts it off
 -- at its top), and how much longer the mouse on the head keeps it.
 local LEAVE, RISE, GRACE = 0.3, 14, 2
@@ -431,6 +441,47 @@ local function Medal()
 	m.over:SetAllPoints()
 	m.over:SetFrameLevel(m.rim:GetFrameLevel() + 2)
 	m.overs = {}
+	-- A voice's busy (BUSY): a comet on the ring, over the look's rim as the arc is; the ring lit whole for the
+	-- flare; a glow behind the circle.
+	local b = CreateFrame("Frame", nil, m)
+	b:SetAllPoints()
+	b:SetFrameLevel(m.rim:GetFrameLevel() + 1)
+	b.glow = m:CreateTexture(nil, "BACKGROUND", nil, -5)
+	b.glow:SetTexture(B.GLOW)
+	b.glow:SetPoint("CENTER")
+	b.glow:SetSize(CIRCLE * 1.9, CIRCLE * 1.9)
+	b.glow:SetAlpha(0)
+	b.ring = b:CreateTexture(nil, "ARTWORK", nil, 1)
+	b.ring:SetTexture(MEDIA .. "SpinnerTrack", nil, nil, "TRILINEAR")
+	b.ring:SetSize(ARC, ARC)
+	b.ring:SetPoint("CENTER")
+	b.ring:SetBlendMode("ADD")
+	b.comet = CreateFrame("Frame", nil, b)
+	b.comet:SetAllPoints()
+	local turning = {}
+	for i, part in ipairs({ "Arc", "Head" }) do
+		local t = b.comet:CreateTexture(nil, "ARTWORK", nil, i + 1)
+		t:SetTexture(MEDIA .. "Spinner" .. part, nil, nil, "TRILINEAR")
+		t:SetSize(ARC, ARC)
+		t:SetPoint("CENTER")
+		if part == "Head" then UI.Tint(t, Theme.light, 0.9) end
+		b[part:lower()] = t
+		local group = t:CreateAnimationGroup()
+		local turn = group:CreateAnimation("Rotation")
+		turn:SetDegrees(-360)
+		turn:SetDuration(BUSY.turn)
+		group:SetLooping("REPEAT")
+		turning[i] = group
+	end
+	-- (Both started together, of one length: the spark stays on the head.)
+	b:SetScript("OnShow", function()
+		for _, group in ipairs(turning) do group:Play() end
+	end)
+	b:SetScript("OnHide", function()
+		for _, group in ipairs(turning) do group:Stop() end
+	end)
+	b:Hide()
+	m.busy = b
 	return m
 end
 
@@ -545,6 +596,11 @@ local function Speak(force)
 	local id = Current()
 	local def = id and voices[id]
 	if id ~= speaking or force then
+		-- (Another voice: nothing of the last one's busy stays.)
+		if id ~= speaking then
+			BUSY.state = nil
+			BUSY.Put(0, 0, GetTime())
+		end
 		speaking = id
 		if def then Fill(medal, id, def) end
 		medal.inside.at = Quiet() and nil or GetTime()
@@ -850,6 +906,77 @@ local function Expire(now)
 	end
 end
 
+-- A voice's busy, each frame: read, then the circle as it stands. (Fields, not locals: the file's main chunk
+-- keeps its locals few.)
+function BUSY.Put(k, lit, now)
+	local m = medal
+	local b = m.busy
+	if k > 0 or lit > 0 then
+		if not b:IsShown() then b:Show() end
+		b.comet:SetAlpha(k)
+		-- (The glow behind breathes while it turns: its swell and its fall.)
+		local breath = 0.5 + 0.5 * math.sin(2 * math.pi * now / BUSY.breath)
+		b.glow:SetAlpha(k * (0.2 + 0.3 * breath) + lit * 0.8)
+		b.ring:SetAlpha(lit)
+	elseif b:IsShown() then
+		b:Hide()
+		b.glow:SetAlpha(0)
+	end
+	if k == BUSY.k then return end
+	BUSY.k = k
+	-- (The level's arc steps aside for the comet on the same ring.)
+	m.track:SetAlpha(1 - k)
+	m.arc:SetAlpha(1 - k)
+	-- (After a new voice's fade, which sets these.)
+	if not m.inside.at then
+		m.inside:SetAlpha(1 - (1 - BUSY.inside) * k)
+		strip.under:SetAlpha(1 - (1 - BUSY.guess) * k)
+	end
+end
+function BUSY.Step(now, elapsed)
+	local def = speaking and voices[speaking]
+	local on = def ~= nil and def.busy ~= nil and not headline and Value(def.busy, def) and true or false
+	local state = BUSY.state
+	if on then
+		if state == nil then
+			BUSY.state, BUSY.at = "wait", now
+		elseif state == "flare" then
+			BUSY.state, BUSY.at = "spin", now
+		end
+		if BUSY.state == "wait" and now - BUSY.at >= BUSY.wait then
+			BUSY.state, BUSY.at = "spin", now
+			-- (In the voice's light, as its sign and the plate's light are.)
+			local r, g, b = Hue(def.color or Theme.Accent)
+			UI.Tint(medal.busy.arc, { r, g, b })
+			UI.Tint(medal.busy.glow, { r, g, b })
+			UI.Tint(medal.busy.ring, { Theme.Hot(r, g, b) })
+		end
+	elseif state == "wait" then
+		BUSY.state = nil
+	elseif state == "spin" then
+		BUSY.state, BUSY.at = "flare", now
+	end
+	state = BUSY.state
+	-- The comet comes in while it turns and goes as the ring flares; the flare swells and falls.
+	local want = state == "spin" and 1 or 0
+	local k = BUSY.k
+	if Quiet() then
+		k = want
+	elseif k ~= want then
+		k = want > k and math.min(1, k + elapsed / BUSY.fade) or math.max(0, k - elapsed / BUSY.fade)
+	end
+	local lit = 0
+	if state == "flare" then
+		local u = (now - BUSY.at) / BUSY.flare
+		if u >= 1 then
+			BUSY.state = nil
+		elseif not Quiet() then
+			lit = math.sin(math.pi * u)
+		end
+	end
+	BUSY.Put(k, lit, now)
+end
+
 local clock = 0
 local function Tick(_, elapsed)
 	local now = GetTime()
@@ -872,6 +999,7 @@ local function Tick(_, elapsed)
 		strip.right:SetAlpha(a)
 		if a >= 1 then inside.at = nil end
 	end
+	BUSY.Step(now, elapsed)
 	-- A voice that beats: its glow and light swell at the start of each beat.
 	local voice = speaking and voices[speaking]
 	if voice and voice.pulse then

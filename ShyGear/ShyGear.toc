@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffGear|r
 ## Notes: Marks the upgrades for your build and picks the best quest reward |cff888888/shy gear|r
 ## Author: Shyce Cream
-## Version: 5.2.4
-## X-Date: 2026-11-21
+## Version: 5.2.5
+## X-Date: 2026-11-22
 ## IconTexture: Interface\AddOns\ShyGear\Media\ShyGearMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore

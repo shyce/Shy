@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffXP|r
 ## Notes: XP an hour, time to level, quest XP ready, and your reputation |cff888888/shy xp|r
 ## Author: Shyce Cream
-## Version: 5.2.4
-## X-Date: 2026-11-21
+## Version: 5.2.5
+## X-Date: 2026-11-22
 ## IconTexture: Interface\AddOns\ShyXP\Media\ShyXPMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore

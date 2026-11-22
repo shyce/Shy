@@ -47,6 +47,11 @@ function Fd.On()
 	return T.db.fade == true and not Fd.Yields()
 end
 
+-- Whether a frame is mid-fade.
+function Fd.Busy()
+	return next(changing) ~= nil
+end
+
 function Fd.Final(frame)
 	if not Fd.On() or not L.LAYOUTS[L.UNITS[frame.kind].layout].fades then return 1 end
 	return OPACITY[state]
@@ -65,11 +70,17 @@ local function Glide(_, elapsed)
 	if not busy then driver:SetScript("OnUpdate", nil) end
 end
 
+-- A 3D head fades with its frame (Portrait.lua).
+local function Heads()
+	if ns.Portrait then ns.Portrait.Follow() end
+end
+
 -- A hidden frame isn't faded: Fd.Shown sets its alpha when it shows.
 local function Start(frame)
 	if not frame.button:IsShown() or (frame.alpha or 1) == Fd.Final(frame) then return end
 	changing[frame] = true
 	driver:SetScript("OnUpdate", Glide)
+	Heads()
 end
 
 function Fd.Shown(frame)
@@ -77,6 +88,7 @@ function Fd.Shown(frame)
 	frame.alpha = final
 	frame.button:SetAlpha(final)
 	changing[frame] = nil
+	Heads()
 end
 
 function Fd.Apply()

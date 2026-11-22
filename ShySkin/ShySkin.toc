@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffSkin|r
 ## Notes: The game's own windows and bars, restyled in your theme |cff888888/shy skin|r
 ## Author: Shyce Cream
-## Version: 5.2.4
-## X-Date: 2026-11-21
+## Version: 5.2.5
+## X-Date: 2026-11-22
 ## IconTexture: Interface\AddOns\ShySkin\Media\ShySkinMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore

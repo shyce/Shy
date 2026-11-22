@@ -474,6 +474,17 @@ local function Before(a, b)
 	return (a.made or 0) < (b.made or 0)
 end
 
+-- Whether `other` hangs from `box`, straight or down a chain. It was seated while it came after `box`, and an
+-- opening since turned the order round. `box` hung from it would hang from itself.
+local function HangsFrom(other, box)
+	local by, steps = other.dockedBy, 0
+	while by and steps < #boxes do
+		if by == box then return true end
+		by, steps = by.dockedBy, steps + 1
+	end
+	return false
+end
+
 -- Where a box `width` by `height` (UIParent units) stands docked, asking for `side`: its left and bottom, the side it
 -- takes, how it lines up (Beside) and what it hangs from (its host, or a window docked to it already). `exact`: on that
 -- side of the host whatever stands there. Nil while the host can't be measured.
@@ -488,7 +499,8 @@ local function DockSeat(box, side, width, height, exact)
 	-- What stands docked to the same host already: opened before this one, and on the screen.
 	local taken = {}
 	for _, other in ipairs(boxes) do
-		if other ~= box and other.dockedOn and RawHost(other) == host and Visible(other) and Before(other, box) then
+		if other ~= box and other.dockedOn and RawHost(other) == host and Visible(other) and Before(other, box)
+			and not HangsFrom(other, box) then
 			local l, b, w, h = Rect(other)
 			if l then taken[#taken + 1] = { box = other, side = other.dockedOn, l, b, w, h } end
 		end

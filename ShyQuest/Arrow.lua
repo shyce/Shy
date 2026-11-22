@@ -566,7 +566,8 @@ end
 -- light, as the card's are while the arrow is up, and the stop's mark stands over the circle's lower right
 -- (the card's tag: a vendor's coin, crossed blades, a pouch); once there what is found where you stand or
 -- what the stop is for fills the circle in its color. The head's plate says where to
--- (the name, then the yards and the map's numbers). The arrow's own box stays out of sight meanwhile.
+-- (the name, then the yards and the map's numbers). While the way there is still being found, a spinner turns
+-- at the end of the name and the yards are quiet (the head's busy). The arrow's own box stays out of sight meanwhile.
 local POINT_ART = 26                 -- ArrowPoint (the card's arrowhead, drawn for it: 52 texels) in the circle
 local TAG, TAG_AT = 18, 16           -- the stop's mark over the circle's lower right: its size, and how far right and
                                      -- down of the middle (the card's 13 at its ring of 36, at the head's 46)
@@ -726,6 +727,8 @@ voice = {
 	seat = SeatIn,
 	title = function() return target and (lead or target.title) or "" end,
 	under = function() return saying end,
+	-- (The way to the stop it follows still being found, Route.lua: the head's spinner, the yards a guess.)
+	busy = function() return target ~= nil and target.about ~= nil and target.about.finding == true end,
 	menu = Menu,
 	hover = function(owner)
 		if not target then return end

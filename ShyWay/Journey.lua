@@ -676,6 +676,16 @@ local function Solve(from, goals, opts)
 				if link.state == "far" then far = true end
 				node = back[node]
 			end
+			-- (Too far to work out from here, while a stop nearer is known to have no way to it at all: the
+			-- ground has them nowhere real. No way, not one by a far town and back.)
+			local first = path[1]
+			if first.from == from and first.state == "far" then
+				local reach = Straight(from, first.to)
+				for _, at in ipairs(stops) do
+					local link = starts[at.index]
+					if link and link.exact and not link.seconds and not link.state and Straight(from, at) < reach then return nil end
+				end
+			end
 			return path, best[reached], reached - START, working, far
 		end
 	end

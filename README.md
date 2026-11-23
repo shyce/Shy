@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.2.7" src="https://img.shields.io/badge/version-5.2.7-29b3ff"></a>
-  <img alt="released 22 Nov 2026" src="https://img.shields.io/badge/released-22_Nov_2026-4a5568">
-  <img alt="tests 37,937 passed" src="https://img.shields.io/badge/tests-37%2C937_passed-4ade80">
+  <a href="CHANGELOG.md"><img alt="version 5.2.8" src="https://img.shields.io/badge/version-5.2.8-29b3ff"></a>
+  <img alt="released 23 Nov 2026" src="https://img.shields.io/badge/released-23_Nov_2026-4a5568">
+  <img alt="tests 38,131 passed" src="https://img.shields.io/badge/tests-38%2C131_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,14 +93,21 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.2.7
+## What's new in 5.2.8
 
 ### Added
-- **ShyQuest:** The card tells you about a long swim ahead. A swim is drawn as water on the map now, so it doesn't look like a boat
+- **ShyQuest:** Creatures that share a spot with the one you need get marked. Hovers and cards say to kill them to make room
+- **ShySkin:** Your professions window has Unlearn on each profession's card. The recipe list has a search by item level and a filter for sources and slots
+- **ShyXP:** Your rested bar lights up while you rest. Well Rested and camp tents count toward how fast it fills
+
+### Changed
+- **ShyGear:** Quest rewards go by their vendor price again. The hand-in no longer quotes an auction price for a reward
+- **ShyGear:** Quest rewards can be worth their auction price. Casters and hunters count melee weapons, and the hand-in names a reward that sells for more
 
 ### Fixed
-- **ShyQuest:** The boat step sent you into the sea. It's on the end of the pier now, and flight points nobody can learn are gone
-- **ShyQuest:** You were sent to the Gurubashi Arena chest and other PvP quests. They're left out of your route now
+- **ShyQuest:** The guide sent you back for travel steps you'd already skipped past. It marks them done once you're nearer the next step
+- **ShyQuest:** The hearthstone suggestion jumped around while your route was worked out. It holds steady now, and an errand you pass is settled once
+- **ShyWay:** The arrow sent you round walls and flipped between trails. It holds a trail now, and a boat or tram ride ends when it stops
 
 [Every release](CHANGELOG.md)
 

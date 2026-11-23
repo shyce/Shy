@@ -5,7 +5,7 @@
 --
 -- Axes: damage (melee), shoot (ranged), spell (spell damage), heal, tough (effective health from health,
 --   armor, dodge, parry and block), mana (the pool), regen (mana between pulls; health for those without
---   mana), wand.
+--   mana), wand. Hunters and casters without a wand count their melee too (STAB).
 -- Verdict: { kind = "upgrade" | "later" | "same" | "worse" | "cant", score (weighted percent),
 --   axes = { damage =, tough =, ... }, d (stat changes), item, over (replaced item; nil for an empty slot),
 --   slot, later (required level), soon (within SOON levels), extra (an effect that isn't scored),
@@ -126,6 +126,10 @@ local ABILITY_SHARE, TAPPED, BLAST = 0.5, 0.5, 0.3
 local TRAINED = { { 4, 750 }, { 3, 8737 }, { 2, 9077 }, { 1, 9078 } }
 -- Hand-set: between two upgrades, lighter armor than the character's own counts for this much.
 local STOPGAP = 0.5
+
+-- Hand-set: what melee damage counts for those who don't fight in melee, while leveling. A caster with no
+-- wand stabs when its mana runs low; a hunter swings when something gets close.
+local STAB = { caster = 0.2, ranged = 0.15 }
 
 local MARGIN = 1    -- weighted percent within which a trade counts as "same"
 local DOWN = 3      -- weighted percent lighter armor must gain to replace your own type
@@ -297,6 +301,8 @@ local function Build()
 		or ((profile.heal or 0) > (profile.spell or 0) and "heal") or "spell"
 
 	local main, off, ranged = ns.Worn(INVSLOT_MAINHAND), ns.Worn(INVSLOT_OFFHAND), ns.Worn(INVSLOT_RANGED)
+	local stab = (profile.hand == "ranged" and STAB.ranged) or (not profile.hand and Dps(ranged) == 0 and STAB.caster)
+	if stab then weigh.damage = math.max(weigh.damage or 0, stab) end
 	return {
 		at = GetTime(), class = class, level = level, focus = focus, buildName = buildName,
 		weigh = weigh, hand = profile.hand, shield = profile.shield, armorTimes = profile.armor or 1, own = own,
@@ -552,7 +558,7 @@ function ns.Judge(link)
 end
 
 local function AxisName(axis)
-	if axis == "damage" then return me.hand == "ranged" and "melee damage" or "damage" end
+	if axis == "damage" then return me.hand == "melee" and "damage" or "melee damage" end
 	if axis == "shoot" then return me.hand == "ranged" and "damage" or "ranged damage" end
 	if axis == "regen" then return me.mana > 0 and "mana regen" or "health regen" end
 	if axis == "spell" and not me.weigh.spell and me.weigh.heal then return "healing" end

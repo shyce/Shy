@@ -239,6 +239,7 @@ local Tier = {
 	SPAN = 2 ^ 24,             -- a tier's key: its tier * SPAN + its node's number
 	JOIN = 11,                 -- the way out of a tier that is a link to another tier (search.via says where to)
 	SLACK = 1.5,               -- yards: a floor this near a tier's span is on it
+	UP_NEAR = 8,               -- yards: a floor this near the height a walk starts at is the one it starts on (Tier.At)
 	BESIDE = 8,                -- yards: a floor this near one of the place's own is still that place (a step,
 	                           -- a counter). The lake under a cliff is not
 	UP_NEAR = 6,               -- yards: of a goal's floors, those this near the height it stands at are it
@@ -2418,7 +2419,8 @@ function Tier.Real(search, key)
 		if not after then
 			ticks = floor(have / KEPT)
 		else
-			local onto = chain[index + 1] or at
+			-- (chain is shared. Past n it still holds nodes from an earlier, longer way.)
+			local onto = index < n and chain[index + 1] or at
 			local step = floor(have / KEPT) - floor((cost[onto] or 0) / KEPT)
 			local way = floor(have / 2) % 16
 			if way ~= LIFT and way ~= FALL then step = step * 2 / (Tier.Toll(search, each) + Tier.Toll(search, onto)) end
@@ -2829,6 +2831,8 @@ function CloseStep(job, ms)
 	-- The tile the last cell looked round was in: most of a cell's neighbours are in it too.
 	local lastRow, lastCol, lastTile = -1, -1, false
 	local looked, most = job.looked, job.most
+	-- (Nearest first all round, lean 0: nothing past job.cap, 64ths of a second. Pocket.Joined.)
+	local cap = job.cap and job.cap * CKEPT
 	-- (As Step: the heap popped and pushed in place, Least worked out here, and a step looked at only where it
 	-- could make a way quicker: no step is quicker than a walk on open ground, STEP or SLANT.)
 	local byte, floor, Floor, Leads, CellTile, CellToll = byte, floor, Floor, Leads, CellTile, Tier.CellToll
@@ -2862,6 +2866,10 @@ function CloseStep(job, ms)
 		end
 		local id = top % CSPAN
 		local have = near[id]
+		if cap and have > cap then
+			job.done, job.capped = true, true
+			break
+		end
 		if have % 2 == 0 then
 			near[id] = have + 1
 			looked = looked + 1
@@ -3107,16 +3115,20 @@ function Tier.At(data, ground, row, col, north, west, pick)
 	local node = row * STRIDE + col
 	local n, text, at = Tier.Of(data, row, col)
 	if n <= 1 or not ground then return node end
+	-- (A height asked for: the node's tier whose span holds it, where no floor at the place is near it. A stop a
+	-- few yards off its floor, in a doorway, is still on that floor: Ironforge's tram, whose only floor at the
+	-- spot itself is the mountain's top, over two hundred yards above the hall.)
+	local spanned = type(pick) == "number" and Tier.Spanned(text, at, n, pick) * Tier.SPAN + node
 	local cellRow, cellCol = CellAt(data, north, west)
-	if floor(cellRow / 8) ~= row or floor(cellCol / 8) ~= col then return node end
+	if floor(cellRow / 8) ~= row or floor(cellCol / 8) ~= col then return spanned or node end
 	local floors = Tier.floors
 	local count = FloorsAt(data, ground, north, west, floors)
-	if count == 0 then return node end
+	if count == 0 then return spanned or node end
 	local id = floors[1]
 	if pick == "high" then
 		id = floors[count]
-	elseif type(pick) == "number" then
-		-- A height: the floor nearest it.
+	elseif spanned then
+		-- A height: the floor nearest it, if it is near.
 		local least
 		for index = 1, count do
 			local cell = floors[index] % FSTRIDE
@@ -3124,6 +3136,7 @@ function Tier.At(data, ground, row, col, north, west, pick)
 			local height = select(5, Floor(CellIn(ground, r, c), (r % CELLS) * CELLS + c % CELLS, floor(floors[index] / FSTRIDE)))
 			if height and (not least or math.abs(height - pick) < least) then id, least = floors[index], math.abs(height - pick) end
 		end
+		if not least or least > Tier.UP_NEAR then return spanned end
 	elseif not pick then
 		Standing(ground, floors, count, north, west)
 		id = floors[1]
@@ -3247,13 +3260,16 @@ end
 -- or behind a counter that is spoken to over); else every tier of its node (row, col: Stand's). on: of
 -- those, the ones of that look where there are any. A floor of a cell round it counts only when it stands
 -- about as high as one of the place's own (Tier.BESIDE), and water never does round a place on land: the
--- sea under a pier's end is not a way of arriving on the pier. up: the height the goal stands at, where it is known; of the place's own floors,
+-- sea under a pier's end is not a way of arriving on the pier. Nor does one past a wall from theirs, unless
+-- theirs are shut in (Pocket.Joined): the grass outside a hall whose floor is barely above it would be reached
+-- for nothing, and the walk round to the door never priced. up: the height the goal stands at, where it is known; of the place's own floors,
 -- only those that near it (Tier.UP_NEAR) where there are any: the top of a tower, not the hall at its foot.
 function Tier.Goals(data, ground, row, col, north, west, on, up)
 	local keys, seen = {}, {}
 	if ground then
 		local cellRow, cellCol = CellAt(data, north, west)
 		local heights, land, wet
+		local mine, joined, shut = {}, nil, false
 		local aimed = up ~= nil and Tier.Near(ground, cellRow, cellCol, up)
 		-- (Stood on dry, that high: no water is the place, under it or round it. The sea under a pier's end
 		-- may be as near its height as the deck.)
@@ -3292,9 +3308,15 @@ function Tier.Goals(data, ground, row, col, north, west, on, up)
 										-- out of it there.
 										if swum and land and not wet then beside = false
 										elseif height then beside = near end
+										if beside and #mine > 0 then
+											if not joined then joined, shut = Pocket.Joined(ground, mine, #mine, cellRow, cellCol) end
+											local walk = joined[k * FSTRIDE + r * CSTRIDE + c]
+											if not shut and (not walk or floor(walk / CKEPT) > Pocket.JOIN) then beside = false end
+										end
 									end
 									if beside then
 										if own then
+											mine[#mine + 1] = k * FSTRIDE + r * CSTRIDE + c
 											if height then
 												heights = heights or {}
 												heights[#heights + 1] = height
@@ -3865,7 +3887,11 @@ local function NearWay(search, node, north, west, reach, level)
 	-- (On a floor within reach of the place, not its own: at its spot nearest the place.)
 	local reached = false
 	for index = 1, costs and goalCount or 0 do
-		if goals[index] == last then reached = costs[index] > 0 end
+		if goals[index] == last then
+			reached = costs[index] > 0
+			-- (Past a wall from them, Pocket.Reach: the floors' own seconds leave out what made it the last resort.)
+			if not node and costs[index] >= Pocket.WALLED then way.seconds = max(way.seconds - Pocket.WALLED / 64, 0) end
+		end
 	end
 	if reached and way.n >= 2 then
 		local cell = last % FSTRIDE
@@ -4056,13 +4082,61 @@ end
 -- a cave whose spot's own floor is the hilltop over it: the way ends within reach of them, on whichever such floor
 -- it comes to first. Each is added after the others, and costs[index] is what the steps from it to the place
 -- would take along an edge (64ths of a second; 0 for their own), so a floor of theirs that is walked to is the
--- end. Returns the new count.
+-- end. A floor from which their own isn't a short walk (Pocket.Joined) is past a wall: the grass outside a hall
+-- whose floor is barely above it. It costs Pocket.WALLED more, so it is the end only where their own floors are
+-- walked to from nowhere near as quickly (behind an invisible wall). Kept by place. Returns the new count.
 Pocket.REACH = 5.5             -- yards: the game's reach for speaking to someone (five yards between the two, and their size)
+Pocket.JOIN = floor(24 / CELL * STEP * TIGHT)   -- 64ths: a floor in reach is theirs when their own is walked to in this (24 yards)
+Pocket.WALLED = 90 * 64        -- 64ths: what a floor in reach past a wall costs more (a walk round to the door is quicker)
 Pocket.costs, Pocket.had, Pocket.heights = {}, {}, {}
+Pocket.reached = setmetatable({}, { __mode = "k" })   -- [ground] = { [place] = { n, id, cost, id, cost, ... } }, Pocket.Reach's
+Pocket.joinJob = { near = {}, heap = { n = 0 }, wanted = {}, most = 4000, wade = WADE, lean = 0, cap = Pocket.JOIN }
 function Pocket.Reach(data, ground, north, west, into, count, level, up)
+	local costs = Pocket.costs
+	local byGround = Pocket.reached[ground]
+	if not byGround then
+		byGround = { n = 0 }
+		Pocket.reached[ground] = byGround
+	end
+	local key = ("%.1f:%.1f:%s:%s"):format(north, west, tostring(level), tostring(up))
+	local kept = byGround[key]
+	if not kept then
+		count = Pocket.Within(data, ground, north, west, into, count, level, up)
+		kept = { n = count }
+		for index = 1, count do kept[index * 2 - 1], kept[index * 2] = into[index], costs[index] end
+		if byGround.n >= 64 then
+			wipe(byGround)
+			byGround.n = 0
+		end
+		byGround[key], byGround.n = kept, byGround.n + 1
+	end
+	for index = 1, kept.n do into[index], costs[index] = kept[index * 2 - 1], kept[index * 2] end
+	return kept.n
+end
+
+-- The floors from which someone's own (into[1 .. count], in cell row, col) are walked to in Pocket.JOIN at the
+-- most: what that takes, as a job's near has it (nil: not a short walk). Then true where their floors are shut
+-- in, every floor that leads to them that near (behind an invisible wall, in a booth).
+function Pocket.Joined(ground, into, count, row, col)
+	local job = Pocket.joinJob
+	local near, heap = job.near, job.heap
+	wipe(near)
+	for index = 1, heap.n do heap[index] = nil end
+	heap.n = 0
+	job.ground, job.looked, job.done, job.capped, job.found, job.row, job.col = ground, 0, nil, nil, nil, row, col
+	for index = 1, count do
+		near[into[index]] = 0
+		Push(heap, into[index])
+	end
+	CloseStep(job, math.huge)
+	return near, not job.capped and job.looked < job.most
+end
+
+function Pocket.Within(data, ground, north, west, into, count, level, up)
 	local costs, had, heights = Pocket.costs, Pocket.had, Pocket.heights
 	wipe(had)
 	wipe(heights)
+	local joined, own = nil, count
 	local land = false
 	for index = 1, count do
 		local id = into[index]
@@ -4105,8 +4179,12 @@ function Pocket.Reach(data, ground, north, west, into, count, level, up)
 					-- is never left for one round it.)
 					local dr, dc = math.abs(r - row), math.abs(c - col)
 					local steps = (dr == 0 and dc == 0) and STEP or (dr < dc and dr * SLANT + (dc - dr) * STEP or dc * SLANT + (dr - dc) * STEP)
+					-- (Past a wall from theirs: only where nothing else is.)
+					joined = joined or Pocket.Joined(ground, into, own, row, col)
+					local walk = joined[id]
+					local walled = not walk or floor(walk / CKEPT) > Pocket.JOIN
 					count = count + 1
-					into[count], costs[count], had[id] = id, floor(steps * TIGHT + 0.5), true
+					into[count], costs[count], had[id] = id, floor(steps * TIGHT + 0.5) + (walled and Pocket.WALLED or 0), true
 				end
 			end
 		end

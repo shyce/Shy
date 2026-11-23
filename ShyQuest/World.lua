@@ -111,12 +111,10 @@ local function Worth(straight, seconds)
 	return math.max(straight, seconds * RUN * ROUND - SNAP)
 end
 
--- Yards of running between two places on a continent, and whether the ground said so (false: it is
--- the straight line, for want of anything better).
 -- A build's share of the ground (W.Budgeted): every errand and stop asks the ground how far it is, and a
 -- place not asked before may begin a search and unpack its ground then and there. Past ASK_MS of that in
--- one build, the rest go by the straight line this time; the searches begun go on in the ground's own
--- frames, and the next build finds them answered.
+-- one build, the rest go by the straight line this time. Those are asked once the build is done (Later),
+-- and from then on are asked whatever is left of a build's share: their searches are kept, and cheap.
 W.ASK_MS = 6
 W.ASK_NEAR = 1200   -- yards (straight): in a build, farther than this is reckoned by the straight line, never asked
 function W.Spare(straight)
@@ -124,6 +122,61 @@ function W.Spare(straight)
 	if straight and straight > W.ASK_NEAR then return false end
 	return debugprofilestop() < W.askUntil
 end
+
+-- Ways a build had no time for: { continent, north, west, toNorth, toWest } by "goal>from", asked after it a
+-- frame's share at a time. The goals asked so far (warm) are kept by "continent:north:west".
+local LATER = {
+	most = 24,       -- ways waiting at once, at most: the rest are asked when a build next comes to them
+	ms = 2,          -- milliseconds a frame for them
+	warmMost = 600,  -- goals kept as asked before, at most (then let go, all at once)
+}
+local later, laterOrder, waiting, warm, warmCount = {}, {}, 0, {}, 0
+local laterFrame = CreateFrame("Frame")
+laterFrame:Hide()
+local function Goal(continent, north, west)
+	return ("%d:%.0f:%.0f"):format(continent, north, west)
+end
+local function Warm(key)
+	if warm[key] then return end
+	if warmCount >= LATER.warmMost then wipe(warm) warmCount = 0 end
+	warm[key], warmCount = true, warmCount + 1
+end
+local function Later(continent, north, west, toNorth, toWest)
+	local goal = Goal(continent, toNorth, toWest)
+	local key = goal .. (">%.0f:%.0f"):format(north, west)
+	if later[key] or #laterOrder >= LATER.most then return end
+	later[key] = { continent, north, west, toNorth, toWest, goal = goal }
+	laterOrder[#laterOrder + 1] = key
+	laterFrame:Show()
+end
+-- (Told once the ground knows a way it was still working out: one more of them in.)
+local function Settled()
+	waiting = waiting - 1
+	if waiting == 0 and #laterOrder == 0 and ns.RefreshErrands then ns.RefreshErrands() end
+end
+laterFrame:SetScript("OnUpdate", Shy.Clocked("world: ways a build had no time for", function(self)
+	local upTo = debugprofilestop() + LATER.ms
+	while laterOrder[1] and debugprofilestop() < upTo do
+		local key = table.remove(laterOrder, 1)
+		local leg = later[key]
+		later[key] = nil
+		Warm(leg.goal)
+		-- (A function of its own for each: the ground waits once for each function it is given.)
+		local _, state = Shy.Way.Ask(leg[1], leg[2], leg[3], leg[4], leg[5], nil, nil, function() Settled() end)
+		if state == "working" then waiting = waiting + 1 end
+	end
+	if laterOrder[1] then return end
+	self:Hide()
+	-- (Every one answered at once: the errands are weighed again with them.)
+	if waiting == 0 and ns.RefreshErrands then ns.RefreshErrands() end
+end))
+if Shy.Memory then
+	Shy.Memory.Cache("Quest world: ways asked after a build", function()
+		wipe(warm)
+		warmCount = 0
+	end, function() return warmCount end)
+end
+
 function W.Budgeted(fn)
 	W.asking, W.askUntil = true, debugprofilestop() + W.ASK_MS
 	local ok, err = pcall(fn)
@@ -131,14 +184,22 @@ function W.Budgeted(fn)
 	if not ok then error(err, 0) end
 end
 
+-- Yards of running between two places on a continent; whether the ground said so (false: it is the
+-- straight line, for want of anything better); and whether asking again gives the same: false while the
+-- ground is still working the way out, or the build had no time to ask (and it is asked after).
 function W.Walked(continent, north, west, toNorth, toWest)
 	local straight = W.Between(north, west, toNorth, toWest)
-	if straight < CLOSE then return straight, true end
-	if straight > REACH or not W.Spare(straight) then return straight, false end
+	if straight < CLOSE then return straight, true, true end
+	-- (Too far to ask, in a build or at all: the straight line, every time.)
+	if straight > REACH or (W.asking and straight > W.ASK_NEAR) then return straight, false, true end
+	if W.asking and debugprofilestop() >= W.askUntil and not warm[Goal(continent, toNorth, toWest)] then
+		Later(continent, north, west, toNorth, toWest)
+		return straight, false, false
+	end
 	local seconds, state, least = Shy.Way.Ask(continent, north, west, toNorth, toWest)
 	seconds = seconds or (state == "far" and least) or nil
-	if not seconds then return straight, false end
-	return Worth(straight, seconds), true
+	if not seconds then return straight, false, state ~= "working" end
+	return Worth(straight, seconds), true, true
 end
 
 -- Yards of running from the player to a map position; nil as W.Distance.
@@ -147,6 +208,15 @@ function W.Walk(map, x, y)
 	local continent, north, west = W.ToWorld(map, x, y)
 	if continent ~= W.continent then return nil end
 	return (W.Walked(continent, W.north, W.west, north, west))
+end
+
+-- The same, and whether asking again gives the same (W.Walked).
+function W.WalkSure(map, x, y)
+	if not W.continent then return nil end
+	local continent, north, west = W.ToWorld(map, x, y)
+	if continent ~= W.continent then return nil end
+	local yards, _, sure = W.Walked(continent, W.north, W.west, north, west)
+	return yards, sure
 end
 
 -- Yards of running from the player to a world position on their continent.

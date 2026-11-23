@@ -271,6 +271,7 @@ function D.Npc(id)
 			takes = Numbers(f[9]),
 			spread = f[10] ~= "" and f[10] or nil,
 			walk = f[11] ~= "" and f[11] or nil,
+			shares = Numbers(f[12]),
 		}
 		cache.npcs[id] = npc
 	end

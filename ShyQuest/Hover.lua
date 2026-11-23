@@ -184,6 +184,17 @@ function H.Thing(tip, ties, named)
 	if more > 0 then Tips.Line(tip, ("and %d more quest%s"):format(more, more == 1 and "" or "s"), DIM, true) end
 end
 
+-- A creature in the way of one an open objective wants (I.Blocks): that quest, and what killing it does.
+function H.Room(tip, id)
+	if not (I and I.Blocks) then return end
+	local wanted, tie = I.Blocks(id)
+	if not wanted then return end
+	local tone = ns.TieTone(tie)
+	Tips.Line(tip, ns.MarkText("goal", MARK, tone) .. " " .. tie.title, WHITE)
+	Tips.Double(tip, Shy.Hover.GlyphText("kill", ns.ToneColor(tone)) .. " Kill it to make room for " .. Shy.Plural(wanted.name),
+		"Shared spawn", WHITE, DIM, true)
+end
+
 -- With the other quest addon's quest lines on the tooltip (Yield.lua) ours step aside; while its drop chances are off,
 -- ours still stand at the right of the game's own objective lines, which adds no line.
 local function Theirs(what)
@@ -373,6 +384,7 @@ local function OnUnit(tip, data)
 		if ties and named then
 			if Theirs("tooltips") then H.Chances(tip, ties, named) else H.Thing(tip, ties, named) end
 		end
+		if id and named then H.Room(tip, id) end
 		if id then Glance(tip, unit) end
 	end
 	if id and Foe(unit) then Careful(tip, id) end

@@ -298,6 +298,70 @@ function I.Mark(id)
 	return mark
 end
 
+-- Shared spawns: spots the server fills with one creature of a set or another (D.Npc's shares). Killing
+-- one that nothing asks for makes room there for one that is asked for.
+
+-- The tie of an open objective that counts or loots this creature, or nil.
+local function Open(id)
+	for _, tie in ipairs(I.Npc(id) or {}) do
+		if not tie.done and (tie.kind == "kill" or tie.kind == "drop") then return tie end
+	end
+end
+
+-- For a creature nothing open asks for: one it takes turns with that an open objective wants, and that
+-- objective's tie. nil otherwise.
+function I.Blocks(id)
+	local npc = D.Npc(id)
+	if not (npc and npc.shares) or Open(id) then return nil end
+	for _, other in ipairs(npc.shares) do
+		local tie = Open(other)
+		local wanted = tie and D.Npc(other)
+		if wanted then return wanted, tie end
+	end
+end
+
+-- For a creature: those it takes turns with that nothing open asks for, or nil.
+function I.Rivals(id)
+	local npc = D.Npc(id)
+	if not (npc and npc.shares) then return nil end
+	local out
+	for _, other in ipairs(npc.shares) do
+		local rival = not Open(other) and D.Npc(other)
+		if rival then
+			out = out or {}
+			out[#out + 1] = rival
+		end
+	end
+	return out
+end
+
+-- Creatures by kind, as a line says them: "Stranglethorn Tigresses", "Skullsplitter Axe Throwers and Mystics"
+-- (words the first one has are said once), "Blackrock Scouts, Sentries and others".
+local KINDS = 2              -- kinds named before "and others"
+function I.Kinds(npcs)
+	local first = npcs[1] and npcs[1].name or ""
+	local words = {}
+	for word in first:gmatch("%S+") do words[#words + 1] = word end
+	local out = {}
+	for i = 1, math.min(#npcs, KINDS) do
+		local name = npcs[i].name
+		if i > 1 then
+			-- (Not the whole name: a kind always keeps its last word.)
+			local n = 1
+			for word in name:gmatch("%S+") do
+				if word ~= words[n] then break end
+				n = n + 1
+			end
+			local rest = {}
+			for word in name:gmatch("%S+") do rest[#rest + 1] = word end
+			name = table.concat(rest, " ", math.min(n, #rest))
+		end
+		out[#out + 1] = Shy.Plural(name)
+	end
+	if #npcs > KINDS then return table.concat(out, ", ") .. " and others" end
+	return table.concat(out, " and ")
+end
+
 -- The name of an item this vendor sells that a quest in the log still needs, or nil (Plates.lua).
 function I.Sells(id)
 	Build()

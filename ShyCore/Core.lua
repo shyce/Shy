@@ -27,6 +27,7 @@
 --   Shy:OnFor(event, key, fn)   Shy:OffFor(event, key, fn)   -- only when the event's first value is `key`
 --   Shy.Profiles                               -- see "Profiles" below
 --   Shy.Hold(setting, value)                    -- see "Game settings an addon holds" below
+--   Shy.Plural(noun)   Shy.Count(n, noun)       -- "Stranglethorn Tigresses", "3 wolves"
 --
 -- Bus events: SHY_ADDON_LOADED (addon), SHY_LOGIN, SHY_COMM (addon, msg, sender, channel),
 -- SHY_BN_COMM (addon, msg, gameAccountID), SHY_THEME (accent changed, Theme.lua), SHY_SLOT (icon slot
@@ -55,6 +56,65 @@ Shy.wings = {}
 Shy.addons = {}   -- by suffix
 Shy.order = {}    -- in load order
 local byName = {}
+
+-- Words
+
+-- English plurals, by the last word of a name, or the one before "of" ("Sister of Pain").
+local PLURAL = {
+	-- One the rules get wrong.
+	irregular = { man = "men", woman = "women", child = "children", person = "people", foot = "feet", tooth = "teeth",
+		goose = "geese", mouse = "mice", louse = "lice", ox = "oxen", die = "dice", leaf = "leaves", loaf = "loaves",
+		thief = "thieves", wolf = "wolves", elf = "elves", dwarf = "dwarves", half = "halves", calf = "calves",
+		self = "selves", shelf = "shelves", sheaf = "sheaves", scarf = "scarves", knife = "knives", wife = "wives",
+		life = "lives", hoof = "hooves", staff = "staves", cactus = "cacti", fungus = "fungi", larva = "larvae" },
+	-- The same for one and many.
+	same = { deer = true, sheep = true, fish = true, moose = true, bison = true, swine = true, trout = true,
+		salmon = true, cod = true, species = true, series = true, aircraft = true, offspring = true },
+	-- Ends in "man" but isn't one ("Shamans", not "Shamen").
+	mans = { human = true, shaman = true, talisman = true, caiman = true, cayman = true, german = true },
+	-- Ends in "ch" said as "k" ("Matriarchs").
+	harsh = { monarch = true, matriarch = true, patriarch = true, stomach = true, epoch = true, eunuch = true },
+	-- Ends in "o" and takes "es".
+	oes = { hero = true, potato = true, tomato = true, echo = true, torpedo = true, volcano = true, veto = true },
+}
+
+local function PluralWord(word)
+	local low = word:lower()
+	local out = PLURAL.irregular[low]
+	if PLURAL.same[low] then
+		out = low
+	elseif not out and low:sub(-3) == "man" and not PLURAL.mans[low] then
+		out = low:sub(1, -4) .. "men"
+	elseif not out and (low:match("[sxz]$") or low:match("[cs]h$")) and not PLURAL.harsh[low] then
+		out = low .. "es"
+	elseif not out and low:match("[^aeiou]y$") then
+		out = low:sub(1, -2) .. "ies"
+	elseif not out and PLURAL.oes[low] then
+		out = low .. "es"
+	elseif not out then
+		out = low .. "s"
+	end
+	-- As it was written: "Watchman" is "Watchmen", "WOLF" is "WOLVES".
+	if word == word:upper() and word ~= low then return out:upper() end
+	if word:sub(1, 1) ~= low:sub(1, 1) then return out:sub(1, 1):upper() .. out:sub(2) end
+	return out
+end
+
+-- "Stranglethorn Tigress" -> "Stranglethorn Tigresses", "Defias Watchman" -> "Defias Watchmen",
+-- "Sister of Pain" -> "Sisters of Pain".
+function Shy.Plural(noun)
+	if type(noun) ~= "string" or noun == "" then return noun end
+	local head, tail = noun:match("^(.-)( of .*)$")
+	if not head or head == "" then head, tail = noun, "" end
+	local before, last = head:match("^(.-)([%a']+)$")
+	if not last then return noun end
+	return before .. PluralWord(last) .. tail
+end
+
+-- "1 wolf", "3 wolves". `many` stands in for a plural the rules don't know.
+function Shy.Count(n, noun, many)
+	return n .. " " .. (n == 1 and noun or many or Shy.Plural(noun))
+end
 
 -- Tables
 

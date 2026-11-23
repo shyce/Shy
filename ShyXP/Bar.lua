@@ -147,9 +147,29 @@ function ns.ShowSummaryTooltip(owner, hints, source)
 	end
 	if on.rested then
 		local rested, share, full = S.Rested()
+		local Rest = ns.Rest
 		if rested > 0 then
 			Row(ahead, "Rested", S.Number(rested) .. " XP", C.hot)
 			Under(ahead, ("%d%% of a level"):format(math.floor(share * 100)) .. (full and (", full in ~" .. S.Duration(full)) or ""))
+			if Rest then
+				local _, _, rank, faster, more = Rest.Rules()
+				local name = rank > 0 and Rest.TalentName()
+				if name then Under(ahead, ("%s: builds %d%% faster, holds %d%% more"):format(name, faster, more)) end
+			end
+		end
+		if Rest then
+			local bonus, stacks, most = Rest.Bag()
+			if bonus > 0 then
+				Row(ahead, "Sleeping bag", ("+%d%% XP"):format(bonus), C.good)
+				if stacks < most then Under(ahead, ("%d of %d stacks"):format(stacks, most)) end
+			end
+			local back, near, tent = Rest.Tent()
+			if back then
+				Row(ahead, "Camp tent", "again in ~" .. S.Duration(back), C.dim)
+			elseif near and share < tent then
+				Row(ahead, "Camp tent", ("rested to %d%%"):format(math.floor(tent * 100 + 0.5)), C.hot)
+				Under(ahead, "Sit by the fire a minute")
+			end
 		end
 	end
 	if #ahead > 0 then body[#body + 1] = { title = "To level " .. (level + 1), rows = ahead } end

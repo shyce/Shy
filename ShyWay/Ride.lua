@@ -7,8 +7,10 @@
 -- stand still.) Either, near a ride's line (Data\Transit.lua's, the client's own), makes the
 -- ride being taken the one that line leads to soonest: the next stop, not one past it, and never one that
 -- ends here. Roads run under these lines. Away from a stop, a ride must go faster than anyone runs or rides.
--- The ride is followed along its line until the character is off it for a few seconds (landed
--- and walked off, or jumped). The tram has no world map and no place the game tells: being in its own map
+-- The ride is followed along its line until it halts at its end, or the character is off it (walked
+-- off, jumped, or off its line for a few seconds). Just off a ride at its end, its deck is no ride of theirs:
+-- an arriving passenger stands on it as one waiting for the way back does, and only being carried off again
+-- is a ride. The tram has no world map and no place the game tells: being in its own map
 -- is the ride, from the door the character was last seen at (else the one the journey they follow goes
 -- by: Shy.Way.Following) to the other city's.
 --
@@ -42,7 +44,8 @@ local OFF_LINE = 80          -- yards: further than this, they are off it
 local OFF_FOR = 3            -- seconds off it before the ride is over
 local OFF_DECK = 40          -- yards from where a ride halts: landed and this far from it on foot, they are off
 local FALLING = 1.2          -- seconds falling: jumped off (a jump on deck is shorter)
-local STAYED = 120           -- seconds landed and not carried again: it left without them (no halt is this long)
+local HALTED = 1.5           -- seconds landed and not carried: halted at its end, the ride is over
+local STAYED = 120           -- seconds after a ride ended at its end in which its deck is no ride of theirs
 local ENDS = 60              -- yards from a line's end: a ride that ends here is not the one being taken
 local BEND = 15              -- yards: the lines are smoothed in pieces no longer than this
 local SEEK = 80              -- points looked over past the last one passed
@@ -73,6 +76,7 @@ local aboard                 -- the ride being taken
 local trip                   -- what the maps show of it
 local last                   -- where the character was last seen out of the tram: a place
 local out                    -- just out of the tram: { ride, took, at }, until the far door is seen
+local arrived                -- where the last ride ended at its end: { world, north, west, at }, while near it
 local log = {}               -- what was noticed, last NOTES of it, for the task manager's counters
 local NOTES = 60
 local speed = 0              -- yards a second carried, as last looked
@@ -209,6 +213,11 @@ local function End(now, why, world, north, west, carried)
 		T.Kept(aboard.ride, landed - aboard.sailed, true)
 	end
 	Note(("end %s: %s"):format(aboard.key or "?", why or "?"), world, north, west, carried)
+	-- (Ended at its end: where it halts is no ride's to begin from until it carries them off. STAYED.)
+	local last = made and made[#made]
+	if aboard.sure and last and aboard.k == #made and aboard.at and Ahead(made, aboard.k, aboard.at) <= ENDS then
+		arrived = { world = last.continent, north = last.north[last.n], west = last.west[last.n], at = now }
+	end
 	docked[aboard.from] = nil
 	local told = aboard.sure
 	aboard = nil
@@ -329,15 +338,16 @@ local function Follow(now, world, north, west, carried)
 		Note(("sure: carried %.0f yards along"):format(gone == math.huge and 0 or gone), world, north, west, carried)
 		Told()
 	end
-	-- (Landed and carried off again, still aboard: that is the next ride, looked for afresh.)
+	-- (Landed and carried off again, still aboard: that is the next ride, looked for afresh once it has carried
+	-- them away from where this one halts.)
 	if aboard.landed and carried >= CARRIED then return End(now, "landed and carried on", world, north, west, carried) end
 	if carried >= CARRIED and not aboard.sailed then
 		aboard.sailed = now
 		Note("set off", world, north, west, carried)
 		Told()
 	end
-	-- (At its end: landed, though the character may stay aboard a while. Walked off it, onto the pier or
-	-- the tower, the ride is over at once: OFF_DECK yards from where it halts, moving on their own.)
+	-- (At its end: landed. Halted there, or walked off it onto the pier or the tower, the ride is over: HALTED
+	-- seconds not carried, or OFF_DECK yards from where it halts, moving on their own.)
 	if aboard.k == #made and Ahead(made, aboard.k, aboard.at) <= ENDS and not aboard.landed then
 		aboard.landed = now
 		Note("landed", world, north, west, carried)
@@ -345,8 +355,10 @@ local function Follow(now, world, north, west, carried)
 	if aboard.landed and carried < CARRIED and stretch.continent == world then
 		local far = math.sqrt((stretch.north[stretch.n] - north) ^ 2 + (stretch.west[stretch.n] - west) ^ 2)
 		if far > OFF_DECK then return End(now, ("walked off, %.0f yards from the halt"):format(far), world, north, west, carried) end
-		-- (Still by the halt long after any halt lasts: it left without them.)
-		if now - aboard.landed >= STAYED then End(now, "landed " .. STAYED .. " s ago and not carried since", world, north, west, carried) end
+		aboard.halted = aboard.halted or now
+		if now - aboard.halted >= HALTED then End(now, ("halted at its end for %.1f s"):format(HALTED), world, north, west, carried) end
+	elseif aboard.halted then
+		aboard.halted = nil
 	end
 end
 
@@ -471,6 +483,16 @@ local function Watch()
 			aboard.fell = nil
 		end
 		return Follow(now, world, north, west, carried)
+	end
+	-- (Just off a ride at its end and still by where it halts: the deck they stand on, and the boat it is, are no
+	-- ride of theirs until it carries them off. Gone off on foot, or long after, it is a dock like any other.)
+	if arrived then
+		local yards = arrived.world == world and math.sqrt((arrived.north - north) ^ 2 + (arrived.west - west) ^ 2) or math.huge
+		if yards > LEFT_DOCK or now - arrived.at > STAYED then
+			arrived = nil
+		elseif yards <= HALT then
+			return
+		end
 	end
 	-- (A jump or a fall carries no one aboard: off a tower's edge or a pier's end is not a ride.)
 	if IsFalling() then return end

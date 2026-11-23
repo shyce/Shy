@@ -757,8 +757,13 @@ voice = {
 	seat = SeatIn,
 	title = function() return target and (lead or target.title) or "" end,
 	under = function() return saying end,
-	-- (The way to the stop it follows still being found, Route.lua: the head's spinner, the yards a guess.)
-	busy = function() return target ~= nil and target.about ~= nil and target.about.finding == true end,
+	-- The head's spinner, read every frame. It runs while the journey is worked out (Route.lua) or the line to
+	-- the target isn't found yet. Both are table reads.
+	busy = function()
+		if not target then return false end
+		if target.about and target.about.finding == true then return true end
+		return target.north ~= nil and target.continent ~= nil and Shy.Way.Trailing(target.continent, target.north, target.west)
+	end,
 	menu = Menu,
 	hover = function(owner)
 		if not target then return end

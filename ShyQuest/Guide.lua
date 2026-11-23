@@ -2571,6 +2571,36 @@ local function Scan(guide)
 		return false
 	end
 
+	-- A step's place: its first waypoint, in world yards. nil for one with none.
+	local function At(step)
+		for _, element in ipairs(step.elements) do
+			local place = element.command == "goto" and Place(element)
+			if place and place.north then return place end
+		end
+	end
+	-- True when you're already where a run of travel steps takes you: in the zone of the first step after it
+	-- with more than travel to do, and that step is nearer than this one. (Come by another way, they'd send you
+	-- back the way you came.) Only being in its zone counts: a flight by a hub far off can still be the way on
+	-- to a step that is nearer than the hub. A step with no place, like the guide's own hearth, is left to Passed.
+	local function Arrived(index)
+		if not W.Known() then return false end
+		local here = At(Step(guide, index))
+		if not here then return false end
+		for later = index + 1, #guide.raw do
+			local step = Step(guide, later)
+			if Wanted(step) and not Side(step) then
+				local state, parts = Evaluate(guide, step)
+				if state == "todo" and not OnlyTravel(parts) then
+					local there = At(step)
+					if not there or there.map ~= W.map or there.continent ~= W.continent then return false end
+					local toThere = W.Between(W.north, W.west, there.north, there.west)
+					return here.continent ~= W.continent or toThere < W.Between(W.north, W.west, here.north, here.west)
+				end
+			end
+		end
+		return false
+	end
+
 	-- A side step runs until its target step is behind `index`; if the target is itself a
 	-- side step, for as long as that one runs.
 	local function Lasts(entry, index, depth)
@@ -2597,8 +2627,9 @@ local function Scan(guide)
 		local leap
 		if Wanted(step) then
 			local state, parts, total, hard = Evaluate(guide, step)
-			-- Auto-pass a soft travel step, unless the player went back to it (held).
-			if state == "todo" and not hard and index >= from and not saved.held[index] and OnlyTravel(parts) and Passed(index) then
+			-- Auto-pass a soft travel step once you're beyond it, unless the player went back to it (held).
+			if state == "todo" and not hard and index >= from and not saved.held[index] and OnlyTravel(parts)
+				and (Passed(index) or Arrived(index)) then
 				if settled then saved.done[index] = true end
 				state = "done"
 			end
@@ -3629,7 +3660,8 @@ function G.Describe(guide, step, parts, whole, ghosts)
 		local onto = (far and landing and landing.world == W.continent and landing) or (not far and boarding)
 		if onto and onto.x then
 			-- (Boarded: on the step's own map still, a few yards from where the guide put it.)
-			local x, y = onto == boarding and W.ToMap(view.map, onto.world, onto.north, onto.west)
+			local x, y
+			if onto == boarding then x, y = W.ToMap(view.map, onto.world, onto.north, onto.west) end
 			if x then
 				view.x, view.y = x, y
 			else

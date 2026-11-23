@@ -171,14 +171,17 @@ function S.KillsToLevel()
 	return math.ceil((max - cur) / average), average
 end
 
--- Returns rested XP, its share of a level, and seconds until full while resting (5% per 8 hours, cap 1.5 levels).
+-- Returns rested XP, its share of a level, and seconds until full while resting (5% per 8 hours, cap 1.5
+-- levels; more of both with Well Rested: Rest.lua).
 function S.Rested()
 	local rested = GetXPExhaustion() or 0
 	local _, max = S.Progress()
+	local rate, most = 0.05 / 8, 1.5
+	if ns.Rest then rate, most = ns.Rest.Rules() end
 	local full
 	if IsResting() then
-		local cap = max * 1.5
-		if rested < cap then full = (cap - rested) / (max * 0.05 / 8) * 3600 end
+		local cap = max * most
+		if rested < cap then full = (cap - rested) / (max * rate) * 3600 end
 	end
 	return rested, rested / max, full
 end
@@ -327,6 +330,7 @@ function T:OnLogin()
 	end
 	C_Timer.NewTicker(5, function() if S.Active() then char.time = char.time + 5 end end)
 	if ns.Rep then ns.Rep.Start() end
+	if ns.Rest then ns.Rest.Start() end
 	ns.SetupBar()
 	ns.SetupBox()
 	if ns.Under then ns.Under.Start() end

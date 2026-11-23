@@ -35,7 +35,7 @@ local HOUR = 3600            -- seconds the stone cools down for
 local AHEAD = 40             -- guide steps looked at, at most, for the uses within that hour
 local TALKS = 20             -- seconds a step takes besides its kills and gathering
 local REHOME = 120           -- seconds more the stone has to save from an inn for it to be worth making home
-local INN = 150              -- yards: an innkeeper this near is the inn the character stands in
+local INN = 150              -- yards, straight: an innkeeper this near is the inn the character stands in
 local HUB = 400              -- yards: a hand-in this near brings the character back to the inn
 local BACK = 3               -- hand-ins to come back for that make an inn worth being home
 local SAME = 300             -- yards: home this near an inn is that inn
@@ -84,7 +84,7 @@ local function Travel(continent, north, west, toNorth, toWest)
 	return seconds, false, false
 end
 
--- The nearest innkeeper of the character's side: { npc, map, x, y, yards }. Every innkeeper of the data is
+-- The nearest innkeeper of the character's side: { npc, map, x, y, yards, inside: within INN }. Every innkeeper of the data is
 -- asked how far, so the answer is kept until the character has walked INN_REDO yards from where it was found
 -- (or been carried off, R.forgotten), when an inn too far to matter then can't have come within INN.
 local innkeeper = { gen = -1 }
@@ -100,7 +100,7 @@ local function Innkeeper()
 	for _, npc in ipairs(same and kept.near or {}) do
 		local map, x, y, yards, dungeon = W.Nearest(npc.places)
 		if map and yards and not dungeon and (not best or yards < best.yards) then
-			best = { npc = npc, map = map, x = x, y = y, yards = yards }
+			best = { npc = npc, map = map, x = x, y = y, yards = yards, inside = W.Distance(map, x, y) <= INN }
 		end
 	end
 	if best then return best end
@@ -111,7 +111,7 @@ local function Innkeeper()
 			local map, x, y, yards, dungeon = W.Nearest(npc.places)
 			if map and yards and not dungeon then
 				if yards <= INN_ROUND then near[#near + 1] = npc end
-				if not best or yards < best.yards then best = { npc = npc, map = map, x = x, y = y, yards = yards } end
+				if not best or yards < best.yards then best = { npc = npc, map = map, x = x, y = y, yards = yards, inside = W.Distance(map, x, y) <= INN } end
 			end
 		end
 	end
@@ -145,7 +145,7 @@ local function Note(set)
 	if home and not set then return end
 	if not name or name == "" or not W.Known() or not (set or Here(name)) then return end
 	local inn = Innkeeper()
-	if inn and inn.yards <= INN then
+	if inn and inn.inside then
 		ns.char.home = { name = name, map = inn.map, x = inn.x, y = inn.y }
 	elseif set then
 		ns.char.home = { name = name, map = W.map, x = W.x, y = W.y }
@@ -199,10 +199,16 @@ local function LeadSaving(home, lead)
 	-- (Walking nearer or farther moves what the stone saves by the seconds of the walk: it is worked out whole,
 	-- two journeys, again every REDO yards, and between them moved by the walk.)
 	-- (... at the character's pace: Shy.Way.Pace.)
-	if kept and math.abs(away - kept.away) <= REDO then return kept.saved - (kept.away - away) / Shy.Way.Pace(), kept.known end
+	local moved = kept and kept.saved - (kept.away - away) / Shy.Way.Pace()
+	if kept and math.abs(away - kept.away) <= REDO then return moved, kept.known end
 	local saved, known, settled = Saving(home, W.north, W.west, lead.north, lead.west)
 	leadOpen = not settled or nil
-	if settled then leadSaved[key] = { saved = saved, away = away, known = known } end
+	if settled then
+		leadSaved[key] = { saved = saved, away = away, known = known }
+	elseif kept then
+		-- (Worked out again while its journeys are still being worked out: what was known stands until they are.)
+		return moved, kept.known
+	end
 	return saved, known
 end
 
@@ -229,7 +235,17 @@ local function Way()
 		if way.key == key then
 			way.stamp = stamp
 		else
-			way = { key = key, stamp = stamp, at = GetTime(), places = places, best = {} }
+			-- What was worked out for the way as it read before stands while the new one is worked out (before): a
+			-- kill moves what each place takes, and the inn's row or the stone's must not go and come back meanwhile.
+			-- Not across a journey forgotten, another guide or another home.
+			local before = {}
+			if way.forgotten == R.forgotten and way.guide == G.current then
+				for name, best in pairs(way.best or {}) do
+					before[name] = best.done and best or (way.before and way.before[name]) or nil
+				end
+			end
+			way = { key = key, stamp = stamp, at = GetTime(), places = places, best = {}, before = before,
+				forgotten = R.forgotten, guide = G.current }
 		end
 	end
 	return way, main
@@ -372,7 +388,9 @@ local function Ahead(home)
 	if not best.done then
 		if not Work(best, found, home, debugprofilestop() + BUDGET) then
 			worker:Show()
-			return nil
+			-- (Meanwhile, what was worked out for the way as it read before: Way.)
+			best = found.before and found.before[home.name]
+			if not best then return nil end
 		end
 	else
 		Redo(best)
@@ -489,7 +507,7 @@ local function Set(lead)
 	if not inn or Inns()[inn.npc.id] then return nil end
 	local busy = Busy()
 	local passing = not busy and R.Passing("sethome", inn.map, inn.x, inn.y, lead, INN)
-	if not passing and inn.yards > INN then return nil end
+	if not passing and not inn.inside then return nil end
 	local noted, name = Home()
 	if Here(name) then return nil end
 	local there = Spot("inn" .. inn.npc.id, inn.map, inn.x, inn.y)
@@ -504,7 +522,7 @@ local function Set(lead)
 	local sure = hereDone and not hereLoose and (not home or (homeDone and not homeLoose))
 	-- (From either, nothing where no way ahead is known from it: a home too far to reckon from saves nothing known.)
 	local gain = sure and math.max(0, fromHere or 0) - math.max(0, fromHome or 0) or 0
-	local back = inn.yards <= INN and Returns() or 0
+	local back = inn.inside and Returns() or 0
 	if gain < REHOME and back < BACK then return nil end
 	return {
 		title = "Make this inn your home",
@@ -515,7 +533,7 @@ local function Set(lead)
 		mark = "home",
 		map = inn.map, x = inn.x, y = inn.y, thing = inn.npc, who = inn.npc.name,
 		-- (In passing or standing in it: part of the way, as the guide's "set your hearthstone" steps were.)
-		first = (not busy and (passing or inn.yards <= INN)) or nil,
+		first = (not busy and (passing or inn.inside)) or nil,
 		route = true,
 		tip = function(tip)
 			tip:AddLine((name and name ~= "") and ("Your hearthstone is set to %s."):format(name) or "Your hearthstone isn't set.",

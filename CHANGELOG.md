@@ -1,5 +1,21 @@
 # Changelog
 
+## 5.2.8 (23 Nov 2026)
+
+### Added
+- **ShyQuest:** Creatures that share a spot with the one you need get marked. Hovers and cards say to kill them to make room
+- **ShySkin:** Your professions window has Unlearn on each profession's card. The recipe list has a search by item level and a filter for sources and slots
+- **ShyXP:** Your rested bar lights up while you rest. Well Rested and camp tents count toward how fast it fills
+
+### Changed
+- **ShyGear:** Quest rewards go by their vendor price again. The hand-in no longer quotes an auction price for a reward
+- **ShyGear:** Quest rewards can be worth their auction price. Casters and hunters count melee weapons, and the hand-in names a reward that sells for more
+
+### Fixed
+- **ShyQuest:** The guide sent you back for travel steps you'd already skipped past. It marks them done once you're nearer the next step
+- **ShyQuest:** The hearthstone suggestion jumped around while your route was worked out. It holds steady now, and an errand you pass is settled once
+- **ShyWay:** The arrow sent you round walls and flipped between trails. It holds a trail now, and a boat or tram ride ends when it stops
+
 ## 5.2.7 (22 Nov 2026)
 
 ### Added

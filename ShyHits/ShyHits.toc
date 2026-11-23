@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffHits|r
 ## Notes: Damage and healing numbers beside the nameplate, and what you gain |cff888888/shy hits|r
 ## Author: Shyce Cream
-## Version: 5.2.7
-## X-Date: 2026-11-22
+## Version: 5.2.8
+## X-Date: 2026-11-23
 ## IconTexture: Interface\AddOns\ShyHits\Media\ShyHitsMarkColor
 ## Dependencies: ShyCore
 ## OptionalDeps: ShyPlates

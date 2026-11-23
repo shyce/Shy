@@ -1210,6 +1210,12 @@ function CardHover.Spawn(spawn)
 		local rows = lists[#lists].rows
 		rows[#rows + 1] = { glyph = "note", tint = C.alert, color = C.alert, text = words }
 	end
+	-- Spots it takes turns at with creatures nothing asks for (Index.lua, I.Rivals).
+	local rivals = spawn.of == "n" and ns.Index and ns.Index.Rivals and ns.Index.Rivals(thing.id)
+	if rivals then
+		local rows = lists[#lists].rows
+		rows[#rows + 1] = { glyph = "kill", tint = light, quiet = true, text = "Shares its spots with " .. ns.Index.Kinds(rivals) }
+	end
 	local key = {}
 	local function Add(text, color)
 		if not text or text == "" then return end

@@ -10,7 +10,7 @@ local T, S = ns.T, ns.Stats
 local B, UI, Theme = Shy.Brand, Shy.UI, Shy.Theme
 
 local BUBBLES = 20
-local BAND = { rested = 0.3, ready = 0.6, log = 0.55 }   -- how solid each band is
+local BAND = { rested = 0.3, resting = 0.55, ready = 0.6, log = 0.55 }   -- how solid each band is (resting: the rested band while you rest)
 
 ns.bars = setmetatable({}, { __mode = "k" })   -- every bar made, for the goal to reach them all
 
@@ -132,6 +132,12 @@ function ns.CreateXPBar(parent, bare)
 		local cur, max, level = S.Progress()
 		local rested = GetXPExhaustion() or 0
 		local ready, whole = (S.QuestXP()), (S.LogXP())
+		-- Resting (an inn, a city, the camp): the rested band lights up.
+		local resting = ns.Rest ~= nil and ns.Rest.Resting() or false
+		if self.resting ~= resting then
+			self.resting = resting
+			UI.Paint(self.rested, Rested, resting and BAND.resting or BAND.rested)
+		end
 		self.target = cur / max
 		self.restedTarget = math.min(1, (cur + rested) / max)
 		self.questTarget = math.min(1, (cur + ready) / max)

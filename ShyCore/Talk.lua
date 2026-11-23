@@ -283,6 +283,7 @@ local s = {
 	choice = 0, choices = 0,
 	suggested = false, -- the choice standing is the suggestion, not the player's
 	why = nil,         -- the word on the suggested reward
+	other = nil,       -- the reward that sells for more than the suggestion: { index, words }
 	confirming = false,   -- the reward page asks about the suggestion
 	rows = 0, tiles = 0, chips = 0, lines = 0, caps = 0, goals = 0,
 	directions = false,   -- the gossip page is a guard's directions: its places stand as tiles
@@ -1233,6 +1234,8 @@ local function Tiles(list, pick)
 		if def.link and s.saying then s.saying[#s.saying + 1] = words or "" end
 		-- The suggested reward says why it is, where ShyGear's word doesn't already (asked about too: nokey).
 		if pick and s.suggested and (n == s.choice or def.nokey) and not words then words = s.why or "Suggested" end
+		-- What sells for more than what you'd take says so, for the coin you'd pass up.
+		if pick and s.other and n == s.other.index and n ~= s.choice and not words then words = s.other.words end
 		tile.say:SetText(words or "")
 		UI.Ink(tile.say, ink or C.dim)
 		local gear = Shy.addons.Gear
@@ -1320,36 +1323,47 @@ end
 -- What a quest gives: choices to pick from (at hand-in), or shown (offered); the rest after.
 local function Rewards(picking)
 	-- The reward to suggest among those to choose from: ShyGear's pick (the best upgrade, else what sells
-	-- for the most), else the first. Asked again at every refresh while the suggestion stands, since an
-	-- item may load late.
+	-- for the most), else the first. Third: the one that sells for more, when that isn't it. Asked at every
+	-- refresh, since an item may load late.
 	local function Suggest(choices)
 		local gear = Shy.addons.Gear
+		local pick
 		if gear and gear.PickReward then
 			local list = {}
 			for i = 1, choices do
 				local _, _, count = GetQuestItemInfo("choice", i)
 				list[i] = { link = GetQuestItemLink("choice", i), count = not issecretvalue(count) and count or 1 }
 			end
-			local ok, pick = pcall(gear.PickReward, gear, list)
-			if ok and pick and pick.index then
-				return pick.index, pick.kind == "sell" and "Sells for the most" or nil
+			local ok, got = pcall(gear.PickReward, gear, list)
+			pick = ok and type(got) == "table" and got or nil
+		end
+		local index, why = pick and pick.index, nil
+		if index then
+			why = pick.kind == "sell" and "Sells for the most" or nil
+		else
+			-- Without a pick, the first reward ShyGear calls an upgrade (now, else later).
+			local later
+			for i = 1, choices do
+				local _, _, kind = Verdict(GetQuestItemLink("choice", i))
+				if kind == "upgrade" then index = i break end
+				later = later or (kind == "later" and i) or nil
 			end
+			index = index or later or 1
 		end
-		-- Without the picker, the first reward ShyGear calls an upgrade (now, else later).
-		local later
-		for i = 1, choices do
-			local _, _, kind = Verdict(GetQuestItemLink("choice", i))
-			if kind == "upgrade" then return i end
-			later = later or (kind == "later" and i) or nil
+		local other
+		if pick and pick.sells and pick.sells ~= index and pick.worth then
+			other = { index = pick.sells, words = "Or sell it for " .. UI.Money(pick.worth) }
 		end
-		return later or 1
+		return index, why, other
 	end
 	local choices, fixed = GetNumQuestChoices(), GetNumQuestRewards()
 	s.saying = {}   -- ShyGear's word on each item drawn (Tiles), to tell when a new verdict changes one
 	s.choices = picking and choices > 1 and choices or 0
 	if s.choices > 0 then
+		local index, why, other = Suggest(choices)
+		s.other = other
 		if s.choice == 0 or s.suggested then
-			s.choice, s.why = Suggest(choices)
+			s.choice, s.why = index, why
 			s.suggested = true
 		end
 		Caption("CHOOSE A REWARD")
@@ -2098,7 +2112,7 @@ local function Render()
 	ui.textTall = 0
 	for _, page in ipairs(s.pages) do ui.textTall = max(ui.textTall, Measure(page)) end
 	s.choice, s.busy, s.arrived = 0, nil, false
-	s.suggested, s.why, s.confirming = false, nil, false
+	s.suggested, s.why, s.other, s.confirming = false, nil, nil, false
 	s.voiced, s.voicing = 1, nil
 	Settle("cascade")
 	local need = Fill()

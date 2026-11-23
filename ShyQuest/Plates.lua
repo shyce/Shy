@@ -5,6 +5,8 @@
 -- With ShyPlates loaded the mark is handed over as a tag (Shy.addons.Plates:Tag) and drawn by its plate.
 -- Listen to SHY_NAMEPLATE / SHY_NAMEPLATES, never SHY_PLATE (ShyFrames' unit frames).
 -- A tag with `lead = true` is the one NPC being headed for; ShyPlates gives it a plaque.
+-- A creature that takes turns at a spawn with one an objective wants (Index.lua, I.Blocks) wears that
+-- objective's emblem ringed in steel: killing it makes room.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -126,7 +128,7 @@ end
 -- Every nameplate is asked its tag again at each route built, and most have the tag they had: a tag is made once
 -- for what it shows and kept (the same list each time, never written to after), so a plate given the list it wears
 -- asks nothing of the game. Made again when the theme's colors or the settings change (Forget).
-local kept = { goal = {}, stop = {}, sign = {}, chip = {} }
+local kept = { goal = {}, stop = {}, sign = {}, chip = {}, room = {} }
 local function Slot(of, key)
 	local slot = of[key]
 	if not slot then
@@ -148,6 +150,23 @@ local function Tag(count, tone)
 		tag = ns.MarkTag("goal", false, tone)
 		tag.count, tag.objective = count or nil, true
 		of[count] = tag
+	end
+	return tag
+end
+
+-- In the way of what you want: the objective's emblem in its color, ringed in steel (a plain mark's rim) and with
+-- no count, since killing it counts for nothing. Alone in a housing's compartment, with no rim, the emblem is steel.
+local function Steel(layer)
+	return layer and { texture = layer.texture, coords = layer.coords, color = ns.MARK.steel } or nil
+end
+local function RoomTag(tone)
+	local key = tone or false
+	local tag = kept.room[key]
+	if not tag then
+		local whole = ns.MarkTag("goal", false, tone)
+		tag = { texture = whole.texture, coords = whole.coords, color = whole.color, back = whole.back,
+			over = Steel(whole.over), flat = Steel(whole.flat) }
+		kept.room[key] = tag
 	end
 	return tag
 end
@@ -213,6 +232,10 @@ local function UnitTag(unit)
 	if mark == "goal" then return Tag(Left(id), Tone(id)) end
 	-- Other vendors of a wanted quest item get the buy sign, unless they are quest givers (the game marks those).
 	if mark ~= "turnin" and mark ~= "pickup" and I.Sells(id) then return SignTag("buy", true) end
+	if mark ~= "turnin" and mark ~= "pickup" then
+		local _, tie = I.Blocks(id)
+		if tie then return RoomTag(ns.TieTone(tie)) end
+	end
 	if mark ~= nil then return nil end
 	local related = C_QuestLog.UnitIsRelatedToActiveQuest(unit)
 	if not issecretvalue(related) and related == true then return Tag() end

@@ -29,6 +29,9 @@
 --   Shy.Way.Trailed(world, toNorth, toWest, north, west) -> way, at   the trail last asked for to that
 --        place, nothing asked of the ground (whoever only reads it: an arrow); nil where none is kept or
 --        the player at (north, west) is off it
+--   Shy.Way.Trailing(world, toNorth, toWest) -> true while the first trail to that place is still being
+--        found and there's no line to show yet. A trail being replaced has its old line, so it's false then.
+--        Nothing is asked of the ground
 --   Shy.Way.Along(way, at, north, west) -> at, off   which of a way's points someone walks toward, from
 --        the one they walked toward before, and how many yards off the way they are
 
@@ -45,8 +48,10 @@ local AHEAD = 4              -- stretches a player may get on in one look (a way
 local CUT = 2                -- yards nearer the next stretch than this one: the corner between them has been cut
 local KEPT = 60              -- places trails are kept to
 local FOLLOW = 8             -- yards past what was walked since the last look that a trail is looked along for the stretch walked on
-local SHORTER = 1.5        -- what is left of a trail takes this many times as long as a way from here would ...
-local SHORTER_BY = 15        -- ... and this many seconds more: another way is asked for
+-- A new way replaces the trail when it's quicker by both of these. The estimates drift up to 6 seconds
+-- apart even when you're on the trail, so the seconds bar sits above that.
+local SHORTER = 1.05         -- times as quick
+local SHORTER_BY = 7         -- seconds quicker
 local SHORTER_EVERY = 1      -- seconds between two looks for a shorter way
 local places, count = {}, 0  -- by place: { [level and height] = trail, last = the trail asked for last }
 
@@ -182,14 +187,15 @@ local function Longer(trail, at, world, north, west, toNorth, toWest, level, up)
 	return seconds ~= nil and left > seconds * SHORTER and left - seconds > SHORTER_BY
 end
 
--- (The last place asked for, kept: every map asks for the same one every frame.)
-local keyFor = {}
-local function PlaceKey(world, north, west)
-	if keyFor.world == world and keyFor.north == north and keyFor.west == west then return keyFor.key end
+-- A place's key. Each caller keeps the last one it made, since the same place is asked about every frame.
+local function KeyIn(kept, world, north, west)
+	if kept.world == world and kept.north == north and kept.west == west then return kept.key end
 	local key = ("%d:%d:%d"):format(world, math.floor(north * 10 + 0.5), math.floor(west * 10 + 0.5))
-	keyFor.world, keyFor.north, keyFor.west, keyFor.key = world, north, west, key
+	kept.world, kept.north, kept.west, kept.key = world, north, west, key
 	return key
 end
+local keyFor = {}
+local function PlaceKey(world, north, west) return KeyIn(keyFor, world, north, west) end
 
 -- The kind of a trail to no level or height in particular: kept to no road, or to them as Shy.Way.Roads() says.
 local PLAIN, ROADS = "nil:nil", { high = "nil:nil:high", auto = "nil:nil:auto", always = "nil:nil:always" }
@@ -267,6 +273,15 @@ function T.Trailed(world, toNorth, toWest, north, west)
 	local at, off = T.Along(way, trail.at, north, west)
 	if off > STRAY then return nil end
 	return way, at
+end
+
+-- Read every frame while the head speaks, so it only looks at what's kept. Its own key cache keeps it from
+-- making a new key each frame or knocking out the maps' cached one.
+local keyTrailing = {}
+function T.Trailing(world, toNorth, toWest)
+	local place = places[KeyIn(keyTrailing, world, toNorth, toWest)]
+	local trail = place and place.last
+	return trail ~= nil and trail.way == nil and trail.asking ~= nil
 end
 
 -- Ways came to be known (SHY_TERRAIN): a trail that ended short of its place may reach it now, and is

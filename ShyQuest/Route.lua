@@ -413,6 +413,19 @@ ns.cardNotes = ns.cardNotes or {}
 table.insert(ns.cardNotes, function(stop)
 	if stop.steep then return ("Level %d fight: %d above you"):format(stop.steep, stop.steep - L.Level()) end
 end)
+-- A fight at spots shared with creatures nothing asks for (Index.lua, I.Rivals): kill those too.
+table.insert(ns.cardNotes, function(stop)
+	local source = stop.source
+	if not source or not source.id or (source.how ~= "kill" and source.how ~= "drops") then return nil end
+	local I = ns.Index
+	if not (I and I.Rivals) then return nil end
+	local rivals, wanted = I.Rivals(source.id), D.Npc(source.id)
+	if not (rivals and wanted) then return nil end
+	-- (One kind is named on the line; the hover names them all.)
+	local kinds = I.Kinds(rivals)
+	return { text = #rivals == 1 and ("Kill %s too"):format(kinds) or "Kill the others here too", tip = { title = "Shared spawns",
+		text = ("%s share these spots with %s. Kill those too. Each one frees a spot for yours."):format(Shy.Plural(wanted.name), kinds) } }
+end)
 
 -- Areas
 -- A thing's spawns stand in areas, as the map circles them: spawns within AREA.link yards of one
@@ -3427,9 +3440,37 @@ local function Least(continent, north, west, strong)
 	return least
 end
 
+-- Where the walk to what leads goes: where its journey is boarded (the flight master, the dock) when it is ridden
+-- to, else the stop itself. Then whether that is known: its journey is worked out (WithJourneys keeps it), or
+-- it is a stop no journey is worked out for. nil: what leads has no place on this continent.
+local function WalkTarget(lead)
+	if not (lead and lead.north and lead.continent == W.continent) then return nil end
+	-- (As WithJourneys has it: a zone only once chosen, an errand only a good way off.)
+	local ridden = not Way.missing and (lead.kind ~= "zone" or lead.chosen)
+		and (lead.kind ~= "errand" or W.Between(W.north, W.west, lead.north, lead.west) > R.ERRAND_FLY)
+	if not ridden then return lead.continent, lead.north, lead.west, true end
+	local kept = R.journeyKept[Key(lead)]
+	if not (kept and kept.toN == lead.north and kept.toW == lead.west) then return lead.continent, lead.north, lead.west, false end
+	local journey = kept.journey
+	for i = 1, journey and journey.n or 0 do
+		local leg = journey[i]
+		if leg.by ~= "walk" then
+			local from = leg.from
+			if from.world ~= W.continent or not from.north then return lead.continent, lead.north, lead.west, false end
+			return from.world, from.north, from.west, true
+		end
+	end
+	return lead.continent, lead.north, lead.west, true
+end
+
+-- What R.Passing last said of each errand from ways that were known: { key = the place and where the walk
+-- goes, passing }. Asked while a way is still being worked out, or with no time left in the build to ask it,
+-- it says that again: a guess never decides, and a guess that differs never takes an answer back.
+local passed = {}
+
 -- True when a place is to be gone to now, with RULES.stay hysteresis; also returns the distance.
---   Within `reach` yards (default ERRAND_NEAR), or nearer than the lead and within RULES.onTheWay of
---   the path to it: in passing.
+--   Within `reach` yards (default ERRAND_NEAR), or nearer than where the walk to what leads goes (WalkTarget:
+--   the flight master, for a flight) and within RULES.onTheWay of the path to it: in passing.
 --   `worth`: yards of walk the errand may add when it is not in passing. It goes when the walk it
 --   adds now is within that and the guide's way soon (Least) does not come a good deal nearer
 --   (WAIT.nearer); `strong` as there. Without `worth` an errand only ever goes in passing, so one that
@@ -3437,26 +3478,41 @@ end
 -- An errand that was asked for is always on the way.
 function R.Passing(id, map, x, y, lead, reach, worth, strong)
 	if not map or not W.Known() then return false end
-	local yards = W.Walk(map, x, y)
+	local yards, known = W.WalkSure(map, x, y)
 	if not yards then return false end
 	if R.Asked(id) or R.errandLed == id then return true, yards end
-	local hold = ranFirst[id] and RULES.stay or 1
-	if yards <= (reach or ERRAND_NEAR) * hold then return true, yards end
 	local continent, north, west = W.ToWorld(map, x, y)
 	if not north or continent ~= W.continent then return false, yards end
-	local placed = lead and lead.north and lead.yards and lead.continent == continent
-	-- The walk it adds: there and on to what leads, less the way to that. With nowhere to go on to, the walk there.
-	local extra = placed and yards + W.Walked(continent, north, west, lead.north, lead.west) - lead.yards or yards
-	if placed and yards <= lead.yards * hold and extra <= RULES.onTheWay * hold then return true, yards end
-	if worth and extra <= worth * hold then
-		local least = Least(continent, north, west, strong)
-		if not least then return true, yards end
-		-- (Straight lines against a straight line: the way ahead is not asked of the ground.)
-		local flat = W.Between(W.north, W.west, north, west)
-		if placed then flat = flat + W.Between(north, west, lead.north, lead.west) - W.Between(W.north, W.west, lead.north, lead.west) end
-		if least * hold > flat * WAIT.nearer then return true, yards end
+	local hold = ranFirst[id] and RULES.stay or 1
+	local toC, toN, toW, toKnown = WalkTarget(lead)
+	local placed = toN ~= nil and toC == continent
+	local passing = yards <= (reach or ERRAND_NEAR) * hold
+	if not passing then
+		-- The walk it adds: there and on to where the walk goes, less the way to that. With nowhere to go on to,
+		-- the walk there.
+		local extra = yards
+		if placed then
+			local to, _, toSure = W.Walked(continent, W.north, W.west, toN, toW)
+			local on, _, onSure = W.Walked(continent, north, west, toN, toW)
+			known = known and toKnown and toSure and onSure
+			extra = yards + on - to
+			passing = yards <= to * hold and extra <= RULES.onTheWay * hold
+		end
+		if not passing and worth and extra <= worth * hold then
+			local least = Least(continent, north, west, strong)
+			-- (Straight lines against a straight line: the way ahead is not asked of the ground.)
+			local flat = W.Between(W.north, W.west, north, west)
+			if placed then flat = flat + W.Between(north, west, toN, toW) - W.Between(W.north, W.west, toN, toW) end
+			passing = not least or least * hold > flat * WAIT.nearer
+		end
 	end
-	return false, yards
+	local key = ("%d:%.0f:%.0f>%s:%.0f:%.0f"):format(map, x, y, tostring(toC), toN or 0, toW or 0)
+	if known then
+		passed[id] = { key = key, passing = passing }
+		return passing, yards
+	end
+	local was = passed[id]
+	return was ~= nil and was.key == key and was.passing, yards
 end
 
 -- Returns the errands that go first, the rest, and those that lead everything.

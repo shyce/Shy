@@ -65,6 +65,7 @@ Shy.Way = {
 	-- Trails
 	Trail = Nothing,
 	Trailed = Nothing,
+	Trailing = function(...) return false end,
 	Along = Nothing,
 
 	-- Rides and flights

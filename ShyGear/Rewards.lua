@@ -1,6 +1,7 @@
--- Quest reward choices: marks the best upgrade and the best vendor price, and selects one at turn-in.
--- A pick is "clear" when every choice is fully read gear and one upgrade leads or none exists;
--- only a clear pick is taken unasked (ns.TakeReward). Nothing is written on Blizzard's frames.
+-- Quest reward choices: marks the best upgrade and what sells for the most, and selects one at turn-in.
+-- Anything you'd wear comes before coin. A pick is "clear" when every choice is fully read gear and one
+-- upgrade leads or none exists; only a clear pick is taken unasked (ns.TakeReward). Nothing is written on
+-- Blizzard's frames.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -13,6 +14,7 @@ local waiting   -- a shown reward isn't loaded yet
 
 -- choices: { { link =, count = }, ... }. Returns nil while an item isn't loaded, else
 -- { index (nil: no pick), kind = "upgrade" | "later" | "sell", clear, sells (index), worth (copper), verdicts }.
+-- Rewards are soulbound: what one sells for is the vendor's price.
 function ns.PickReward(choices)
 	local verdicts = {}
 	local best, second, sells, worth
@@ -38,14 +40,14 @@ function ns.PickReward(choices)
 		local value = item.sell * (choice.count or 1)
 		if value > (worth or 0) then sells, worth = i, value end
 	end
+	local pick = { sells = sells, worth = worth, verdicts = verdicts }
 	if best then
 		local lead = not second or verdicts[best].keep >= verdicts[second].keep + MARGIN
-		return { index = best, kind = ns.MarkFor(verdicts[best]), clear = plain and lead, sells = sells, worth = worth, verdicts = verdicts }
+		pick.index, pick.kind, pick.clear = best, ns.MarkFor(verdicts[best]), plain and lead
+	elseif plain and sells then
+		pick.index, pick.kind, pick.clear = sells, "sell", true
 	end
-	if plain and sells then
-		return { index = sells, kind = "sell", clear = true, sells = sells, worth = worth, verdicts = verdicts }
-	end
-	return { sells = sells, worth = worth, verdicts = verdicts }
+	return pick
 end
 
 local function Offered()
@@ -117,7 +119,11 @@ function ns.TakeReward()
 	if pick.kind == "sell" then
 		T:Print(("took %s to sell (%s). Nothing was an upgrade."):format(item.link, ns.Money(pick.worth)))
 	else
-		T:Print(("took %s: %s."):format(item.link, ns.Words(pick.verdicts[pick.index])))
+		local said = ("took %s: %s."):format(item.link, ns.Words(pick.verdicts[pick.index]))
+		-- Coin you passed up for it, where another sells for more.
+		local other = pick.sells ~= pick.index and pick.sells and ns.Read(choices[pick.sells].link)
+		if other then said = said .. (" %s would sell for %s."):format(other.link, ns.Money(pick.worth)) end
+		T:Print(said)
 	end
 	return pick.index
 end

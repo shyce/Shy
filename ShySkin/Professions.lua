@@ -3,8 +3,9 @@
 -- professions key, a recipe link, Escape), emptied and taking no mouse: every piece of it goes to the attic
 -- (Shop.lua). Ours is a child of it, so it opens and closes with it, in a fight too, and its size never changes.
 --
--- Two pages. Your professions: a card for each primary profession on its painting, with its skill and its spells,
--- and one each for Cooking, Fishing and First Aid; a slot you haven't filled says what to do, in the game's words.
+-- Two pages. Your professions: a card for each primary profession on its painting, with its skill, its spells and
+-- Unlearn, and one each for Cooking, Fishing and First Aid; a slot you haven't filled says what to do, in the game's
+-- words.
 -- A profession's recipes, a workbench:
 --   the band: your rank and your skill to its cap, a glow on the bar for where Create all should take you;
 --   the list: its own filter (All, Can make, Skill-ups, To learn, and with the auction house's prices Profit: the
@@ -12,6 +13,8 @@
 --   your favorites and the game's categories
 --   under the family's group heads (a category with a point to gain washed from the left in the best color in it),
 --   each recipe's name in the game's difficulty color with the chance of a point and how many you can make;
+--   in the title strip, the search (a name, or an item level as the game reads one) and a funnel with the game's
+--   sources and slots;
 --   the recipe on a stage: the profession's painting under a light, what it makes in its quality's color, star and
 --   pin; where it takes your skill (its colors laid over the ranks, you on them); what it needs nearby, and the
 --   recipe that builds it when you know one; its reagents, have against need and the bank's count (and, with prices,
@@ -60,6 +63,7 @@ local L = {
 	pane = 148, cardGap = 8, -- a primary profession's card, and between two cards
 	cardIn = 14, cardIcon = 36, -- a card's inset, its profession's picture
 	spell = 34,              -- a profession spell's slot
+	unlearn = 22,            -- a primary card's Unlearn
 }
 L.head0 = HEAD.line + UI.LINE   -- the header's foot
 L.segTop = L.head0 + L.band + 8
@@ -96,6 +100,7 @@ local WORDS = {
 	vendorPays = "A vendor pays", reagentsCost = "Reagents", profitCell = "Profit", lossCell = "Loss", noPrice = "No price",
 	afterCut = "after the auction house's %d%% cut", lack = "You're missing %s of them",
 	lackPoor = "You're missing %s of them, more than you have", recipeCost = "The recipe costs %s", payback = ", paid back in %d",
+	showAll = "Show all",
 }
 -- The secondary professions' cards: the game's painting and words for each.
 local SECONDARY = {
@@ -121,6 +126,8 @@ local seen = {}      -- professionID -> the skill last drawn, so a point gained 
 local toast          -- { text, untilTime }
 local made = {}      -- recipe -> what one craft makes and needs, for pricing ({ item, count, reagents }), or false
 local plans = {}     -- recipe -> its plan at the auction house's prices (the list's), or false; let go when prices change
+local byLevel        -- the search is a level range ("~20", "20-30"), not words
+local hidden = 0     -- sources and slots the funnel leaves out
 local Refresh, Stale
 
 local function Frame() return ProfessionsFrame end
@@ -269,7 +276,7 @@ local function Read()
 	prof = info
 	wipe(heads)
 	if not info or info.professionID == 0 then return end
-	local searching = (C_TradeSkillUI.GetRecipeItemNameFilter() or "") ~= ""
+	local searching = byLevel or (C_TradeSkillUI.GetRecipeItemNameFilter() or "") ~= ""
 	local learning = mode == "learn"
 	local profiting = mode == "profit"
 	local mine = Local()
@@ -386,7 +393,7 @@ local function SetMode(i)
 end
 
 -- The game's lists put back as its own window keeps them.
-local function Unlearn()
+local function ResetLists()
 	if mode ~= "learn" and mode ~= "profit" then return end
 	mode = "all"
 	C_TradeSkillUI.SetShowLearned(true)
@@ -541,7 +548,8 @@ local function SpellButton(parent, key)
 end
 
 -- A card on the overview: its painting under a burn, its icon, name, skill, spells, or the words for an empty slot.
-local function Card(key, w, h)
+-- A primary one has Unlearn at its top right: the game's own dialog, where you type the word to confirm.
+local function Card(key, w, h, primary)
 	local card = CreateFrame("Frame", nil, own.book)
 	card:SetSize(w, h)
 	card.art = card:CreateTexture(nil, "BACKGROUND", nil, 1)
@@ -584,13 +592,98 @@ local function Card(key, w, h)
 			b:SetPoint("TOPLEFT", card, "TOPLEFT", L.cardIn, under - (j - 1) * (L.spell + 8))
 		end
 	end
+	if primary then
+		card.unlearn = Shop.Button(card, nil, function(self)
+			if self.skillLine then StaticPopup_Show("UNLEARN_SKILL", self.skillName, nil, self.skillLine) end
+		end)
+		card.unlearn:SetHeight(L.unlearn)
+		card.unlearn:Say(Global("UNLEARN"))
+		card.unlearn:SetBare(true)
+		card.unlearn:SetPoint("TOPRIGHT", -L.cardIn, -L.cardIn)
+	end
 	return card
 end
 
+-- The search reads as the game's own: a level ("20", "~20" for two either side, "20-30") finds what makes items of
+-- those levels; anything else is a name.
 local function Search(parent)
 	return Shop.Search(parent, SEARCH, function(text)
-		if text ~= (C_TradeSkillUI.GetRecipeItemNameFilter() or "") then C_TradeSkillUI.SetRecipeItemNameFilter(text) end
+		local near = text:match("^~(%d+)")
+		local least, most
+		if near then
+			least, most = tonumber(near) - 2, tonumber(near) + 2
+		else
+			local from, to = text:match("^(%d+)%s*-*%s*(%d*)$")
+			least = tonumber(from)
+			most = tonumber(to) or least
+		end
+		byLevel = least ~= nil
+		if byLevel then
+			least = math.max(1, math.min(10000, least))
+			most = math.max(least, math.min(10000, most))
+			C_TradeSkillUI.SetRecipeItemNameFilter(nil)
+			C_TradeSkillUI.SetRecipeItemLevelFilter(least, most)
+		else
+			if text ~= (C_TradeSkillUI.GetRecipeItemNameFilter() or "") then C_TradeSkillUI.SetRecipeItemNameFilter(text) end
+			C_TradeSkillUI.SetRecipeItemLevelFilter(0, 0)
+		end
 	end)
+end
+
+-- The game's other filters, as its own menu has them: where a recipe is learned, and the slot what it makes goes in.
+local function Sources()
+	local out = {}
+	if C_TradeSkillUI.IsNPCCrafting() then return out end
+	for i = 1, C_PetJournal.GetNumPetSources() do
+		if C_TradeSkillUI.IsAnyRecipeFromSource(i) then out[#out + 1] = i end
+	end
+	return out
+end
+
+-- A gathering profession has no slots to sort by (the game's menu leaves them out).
+local function Slots()
+	local game = rawget(_G, "Professions")
+	if prof and game and game.GetProfessionType and game.ProfessionType
+		and game.GetProfessionType(prof) == game.ProfessionType.Gathering then return 0 end
+	return C_TradeSkillUI.GetAllFilterableInventorySlotsCount() or 0
+end
+
+-- How many sources and slots are left out.
+local function Hidden()
+	local n = 0
+	for _, i in ipairs(Sources()) do
+		if C_TradeSkillUI.IsRecipeSourceTypeFiltered(i) then n = n + 1 end
+	end
+	for i = 1, Slots() do
+		if C_TradeSkillUI.IsInventorySlotFiltered(i) then n = n + 1 end
+	end
+	return n
+end
+
+-- The funnel's menu. The game's two calls take opposite senses: a source is set filtered, a slot set shown.
+local function WriteFilters(root)
+	root:CreateSection(Global("SOURCES"))
+	for _, i in ipairs(Sources()) do
+		root:CreateCheckbox(Global("BATTLE_PET_SOURCE_" .. i), function() return not C_TradeSkillUI.IsRecipeSourceTypeFiltered(i) end,
+			function()
+				C_TradeSkillUI.SetRecipeSourceTypeFilter(i, not C_TradeSkillUI.IsRecipeSourceTypeFiltered(i))
+				Stale()
+			end)
+	end
+	root:CreateSection(Global("TRADESKILL_FILTER_SLOTS"))
+	for i = 1, Slots() do
+		root:CreateCheckbox(C_TradeSkillUI.GetFilterableInventorySlotName(i), function() return not C_TradeSkillUI.IsInventorySlotFiltered(i) end,
+			function()
+				C_TradeSkillUI.SetInventorySlotFilter(i, C_TradeSkillUI.IsInventorySlotFiltered(i))
+				Stale()
+			end)
+	end
+	root:CreateDivider()
+	root:CreateButton(WORDS.showAll, function()
+		C_TradeSkillUI.ClearRecipeSourceTypeFilter()
+		C_TradeSkillUI.ClearInventorySlotFilter()
+		Stale()
+	end):SetEnabled(Hidden() > 0)
 end
 
 -- A small section word over a hairline that fades out ("REAGENTS"): the one the vendor and the trainer wear too.
@@ -907,6 +1000,12 @@ local function BuildCraft(box)
 	own.search = Search(craft)
 	own.search:SetPoint("RIGHT", box, "TOPRIGHT", -(HEAD.pad + HEAD.close + 6), -box.head.mid)
 	own.search:SetFrameLevel(box.head:GetFrameLevel() + 10)
+	-- The funnel beside it: the game's sources and slots. In gold, with how many are left out, while it narrows the list.
+	own.funnel = UI.MenuButton(craft, { height = HEAD.control, plate = true, write = WriteFilters, menu = { align = "RIGHT" } })
+	own.funnel:SetIcon(Skin.GLYPH.funnel)
+	own.funnel:SetLabel("")
+	own.funnel:SetPoint("RIGHT", own.search, "LEFT", -6, 0)
+	own.funnel:SetFrameLevel(box.head:GetFrameLevel() + 10)
 
 	-- The list: its filter, then the groups.
 	-- The list's filter: the family's tabs, the open one lit on its line, a quiet count where it says something.
@@ -1342,7 +1441,7 @@ local function Build()
 	own.book:SetAllPoints(UI.Body(box))
 	local inner = L.w - 2 * L.pad
 	own.cards = {
-		Card("p1", inner, L.pane), Card("p2", inner, L.pane),
+		Card("p1", inner, L.pane, true), Card("p2", inner, L.pane, true),
 	}
 	local small = math.floor((inner - 2 * L.cardGap) / 3)
 	local tall = L.h - L.head0 - 8 - 2 * L.pane - 2 * L.cardGap - L.pad
@@ -1453,6 +1552,10 @@ local function DrawBook()
 		card.bar:SetShown(has)
 		card.missing:SetShown(not has)
 		card.words:SetShown(not has)
+		if card.unlearn then
+			card.unlearn:SetShown(has)
+			card.unlearn.skillName, card.unlearn.skillLine = p.name, p.skillLine
+		end
 		if has then
 			card.icon:SetTexture(p.icon)
 			card.name:SetText(p.name)
@@ -2085,6 +2188,11 @@ local function Draw()
 			and (tab.skillLine == prof.parentProfessionID or tab.skillLine == prof.professionID))
 	end
 	if not craft then return end
+	hidden = Hidden()
+	own.funnel:SetShown(#Sources() > 0 or Slots() > 0)
+	own.funnel:SetLabel(hidden > 0 and tostring(hidden) or "")
+	own.funnel:SetMark(hidden > 0 and C.alert or nil)
+	Theme.Tint(own.funnel.icon, hidden > 0 and C.alert or C.text)
 	DrawList()
 	DrawRecipe()
 	DrawBand()
@@ -2115,7 +2223,7 @@ local function Hook()
 	end)
 	f:HookScript("OnHide", function()
 		making = nil
-		Unlearn()
+		ResetLists()
 	end)
 	-- The game moves between its pages (they are in the attic, so no OnShow comes from them): ours follows its calls.
 	if f.SelectBookPage then hooksecurefunc(f, "SelectBookPage", function() if M.on then page = "book"; Stale() end end) end
@@ -2144,7 +2252,7 @@ local function Hook()
 			page = "craft"
 		elseif event == "TRADE_SKILL_CLOSE" then
 			making = nil
-			Unlearn()
+			ResetLists()
 		elseif event == "PLAYER_REGEN_ENABLED" then
 			if M.on and not own.box then M:Refresh() end   -- first loaded in a fight: built now
 		end
@@ -2173,7 +2281,7 @@ end
 local function Clear(m)
 	if m.on then return end   -- a repaint: the layout stays
 	making = nil
-	Unlearn()
+	ResetLists()
 	if theirs then
 		if theirs.makeable then C_TradeSkillUI.SetOnlyShowMakeableRecipes(true) end
 		if theirs.skillUp then C_TradeSkillUI.SetOnlyShowSkillUpRecipes(true) end

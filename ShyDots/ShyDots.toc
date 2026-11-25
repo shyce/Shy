@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffDots|r
 ## Notes: Shows on health bars when your DoTs will finish a mob |cff888888/shy dots|r
 ## Author: Shyce Cream
-## Version: 5.2.8
-## X-Date: 2026-11-23
+## Version: 5.2.11
+## X-Date: 2026-11-25
 ## IconTexture: Interface\AddOns\ShyDots\Media\ShyDotsMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore

@@ -144,7 +144,6 @@ local function ReplyEditor(parent, width)
 			local room = to - R.ACT - R.X - R.GAP * 2
 			self:SetSize(to, R.ROW)
 			self.text:SetWidth(room)
-			self.text.box:SetWidth(room)
 		end
 		row:Fit(wide)
 		rows[i] = row

@@ -9,8 +9,9 @@
 -- AUTOREPEAT_SPELL), or a swing still filling its bar; the row stays a moment after, for the next. The
 -- layout reads W.Wanted() and W.Hands(); a change touches the cockpit. The stance and totem bars ride the
 -- plate's foot and are protected: in a fight they can't follow it. So when a fight begins (still free to move
--- them) the row opens at once for a character who swung in their last fight, and in a fight it neither opens
--- nor closes while one of those bars shows; it closes when the fight is over.
+-- them) with one of those bars showing, the row opens at once and stays open until the fight is over. The swing
+-- stands in it; with no swing timer seated there the cast bar's row is held open instead (W.HeldEmpty), once
+-- you have cast in a fight.
 --
 -- Fill: white (Theme.SCHOOL physical), the temporary weapon enchant's color
 -- (C_Item.GetWeaponEnchantInfo + Coatings.lua; a module's, such as ShyRogue's
@@ -113,8 +114,7 @@ local repeating = false   -- a shot (or a wand) repeats
 local busyWas = false     -- swinging when last looked
 local idleSince           -- when the swing stopped: the row stays HOLD after
 local held = false        -- opened in this fight with a protected bar in the foot row: open until it ends
-local swung = false       -- a swing in this fight (ns.char.swings after it)
-local told = false        -- W.Wanted() as the layout was last told
+local told = false       -- W.Wanted() as the layout was last told
 local handsTold = 1       -- W.Hands() as the layout was last told
 
 local Native
@@ -193,15 +193,6 @@ local function Pinned()
 	return false
 end
 
--- Does the hand row want to be open for the swing? (Layout.lua's plan reads it.) In a fight with a stance or
--- totem bar in the foot row it stays as the fight found it, open or closed: that bar can't follow the foot.
--- Closed so, the next fight opens it at its start (ns.char.swings).
-function W.Wanted()
-	if not T.db.swing then return false end
-	if InCombatLockdown() and Pinned() then return told end
-	return Busy() or held or (idleSince ~= nil and GetTime() - idleSince < HOLD)
-end
-
 -- The plan changes: the cockpit is planned again (Move.lua seats the pieces and measures it, else it measures itself).
 local function Changed()
 	if ns.Move and ns.Move.Touch() == true and ns.Layout.IsActive() then return end
@@ -211,6 +202,20 @@ end
 -- The cockpit holds the row (the plate is up, the timer not taken out).
 local function Seated()
 	return T.CockpitHolds ~= nil and T:CockpitHolds("swing")
+end
+
+-- Does the hand row want to be open for the swing? (Layout.lua's plan reads it.) Held for the fight, it is. In a
+-- fight that found it unheld, with a stance or totem bar in the foot row, it stays as the fight found it.
+function W.Wanted()
+	if not T.db.swing then return false end
+	if held and Seated() then return true end
+	if InCombatLockdown() and Pinned() and Seated() then return told end
+	return Busy() or (idleSince ~= nil and GetTime() - idleSince < HOLD)
+end
+
+-- The row held open for this fight with no swing timer seated in it: the cast bar's row stays open (Layout.Casting).
+function W.HeldEmpty()
+	return held and not (T.db.swing and Seated())
 end
 
 -- The pictures and bars show: in the cockpit while the plate has the row open for the swing, and not while a
@@ -534,7 +539,6 @@ end
 
 local function Swung(duration, kind)
 	if issecretvalue(kind) then return end
-	if InCombatLockdown() then swung = true end
 	if kind == RANGED then
 		Mode(true)
 		Begin(bars[MAIN], duration)
@@ -553,17 +557,17 @@ local function Rearmed()
 	if bars[OFF].ends and bars[OFF]:IsShown() then Begin(bars[OFF], off) end
 end
 
--- A fight begins. This is the last moment the stance and totem bars may move: a character who swings (now, or
--- in their last fight) gets the row open at once, and the pieces are seated for it now, not a frame on.
--- (Told is not enough: auto-attack may have told it this same frame, and Move.lua seats the pieces a frame on.)
+-- A fight begins. This is the last moment the stance and totem bars may move: with one showing, the row opens at
+-- once for whatever the plate holds in it, and the pieces are seated for it now, not a frame on. The swing timer
+-- always has it; with that off, the cast bar has it once you have cast in a fight (ns.char.fightCasts, kept), so
+-- a warrior's plate doesn't grow an empty row. (Told is not enough: auto-attack may have told it this same frame, and Move.lua seats the pieces a frame on.)
 local function Fight()
-	swung = false
-	if not (T.db.swing and Pinned() and (Busy() or ns.char.swings)) then return end
+	local cast = T.CockpitHolds ~= nil and T:CockpitHolds("cast") and ns.char.fightCasts
+	if not (Pinned() and ((T.db.swing and Seated()) or cast)) then return end
 	held = true
+	told = W.Wanted()
 	local plan = ns.Cockpit.Plan()
-	if told and plan and plan.swinging then return end
-	told = true
-	ns.Move.Sync()
+	if not (plan and (plan.swinging or plan.casting)) then ns.Move.Sync() end
 	Show()
 end
 
@@ -580,10 +584,11 @@ local function OnEvent(_, event, a, b)
 	elseif event == "PLAYER_REGEN_DISABLED" then
 		Fight()
 	elseif event == "PLAYER_REGEN_ENABLED" then
-		-- Learned for the next fight: did this one swing?
-		if T.db.swing then ns.char.swings = swung or nil end
+		-- The fight over: the row closes, unless something still has it. The pieces are seated now, not a frame on.
+		local was = held
 		held = false
 		Recheck()
+		if was then ns.Move.Sync() end
 	elseif event == "CURRENT_SPELL_CAST_CHANGED" or event == "ACTIONBAR_UPDATE_STATE" then
 		Queue()
 	elseif event == "WEAPON_SLOT_CHANGED" then
@@ -770,11 +775,15 @@ function W.Start()
 	end)
 	Shy:On("SHY_THEME", Paint)
 	Shy:On("SHY_HUD_LAYOUT", Show)
-	-- A cast takes the row from the swing at once; the swing comes back when the plate hands it back.
+	-- A cast takes the row from the swing at once; the swing comes back when the plate hands it back. A cast in a
+	-- fight with a stance or totem bar up is kept in mind: from the next fight on, the row is held for the cast bar.
 	local cast = PlayerCastingBarFrame
 	if cast then
 		local Shown = Shy.Clocked("ShyDock swing: cast bar", Show)
-		cast:HookScript("OnShow", Shown)
+		cast:HookScript("OnShow", Shy.Clocked("ShyDock swing: cast bar", function()
+			if InCombatLockdown() and Pinned() then ns.char.fightCasts = true end
+			Show()
+		end))
 		cast:HookScript("OnHide", Shown)
 	end
 	-- Taken out and sized by the player: the bars fill the box again.

@@ -16,10 +16,12 @@ local GROUPS = {
 	{ "rebuilt", "Windows made new" },
 }
 
--- One of a part's own switches: in the list while the part is on, stood in under it.
+-- One of a part's own switches: in the list while the part is on (and its own `shown` says so), stood in under it.
 local function Option(m, o)
 	return { sub = true, key = "options." .. m.id .. "." .. o.key, label = o.label, desc = o.desc, words = m.title,
-		shown = function() return m:IsOn() == true and (m.shown == nil or m.shown() == true) end,
+		shown = function()
+			return m:IsOn() == true and (m.shown == nil or m.shown() == true) and (o.shown == nil or o.shown() == true)
+		end,
 		set = function(v) m:SetOption(o.key, v) end }
 end
 

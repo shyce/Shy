@@ -1,8 +1,7 @@
 -- A plate: everything drawn on one unit frame. The secure unit buttons and the options preview each carry one.
 -- It never touches the host frame's position, size or visibility, so it is safe on a secure button in combat.
 -- Nothing is measured: positions come from Layout.lua, and texts truncate through their anchors.
--- With secret values: combo blades are lit through a curve (no flash or gleam), the two incoming-heal
--- bars overlap instead of running end to end, and the mana spark is hidden.
+-- With secret values: combo blades are lit through a curve (no flash or gleam), and the mana spark is hidden.
 -- P.LEVELS: the frame levels of a plate's pieces over its host frame, for whoever stands something among them.
 
 local ADDON, ns = ...
@@ -41,8 +40,13 @@ local SHIELD = { fill = "Interface\\RaidFrame\\Shield-Fill", stripes = "Interfac
 -- over time past the health's end; your own heal there, and a shield's fill over the health; the fold (healing
 -- to come that has no room past the end, back over the health and a shield); a shield's stripes, and damage
 -- to come on an enemy; the marks; the words.
-local LEVELS = { heal = 2, own = 3, shield = 3, fold = 4, stripes = 5, doom = 5, marks = 6, texts = 7 }
+local LEVELS = { heal = 2, own = 3, shield = 3, fold = 4, stripes = 5, doom = 5, stop = 5, marks = 6, texts = 7 }
 P.LEVELS = LEVELS
+-- Your own heal on its way: what lands past the health's end, what would be wasted back over it. The bar's end
+-- lights gold once more than `half` of it would be wasted: a light `width` long, ending in a `line`.
+local OWN = { lands = 0.9, wasted = 0.85 }
+local STOP = { half = 0.5, width = 12, line = 3, glow = 0.6 }
+local SOLID = "Interface\\Buttons\\WHITE8X8"
 
 -- Fonts: both are font families (UI.NameFont), so every alphabet renders.
 
@@ -138,14 +142,14 @@ function P.Create(owner, kind)
 	fold:SetFrameLevel(level + LEVELS.fold)
 	self.fold = fold
 
-	-- Incoming heals in mint: others' first, then your own, each starting where the last ends.
+	-- Incoming heals: others' in pale mint, then your own, each starting where the last ends.
 	self.heals = {}
-	for i, color in ipairs({ { 0.40, 1.00, 0.78, 0.40 }, { 0.40, 1.00, 0.78, 0.75 } }) do
-		local heal = self:NewHeal()
-		self:ToneHeal(heal, unpack(color))
-		self.heals[i] = heal
-	end
-	self.heals[2]:SetFrameLevel(level + LEVELS.own)
+	for i = 1, 2 do self.heals[i] = self:NewHeal() end
+	local others, mine = self.heals[1], self.heals[2]
+	self:ToneHeal(others, 0.40, 1.00, 0.78, 0.40)
+	mine:SetFrameLevel(level + LEVELS.own)
+	mine.stops = true
+	self:ToneOwn()
 
 	-- A shield (what will be absorbed before any health is lost: a Power Word: Shield, a ward): on the end of
 	-- the health they have, wherever that is: its far edge is the fill's own, and it reaches back over the fill
@@ -786,6 +790,7 @@ end
 function Plate:SizeHeal(bar, rect)
 	bar:SetSize(rect[3], rect[4])
 	bar.back:SetSize(rect[3], rect[4])
+	if bar.half then bar.half:SetSize(rect[3] * STOP.half, rect[4]) end
 end
 
 -- Where a bar starts: on the end of the one before it (`after`; nil: the health's own end). Its twin, from
@@ -799,12 +804,24 @@ function Plate:HangHeal(bar, after)
 	bar:SetPoint("LEFT", after and after.fill or health.fill, "RIGHT", 0, 0)
 	bar.back:ClearAllPoints()
 	bar.back:SetPoint("RIGHT", after and after.back.fill or health, after and "LEFT" or "RIGHT", 0, 0)
+	if bar.half then self:HangHalf(bar) end
 end
 
--- `glide`: the bar eases to the value (the game's own easing; it takes secrets too).
+function Plate:HangHalf(bar)
+	local after = bar.after
+	bar.half:ClearAllPoints()
+	bar.half:SetPoint("LEFT", after and after.fill or self.bars.health.fill, "RIGHT", 0, 0)
+end
+
+-- `glide`: the bar eases to the value (the game's own easing; it takes secrets too). `on`: shown, so a bar
+-- told again as it stands costs nothing more.
 function Plate:FillHeal(bar, value, max, glide)
+	if bar.stops and not bar.half then self:BuildStop(bar) end
 	Fill(bar, value, max, glide)
 	Fill(bar.back, value, max, glide)
+	if bar.half then Fill(bar.half, value, max, glide) end
+	if bar.on then return end
+	bar.on = true
 	bar:Show()
 	bar.back:Show()
 end
@@ -814,15 +831,71 @@ function Plate:ToneHeal(bar, r, g, b, a)
 	bar.back:SetStatusBarColor(r, g, b, a)
 end
 
-function Plate:DropHeal(bar)
-	bar:Hide()
-	bar.back:Hide()
+-- Your own: mint where it lands, soft red where it would be wasted.
+function Plate:ToneOwn()
+	local mine, good, bad = self.heals[2], UI.colors.good, UI.colors.bad
+	mine:SetStatusBarColor(good[1], good[2], good[3], OWN.lands)
+	mine.back:SetStatusBarColor(bad[1], bad[2], bad[3], OWN.wasted)
 end
 
--- Incoming heals: others' in pale green, then your own in bright green, shifting to red by the share that
--- would overheal. They start where what stands before them ends (`healStart`: the last segment of healing
--- over time, Hots.lua, which always starts on the health's own end so nothing stands between the health and
--- it; nil: the health's own end). `healChain`: your own starts on the end of others' (else where theirs does).
+function Plate:DropHeal(bar)
+	if not bar.on then return end
+	bar.on = false
+	bar:Hide()
+	bar.back:Hide()
+	if bar.half then bar.half:SetValue(0) end
+end
+
+-- Too much wasted: the bar's end lights gold. Nothing is compared, the frames do it. A bar `half` as wide as
+-- your heal's, hung where it is, ends half way along it. A window from the bar's start to a little short of
+-- that end holds a light standing on the bar's own end. So the light shows only once half way along your heal
+-- is past the end of the health: once more than half of it would be wasted. The line comes first; the glow
+-- behind it, in a window cut shorter by its width, comes in as more of it would be wasted. Built when your own
+-- heal first lands on the frame (`stops`): a frame you never heal pays nothing.
+local function Gate(self, half, short)
+	local health = self.bars.health
+	local gate = CreateFrame("Frame", nil, health)
+	gate:SetClipsChildren(true)
+	gate:SetFrameLevel(self.owner:GetFrameLevel() + LEVELS.stop)
+	gate:SetPoint("TOPRIGHT", half:GetStatusBarTexture(), "TOPRIGHT", -short, 0)
+	-- (from before the bar's start, so the window is never turned inside out)
+	gate:SetPoint("BOTTOMLEFT", health, "BOTTOMLEFT", -(short + 1), 0)
+	return gate
+end
+
+local function Light(gate, health, width)
+	local light = gate:CreateTexture(nil, "ARTWORK")
+	light:SetPoint("TOPRIGHT", health, "TOPRIGHT", 0, 0)
+	light:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
+	light:SetWidth(width)
+	return light
+end
+
+function Plate:BuildStop(mine)
+	local health = self.bars.health
+	local half = CreateFrame("StatusBar", nil, health)
+	half:SetStatusBarTexture(SOLID)
+	half:SetAlpha(0)
+	half:SetMinMaxValues(0, 1)
+	half:SetValue(0)
+	mine.half = half
+	local rect = self.rects and self.rects.health
+	if rect then half:SetSize(rect[3] * STOP.half, rect[4]) end
+	self:HangHalf(mine)
+	local gold = UI.colors.alert
+	local line = Light(Gate(self, half, STOP.line + 1), health, STOP.line)
+	line:SetColorTexture(gold[1], gold[2], gold[3], 1)
+	local glowGate = Gate(self, half, STOP.width + 1)
+	local glow = Light(glowGate, health, STOP.width)
+	glow:SetColorTexture(1, 1, 1, 1)
+	glow:SetGradient("HORIZONTAL", CreateColor(gold[1], gold[2], gold[3], 0), CreateColor(gold[1], gold[2], gold[3], STOP.glow))
+	self.stop, self.stopGlow = line:GetParent(), glowGate
+end
+
+-- Incoming heals: others' first, then your own. They start where what stands before them ends (`healStart`:
+-- the last segment of healing over time, Hots.lua, which always starts on the health's own end so nothing
+-- stands between the health and it; nil: the health's own end). `healChain`: your own starts on the end of
+-- others' (else where theirs does).
 
 function Plate:HangHeals()
 	local others, mine = self.heals[1], self.heals[2]
@@ -831,45 +904,40 @@ function Plate:HangHeals()
 	self:HangHeal(mine, self.healChain and others or start)
 end
 
+-- The game splits what is coming into yours and others', even when it keeps the numbers: no arithmetic here.
+local predict
+local function Coming(unit)
+	if not predict then
+		predict = CreateUnitHealPredictionCalculator()
+		predict:SetIncomingHealClampMode(Enum.UnitIncomingHealClampMode.MaximumHealth)
+	end
+	UnitGetDetailedHealPrediction(unit, "player", predict)
+	local _, own, rest = predict:GetIncomingHeals()
+	return own, rest
+end
+
 function Plate:UpdateHeals()
 	local unit = self.unit
 	local others, mine = self.heals[1], self.heals[2]
-	local all, own = UnitGetIncomingHeals(unit), UnitGetIncomingHeals(unit, "player")
-	local hp, max = UnitHealth(unit), UnitHealthMax(unit)
-	self.healChain = false
-	if not Secret(all) and all == nil then
-		self:DropHeal(others)
-		self:DropHeal(mine)
-		return
-	end
-	if Secret(all, own, hp, max) then
-		-- Secret: no arithmetic. The total in pale green, your own part overlapping its start.
+	local own, rest = Coming(unit)
+	local max = UnitHealthMax(unit)
+	if Secret(own, rest, max) then
+		-- A heal of nothing draws nothing.
+		self.healChain = true
 		self:HangHeals()
-		self:FillHeal(others, all, max)
-		if Secret(own) or own ~= nil then self:FillHeal(mine, own, max) else self:DropHeal(mine) end
-		self:ToneHeal(mine, 0, 1, 0, 1)
+		self:FillHeal(others, rest, max)
+		self:FillHeal(mine, own, max)
 		return
 	end
-	own = own or 0
-	if all <= 0 or max <= 0 then
+	self.healChain = rest > 0
+	if max <= 0 or own + rest <= 0 then
 		self:DropHeal(others)
 		self:DropHeal(mine)
 		return
 	end
-	local rest = math.max(0, all - own)
-	self.healChain = rest > 0
 	self:HangHeals()
 	if rest > 0 then self:FillHeal(others, rest, max) else self:DropHeal(others) end
-	if own > 0 then
-		self:FillHeal(mine, own, max)
-		-- Green to red by the overheal share, then normalized to full brightness.
-		local waste = math.max(0, math.min(1, (hp + rest + own - max) / own))
-		local r, g, a = waste, 1 - waste, 1 - 0.35 * waste
-		local high = math.max(r, g, 0.00001)
-		self:ToneHeal(mine, r / high, g / high, 0, a)
-	else
-		self:DropHeal(mine)
-	end
+	if own > 0 then self:FillHeal(mine, own, max) else self:DropHeal(mine) end
 end
 
 -- The shield left on them, against their whole health. Both numbers may be the game's to keep: they go to the
@@ -1297,7 +1365,6 @@ function Plate:Sample(s)
 	if s.heal then self:FillHeal(others, s.heal, s.max) else self:DropHeal(others) end
 	if s.mine then
 		self:FillHeal(mine, s.mine, s.max)
-		self:ToneHeal(mine, 0, 1, 0, 1)
 	else
 		self:DropHeal(mine)
 	end
@@ -1332,7 +1399,6 @@ local Sliver = {}
 Sliver.__index = Sliver
 
 local PET = { 0.2, 0.8, 0.15 }
-local SOLID = "Interface\\Buttons\\WHITE8X8"
 
 function P.CreateSliver(owner)
 	local self = setmetatable({ owner = owner }, Sliver)

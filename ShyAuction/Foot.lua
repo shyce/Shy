@@ -13,33 +13,45 @@ local Shop = Shy.Shop
 local F = {}
 ns.Foot = F
 
-local L = { market = 200, button = 124, bar = 18, pad = 12 }
+-- market: what stands at the left; button: the one at the right end (and its height); a page's own foot keeps to these.
+local L = { market = 200, button = 124, buttonHeight = 26, bar = 18, pad = 12 }
+F.L = L
 local foot, ticker
 local Ticking   -- (below: the footer's hide stops it)
 
 local EMBLEM = { Alliance = "communities-icon-faction-alliance", Horde = "communities-icon-faction-horde" }
 local SIDE = { Alliance = "Alliance auction house", Horde = "Horde auction house", Neutral = "Neutral auction house" }
 
--- (on the window's body: UI.Body)
+-- The band every foot of the window stands in (the scan bar's, a page's own): a floor a little darker than the window,
+-- a groove along its top, a lip of light under it. On the window's body (UI.Body).
+function F.Band(body, tall)
+	local band = CreateFrame("Frame", nil, body)
+	band:SetPoint("BOTTOMLEFT", 2, 2)
+	band:SetPoint("BOTTOMRIGHT", -2, 2)
+	band:SetHeight(tall - 2)
+	band.floor = band:CreateTexture(nil, "BACKGROUND")
+	band.floor:SetAllPoints()
+	band.floor:SetColorTexture(0, 0, 0, 0.3)
+	band.groove = band:CreateTexture(nil, "BORDER")
+	band.groove:SetPoint("TOPLEFT")
+	band.groove:SetPoint("TOPRIGHT")
+	band.groove:SetHeight(1)
+	band.groove:SetColorTexture(0, 0, 0, 0.85)
+	band.lip = band:CreateTexture(nil, "BORDER")
+	band.lip:SetPoint("TOPLEFT", 0, -1)
+	band.lip:SetPoint("TOPRIGHT", 0, -1)
+	band.lip:SetHeight(1)
+	band.lip:SetColorTexture(1, 1, 1, 0.07)
+	return band
+end
+
+-- The scan bar shown, or put aside for a page's own foot.
+function F.Shown(on)
+	if foot then foot:SetShown(on) end
+end
+
 function F.Build(body, tall)
-	foot = CreateFrame("Frame", nil, body)
-	foot:SetPoint("BOTTOMLEFT", 2, 2)
-	foot:SetPoint("BOTTOMRIGHT", -2, 2)
-	foot:SetHeight(tall - 2)
-	-- The band: a floor a little darker than the window, a groove along its top, a lip of light under it.
-	foot.floor = foot:CreateTexture(nil, "BACKGROUND")
-	foot.floor:SetAllPoints()
-	foot.floor:SetColorTexture(0, 0, 0, 0.3)
-	foot.groove = foot:CreateTexture(nil, "BORDER")
-	foot.groove:SetPoint("TOPLEFT")
-	foot.groove:SetPoint("TOPRIGHT")
-	foot.groove:SetHeight(1)
-	foot.groove:SetColorTexture(0, 0, 0, 0.85)
-	foot.lip = foot:CreateTexture(nil, "BORDER")
-	foot.lip:SetPoint("TOPLEFT", 0, -1)
-	foot.lip:SetPoint("TOPRIGHT", 0, -1)
-	foot.lip:SetHeight(1)
-	foot.lip:SetColorTexture(1, 1, 1, 0.07)
+	foot = F.Band(body, tall)
 
 	-- Your market.
 	foot.emblem = foot:CreateTexture(nil, "ARTWORK")
@@ -83,7 +95,7 @@ function F.Build(body, tall)
 		if not ok then T:Print(why) end
 		F.Draw()
 	end)
-	foot.button:SetHeight(26)
+	foot.button:SetHeight(L.buttonHeight)
 	foot.button:SetPoint("RIGHT", -L.pad, 0)
 
 	-- (While a scan runs or the next one is counted down, the bar is drawn again a few times a second; otherwise not.)

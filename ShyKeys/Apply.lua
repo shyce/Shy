@@ -27,7 +27,7 @@ function Keys.Apply(addon, jobs, opts)
 	if opts.build then build, buildName = opts.build() end
 	jobs = Base(jobs, build)   -- (what you seldom press is given its key once what you moved is read: below)
 	local learns = Learns(opts.knows)
-	local result = { placed = 0, waiting = 0, waits = {}, cleared = 0, bound = 0, tidied = 0, kept = 0, left = {}, new = {}, moved = {}, at = {}, learns = learns, build = build, buildName = buildName, shared = 0,
+	local result = { placed = 0, waiting = 0, waits = {}, cleared = 0, gone = {}, bound = 0, tidied = 0, kept = 0, left = {}, new = {}, moved = {}, at = {}, learns = learns, build = build, buildName = buildName, shared = 0,
 		rehomed = {}, homeless = 0 }
 	local pinned = before.pinned
 	if not before.theirs then before.theirs = Theirs(made) end   -- (your macros, before the first layout: never deleted here)
@@ -91,6 +91,8 @@ function Keys.Apply(addon, jobs, opts)
 		if made[job.name] then
 			Drop(job.name)
 			result.cleared = result.cleared + 1
+			-- (one that casts nothing you know now: a talent dropped, a spell unlearned)
+			if not job.supply and not job.make and #(Does(job, known, nil, true) or EMPTY) == 0 then result.gone[#result.gone + 1] = job end
 		end
 	end
 	local taken = {}         -- what of yours stood on a button a job took just now: { slot, held }

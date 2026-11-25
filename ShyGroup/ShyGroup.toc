@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffGroup|r
 ## Notes: Find a group or fill yours: see who's listed, whisper in one click |cff888888/shy group|r
 ## Author: Shyce Cream
-## Version: 5.2.8
-## X-Date: 2026-11-23
+## Version: 5.2.11
+## X-Date: 2026-11-25
 ## IconTexture: Interface\AddOns\ShyGroup\Media\ShyGroupMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore

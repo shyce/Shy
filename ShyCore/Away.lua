@@ -4,15 +4,17 @@
 -- line at the right, lit from the line and by a halo behind the chest; chat stands large at the left on
 -- the dusk, with no housing, whispers in a section of their own over it; a header at the top left says
 -- how long you have been away, what came in and how things stand (the frame rate, the latency, the
--- gear's wear, room in the bags, rest banked); and the footer on the floor carries your name, your
--- level and where you stand, the clock, your gold and friends online. Nothing here takes the mouse:
--- anything you do brings the HUD back.
+-- gear's wear, room in the bags, rest banked); the column at the right tells your story (gold on every
+-- character, Waylaid Crates, Merchant's Favor and Honor Points over the game's statistics rolling up like credits); and the
+-- footer on the floor carries your name, your level and where you stand, the clock, your gold and friends
+-- online. Nothing here takes the mouse: anything you do brings the HUD back.
 --
 --   Shy.Immersion.board.Set(depth, now, since, came)  how far up the board is (0 to 1, hidden at 0), the
 --                                                     time away as words, what came in ({ word, text } ...)
 --   Shy.Immersion.board.Drop()                        gone at once (a fight)
 --   Shy.Immersion.board.frame / .chat / .whispers     the board, its chat and its whispers, once built
 --   Shy.Immersion.board.vitals                        the header's line on how things stand
+--   Shy.Immersion.board.story                         the story's column: heads (the figures), entries (the roll), rows
 --
 -- Chat is the tab you are on: as the board comes up, the selected window's last lines are copied into
 -- the board's own message frame, each as the window holds it (ShyChat's rewriting included), and while
@@ -397,6 +399,8 @@ local function BuildWords()
 	ui.friends:SetJustifyH("RIGHT")
 end
 
+local BuildStory   -- (the story's column: below, with the rest of it)
+
 local function Build()
 	if board then return end
 	board = CreateFrame("Frame", nil, UIParent)
@@ -420,6 +424,7 @@ local function Build()
 	BuildFloor()
 	BuildFigure()
 	BuildWords()
+	BuildStory()
 end
 
 -- What the header and the footer say
@@ -505,6 +510,373 @@ local function Refresh(since, came)
 	ui.friends:SetText(Friends())
 end
 
+-- Your story: the column at the right
+--
+-- What your bags know across your characters stands at the top, mirroring the header, each with its picture: gold on
+-- every character, Waylaid Crates, Merchant's Favor, Honor Points (ShyBags and ShyCrates; this character's alone
+-- without them). The figures count up
+-- as the board rises. Under them the game's statistics roll up like credits, the best first, then the game's
+-- groups, the most exciting first, each under its name in the accent. They fade in at the foot and out at the top,
+-- and start over once through. Read as the board comes up; a pool of rows a screen's worth deep carries the roll.
+
+local STORY = {
+	X = 0.80,          -- the column's left edge, as a share of the width: clear of the figure
+	BIG = 30,          -- a figure at the top
+	SMALL = 12,        -- labels and captions
+	VALUE = 17,        -- a statistic
+	STEP = 58,         -- from one figure at the top to the next
+	UNDER = 32,        -- a figure's label under it
+	GAP = 10,          -- between the figures and the roll
+	CAP = 42,          -- a caption's room, its air above it
+	ROW = 42,          -- a statistic's room
+	RULE = 150,        -- the caption's hairline
+	FADE = 56,         -- the roll fades over this at both ends
+	SPEED = 14,        -- units a second
+	STEPS = 24,        -- the figures count up in this many steps
+	HEADS = 4,
+	ICON = 26,         -- a figure's picture, at its left (Shy.Slot)
+	ICON_GAP = 8,
+}
+-- The statistics that lead the roll, the best first (the client's Achievement IDs).
+local BEST = {
+	193,    -- Largest hit dealt
+	189,    -- Largest heal cast
+	1098,   -- Onyxia kills
+	334,    -- Most gold ever owned
+	332,    -- Most expensive auction sold
+	395,    -- Warsong Gulch flags captured
+	319,    -- Duels won
+	1336,   -- Creature type killed the most
+	594,    -- Deaths from Hogger
+	1042,   -- Number of hugs
+}
+-- Then the game's groups, the most exciting first (the client's Achievement_Category IDs). Any other follows in the
+-- game's own order.
+local GROUPS = {
+	14821,  -- Boss Kills
+	141,    -- Combat
+	136,    -- Honorable Kills
+	137,    -- Killing Blows
+	153,    -- Battlegrounds
+	154,    -- World PvP
+	140,    -- Wealth
+	135,    -- Creatures
+	133,    -- Quests
+	134,    -- Travel
+	147,    -- Reputation
+	191,    -- Gear
+	14807,  -- Dungeons & Raids
+	173,    -- Professions
+	178,    -- Secondary Skills
+	132,    -- Skills
+	145,    -- Consumables
+	131,    -- Social
+	130,    -- Character
+	122,    -- Deaths
+	126,    -- Deaths in the world
+	125,    -- Deaths in dungeons and raids
+	124,    -- Deaths in battlegrounds
+	127,    -- Resurrection
+	21,     -- Player vs. Player
+}
+local RANK = {}
+for i, id in ipairs(GROUPS) do RANK[id] = i end
+
+local story = { rows = {}, entries = {}, heads = {}, at = 0, first = 1, room = 0 }
+Board.story = story
+
+-- A statistic's value as the game words it (a count, a sum in coins, a name), or nil where there is none. A "most"
+-- one comes as its count and its answer, "1496 (Eastern Kingdoms)": the answer alone, and true.
+local function Readable(v)
+	v = Plain(v)
+	if type(v) == "number" then v = tostring(v) end
+	if type(v) ~= "string" or v == "" or v == "--" then return nil end
+	local answer = v:match("^%s*[%d,.]+%s*%((.-)%)%s*$")
+	if answer and answer ~= "" then return answer, true end
+	local n = tonumber(v)
+	if n then return n > 0 and BreakUpLargeNumbers(n) or nil end
+	return v
+end
+
+-- Under a "most" one's answer, what it is the most of: "Continent with the most Honorable Kills" reads "Most
+-- Honorable Kills" under Eastern Kingdoms, "Creature type killed the most" reads "Killed the most" under Beast.
+local function MostOf(label)
+	local rest = label:match("^.- with the most (.+)$")
+	if rest then return "Most " .. rest end
+	local done = label:match("^.- (%a+ the most)$") or label:match("^.- (%a+ most)$")
+	if done then return done:sub(1, 1):upper() .. done:sub(2) end
+	return label
+end
+
+local function Named(id)
+	local _, name = GetAchievementInfo(id)
+	name = Plain(name)
+	if type(name) ~= "string" or name == "" or name:find("<", 1, true) or name:find("UNUSED", 1, true) then return nil end
+	return name
+end
+
+-- A group's name, with its parent's where the name alone says too little ("Deaths · World").
+local function GroupName(id)
+	local name, parent = GetCategoryInfo(id)
+	name, parent = Plain(name), Plain(parent)
+	if type(name) ~= "string" then return nil end
+	if type(parent) ~= "number" or parent == -1 then return name end
+	local over, top = GetCategoryInfo(parent)
+	over, top = Plain(over), Plain(top)
+	if type(over) ~= "string" or top == -1 or name:find(over, 1, true) then return name end
+	return over .. " · " .. name
+end
+
+local function Add(entries, kind, value, label)
+	local h = kind == "cap" and STORY.CAP or STORY.ROW
+	local last = entries[#entries]
+	entries[#entries + 1] = { kind = kind, value = value, label = label, y = last and (last.y + last.h) or 0, h = h }
+end
+
+-- The roll: your best, then each group with something in it, the most exciting first.
+local function Statistics()
+	local entries = {}
+	local list = GetStatisticsCategoryList() or {}
+	local ids, groups, byId = {}, {}, {}
+	for key, id in pairs(list) do
+		if type(key) == "number" then ids[#ids + 1] = key end
+	end
+	table.sort(ids)
+	for order, key in ipairs(ids) do
+		local category = list[key]
+		local rows = {}
+		for i = 1, Plain(GetCategoryNumAchievements(category)) or 0 do
+			local quantity, skip, id = GetStatistic(category, i)
+			id = Plain(id)
+			if not Plain(skip) and id then
+				local value, most = Readable(quantity)
+				local label = Named(id)
+				if value and label then
+					if most then label = MostOf(label) end
+					local row = { value = value, label = label }
+					rows[#rows + 1] = row
+					byId[id] = row
+				end
+			end
+		end
+		if #rows > 0 then groups[#groups + 1] = { name = GroupName(category), rows = rows, rank = RANK[category] or (#GROUPS + order) } end
+	end
+	local best = false
+	for _, id in ipairs(BEST) do
+		local row = byId[id]
+		if row then
+			if not best then Add(entries, "cap", "Your best") end
+			best = true
+			Add(entries, "stat", row.value, row.label)
+			row.taken = true
+		end
+	end
+	table.sort(groups, function(a, b) return a.rank < b.rank end)
+	for _, group in ipairs(groups) do
+		local named = false
+		for _, row in ipairs(group.rows) do
+			if not row.taken then
+				if not named and group.name then Add(entries, "cap", group.name) end
+				named = true
+				Add(entries, "stat", row.value, row.label)
+			end
+		end
+	end
+	return entries
+end
+
+-- A currency as a figure: how many your characters hold (ShyBags), this one's alone without it, with its name and
+-- picture as the game gives them (the bags show the same).
+local function Currency(id, name)
+	local bags = Shy.addons.Bags
+	local info = C_CurrencyInfo.GetCurrencyInfo(id)
+	local n = bags and bags.Currency and bags:Currency(id) or Plain(info and info.quantity) or 0
+	local icon = info and Plain(info.iconFileID)
+	return { n = n, label = info and Plain(info.name) or name, icon = icon ~= 0 and icon or nil }
+end
+
+-- The figures at the top: { n or copper, label, icon }. Gold on every character where there is more than one (this
+-- one's stands on the floor); Waylaid Crates and Merchant's Favor with ShyCrates; Honor Points.
+local function Highlights()
+	local out = {}
+	local bags, crates = Shy.addons.Bags, Shy.addons.Crates
+	local gold = bags and bags.Gold and bags:Gold()
+	if gold and gold.chars > 1 then
+		out[#out + 1] = { copper = gold.hand + gold.mail + gold.sold, label = ("Gold, %d characters"):format(gold.chars) }
+	end
+	if crates and crates.Count then
+		out[#out + 1] = { n = crates:Count(), label = "Waylaid Crates", icon = crates.Icon and crates:Icon() or nil }
+		local favor = crates.Favor and crates:Favor()
+		if favor then out[#out + 1] = Currency(favor, "Merchant's Favor") end
+	end
+	out[#out + 1] = Currency(Constants.CurrencyConsts.HONOR_CURRENCY_ID, "Honor Points")
+	return out
+end
+
+-- A figure at the top, counted up to `share` of itself.
+local function Figure(head, share)
+	local it = head.it
+	if it.copper then
+		head.value:SetText(UI.Money(math.floor(it.copper * share), true, STORY.BIG))
+	else
+		head.value:SetText(BreakUpLargeNumbers(math.floor(it.n * share + 0.5)))
+	end
+end
+
+local function Count(depth)
+	local share = math.floor(Ease(0.5, 1, depth) * STORY.STEPS + 0.5) / STORY.STEPS
+	if share == story.counted then return end
+	story.counted = share
+	for _, head in ipairs(story.heads) do
+		if head.it then Figure(head, share) end
+	end
+end
+
+local function RollRow()
+	local row = CreateFrame("Frame", nil, story.window)
+	row:SetHeight(STORY.ROW)
+	row.cap = Words(row, STORY.SMALL, Theme.Accent)
+	row.cap:SetJustifyH("RIGHT")
+	row.cap:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 14)
+	row.rule = row:CreateTexture(nil, "ARTWORK")
+	row.rule:SetColorTexture(1, 1, 1, 1)
+	row.rule:SetSize(STORY.RULE, 1)
+	row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 8)
+	row.value = UI.Text(row, "", STORY.VALUE, true)
+	row.value:SetJustifyH("RIGHT")
+	row.value:SetPoint("TOPRIGHT", row, "TOPRIGHT")
+	row.label = Words(row, STORY.SMALL, C.dim)
+	row.label:SetJustifyH("RIGHT")
+	row.label:SetWordWrap(false)
+	row.label:SetPoint("TOPRIGHT", row.value, "BOTTOMRIGHT", 0, -3)
+	row:Hide()
+	return row
+end
+
+local function Dress(row, e)
+	row.entry = e
+	local cap = e.kind == "cap"
+	row.cap:SetShown(cap)
+	row.rule:SetShown(cap)
+	row.value:SetShown(not cap)
+	row.label:SetShown(not cap)
+	if cap then
+		row.cap:SetText(e.value:upper())
+	else
+		row.value:SetText(e.value)
+		row.label:SetText(e.label)
+	end
+	row:SetHeight(e.h)
+end
+
+-- Each frame: the list a little further up, the rows on screen given what stands there now.
+local function Roll(_, elapsed)
+	local entries = story.entries
+	local n = #entries
+	if n == 0 then return end
+	local room = story.room
+	if room <= 0 then return end
+	local last = entries[n]
+	local whole = last.y + last.h + room
+	story.at = story.at + elapsed * STORY.SPEED
+	if story.at >= whole then
+		story.at = story.at % whole
+		story.first = 1
+	end
+	local top = room - story.at
+	while story.first < n and top + entries[story.first].y + entries[story.first].h < 0 do story.first = story.first + 1 end
+	local used = 0
+	for i = story.first, n do
+		local e = entries[i]
+		local y = top + e.y
+		if y >= room then break end
+		used = used + 1
+		local row = story.rows[used]
+		if not row then
+			row = RollRow()
+			story.rows[used] = row
+			row:SetWidth(story.width or 1)
+			row.rule:SetGradient("HORIZONTAL", story.from, story.to)
+		end
+		if row.entry ~= e then Dress(row, e) end
+		row:SetPoint("TOPRIGHT", story.window, "TOPRIGHT", 0, -y)
+		local middle = y + e.h / 2
+		row:SetAlpha(max(0, min(1, middle / STORY.FADE, (room - middle) / STORY.FADE)))
+		if not row:IsShown() then row:Show() end
+	end
+	for i = used + 1, #story.rows do
+		local row = story.rows[i]
+		if row:IsShown() then
+			row:Hide()
+			row.entry = nil
+		end
+	end
+end
+
+function BuildStory()
+	local column = CreateFrame("Frame", nil, ui.words)
+	story.frame = column
+	column:SetPoint("TOPRIGHT", board, "TOPRIGHT", -EDGE, -(EDGE - 8))
+	column:SetPoint("BOTTOM", ui.line, "TOP", 0, CHAT_LIFT)
+	for i = 1, STORY.HEADS do
+		local head = {}
+		head.value = UI.Text(column, "", STORY.BIG, true)
+		head.value:SetJustifyH("RIGHT")
+		head.value:SetPoint("TOPRIGHT", column, "TOPRIGHT", 0, -(i - 1) * STORY.STEP)
+		head.label = Words(column, STORY.SMALL, C.dim)
+		head.label:SetJustifyH("RIGHT")
+		head.label:SetPoint("TOPRIGHT", column, "TOPRIGHT", 0, -((i - 1) * STORY.STEP + STORY.UNDER))
+		-- Its picture at its left, in the family's slot: it moves out as the figure counts up.
+		head.holder = CreateFrame("Frame", nil, column)
+		head.holder:SetSize(STORY.ICON, STORY.ICON)
+		head.holder:SetPoint("RIGHT", head.value, "LEFT", -STORY.ICON_GAP, 0)
+		head.icon = head.holder:CreateTexture(nil, "ARTWORK")
+		head.icon:SetAllPoints()
+		head.slot = Shy.Slot.New(head.holder, { icon = head.icon, size = STORY.ICON, hover = false })
+		head.holder:Hide()
+		story.heads[i] = head
+	end
+	local window = CreateFrame("Frame", nil, column)
+	story.window = window
+	window:SetClipsChildren(true)
+	window:SetPoint("BOTTOMLEFT", column, "BOTTOMLEFT")
+	window:SetPoint("BOTTOMRIGHT", column, "BOTTOMRIGHT")
+	window:SetScript("OnUpdate", Shy.Clocked("away: the roll", Roll))
+end
+
+-- As the board comes up: the figures and the roll read afresh, the roll from its start.
+local function Tell()
+	-- (The board covers the screen: its measure is UIParent's, known before the board is laid out.)
+	local width = max(1, UIParent:GetWidth() * (1 - STORY.X) - EDGE)
+	story.frame:SetWidth(width)
+	story.width = width
+	local r, g, b = Theme.AccentSolid()
+	story.from, story.to = CreateColor(r, g, b, 0), CreateColor(r, g, b, 0.7)
+	local its = Highlights()
+	for i, head in ipairs(story.heads) do
+		local it = its[i]
+		head.it = it
+		head.value:SetShown(it ~= nil)
+		head.label:SetShown(it ~= nil)
+		if it then head.label:SetText(it.label:upper()) end
+		if it and it.icon then head.icon:SetTexture(it.icon) end
+		head.holder:SetShown(it ~= nil and it.icon ~= nil)
+	end
+	story.counted = nil
+	local below = #its * STORY.STEP + STORY.GAP
+	story.window:SetPoint("TOPLEFT", story.frame, "TOPLEFT", 0, -below)
+	-- (Worked out, not measured: the floor's line it stands on is still rising.)
+	story.room = UIParent:GetHeight() - (EDGE - 8) - FOOT - CHAT_LIFT - below
+	story.entries = Statistics()
+	story.at, story.first = 0, 1
+	for _, row in ipairs(story.rows) do
+		row:SetWidth(width)
+		row.rule:SetGradient("HORIZONTAL", story.from, story.to)
+		row:Hide()
+		row.entry = nil
+	end
+end
+
 -- The first frame up: the screen's measure, the character, the windows and their lines.
 local function Rise(now)
 	local w, h = board:GetWidth(), board:GetHeight()
@@ -534,6 +906,7 @@ local function Rise(now)
 	source = Source()
 	wipe(heard)
 	Fill()
+	Tell()
 	at = now
 end
 
@@ -567,6 +940,8 @@ function Board.Set(depth, now, since, came)
 	ui.stand:SetAlpha(f)
 	ui.stand:SetPoint("BOTTOM", ui.line, "TOP", ui.standX or 0, 2 - FIGURE_RISE * (1 - f))
 	ui.words:SetAlpha(Ease(0.5, 1, depth))
+	-- (The figures count up on the way up only.)
+	if depth >= lastDepth then Count(depth) end
 	lastDepth = depth
 	if now - at >= 1 then
 		at = now

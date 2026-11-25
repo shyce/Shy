@@ -4,6 +4,10 @@
 -- LISTED yards.
 --   Spells due: the spellbook's FutureSpell entries whose level is reached. If the spellbook
 --     lists none, the last trainer visit is used instead (Since).
+--   A spell you know is never due, whoever taught it (Have: the spellbook, by name and the level
+--     or rank learned). What a visit saw can be old; the spellbook is always now.
+--   A trainer's ranks can come a moment after its list. A spell read before its rank shows is
+--     read again once it does, and dropped when its ranks are known (Tidy).
 --   Costs: no client table has trainer prices, so a class trainer's list is read whenever its
 --     window is open and kept per account (T.db.trainers). Unknown until a first visit.
 --   Not every future spell is sold (some come from class quests). Once a trainer's full list is
@@ -111,6 +115,53 @@ local function Book(known)
 	return listed, matched, due
 end
 
+-- The spells you know, from the spellbook: name -> { level, rank }, the highest of each learned.
+local function Have()
+	local have, bank = {}, Enum.SpellBookSpellBank.Player
+	for line = 1, C_SpellBook.GetNumSpellBookSkillLines() or 0 do
+		local info = C_SpellBook.GetSpellBookSkillLineInfo(line)
+		for slot = info and info.itemIndexOffset + 1 or 1, info and info.itemIndexOffset + info.numSpellBookItems or 0 do
+			local item = C_SpellBook.GetSpellBookItemInfo(slot, bank)
+			local name = item and item.itemType == Enum.SpellBookItemType.Spell and item.name
+			if name and not issecretvalue(name) then
+				local mine = have[name] or { level = 0, rank = 0 }
+				have[name] = mine
+				-- (the slot's level, and the spell's own: one rank's, where the slot may give the first's)
+				local id = item.spellID
+				mine.level = math.max(mine.level, C_SpellBook.GetSpellBookItemLevelLearned(slot, bank) or 0,
+					id and not issecretvalue(id) and C_Spell.GetSpellLevelLearned(id) or 0)
+				mine.rank = math.max(mine.rank, tonumber((item.subName or ""):match("%d+")) or 0)
+			end
+		end
+	end
+	return have
+end
+
+-- Whether a spell is known: by its rank, else by the level it comes at. One with neither to go by
+-- is known by its name.
+local function Knows(have, spell)
+	local mine = have[spell.name]
+	if not mine then return false end
+	local rank = tonumber((spell.rank or ""):match("%d+"))
+	if rank and mine.rank >= rank then return true end
+	if mine.level > 0 then return mine.level >= (spell.level or 0) end
+	return rank == nil
+end
+
+-- A spell kept without its rank, read before the rank showed, goes once that rank is kept: the same
+-- name at the same level. Until then it stands for that rank.
+local function Tidy(known)
+	local ranked = {}
+	for key, entry in pairs(known.spells) do
+		local name, rank = key:match("^(.-)|(.*)$")
+		if name and rank ~= "" then ranked[name .. "|" .. entry[1]] = true end
+	end
+	for key, entry in pairs(known.spells) do
+		local name, rank = key:match("^(.-)|(.*)$")
+		if name and rank == "" and ranked[name .. "|" .. entry[1]] then known.spells[key] = nil end
+	end
+end
+
 -- Spells due according to the saved trainer list: what was still for sale at the last visit,
 -- plus what it lists for the levels gained since.
 local function Since(known, mine)
@@ -130,16 +181,17 @@ local function Work()
 	stale, waiting = false, nil
 	if not Class() or not ns.char then return end
 	local known, mine = Prices(), Mine()
+	Tidy(known)
 	local listed, matched, found = Book(known)
 	mine.saw = { listed = listed, due = #found, level = UnitLevel("player") }
 	local from = "book"
 	if listed == 0 then found, from = Since(known, mine), "trainer" end
 	-- With the trainer's full list known, a spell it doesn't list isn't sold by trainers.
 	local strict = from == "book" and known.whole and matched > 0
-	local due, cost, names = {}, 0, {}
+	local due, cost, names, have = {}, 0, {}, Have()
 	for _, spell in ipairs(found) do
 		local key, entry = Listed(known, spell)
-		if not (key and mine.blocked[key]) and (entry or not strict) then
+		if not (key and mine.blocked[key]) and (entry or not strict) and not Knows(have, spell) then
 			due[#due + 1] = spell
 			spell.cost = entry and entry[2] or nil
 			-- A spell with no known price makes the total unknown.
@@ -454,16 +506,23 @@ local function Teach()
 	TeachNext()
 end
 
+local shown = false          -- a trainer's window is open
 local events = CreateFrame("Frame")
 for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "QUEST_TURNED_IN",
-	"TRAINER_SHOW", "TRAINER_UPDATE", "TRAINER_CLOSED" }) do
+	"TRAINER_SHOW", "TRAINER_UPDATE", "TRAINER_SERVICE_INFO_NAME_UPDATE", "TRAINER_CLOSED" }) do
 	events:RegisterEvent(event)
 end
 events:SetScript("OnEvent", function(_, event, id)
 	if not ns.char then return end
 	if event == "TRAINER_CLOSED" then
+		shown = false
 		Taught()
+	elseif event == "TRAINER_SERVICE_INFO_NAME_UPDATE" then
+		-- (a rank that showed late: the list is read again, while the window is still there to read)
+		if not shown then return end
+		Read()
 	elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
+		if event == "TRAINER_SHOW" then shown = true end
 		Read()
 		if event == "TRAINER_SHOW" then
 			Teach()

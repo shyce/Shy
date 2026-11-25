@@ -24,7 +24,7 @@
 --                                   ship's own path) it carries their offset, shed over the first TAPER
 --                                   yards, so it leads from them and joins the line ahead
 --   spec.look                       the line's look (default Shy.Maps.JOURNEY: even and still, in its case:
---                                   never mistaken for the way walked, which tapers and has a comet)
+--                                   never mistaken for the way walked, which tapers)
 --   trip:Update()                   after it starts, changes or ends: both maps are laid again now
 --   trip:Look(sign, color, strip)   another sign, color or strip (a crossing's kind)
 --
@@ -550,8 +550,6 @@ function Trip:SetupMap()
 				if ticks % 5 == 0 then self:Rehover(map.mark) end
 			end)
 		end
-		Maps.Shine(map.pen, GetTime())
-		if map.link then Maps.Shine(map.link, GetTime()) end
 	end))
 end
 
@@ -587,7 +585,6 @@ function Trip:SetupMini()
 				self:Rehover(mini.mark)
 			end
 		end)
-		Maps.Shine(mini.pen, GetTime())
 	end))
 end
 

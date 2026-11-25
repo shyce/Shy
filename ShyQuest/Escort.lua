@@ -55,6 +55,11 @@ local TOLD_RECENTLY = 60     -- seconds a record just told on a channel is not t
 local BEND = 6               -- yards: a journey's way is smoothed in pieces no longer than this
 local SEEK = 60              -- points of it looked over past the last one passed
 local STRAYED = 40           -- yards off the way from which the whole rest of it is looked over
+-- Elites on the way (Perilous): an elite or boss whose spawn is this near it, and no more than `over` levels
+-- above the quest. (Not a rare elite: it is seldom up. Nor a town's guards, far above the quest: the walk
+-- isn't through their town.)
+local ELITES = { reach = 60, over = 5, rank = { [1] = true, [3] = true } }
+local NONE = {}
 
 local PACK = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+"
 local BASE = #PACK
@@ -240,6 +245,38 @@ function Escort.Path(id)
 	if points then return { { map = record.m, points = points } }, true end
 	local endMap, endX, endY = End(id, map)
 	if map and endMap then return { { map = map, points = { x, y, endX, endY } } }, false end
+end
+
+-- The worst elite your level or higher on an escort's way (Path, when known; else where who is walked
+-- stands), or nil. A walk through a camp of those is no walk to take: the route and the guide leave it out
+-- until you outlevel them (Route's Worth, Guide's ChainGone). Taken anyway, it stays.
+local perils = { level = nil, stamp = nil }
+function Escort.Perilous(id)
+	if not D.Escort(id) or not ns.Safety then return nil end
+	local level = L.Level()
+	if perils.level ~= level or perils.stamp ~= stamp then
+		perils = { level = level, stamp = stamp }
+	end
+	local known = perils[id]
+	if known == nil then
+		known = false
+		-- (A straight line is a guess, and a guess sends nobody away: the Traitor's line to Moonbrook passes over
+		-- the mine's elites, far under his real road.)
+		local way, walked = Escort.Path(id)
+		local quest = D.Quest(id)
+		if not walked then
+			local map, x, y = Start(id)
+			way = map and { { map = map, points = { x, y } } }
+		end
+		local most = quest and quest.level + ELITES.over or 0
+		for _, npc in ipairs(way and ns.Safety.Along(way, ELITES.reach, function(npc)
+			return ELITES.rank[npc.rank] == true and npc.maxLevel >= level and npc.maxLevel <= most
+		end) or NONE) do
+			if not known or npc.maxLevel > known.maxLevel then known = npc end
+		end
+		perils[id] = known
+	end
+	return known or nil
 end
 
 -- The way in the world, smoothed as a journey's line (Shy.Maps.Smooth, with its continent): the

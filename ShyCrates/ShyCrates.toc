@@ -1,0 +1,23 @@
+## Interface: 16001
+## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffCrates|r
+## Notes: Fill Waylaid Crates in one click, with what each bundle costs at the auction house |cff888888/shy crates|r
+## Author: Shyce Cream
+## Version: 5.2.11
+## X-Date: 2026-11-25
+## IconTexture: Interface\AddOns\ShyCrates\Media\ShyCratesMarkColor
+## Dependencies: ShyCore
+## OptionalDeps: ShyAuction, ShyBags
+## Group: ShyCore
+## SavedVariables: ShyCratesDB
+
+ShyCrates.lua
+Data\Crates.lua
+Plan.lua
+Cast.lua
+Tooltip.lua
+List.lua
+Wares.lua
+Page.lua
+Window.lua
+Rail.lua
+Options.lua

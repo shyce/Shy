@@ -1,5 +1,5 @@
--- Settings: the console's switches, the cooldown manager's, the bars a character has and the way back to the
--- layout before it. The layouts and sizes are picked in the Screen room, a button away.
+-- Settings: the console's layout, size and bars, then its switches, the cooldown manager's, the bars a character has
+-- and the way back to the layout before it. The Screen room picks the same things on cards that draw each one.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -39,6 +39,28 @@ local function Step()
 	return asked or now
 end
 
+-- The console's choices, as the Screen room's cards and chips name them.
+local function Styles()
+	local items = {}
+	for _, row in ipairs(ns.Preview.STYLE_ROWS) do
+		for _, key in ipairs(row[2]) do items[#items + 1] = { value = key, text = ns.Preview.STYLES[key] } end
+	end
+	return items
+end
+local function Sizes()
+	local items = {}
+	for i, key in ipairs(ns.Console.SIZE_ORDER) do items[i] = { value = key, text = ns.Preview.NAMES[key] } end
+	return items
+end
+local GROW = { { value = "grow", text = "Grow with me" }, { value = "all", text = "Every bar now" } }
+local function Vessel(keys)
+	local items = {}
+	for i, key in ipairs(keys) do items[i] = { value = key, text = ns.Vessel.NAMES[key] } end
+	return items
+end
+-- (Preview.Wear puts the console on and draws again itself.)
+local function Picked() end
+
 local function SetStep(step)
 	if not L.Report(L.SetUp(nil, nil, { step = step, words = "Your bars are set. Reload to apply them." })) then return end
 	-- Picked by hand: the bars aren't offered again until the abilities need more than this.
@@ -57,16 +79,28 @@ T:Settings({
 		L.CooldownsInCombat()
 	end,
 
-	{ note = "The console isn't in use on this character, so most of this does nothing yet. Set it up on Screen.", alert = true,
+	{ note = "Not set up on this character yet. Pick a layout and it's set up, with a reload.", alert = true,
 		shown = function() return not Active() end },
-	{ label = "Layout and size", button = "Screen",
-		words = "console flanks open stack center healer tank minimal compact roomy grand grow with me set up put it back cooldown size tracked bars side left right small medium large",
-		says = function()
-			if not Active() then return "not set up" end
-			return ns.Preview.STYLES[L.Style()] .. ", " .. ns.Preview.NAMES[L.Size()]:lower()
-		end,
-		run = function() Shy.Hub.OpenAt("screen", "Console") end,
-		desc = "Pick the console's layout and size, bars that grow as you level, and how big your cooldowns are." },
+	{ label = "Layout", items = Styles, default = function() return ns.Console.STYLE end, get = function() return L.Style() end, set = function(v) ns.Preview.Wear("style", v) end,
+		apply = Picked, words = "console flanks open stack center healer tank minimal by role classic set up",
+		desc = "Where your bars, frames, chat and meter stand. A pick goes on at once, with a reload as you close." },
+	{ label = "Size", items = Sizes, default = function() return ns.Console.DEFAULT end, get = function() return L.Size() end, set = function(v) ns.Preview.Wear("size", v) end,
+		apply = Picked, enabled = Active, words = "compact roomy grand big small",
+		desc = "How much room the console takes along the bottom of your screen." },
+	{ label = "Bars", items = GROW, default = "all", get = function() return L.Grows() and "grow" or "all" end,
+		set = function(v) ns.Preview.Wear("grow", v == "grow") end, apply = Picked, enabled = Active,
+		words = "grow with me every bar level abilities",
+		desc = "Grow with me starts you with fewer bars and adds them as you learn abilities." },
+	{ label = "Cooldown size", items = Vessel(ns.Vessel.SIZES), enabled = Active, words = "cooldown manager icons bars small medium large",
+		default = function() return ns.Vessel.SizeOf(T.defaults.cockpitScale) end,
+		get = function() return ns.Vessel.SizeOf(L.Scale()) end,
+		set = function(v) T.db.cockpitScale = ns.Vessel.SCALES[v] end,
+		desc = "How big your cooldowns and tracked bars are, in the cooldown manager under your character." },
+	{ label = "Tracked bars", items = Vessel(ns.Vessel.SIDES), enabled = Active, words = "tracked buffs bars side left right",
+		default = function() return T.defaults.barsSide end,
+		get = function() return L.BarsSide() end,
+		set = function(v) T.db.barsSide = v end,
+		desc = "Which side of the cooldown manager your tracked bars hang off." },
 
 	{ section = "Console" },
 	{ key = "housing", label = "Bar housing", words = "gryphons frame action bars steel pet bar",

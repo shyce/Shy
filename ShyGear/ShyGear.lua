@@ -62,12 +62,9 @@ function ns.Focuses()
 	return ns.FOCUS[ns.Class()] or ANY_CLASS
 end
 
--- The talent build ShyQuest follows (the setup's pick), if it is loaded: { id, name, role, goal }.
+-- The talent build you play (ShyCore's: what your talents are): { id, name, role, goal }, or nil.
 function ns.Build()
-	local quest = Shy.addons.Quest
-	if not (quest and quest.Build) then return nil end
-	local ok, build = pcall(quest.Build, quest)
-	return ok and type(build) == "table" and build or nil
+	return Shy.Build and Shy.Build.Played() or nil
 end
 
 -- What gear is weighed for with no role picked: "build" (the talent build, when its weights are known),
@@ -187,7 +184,7 @@ function T:OnLogin()
 		if event ~= "PLAYER_EQUIPMENT_CHANGED" and event ~= "UNIT_STATS" then ns.Forget() end
 		ns.Refresh()
 	end)
-	Shy:On("SHY_BUILD", ns.Refresh)   -- ShyQuest's talent build changed
+	Shy:On("SHY_BUILD", ns.Refresh)   -- the talent build you play changed
 	ns.SetupTooltip()
 	ns.SetupRewards()
 	ns.SetupBags()

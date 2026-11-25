@@ -59,7 +59,11 @@
 --   Shy.Setup.Untouched()      Global has only ever been used by one character
 --
 --   Shy.Setup.GAME             game settings: { key, group, title, desc, want = { cvar = value },
---                              flags = { cvar = index }, on, off, can, owner, round } (see "Game settings");
+--                              flags = { cvar = index }, on, off, can, owner, holder, round } (see "Game settings").
+--                              owner: an addon with its own switch for it (the row goes while it's loaded), or a
+--                              function true while something holds it (the row stays, dimmed, and holder says what)
+--   Shy.Setup.Listed(def)      whether its row stands: the client has it and no addon's own switch stands in
+--   Shy.Setup.Owned(def)       whether something holds it right now
 --                              one that isn't a CVar has is(), take(kept), back(kept) instead, and may
 --                              have reload (a sentence: it shows after a reload) and fail (why it couldn't)
 --   Shy.Setup.Offered()        the ones available on this client and nobody else's to switch right now
@@ -536,18 +540,19 @@ S.GAME = {
 			local dock = Shy.addons.Dock
 			return dock ~= nil and dock.HoldsDisplay ~= nil and dock:HoldsDisplay() == true
 		end,
+		holder = "ShyDock's layout shows your health and power on your unit frame, so it keeps this off.",
 		desc = "Your health and power just under your character, where you're looking in a fight. ShyDock's layouts by role show them on your unit frame instead and keep this off. (Options > Combat)",
 		want = { nameplateShowSelf = "1" } },
 	{ key = "enemyPlates", group = "Nameplates", title = "Enemy nameplates", on = true, round = 2,
-		owner = Tweaks("npcNames"),
+		owner = Tweaks("npcNames"), holder = "ShyTweaks' Restyle NPC names sets this while it's on.",
 		desc = "Every enemy near you gets a nameplate with its health, casts and your debuffs. ShyTweaks' Restyle NPC names controls this while it's on. (Options > Nameplates)",
 		want = { nameplateShowEnemies = "1" } },
 	{ key = "friendPlates", group = "Nameplates", title = "Friendly nameplates", on = true, round = 2,
-		owner = Tweaks("classNames"),
+		owner = Tweaks("classNames"), holder = "ShyTweaks' Restyle player names sets this while it's on.",
 		desc = "Players on your side get a nameplate, so a group or a fight is easy to read. ShyTweaks' Restyle player names controls this while it's on. (Options > Nameplates)",
 		want = { nameplateShowFriendlyPlayers = "1" } },
 	{ key = "alwaysPlates", group = "Nameplates", title = "Nameplates out of combat", on = true, round = 2,
-		owner = Tweaks("npcNames"),
+		owner = Tweaks("npcNames"), holder = "ShyTweaks' Restyle NPC names sets this while it's on.",
 		desc = "Nameplates show all the time, not only once a fight starts. ShyTweaks' Restyle NPC names controls this while it's on. (Options > Nameplates)",
 		want = { nameplateShowAll = "1" } },
 	{ key = "plateAggro", group = "Nameplates", title = "Threat colors on nameplates", on = true, round = 9,
@@ -556,13 +561,14 @@ S.GAME = {
 			local plates = Shy.addons.Plates
 			return plates ~= nil and plates.IsOn ~= nil and plates:IsOn() == true
 		end,
+		holder = "ShyPlates draws your nameplates and colors them by threat itself.",
 		desc = "An enemy's health bar changes color when you lose threat as a tank, or pull threat as anyone else. (Options > Nameplates > Aggro Display > Health Bar Color)",
 		flags = { nameplateThreatDisplay = Enum.NamePlateThreatDisplay.HealthBarColor } },
 	{ key = "stackPlates", group = "Nameplates", title = "Stack enemy nameplates", on = true, round = 2,
 		desc = "Enemy nameplates stack instead of overlapping, so each stays readable. (Options > Nameplates)",
 		flags = { nameplateStackingTypes = Enum.NamePlateStackType.Enemy } },
 	{ key = "npcPlates", group = "Nameplates", title = "Friendly NPC nameplates", on = true, round = 11,
-		owner = Tweaks("npcNames"),
+		owner = Tweaks("npcNames"), holder = "ShyTweaks' Restyle NPC names sets this while it's on.",
 		desc = "Guards, vendors and quest givers get a nameplate with their name. ShyQuest marks the one for your next step there. ShyTweaks' Restyle NPC names controls this while it's on. (Options > Nameplates)",
 		want = { nameplateShowFriendlyNpcs = "1" } },
 	{ key = "minionPlates", group = "Nameplates", title = "Enemy pet nameplates", round = 2,
@@ -591,12 +597,34 @@ S.GAME = {
 	{ key = "partyBubbles", group = "Chat", title = "Party chat bubbles", on = true, round = 5,
 		desc = "Party chat shows in bubbles over their heads, like /say does. (Options > Interface > Chat Bubbles > Party Chat)",
 		want = { chatBubbles = "1", chatBubblesParty = "1" } },
+	{ key = "interactKey", group = "Controls", title = "Interact key", on = true, round = 12,
+		desc = "Your Interact key talks to, loots or gathers whatever is closest in front of you. Bind it in Key Bindings. (Options > Controls > Enable Interact Key)",
+		want = { softTargetInteract = tostring(Enum.SoftTargetEnableFlags.Any) },
+		off = { softTargetInteract = tostring(Enum.SoftTargetEnableFlags.Gamepad) } },
+	{ key = "cameraThrough", group = "Camera", title = "Camera past small things", on = true, round = 12,
+		desc = "The camera slides past trees, posts and lamps instead of zooming in on you.",
+		want = { cameraIndirectVisibility = "1", cameraIndirectOffset = "10" } },
+	{ key = "farPlates", group = "Nameplates", title = "Nameplates further out", on = true, round = 12,
+		desc = "Nameplates show for enemies further away, so you see a pull coming.",
+		want = { nameplateMaxDistance = "41" } },
+	{ key = "sharpen", group = "Graphics", title = "Sharper picture", on = true, round = 12,
+		desc = "The game sharpens the picture at full render scale, so edges and text look crisp.",
+		want = { ResampleAlwaysSharpen = "1" } },
+	{ key = "grass", group = "Graphics", title = "Fuller grass", round = 12,
+		desc = "More grass, drawn further out. It costs some frame rate. Herbs and quest items hide in it a bit more.",
+		want = { groundEffectDensity = "128", groundEffectDist = "320" } },
+	{ key = "weather", group = "Graphics", title = "Heavier weather", round = 12,
+		desc = "Rain and snow fall thicker when the zone has them.",
+		want = { weatherDensity = "3" } },
+	{ key = "fastLoading", group = "Fewer interruptions", title = "Shorter loading screens", round = 12,
+		desc = "Loading screens end sooner. Far-off parts of the world fill in as you play.",
+		want = { worldPreloadNonCritical = "0" } },
 }
 -- Columns of groups: three where the list has the width (the setup window, the /shy window), two where it is
 -- narrower. And the list's line spacing.
 local COLUMNS = {
-	[3] = { { "Camera", "Controls", "Loot", "Chat" }, { "On screen", "Fewer interruptions", "Sound" }, { "Features", "Nameplates" } },
-	[2] = { { "Camera", "Controls", "Loot", "Chat", "Features" }, { "On screen", "Fewer interruptions", "Sound", "Nameplates" } },
+	[3] = { { "Camera", "Controls", "Loot", "Chat" }, { "On screen", "Fewer interruptions", "Sound" }, { "Features", "Nameplates", "Graphics" } },
+	[2] = { { "Camera", "Controls", "Loot", "Chat", "Features" }, { "On screen", "Fewer interruptions", "Sound", "Nameplates", "Graphics" } },
 }
 local WIDE = 700   -- a list at least this wide has three columns
 
@@ -645,11 +673,37 @@ function S.Offered()
 	return offered
 end
 
--- The list's rows: what is offered, and what something switches for now (shown dimmed).
+-- A row of the list: offered, or held by something else (shown dimmed, saying what holds it).
+function S.Listed(def)
+	return S.Can(def) and (type(def.owner) == "function" or not Owned(def))
+end
+
+function S.Owned(def)
+	return Owned(def) == true
+end
+
+-- One switch of a game setting, wherever it is switched (setup, the Game room, the Settings list): not in a fight
+-- (the game refuses most then), read back, said when the game wouldn't take it, a reload offered where one is needed.
+-- True when it took.
+function S.Switch(def, on)
+	if InCombatLockdown() then
+		Shy.core:Print("game settings can't be changed in a fight.")
+		return false
+	end
+	if on then S.Take(def) else S.Return(def) end
+	if S.Is(def) ~= on then
+		Shy.core:Print("\"" .. def.title .. "\" " .. (def.fail or "is kept by the game. Addons can't change it."))
+		return false
+	end
+	if def.reload then Shy.Reload(def.reload) end
+	return true
+end
+
+
 local function Rows()
 	local rows = {}
 	for _, def in ipairs(S.GAME) do
-		if S.Can(def) and (type(def.owner) == "function" or not Owned(def)) then rows[#rows + 1] = def end
+		if S.Listed(def) then rows[#rows + 1] = def end
 	end
 	return rows
 end
@@ -1349,17 +1403,7 @@ local function GameRow(f, def, plan, enabled, changed)
 	else
 		get = function() return S.Is(def) end
 		set = function(v)
-			-- Many CVars can't be set in combat.
-			if InCombatLockdown() then
-				core:Print("game settings can't be changed in combat.")
-				return
-			end
-			if v then S.Take(def) else S.Return(def) end
-			if S.Is(def) ~= v then
-				core:Print("\"" .. def.title .. "\" " .. (def.fail or "can only be changed in the game's Options window."))
-			elseif def.reload then
-				Shy.Reload(def.reload)
-			end
+			S.Switch(def, v)
 			changed()
 		end
 	end

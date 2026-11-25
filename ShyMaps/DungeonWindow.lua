@@ -552,7 +552,6 @@ local function FillBar(width, book)
 	if Wide(1) > room - search then search = math.max(L.searchLeast, room - Wide(1)) end
 	local first = (#chain > 1 and Wide(1) > room - search) and 2 or 1
 	own.search:SetWidth(search)
-	own.search.box:SetWidth(search)
 	own.search:ClearAllPoints()
 	own.search:SetPoint("RIGHT", bar, "RIGHT", -L.pad, 0)
 	for _, crumb in ipairs({ own.root, own.crumbs[1], own.crumbs[2] }) do crumb:Hide() end

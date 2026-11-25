@@ -8,8 +8,10 @@
 --   :Breakdown(guid)     each spell's own share, oldest first, as { school, coming, name }, and the total.
 --                        The list is one table, filled again by the next call: read it, don't keep it.
 --   :BreakdownOn(unit)   the same by unit token
+--   :HealSize(spell)     what one cast of that heal (a spell ID, any rank) heals on a friend: the tables' size
+--                        with your healing power and talents; nil for a spell that is no heal on one friend
 --   :Report()            what is being followed now, as text
--- Bus: SHY_HOTS (guid) when a friend's coming healing changes.
+-- Bus: SHY_HOTS (guid) when a friend's coming healing changes; SHY_HEAL_SIZES when a heal's size may have.
 -- The look is each addon's own: ShyFrames draws it past the end of the health someone has.
 
 local ADDON, ns = ...
@@ -25,6 +27,8 @@ local T = Shy:NewAddon(ADDON, {
 		shares = {},    -- learned: how much more (or less) a spell's tick is than its own numbers say, by spell
 		family = {},    -- the same by the spell's family, for a rank not seen yet
 		spans = {},     -- learned: the number of ticks, by spell, where one runs longer than its own numbers say
+		heals = {},     -- learned: how much more (or less) a heal heals than its own numbers say, by spell
+		healFamily = {},   -- the same by the spell's family
 	},
 })
 ns.T = T
@@ -35,6 +39,11 @@ end
 
 function T:OnLogin()
 	ns.Track.Start()
+	ns.Sizes.Start()
+end
+
+function T:HealSize(spell)
+	return ns.Sizes.Size(spell)
 end
 
 function T:Coming(guid)
@@ -65,6 +74,9 @@ function T:Forget()
 	wipe(self.db.shares)
 	wipe(self.db.family)
 	wipe(self.db.spans)
+	wipe(self.db.heals)
+	wipe(self.db.healFamily)
+	Shy:Fire("SHY_HEAL_SIZES")
 end
 
 function T:Apply()
@@ -82,8 +94,8 @@ T:Command("on", "track your HoTs", function() Switch(true) end)
 T:Command("off", "stop tracking your HoTs", function() Switch(false) end)
 -- For finding faults: what is tracked, to copy. Not listed.
 T:Command("report", nil, function() Shy.UI.ShowCopyBox("ShyHots", T:Report()) end)
-T:Command("forget", "forget the tick sizes learned so far", function()
+T:Command("forget", "forget the heal and tick sizes learned so far", function()
 	T:Forget()
 	Shy.Settings.Refresh()
-	T:Print("learned tick sizes forgotten.")
+	T:Print("learned sizes forgotten.")
 end)

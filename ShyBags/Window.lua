@@ -29,7 +29,7 @@ local FOOT, SEAM = 17, 13                 -- footer height, seam width
 local SEAT, SEAT_TOP, SEAT_STEP = 22, 36, 27
 local GRAB = 28                           -- of the title strip kept bare between the name and the search box
 local RAIL_BUTTON = 20                   -- the rail's buttons over the menu (sort again, the bag row's switch)
-local RAIL = 2 * (RAIL_BUTTON + 4)        -- the room they take above the menu's rule
+local RAIL_STEP = RAIL_BUTTON + 4        -- one more above the last
 local BOX_W, BOX_H = SPINE + 10 * STEP - Tile.GAP + RIGHT, TOP + 5 * STEP + 24
 local LOW = 3   -- free slots at which the count turns gold
 local WING_EDGE = 8                       -- the wing window's margin round its content
@@ -37,6 +37,7 @@ local WING_MIN = { 2 * 8 + 220, 180 }     -- the least you can size the wing to
 
 local box, win
 local P = {}                       -- the window's parts, by name
+local railed = {}                  -- other addons' rail buttons (T:RegisterRailButton), in their order
 local left = SPINE
 local view = { guid = nil, wing = nil }
 local query, test = "", nil
@@ -188,6 +189,12 @@ local function GoldTip(door)
 	end
 	local sections = { { title = "On this realm", rows = rows } }
 	if #owed > 0 then sections[2] = { title = "Waiting in the mail", rows = owed } end
+	-- Your currencies, all your characters' together.
+	local held = {}
+	for _, cur in ipairs(ns.Views.Currencies()) do
+		held[#held + 1] = { text = cur.name, icon = cur.icon, right = BreakUpLargeNumbers(cur.total), rightColor = C.text }
+	end
+	if #held > 0 then sections[#sections + 1] = { title = "Currencies", rows = held } end
 	UI.Tip(door, "Gold", nil, { side = "TOP", note = Coins(gold.hand), sections = sections,
 		hints = { { "left", "Open beside the bags" } } })
 end
@@ -340,10 +347,17 @@ local function Foot(isMe, c)
 	local coins = c.money and Coins(c.money) or ""
 	-- Tight: the largest coin alone (25g), never a run of coins under the slots.
 	local tight = (c.money and c.money >= 10000) and Coins(math.floor(c.money / 10000) * 10000) or coins
+	-- Its currencies (Merchant's Favor) on the gold's door before the gold: those it shows on its backpack, else its
+	-- largest two.
+	local purse = {}
+	for _, cur in ipairs(ns.Views.Carried(c, 2)) do
+		purse[#purse + 1] = ("|T%s:11:11:0:0|t %s"):format(tostring(cur.icon or ""), BreakUpLargeNumbers(cur.n))
+	end
+	purse = #purse > 0 and (table.concat(purse, "  ") .. "   ") or nil
 
 	-- The longest wording that fits: long count and doors, then a short count, then short doors, then doors as
 	-- glyphs alone and the gold as its largest coin. Even that too wide, the window widens to it (Layout).
-	local function Try(longCount, longDoors, glyphs, tightGold)
+	local function Try(longCount, longDoors, glyphs, tightGold, currencies)
 		local count, of = "", ""
 		if slots == 0 then
 			count = "no bags saved"
@@ -365,10 +379,12 @@ local function Foot(isMe, c)
 				used = used + door:GetWidth()
 			end
 		end
-		doors.gold:Say(tightGold and tight or coins)
+		doors.gold:Say((currencies and purse or "") .. (tightGold and tight or coins))
 		return used + doors.gold:GetWidth() <= width, used + doors.gold:GetWidth()
 	end
-	local fits = Try(true, true) or Try(false, true) or Try(false, false) or Try(false, false, true)
+	-- The currencies stay while anything else can give way; they go before the gold is cut to its largest coin.
+	local fits = Try(true, true, false, false, true) or Try(false, true, false, false, true)
+		or Try(false, false, false, false, true) or Try(false, false, true, false, true) or Try(false, false, true)
 	if not fits then
 		local ok, need = Try(false, false, true, true)
 		-- (Asked once: the window is laid out again that much wider, and the foot said again.)
@@ -548,7 +564,7 @@ end
 -- The rail: as many characters as fit, the rest behind a "+N" seat, and the menu button at the bottom.
 local function Spine(looked, rows)
 	local list = Store.List()
-	local fit = math.max(2, math.floor((TOP + rows * STEP - 9 - SEAT_TOP + 5 - RAIL) / SEAT_STEP))
+	local fit = math.max(2, math.floor((TOP + rows * STEP - 9 - SEAT_TOP + 5 - (2 + (P.railedShown or 0)) * RAIL_STEP) / SEAT_STEP))
 	local shown, rest = {}, {}
 	if #list <= fit then
 		shown = list
@@ -695,6 +711,41 @@ local function Rail(mine)
 	end
 	P.bandToggle:SetShown(P.band ~= nil and mine == true)
 	if P.band then P.bandToggle:Lit(BandOpen()) end
+	-- Other addons' buttons, above the bag row's switch: each asked whether it shows, is lit, glimmers, and set in
+	-- its place as it is shown (a button made after the window was laid out would stand at the rail's foot).
+	local shown = 0
+	for _, def in ipairs(railed) do
+		local on = mine == true and (def.shown == nil or def.shown() == true)
+		if on and not def.button and P.RailButton then
+			local b = P.RailButton(nil, 0)
+			b.railBottom = nil
+			if def.icon then Shy.Theme.Icon(b.glyph, def.icon, 16) end
+			b:SetScript("OnClick", function(self)
+				UI.TipHide(self, true)
+				def.click()
+			end)
+			if def.tip then b:HookScript("OnEnter", function(self) def.tip(self) end) end
+			def.button = b
+		end
+		local b = def.button
+		if b then
+			b:SetShown(on)
+			if on then
+				shown = shown + 1
+				local bottom = 7 + FOOT + 4 + 1 + 4 + (shown + 1) * RAIL_STEP
+				if b.railBottom ~= bottom then
+					b.railBottom = bottom
+					b:ClearAllPoints()
+					b:SetPoint("BOTTOMLEFT", UI.Body(win), "BOTTOMLEFT", 4, bottom)
+				end
+				b:Lit(def.lit and def.lit() or false)
+				UI.Glimmer(b, def.glimmer and def.glimmer() or false)
+			else
+				UI.Glimmer(b, false)
+			end
+		end
+	end
+	P.railedShown = shown
 end
 
 -- The wing is a window of its own, docked to the bags. Beside them it is as tall as they are, its rows level with
@@ -800,6 +851,13 @@ local function Layout(columns, rows, wingWidth)
 	for _, b in ipairs({ P.sortRail, P.bandToggle }) do
 		b:ClearAllPoints()
 		b:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 4, b.railBottom)
+	end
+	for _, def in ipairs(railed) do
+		local b = def.button
+		if b and b:IsShown() then
+			b:ClearAllPoints()
+			b:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 4, b.railBottom)
+		end
 	end
 	for index, seat in pairs(seats) do PlaceSeat(seat, index) end
 
@@ -944,6 +1002,12 @@ function Window.Refresh()
 	if not (win and box:IsShown()) then return end
 	local c, guid, isMe = Who()
 	if not c then return end
+	-- (Other addons' rail buttons counted first: the characters' seats stand clear of them.)
+	local railing = 0
+	for _, def in ipairs(railed) do
+		if isMe and (def.shown == nil or def.shown() == true) then railing = railing + 1 end
+	end
+	P.railedShown = railing
 	-- The bank window follows the character shown; it is placed first, so the search knows whether it is up.
 	if ns.BankWindow then ns.BankWindow.Refresh() end
 	if ns.AuctionWindow then ns.AuctionWindow.Refresh() end
@@ -1381,6 +1445,15 @@ local function Build()
 		window = true,
 		hang = true,
 	})
+	-- Your bags closed: the rail's other buttons are told (what they opened may close with them).
+	box:HookScript("OnHide", function()
+		for _, def in ipairs(railed) do
+			if def.hidden then
+				local ok, err = pcall(def.hidden)
+				if not ok then geterrorhandler()(err) end
+			end
+		end
+	end)
 	win = CreateFrame("Frame", "ShyBagsWindow", box)
 	win:SetPoint("TOPLEFT", box, "TOPLEFT", 0, 0)
 	win:SetSize(BOX_W, BOX_H)
@@ -1497,7 +1570,7 @@ local function Build()
 		b:SetPoint("BOTTOMLEFT", UI.Body(win), "BOTTOMLEFT", 4, bottom)
 		b.railBottom = bottom
 		b.glyph = b:CreateTexture(nil, "OVERLAY")
-		b.glyph:SetTexture(MEDIA .. glyph)
+		if glyph then b.glyph:SetTexture(MEDIA .. glyph) end
 		b.glyph:SetSize(16, 16)
 		b.glyph:SetPoint("CENTER", 0, 0)
 		UI.KeyPress(b, { fill = C.bg, glyphs = { b.glyph }, sink = { b.glyph } })
@@ -1514,6 +1587,7 @@ local function Build()
 		b:Hide()
 		return b
 	end
+	P.RailButton = RailButton
 	P.sortRail = RailButton("RailSort", 7 + FOOT + 4 + 1 + 4)
 	P.sortRail:SetScript("OnClick", function(self)
 		UI.TipHide(self, true)
@@ -1525,7 +1599,7 @@ local function Build()
 		UI.Tip(self, words.name, changed and "Your bags changed since they were sorted." or "Nothing in your bags moves.",
 			{ side = "TOP", hints = { { "left", (inUse and not changed) and "Sort again" or "Sort" } } })
 	end)
-	P.bandToggle = RailButton("RailBags", 7 + FOOT + 4 + 1 + 4 + RAIL_BUTTON + 4)
+	P.bandToggle = RailButton("RailBags", 7 + FOOT + 4 + 1 + 4 + RAIL_STEP)
 	P.bandToggle:SetScript("OnClick", function(self)
 		UI.TipHide(self, true)
 		if not P.band then return end
@@ -1828,6 +1902,37 @@ end)
 
 function T:OpenWindow()
 	Takeover.Open()
+end
+
+-- For another addon: a button of its own on the rail, above the bag row's switch, while your own bags are shown.
+--   T:RegisterRailButton({ id, order, icon (a mark or texture), click = function() end,
+--       shown = function() return bool end, lit = function() return bool end,
+--       glimmer = function() return bool end,   -- it has something for you: UI.Glimmer
+--       tip = function(button) end,            -- its hover
+--       hidden = function() end })             -- your bags closed (what it opened may close with them)
+-- They are asked again at every change of the bags, and on T:RefreshRail(): keep them cheap.
+function T:RegisterRailButton(def)
+	assert(type(def) == "table" and def.id and def.click, "a rail button needs an id and a click")
+	for index, other in ipairs(railed) do
+		if other.id == def.id then
+			table.remove(railed, index)
+			break
+		end
+	end
+	railed[#railed + 1] = def
+	table.sort(railed, function(a, b)
+		if (a.order or 99) ~= (b.order or 99) then return (a.order or 99) < (b.order or 99) end
+		return tostring(a.id) < tostring(b.id)
+	end)
+	if win then Window.Refresh() end
+end
+
+-- A rail button's state changed outside the bags (a price, a purchase): asked again while the window is up.
+function T:RefreshRail()
+	if not (box and box:IsShown()) then return end
+	local was = P.railedShown
+	Rail(P.mine)
+	if P.railedShown ~= was then Window.Refresh() end
 end
 
 -- For another addon: test(place) true while your "bank" or your "mail" holds something a quest needs with you.

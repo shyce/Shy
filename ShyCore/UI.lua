@@ -45,7 +45,9 @@
 -- UI.Money, UI.PlainText
 -- Hover text: UI.Tip, UI.TipHide, UI.Help, UI.Lines (Hover.lua)
 -- Also: UI.Button, UI.Press, UI.Menu, UI.ContextMenu, UI.TellMenu, UI.Tabs, UI.Rail, UI.GlyphArt, UI.ScrollArea, UI.PageHeader, UI.Spinner,
--- UI.ShowCopyBox, UI.OpenColorPicker, UI.Themed, Shy.Reload. Each is documented where it is defined.
+-- UI.ShowCopyBox, UI.OpenColorPicker, UI.Themed, UI.SecureOver, UI.Glimmer, Shy.Reload. Each is documented where it is defined.
+-- UI.Showing(region, on): shown or not, told only when that changes (for what is asked at every frame: asking a
+-- region whether it shows is itself a call into the game). Whatever shows or hides it goes through here.
 
 local UI = {}
 Shy.UI = UI
@@ -62,6 +64,15 @@ UI.colors = Theme.ui
 local C = UI.colors
 
 UI.Paint, UI.Tint, UI.Ink = Theme.Paint, Theme.Tint, Theme.Ink
+
+-- (What it was last told is kept on it: shownAs.)
+function UI.Showing(region, on)
+	on = on and true or false
+	if region.shownAs ~= on then
+		region.shownAs = on
+		region:SetShown(on)
+	end
+end
 
 UI.EDGE = Shy.MEDIA .. "PanelEdge"     -- a panel's beveled edge: a nine slice with an empty middle
 UI.BRACKET = Shy.MEDIA .. "Bracket"    -- top left corner bracket; mirrored for the other three
@@ -718,6 +729,47 @@ function UI.LookStill(t)
 	if t.shyBreath then t.shyBreath:Stop() end
 	if t.shyTwinkle then t.shyTwinkle:Stop() end
 	if t.shyDrift then t.shyDrift:Stop() end
+end
+
+-- A small button that has something for you: a glow in the accent breathing under it and a sheen crossing it now and
+-- then, both run by the game (UI.LookBreath, UI.LookDrift); nothing at all while it is off or hidden.
+--   UI.Glimmer(button, on)
+local GLIMMER = { reach = 1.9, breath = 2.4, low = 0.35, cross = 0.8, rest = 4.5 }
+function UI.Glimmer(button, on)
+	on = on and true or false
+	if button.shyGlimmer == on then return end
+	button.shyGlimmer = on
+	local g = button.shyGlimmerParts
+	if on and not g then
+		g = {}
+		local w, h = button:GetWidth(), button:GetHeight()
+		g.glow = button:CreateTexture(nil, "BACKGROUND", nil, 7)
+		g.glow:SetTexture(Shy.MEDIA .. "Glow")
+		g.glow:SetBlendMode("ADD")
+		g.glow:SetPoint("CENTER")
+		g.glow:SetSize(w * GLIMMER.reach, h * GLIMMER.reach)
+		-- (The sheen crosses inside the button only: a frame of its own clips it.)
+		g.clip = CreateFrame("Frame", nil, button)
+		g.clip:SetAllPoints()
+		g.clip:SetClipsChildren(true)
+		g.sheen = g.clip:CreateTexture(nil, "OVERLAY")
+		g.sheen:SetTexture(Shy.MEDIA .. "Sheen")
+		g.sheen:SetBlendMode("ADD")
+		g.sheen:SetSize(h, h)
+		g.sheen:SetPoint("CENTER", button, "LEFT", -h / 2, 0)
+		button.shyGlimmerParts = g
+	end
+	if not g then return end
+	g.glow:SetShown(on)
+	g.clip:SetShown(on)
+	if on then
+		Theme.Tint(g.glow, Theme.Accent)
+		UI.LookBreath(g.glow, GLIMMER.breath, GLIMMER.low)
+		UI.LookDrift(g.sheen, button:GetWidth() + g.sheen:GetWidth(), 0, GLIMMER.cross, GLIMMER.rest)
+	else
+		UI.LookStill(g.glow)
+		UI.LookStill(g.sheen)
+	end
 end
 
 -- The accent a housing (or a header's owner) wears: a sample's own (UI.Panel's opts.accent: a preset's card shows
@@ -3506,22 +3558,32 @@ function UI.Beside(window, piece, opts)
 	return { edge .. "RIGHT", piece, edge .. "LEFT", -((piece:GetLeft() or 0) - (window:GetLeft() or 0)) * unit - 6, y }
 end
 
--- The game's tooltip for a piece of a window with a picture (a row, a card, a slot): owned by the piece, its bottom
--- left corner on the picture's top right one, the same place in every window. With no room for it past there on
--- the screen (GAME_TIP_ROOM), it stands off the top left corner instead: the game would push it back over the piece.
+-- The game's tooltip for a piece of a window with a picture (a row, a card, a slot): owned by the piece, standing
+-- beside it, its top level with the piece's and growing down, the same place in every window. Beside, never over or
+-- above: however tall it grows, the screen only slides it along the piece's side, and what you point at stays in
+-- sight. With no room past the piece's right on the screen (GAME_TIP_ROOM), it stands at its left.
 --   UI.GameTipAt(row, row.icon):SetItemByID(id)
--- icon: the picture, where it is not the whole piece. A row whose words begin at its top (a line of a close
--- list) passes none: the tooltip stands off the row's own corner, clear of it both ways.
-local GAME_TIP_ROOM = 300
+-- icon: the picture. Inside the piece (a row's), the tooltip stands clear of the whole piece; elsewhere (a bag slot
+-- for a row of a list beside the bags), beside the picture alone.
+local GAME_TIP_ROOM, GAME_TIP_GAP = 300, 4
+-- Whether a picture is part of a piece: the piece's own, or of something it holds.
+local function Within(inner, outer)
+	local at = inner
+	while at do
+		if at == outer then return true end
+		at = at:GetParent()
+	end
+	return false
+end
 function UI.GameTipAt(piece, icon)
-	local at = icon or piece
+	local beside = (icon and not Within(icon, piece)) and icon or piece
 	GameTooltip:SetOwner(piece, "ANCHOR_NONE")
 	GameTooltip:ClearAllPoints()
-	local right, scale = at:GetRight(), at:GetEffectiveScale()
+	local right, scale = beside:GetRight(), beside:GetEffectiveScale()
 	if right and scale and (UIParent:GetWidth() or 0) - right * scale / UIParent:GetEffectiveScale() < GAME_TIP_ROOM then
-		GameTooltip:SetPoint("BOTTOMRIGHT", at, "TOPLEFT", 0, 0)
+		GameTooltip:SetPoint("TOPRIGHT", beside, "TOPLEFT", -GAME_TIP_GAP, 0)
 	else
-		GameTooltip:SetPoint("BOTTOMLEFT", at, "TOPRIGHT", 0, 0)
+		GameTooltip:SetPoint("TOPLEFT", beside, "TOPRIGHT", GAME_TIP_GAP, 0)
 	end
 	return GameTooltip
 end
@@ -6093,117 +6155,167 @@ local function MenuPlace(opts)
 	end
 end
 
--- Secure rows: protected actions (raid markers, pings) are blocked from addon code even on a hardware
--- click, but work from a SecureActionButton. An item may carry that button's attributes:
+-- Secure overlays: protected actions (raid markers, pings, an item used on another) are blocked from addon
+-- code even on a hardware click, but work from the game's SecureActionButton. A pool of those lies over our
+-- own widgets to take the click:
+--   local over = UI.SecureOver(prefix, opts)   -- prefix names the buttons (prefix .. n)
+--   over:Lay(widget, attrs, area)   a button over widget, set to attrs (the button's attributes; another table
+--                                   sets them afresh). area: a frame the widget must lie wholly inside (a list
+--                                   that scrolls), or nil. The button, or nil (in a fight, out of the area)
+--   over:Done()                     after a round of Lays: puts away the buttons not laid in it
+--   over:Clear()                    puts them all away
+--   over:Shown()                    the buttons on the screen
+-- opts: strata, level (where they stand; else just over the widget), click(widget, button, b) once a click
+-- is done (sounds and what follows it), again() when a fight ends (lay them again).
+--
+-- The buttons are children of UIParent placed by coordinates, never parented or anchored to the widget:
+-- anything a protected frame is anchored to becomes protected, and our windows must stay free to move and
+-- hide in a fight. They are made, placed and hidden only out of combat, and hidden at PLAYER_REGEN_DISABLED
+-- (which fires just before lockdown); the widgets under them then do nothing until the fight is over.
+do
+	local pools = {}
+	local Over = {}
+	Over.__index = Over
+
+	local function Away(b)
+		b:Hide()
+		b.widget, b.attrs, b.at = nil, nil, nil
+	end
+
+	local function Button(pool, index)
+		local b = pool.buttons[index]
+		if b then return b end
+		b = CreateFrame("Button", pool.prefix .. index, UIParent, "SecureActionButtonTemplate")
+		b:RegisterForClicks("AnyUp", "AnyDown")
+		b:Hide()
+		b.set = {}
+		-- Hover and press go to the widget under it, for its look.
+		local function Tell(script)
+			return function(self)
+				local widget = self.widget
+				local fn = widget and widget:GetScript(script)
+				if fn then fn(widget) end
+			end
+		end
+		b:SetScript("OnEnter", Tell("OnEnter"))
+		b:SetScript("OnLeave", Tell("OnLeave"))
+		b:HookScript("OnMouseDown", Tell("OnMouseDown"))
+		b:HookScript("OnMouseUp", Tell("OnMouseUp"))
+		b:SetScript("PostClick", function(self, button, down)
+			if down or not pool.opts.click then return end
+			pool.opts.click(self.widget, button, self)
+		end)
+		pool.buttons[index] = b
+		return b
+	end
+
+	function Over:Lay(widget, attrs, area)
+		if InCombatLockdown() then return end
+		local left, foot, width, height = widget:GetLeft(), widget:GetBottom(), widget:GetWidth(), widget:GetHeight()
+		if not (left and foot) then return end
+		if area then
+			local top, bottom = area:GetTop(), area:GetBottom()
+			-- Not over a widget scrolled out of view.
+			if not (top and bottom and foot >= bottom - 1 and foot + height <= top + 1) then return end
+		end
+		self.used = self.used + 1
+		local b = Button(self, self.used)
+		if b.attrs ~= attrs then
+			for key in pairs(b.set) do b:SetAttribute(key, nil) end
+			wipe(b.set)
+			for key, value in pairs(attrs) do
+				b:SetAttribute(key, value)
+				b.set[key] = true
+			end
+			b.attrs = attrs
+		end
+		b.widget = widget
+		local scale = widget:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		local strata = self.opts.strata or widget:GetFrameStrata()
+		local level = self.opts.level or (widget:GetFrameLevel() + 10)
+		local at = ("%.1f %.1f %.1f %.1f %s %d"):format(left * scale, foot * scale, width * scale, height * scale, strata, level)
+		if b.at ~= at then
+			b.at = at
+			b:SetFrameStrata(strata)
+			b:SetFrameLevel(level)
+			b:ClearAllPoints()
+			b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * scale, foot * scale)
+			b:SetSize(width * scale, height * scale)
+		end
+		b:Show()
+		return b
+	end
+
+	function Over:Done()
+		if InCombatLockdown() then return end
+		for index = self.used + 1, #self.buttons do Away(self.buttons[index]) end
+		self.used = 0
+	end
+
+	function Over:Clear()
+		self.used = 0
+		self:Done()
+	end
+
+	function Over:Shown()
+		local shown = {}
+		for _, b in ipairs(self.buttons) do
+			if b:IsShown() then shown[#shown + 1] = b end
+		end
+		return shown
+	end
+
+	function UI.SecureOver(prefix, opts)
+		local pool = setmetatable({ prefix = prefix, opts = opts or {}, buttons = {}, used = 0 }, Over)
+		pools[#pools + 1] = pool
+		return pool
+	end
+
+	-- Put away while it is still allowed; laid again once the fight is over.
+	local watch = CreateFrame("Frame")
+	watch:RegisterEvent("PLAYER_REGEN_DISABLED")
+	watch:RegisterEvent("PLAYER_REGEN_ENABLED")
+	watch:SetScript("OnEvent", function(_, event)
+		for _, pool in ipairs(pools) do
+			if event == "PLAYER_REGEN_DISABLED" then
+				pool.used = 0
+				for _, b in ipairs(pool.buttons) do Away(b) end
+			elseif pool.opts.again then
+				pool.opts.again()
+			end
+		end
+	end)
+end
+
+-- Secure rows: a menu item may carry the attributes of a secure button laid over its row:
 --   secure = { type = "raidtarget", action = "set", marker = 8, unit = "target" }
 --   secure = { type = "macro", macrotext = "/ping [@target] 1" }
--- and a secure button is laid over its row to take the click.
---
--- The buttons are children of UIParent positioned by absolute coordinates, never parented or anchored
--- to the menu: anything a protected frame is anchored to becomes protected, and the menu must stay
--- free to move and hide in combat. They are created, placed and hidden only out of combat, and are
--- hidden at PLAYER_REGEN_DISABLED (which fires just before lockdown); such rows then do nothing
--- until the menu is reopened after combat.
-local secureRows = {}
-
-local function SecureRow(index)
-	local b = secureRows[index]
-	if b then return b end
-	b = CreateFrame("Button", "ShyMenuSecureRow" .. index, UIParent, "SecureActionButtonTemplate")
-	b:SetFrameStrata("FULLSCREEN_DIALOG")
-	b:SetFrameLevel(200)   -- above the menu's rows
-	b:RegisterForClicks("AnyUp", "AnyDown")
-	b:Hide()
-	b.set = {}
-	-- Forward hover and press to the row under it, for its look.
-	local function Tell(script)
-		return function(self)
-			local row = self.row
-			local fn = row and row:GetScript(script)
-			if fn then fn(row) end
-		end
-	end
-	b:SetScript("OnEnter", Tell("OnEnter"))
-	b:SetScript("OnLeave", Tell("OnLeave"))
-	b:HookScript("OnMouseDown", Tell("OnMouseDown"))
-	b:HookScript("OnMouseUp", Tell("OnMouseUp"))
-	b:SetScript("PostClick", function(self, _, down)
-		if down then return end
+-- Such rows do nothing in a fight until the menu is opened again after it.
+local secureRows = UI.SecureOver("ShyMenuSecureRow", {
+	strata = "FULLSCREEN_DIALOG", level = 200,   -- above the menu's rows
+	click = function(row)
 		Sound("IG_MAINMENU_OPTION_CHECKBOX_ON")
-		local item = self.row and self.row.item
+		local item = row and row.item
 		-- What a secure row does of its own, after the game's action (a tell menu remembering the chat picked).
 		if item and item.after then item.after(item, menu and menu.owner) end
 		if not (item and item.keep) then UI.CloseMenu() end
-	end)
-	secureRows[index] = b
-	return b
-end
-
-local function HideSecureRows(from)
-	if InCombatLockdown() then return end
-	for index = from or 1, #secureRows do
-		local b = secureRows[index]
-		b:Hide()
-		b.row, b.item, b.at = nil, nil, nil
-	end
-end
+	end,
+})
 
 -- Lays a secure button over every visible secure row, at the row's current position.
 local function PlaceSecureRows()
 	if InCombatLockdown() or not (menu and menu:IsShown()) then return end
-	local used = 0
-	local top, bottom = menu.area:GetTop(), menu.area:GetBottom()
-	local scale = menu:GetEffectiveScale() / UIParent:GetEffectiveScale()
 	for _, row in ipairs(menu.rows) do
 		local item = row:IsShown() and row.item
 		local secure = item and not item.disabled and item.secure
-		if secure and top and bottom then
-			local left, foot, width, height = row:GetLeft(), row:GetBottom(), row:GetWidth(), row:GetHeight()
-			-- Skip rows scrolled out of view.
-			if left and foot and foot >= bottom - 1 and foot + height <= top + 1 then
-				used = used + 1
-				local b = SecureRow(used)
-				if b.item ~= item then
-					for key in pairs(b.set) do b:SetAttribute(key, nil) end
-					wipe(b.set)
-					for key, value in pairs(secure) do
-						b:SetAttribute(key, value)
-						b.set[key] = true
-					end
-					b.item = item
-				end
-				b.row = row
-				local at = ("%.1f %.1f %.1f %.1f"):format(left * scale, foot * scale, width * scale, height * scale)
-				if b.at ~= at then
-					b.at = at
-					b:ClearAllPoints()
-					b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * scale, foot * scale)
-					b:SetSize(width * scale, height * scale)
-				end
-				b:Show()
-			end
-		end
+		if secure then secureRows:Lay(row, secure, menu.area) end
 	end
-	HideSecureRows(used + 1)
+	secureRows:Done()
 end
-
--- Hide them while it is still allowed.
-local secureWatch = CreateFrame("Frame")
-secureWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
-secureWatch:SetScript("OnEvent", function()
-	for _, b in ipairs(secureRows) do
-		b:Hide()
-		b.row, b.item, b.at = nil, nil, nil
-	end
-end)
 
 -- The secure buttons currently shown.
 function UI.MenuSecureRows()
-	local shown = {}
-	for _, b in ipairs(secureRows) do
-		if b:IsShown() then shown[#shown + 1] = b end
-	end
-	return shown
+	return secureRows:Shown()
 end
 
 -- A menu's housing, the one every menu wears (ours, and the game's own as ShySkin dresses them): a black
@@ -6309,7 +6421,7 @@ local function MenuBuild()
 	f:SetScript("OnShow", function(self) self:RegisterEvent("GLOBAL_MOUSE_DOWN") end)
 	f:SetScript("OnHide", function(self)
 		self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
-		HideSecureRows()
+		secureRows:Clear()
 	end)
 	f:SetScript("OnEvent", function(self, _, button)
 		-- opts.keepOn: that button elsewhere doesn't close the menu (the right button turns the camera).
@@ -7906,9 +8018,11 @@ function UI.Input(parent, label, get, set, opts)
 		f.label:SetPoint("TOPLEFT")
 	end
 
+	-- (As wide as the frame: it flows when the frame does.)
 	local box = CreateFrame("EditBox", nil, f)
-	box:SetSize(width, 24)
+	box:SetHeight(24)
 	box:SetPoint("BOTTOMLEFT")
+	box:SetPoint("BOTTOMRIGHT")
 	box:SetAutoFocus(false)
 	box:SetFontObject(GameFontHighlight)
 	box:SetTextInsets(8, 8, 0, 0)
@@ -7918,6 +8032,9 @@ function UI.Input(parent, label, get, set, opts)
 
 	local placeholder = UI.Text(box, "", nil, false, C.dim)
 	placeholder:SetPoint("LEFT", 8, 0)
+	placeholder:SetPoint("RIGHT", -8, 0)
+	placeholder:SetJustifyH("LEFT")
+	placeholder:SetWordWrap(false)
 
 	local function Commit(self)
 		if self:GetText() ~= (get() or "") then set(self:GetText()) end
@@ -9400,10 +9517,15 @@ function UI.Window(opts)
 		_G[opts.name] = box
 		table.insert(UISpecialFrames, opts.name)
 	end
-	if opts.onClose then
+	if opts.onClose or opts.secure then
 		-- OnHide also fires when a parent hides; only the window's own hide counts as closing.
 		box:HookScript("OnHide", function(self)
-			if not self:IsShown() then opts.onClose(self) end
+			if self:IsShown() then return end
+			-- A secure window hidden in a fight (its state driver) is only away: it comes back after.
+			if opts.secure and InCombatLockdown() then return end
+			if opts.onClose then opts.onClose(self) end
+			-- Closed (Esc, its ×): its state driver is told, or it shows the window again within a moment.
+			if opts.secure then Shy.HUD.Update(self) end
 		end)
 	end
 	local head = opts.head or {}

@@ -48,7 +48,7 @@ local ADDON, ns = ...
 -- A job's by = { [build id] = job } is what its key does for that talent build instead (no key of
 -- its own); a macro made for a job the build doesn't have is deleted, so a class stays within a character's
 -- macros.
--- opts: build (a function: the build's id and name; Shy.Keys.Build asks ShyQuest), forms (the stances whose
+-- opts: build (a function: the build's id and name; Shy.Keys.Build asks ShyCore), forms (the stances whose
 -- page of the main bar gets the job too) with plain (and the bar's own page: a class not always in a form),
 -- knows (a spell the class always has, to ask whether macros can tell what is learned), stances (what 1 2 3
 -- are, in words), list (the command that lists the keys), keep (what to stay in on the stance bar, by build: { plain =

@@ -1063,7 +1063,7 @@ local function CreateRow(card, lead)
 	row.tag = ns.CreateMark(row, TAG)
 	row.tag:SetPoint("CENTER", row, "TOPLEFT", RAIL + (lead and DIAL_TAG or PIN_TAG_X), -row.node - (lead and DIAL_TAG or PIN_TAG_Y))
 	row.tag:SetFrameLevel(row.pin:GetFrameLevel() + 2)
-	row.tag:Hide()
+	UI.Showing(row.tag, false)
 	row.title = UI.Text(row, "", lead and 15 or 12, true)
 	row.title:SetPoint("TOPLEFT", GUTTER, lead and -4 or -3)
 	row.yards = UI.Text(row, "", lead and 13 or 11, lead, lead and C.hot or C.dim)
@@ -1096,8 +1096,8 @@ function Node.Show(row, stop, place, bare)
 	if row.nodeSaid == said then return end
 	row.nodeSaid = said
 	row.pin:SetShown(number ~= nil)
-	row.mark:SetShown(number == nil)
-	row.tag:SetShown(sign ~= nil)
+	UI.Showing(row.mark, number == nil)
+	UI.Showing(row.tag, sign ~= nil)
 	if number then
 		row.pin:Set(kind == "zone" and "zone" or "step", kind == "zone" and stop.chosen or (place and place.lit), number)
 		if sign then row.tag:Set(sign, false, nil, tone) end
@@ -1424,7 +1424,7 @@ function ns.CreateCard(parent, onResize)
 	first.here:SetPoint("CENTER", first, "TOPLEFT", RAIL, -first.node)
 	first.here:SetTexture(ns.MEDIA .. "Marks")
 	UI.Concentric(first.here)
-	first.here:Hide()
+	UI.Showing(first.here, false)
 	first.pin:Hide()
 	-- A click on the dial keeps the waypoint arrow on screen (Arrow.lua), following the steps as
 	-- they are done; another puts it away. While it is up the dial's ring is lit.
@@ -1810,18 +1810,14 @@ function ns.CreateCard(parent, onResize)
 			first.turned = turn
 			first.arrow:SetRotation(turn)
 		end
-		if first.arrow:IsShown() ~= arrowOn then first.arrow:SetShown(arrowOn) end
+		UI.Showing(first.arrow, arrowOn)
 		-- The dial's ring is the arrow's alone: a mark or an emblem has its own plate, and stands bare.
-		if first.dial:IsShown() ~= arrowOn then
-			first.dial:SetShown(arrowOn)
-			first.weave:SetShown(arrowOn)
-		end
-		if first.here:IsShown() ~= among then first.here:SetShown(among) end
-		local markOn = not among and not arrowOn
-		if first.mark:IsShown() ~= markOn then first.mark:SetShown(markOn) end
+		UI.Showing(first.dial, arrowOn)
+		UI.Showing(first.weave, arrowOn)
+		UI.Showing(first.here, among)
+		UI.Showing(first.mark, not among and not arrowOn)
 		-- While the way is pointed, what the stop is for stands over the dial's lower right.
-		local tagOn = arrowOn and first.tagged ~= nil
-		if first.tag:IsShown() ~= tagOn then first.tag:SetShown(tagOn) end
+		UI.Showing(first.tag, arrowOn and first.tagged ~= nil)
 	end
 
 	-- Apply `width` (ShyDock may put the card in a column of another width).
@@ -2434,7 +2430,6 @@ function ns.CreateCard(parent, onResize)
 					bar:SetPoint("TOPRIGHT", 0, -top)
 					bar:SetHeight(barTall)
 					self.search:SetWidth(width - PAD * 2 - ZONE.switch - 8)
-					self.search.box:SetWidth(width - PAD * 2 - ZONE.switch - 8)
 				end
 				self.style:Refresh()
 				self.search:Refresh()
@@ -2819,11 +2814,17 @@ function ns.CreateCard(parent, onResize)
 	-- (The arrow comes round every frame; the timer's words change by the second and its bar slowly: asked
 	-- four times a second, not a hundred.) The card made room for the plate as it stood: when the countdown
 	-- ends, or its words take another line, the card is laid out again round it.
+	-- (Whether the lead and the timer show is kept as they show and hide: asking them at every frame is a call each.)
 	local sinceTimer = 0
+	first.up, timer.up = first:IsShown(), timer:IsShown()
+	first:HookScript("OnShow", function() first.up = true end)
+	first:HookScript("OnHide", function() first.up = false end)
+	timer:HookScript("OnShow", function() timer.up = true end)
+	timer:HookScript("OnHide", function() timer.up = false end)
 	card:SetScript("OnUpdate", Shy.Clocked("frame: card", function(_, elapsed)
-		if first.stop and first:IsShown() then Point(elapsed) end
+		if first.stop and first.up then Point(elapsed) end
 		sinceTimer = sinceTimer + (elapsed or 1)
-		if sinceTimer >= 0.25 and timer:IsShown() then
+		if sinceTimer >= 0.25 and timer.up then
 			sinceTimer = 0
 			local tall = timer:GetHeight()
 			if not timer:Tick() or timer:GetHeight() ~= tall then card:Refill() end

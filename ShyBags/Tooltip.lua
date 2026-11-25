@@ -1,5 +1,5 @@
--- In an item's tooltip, where else the account has it: a heading, then a line a place with its count at the right
--- (GameTooltip and ItemRefTooltip only).
+-- In an item's tooltip (a section of it, Shy.Tips), where else the account has it: a heading, then a line a place with
+-- its count at the right. Worked out once an item, again after a scan.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -12,8 +12,7 @@ ns.Tooltip = Tooltip
 T.defaults.tooltip = true
 
 local MOST = 4       -- other characters named, before the rest are counted as one line
-local HEAD = Shy.Hover.Heading("You also have")
-local said = {}      -- itemID -> its lines or false; cleared on every scan
+local stamp = 0      -- goes up with every scan: what the section said is let go
 
 -- { place, count, color } a line: your bank, mailbox and auctions, then each other character in their class's color.
 local function Lines(id)
@@ -40,28 +39,19 @@ local function Lines(id)
 	return lines
 end
 
-local function OnItem(tip, data)
-	if not T.db.tooltip or (tip ~= GameTooltip and tip ~= ItemRefTooltip) then return end
-	local id = data and data.id
-	if issecretvalue(id) or type(id) ~= "number" then return end
-	local lines = said[id]
-	if lines == nil then
-		lines = Lines(id)
-		said[id] = lines
-	end
+function Tooltip.Build(about, out)
+	if type(about.id) ~= "number" then return end
+	local lines = Lines(about.id)
 	if not lines then return end
 	local dim, text = UI.colors.dim, UI.colors.text
-	tip:AddLine(" ")
-	tip:AddLine(HEAD, dim[1], dim[2], dim[3])
+	out:Section("You also have")
 	for _, line in ipairs(lines) do
-		local color = line[3] or dim
-		tip:AddDoubleLine(line[1], tostring(line[2]), color[1], color[2], color[3], text[1], text[2], text[3])
+		out:Row({ text = line[1], color = line[3] or dim, right = tostring(line[2]), rightColor = text })
 	end
 end
 
--- Asked for once every addon has logged in, so these lines are the last on the tooltip: nothing of another addon's
--- stands under the heading.
 function Tooltip.Init()
-	Shy:On("SHY_LOGIN", function() Shy.OnTip(Enum.TooltipDataType.Item, "where else you have it", OnItem) end)
-	Shy:On("SHY_BAGS_SCANNED", function() said = {} end)
+	Shy.Tips.Add({ id = "where else you have it", order = 50, on = function() return T.db.tooltip == true end,
+		stamp = function() return stamp end, build = Tooltip.Build })
+	Shy:On("SHY_BAGS_SCANNED", function() stamp = stamp + 1 end)
 end

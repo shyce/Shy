@@ -1,8 +1,8 @@
--- In an item's tooltip (the game's and a clicked link's; ShyTip's card keeps every line): under a heading, the market
+-- In an item's tooltip (a section of it, Shy.Tips: the game's and a clicked link's): under a heading, the market
 -- price each on your market and how old it is, and, hovered on a stack in your bags, what the stack is worth. Worked out
 -- once an item and again when prices change.
 --   Tooltip.Lines(item, owner)   { { words, copper | text } } or nil: what the lines say
---   Tooltip.For(tip, data, ours) writes them on a tooltip (ours: the game's or a link's)
+--   Tooltip.Build(about, out)     its section on an item's tooltip (Shy.Tips)
 
 local ADDON, ns = ...
 local T = ns.T
@@ -11,7 +11,6 @@ local UI = Shy.UI
 local Tooltip = {}
 ns.Tooltip = Tooltip
 
-local HEAD = Shy.Hover.Heading("At the auction house")
 local said = {}      -- item -> its lines, or false; let go when prices change (the book's stamp)
 local saidAt
 
@@ -48,28 +47,21 @@ function Tooltip.Lines(item, owner)
 	return out
 end
 
-function Tooltip.For(tip, data, ours)
-	if not (ours and T.db.tooltip) then return end
-	local id = data and data.id
-	if issecretvalue(id) or type(id) ~= "number" then return end
-	local lines = Tooltip.Lines(id, tip:GetOwner())
+-- Its section on an item's tooltip (Shy.Tips): the price lines under their heading, kept until prices change.
+function Tooltip.Build(about, out)
+	if type(about.id) ~= "number" then return end
+	local lines = Tooltip.Lines(about.id, about.owner)
 	if not lines then return end
 	local dim, text = UI.colors.dim, UI.colors.text
-	tip:AddLine(" ")
-	tip:AddLine(HEAD, dim[1], dim[2], dim[3])
+	out:Section("At the auction house")
 	for _, line in ipairs(lines) do
 		local right = type(line[2]) == "number" and UI.Money(math.floor(line[2] + 0.5), true) or line[2]
-		tip:AddDoubleLine(line[1], right, dim[1], dim[2], dim[3], text[1], text[2], text[3])
+		out:Row({ text = line[1], color = dim, right = right, rightColor = text })
 	end
 end
 
--- Asked for once every addon has logged in, so these lines stand after everyone else's.
-function Tooltip.Hook()
-	Shy.OnTip(Enum.TooltipDataType.Item, "what it sells for", function(tip, data)
-		Tooltip.For(tip, data, tip == GameTooltip or tip == ItemRefTooltip)
-	end)
-end
-
 function Tooltip.Init()
-	Shy:On("SHY_LOGIN", Tooltip.Hook)
+	Shy.Tips.Add({ id = "what it sells for", order = 60, on = function() return T.db.tooltip == true end,
+		stamp = function() return ns.Book.Stamp() end, per = function(about) return Stack(about.owner) end,
+		build = Tooltip.Build })
 end

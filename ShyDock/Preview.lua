@@ -972,6 +972,32 @@ local function Left()
 end
 local function Leave() C_Timer.After(0, Left) end
 
+-- A pick of the console's layout, size or bars from outside the cards (the Settings list): as a card's. With the
+-- console in use and as laid out, on the screen at once, the reload it owes asked as the window closes. Not set up,
+-- or a layout you changed yourself: the console is laid out fresh with it, with a reload.
+--   P.Wear(field, value)   field: "style", "size" or "grow"
+function P.Wear(field, value)
+	local L = ns.Layout
+	if InCombatLockdown() then return L.Report(false, "combat") end
+	local pick = { style = L.Style(), size = L.Size(), grow = L.Grows() }
+	pick[field] = value
+	local opts = {}
+	if pick.grow ~= L.Grows() then opts.grow = pick.grow end
+	if not L.IsActive() or L.Custom() then
+		if L.Previewing() then L.Keep() end
+		owe.fresh = false
+		return L.Report(L.SetUp(pick.size, pick.style, next(opts) and opts or nil))
+	end
+	if pick.style == L.Style() and pick.size == L.Size() and pick.grow == L.Grows() then return true end
+	local ok, why = L.Wear(pick.size, pick.style, opts, function()
+		T:Apply()
+		P.Refresh()
+	end)
+	if ok then owe.fresh = true else L.Report(ok, why) end
+	P.Refresh()
+	return ok
+end
+
 -- The window closing from another room: asked then.
 Shy:On("SHY_HUB_CLOSED", Leave)
 

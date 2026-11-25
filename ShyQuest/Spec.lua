@@ -1,8 +1,8 @@
 -- Talent suggestions as a route errand: with a point to spend, a card row names the next talent
--- of the character's leveling build (Data/Specs.lua), read against the tree through C_Traits.
+-- of the character's leveling build, read against the tree by ShyCore (Shy.Build).
 --   A class has several builds: one for each way to play it (a tree, a healer or tank for dungeons,
---     PvP), the first the one for questing alone. The build is the one the player picked (the setup
---     window's step, the card's menu, the options), else the one the talents already bought fit
+--     PvP), the first the one for questing alone. The build followed is the one the player picked (the
+--     setup window's step, the card's menu, the options), else the one the talents already bought fit
 --     best. A build that is a hard way to level says so (`note`), and what to do about it.
 --   The next talent is the first in the build's order not yet bought that far. A character with
 --     more than STRAYED points outside the build is told so, and to pick another or reset.
@@ -17,13 +17,13 @@
 --     numbered pins, the next one a white ring, and their tooltips say so. They are frames of ours standing
 --     on the talent buttons: the game's own glow and search mark are fields written on its buttons, which
 --     addon code must not do.
---   C_Traits has no data until the spellbook is first read (SHY_SPELLS) or a trait event has fired (`ready`).
 
 local ADDON, ns = ...
 local T = ns.T
 local R = ns.Route
 local UI = Shy.UI
 local C = UI.colors
+local Build = Shy.Build      -- (none until the client restarts with the ShyCore that has it: no suggestions)
 
 local Spec = {}
 ns.Spec = Spec
@@ -32,34 +32,32 @@ T.defaults.spec = { on = true }      -- unspent talent points as a row on the ca
 
 local LEAD_FOR = 30          -- seconds a new point leads the card, from the first moment out of combat
 local FIRST_FOR = 120        -- the same for the character's first point
-local STRAYED = 5            -- more points than this outside the build: stop naming talents
-local AHEAD = 3              -- talents listed after the next one
+local STRAYED = Build and Build.STRAYED or 5   -- more points than this outside the build: stop naming talents
+local AHEAD = Build and Build.AHEAD or 3       -- talents listed after the next one
 local PIN = 20               -- a numbered pin on a talent, standing on the talent's top left corner
 local RING = 5               -- how far the next talent's ring stands out from it
 local PLACE = { "next", "2nd", "3rd", "4th" }    -- a marked talent's turn, in its tooltip (AHEAD + 1 of them)
 
 local ready = false          -- spell or trait data has loaded
-local stale = true
-local state                  -- last result of Work, or nil
-local names = {}             -- node -> { name, icon }
-local tabs                   -- the tree's three tabs: { { name, icon }, ... }
-local counts = {}            -- build -> { [node] = ranks its order puts there }
 local fresh                  -- a point just arrived: { span, calmAt }
 
 -- This class's tree and builds: { tree, tabs, from, nodes, builds }, or nil.
 local function Class()
-	local all = ns.data.specs
-	local class = UnitClassBase("player")
-	return all and class and all[class] or nil
+	return Build and Build.Class() or nil
 end
 
--- This character's talent state: { seen, skip, first, greeted, build }.
+-- This character's talent state: { seen, skip, first, greeted }. (The pick is ShyCore's.)
 local function Mine()
 	if not ns.char then return nil end
 	local mine = ns.char.spec
 	if not mine then
 		mine = {}
 		ns.char.spec = mine
+	end
+	-- A pick made before ShyCore kept them: ShyCore's now.
+	if mine.build ~= nil and Build then
+		if Build.Picked() == nil then Build.Choose(mine.build) end
+		mine.build = nil
 	end
 	return mine
 end
@@ -73,167 +71,19 @@ local function Points(count)
 	return count == 1 and "1 point to spend" or ("%d points to spend"):format(count)
 end
 
--- What a build is for, in a word or two. first: it is the class's first, the one for questing alone.
-local function Tag(build, first)
-	if first then return "recommended" end
-	if build.goal == "pvp" then return "PvP" end
-	if build.goal ~= "dungeon" then return "questing" end
-	return build.role == "healer" and "dungeon healer" or build.role == "tank" and "dungeon tank" or "dungeons"
-end
-
--- The ranks a build's order puts in each talent.
-local function Counts(build)
-	local most = counts[build]
-	if most then return most end
-	most = {}
-	for _, node in ipairs(build.order) do most[node] = (most[node] or 0) + 1 end
-	counts[build] = most
-	return most
-end
-
-local function Named(config, node)
-	local known = names[node]
-	if known then return known[1], known[2] end
-	local at = C_Traits.GetNodeInfo(config, node)
-	local entry = at and at.entryIDs and at.entryIDs[1]
-	local info = entry and C_Traits.GetEntryInfo(config, entry)
-	local talent = info and info.definitionID and C_Traits.GetDefinitionInfo(info.definitionID)
-	if not talent then return nil end
-	local name = talent.overrideName or (talent.spellID and C_Spell.GetSpellName(talent.spellID))
-	local icon = talent.overrideIcon or (talent.spellID and C_Spell.GetSpellTexture(talent.spellID))
-	if not name then return nil end
-	names[node] = { name, icon }
-	return name, icon
-end
-
--- The tree's tabs indexed as the data numbers them, with the talent window's names.
-local function Tabs(spec)
-	if tabs then return tabs end
-	local out = {}
-	for _, shown in ipairs(C_Traits.GetGroupDisplayInfoByTreeID(spec.tree) or {}) do
-		for index, group in ipairs(spec.tabs) do
-			if shown.groupID == group then out[index] = { name = shown.displayName, icon = shown.icon } end
-		end
-	end
-	if not (out[1] and out[2] and out[3]) then return nil end
-	tabs = out
-	return out
-end
-
--- One talent of the order: name, tab and row, and the rank the next point buys.
-local function Entry(spec, config, node, have, count)
-	local name, icon = Named(config, node)
-	local about = spec.nodes[node]
-	local tab = Tabs(spec)[about[1]]
-	return { node = node, name = name, icon = icon, tab = tab.name, row = about[2],
-		rank = have + 1, ranks = about[3], count = count }
-end
-
--- Reads the tree: ranks bought, points unspent, the build, and its next talents.
-local function Work()
-	stale, state = false, nil
-	local spec, mine = Class(), Mine()
-	if not spec or not mine then return end
-	local config = C_SpecializationInfo.GetCombatConfigIDForSpecGroup(C_SpecializationInfo.GetActiveSpecGroup())
-	local info = config and C_Traits.GetConfigInfo(config)
-	if not info then
-		stale = true         -- talents not loaded yet: retry next time
-		return
-	end
-	-- A different tree than the builds were written for: say nothing.
-	if info.treeIDs[1] ~= spec.tree or not Tabs(spec) then return end
-	local purse = C_Traits.GetTreeCurrencyInfo(config, spec.tree, false)[1]
-	if not purse or issecretvalue(purse.quantity) then return end
-	local unspent = purse.quantity
-
-	local have, can, spent = {}, {}, 0
-	local telling = false        -- canPurchaseRank is true for at least one node
-	for _, node in ipairs(C_Traits.GetTreeNodes(spec.tree) or {}) do
-		local at = C_Traits.GetNodeInfo(config, node)
-		local ranks = at and at.ranksPurchased or 0
-		if issecretvalue(ranks) then return end
-		local about = spec.nodes[node]
-		-- A talent whose rank count differs from the data: the tree has changed, say nothing.
-		if about and (not at or at.maxRanks ~= about[3]) then return end
-		have[node], can[node] = ranks, at ~= nil and at.canPurchaseRank == true
-		telling = telling or can[node]
-		spent = spent + ranks
-	end
-	for node in pairs(spec.nodes) do
-		if not have[node] then return end
-	end
-
-	-- The build: the player's pick, else the one the talents bought fit best (the first of equals, so
-	-- the one for questing alone while nothing is bought). offs: points outside each build, by id.
-	local offs, build, fits = {}, nil, nil
-	for _, one in ipairs(spec.builds) do
-		local most, off = Counts(one), 0
-		for node, ranks in pairs(have) do
-			if ranks > (most[node] or 0) then off = off + ranks - (most[node] or 0) end
-		end
-		offs[one.id] = off
-		if one.id == mine.build then build = one end
-		if not fits or off < offs[fits.id] then fits = one end
-	end
-	local chosen = build ~= nil
-	build = build or fits
-	local off = offs[build.id]
-
-	-- The first talent of the order still to buy, and the next few. Its prerequisites are the
-	-- order's earlier talents, so it should be purchasable; canPurchaseRank is only a check that
-	-- the tree still matches. If other nodes are purchasable but this one isn't, skip to the
-	-- first that is. If no node reports purchasable, the flag isn't trusted.
-	local plan, count, left = {}, {}, 0
-	for _, node in ipairs(build.order) do
-		count[node] = (count[node] or 0) + 1
-		if count[node] > have[node] then
-			left = left + 1
-			local last = plan[#plan]
-			if last and last.node == node and #plan <= AHEAD + 1 and not plan.full then
-				last.count = last.count + 1
-			elseif plan.full then
-				-- Past the ones listed: only counted.
-			elseif #plan == 0 and unspent > 0 and telling and not can[node] then
-				-- Skipped.
-			elseif #plan <= AHEAD then
-				if not Named(config, node) then
-					stale = true     -- name not loaded yet: retry next time
-					return
-				end
-				plan[#plan + 1] = Entry(spec, config, node, have[node], 1)
-			else
-				plan.full = true
-			end
-		end
-	end
-	plan.full = nil
-
-	local earned = spent + unspent
-	local tree = Tabs(spec)[build.tab]
-	state = {
-		unspent = unspent, spent = spent, earned = earned, off = off, offs = offs,
-		build = build, chosen = chosen, name = build.name, why = build.why, note = build.note,
-		tree = tree.name, treeIcon = tree.icon,
-		config = config, treeID = spec.tree, group = spec.tabs[build.tab],
-		next = plan[1], plan = plan,
-		-- The order has no talent left to name: every one is bought.
-		ended = left == 0,
-		strayed = off > STRAYED or (unspent > 0 and plan[1] == nil),
-	}
-
-	-- A new point since the last read.
-	if mine.seen and earned > mine.seen then fresh = { span = LEAD_FOR } end
-	mine.seen = earned
-	if unspent <= 0 then fresh = nil end
-end
-
--- The current state, or nil: { unspent, spent, earned, off, offs, build, chosen, name, why, note, tree,
--- treeIcon, config, treeID, group, next, plan, ended, strayed }.
--- next and each of plan: { node, name, icon, tab, row, rank, ranks, count }.
+-- The current reading (Shy.Build.Now), or nil.
 function Spec.Now()
-	if not ready then return nil end
-	if stale then Work() end
-	return state
+	if not ready or not Build or not Mine() then return nil end
+	return Build.Now()
+end
+
+-- A new point since the last look: it leads the card for a while.
+local function Fresh()
+	local now, mine = Spec.Now(), Mine()
+	if not now or not mine then return end
+	if mine.seen and now.earned > mine.seen then fresh = { span = LEAD_FOR } end
+	mine.seen = now.earned
+	if now.unspent <= 0 then fresh = nil end
 end
 
 -- Where a talent stands, and how many points it takes in a row. The tab is named only when it isn't
@@ -551,53 +401,39 @@ function Spec.Learn()
 		C_Traits.RollbackConfig(config)
 		return false
 	end
-	stale = true
+	Build.Stale()
 	return true
 end
 
 -- The build
 
--- The build the suggestions follow: the one read from the talents, else (nothing read yet) the pick or
--- the class's first. nil for a class with none.
+-- The build the suggestions follow: your pick, else the one your talents fit best. nil for a class with none.
 function Spec.Build()
-	local now = Spec.Now()
-	if now then return now.build end
-	local spec, mine = Class(), Mine()
-	if not spec then return nil end
-	for _, build in ipairs(spec.builds) do
-		if mine and build.id == mine.build then return build end
-	end
-	return spec.builds[1]
+	return Build and Build.Followed() or nil
 end
 
--- The class's builds for a picker, in the data's order: { { build, tag, on, reset } }. on: the one being
--- followed. reset: the talents already bought don't fit it, so it would take a reset at a trainer.
+-- The class's builds for a picker (Shy.Build.Builds): { { build, tag, on, reset } }.
 function Spec.Builds()
-	local spec, now, current = Class(), Spec.Now(), Spec.Build()
-	local out = {}
-	for index, build in ipairs(spec and spec.builds or {}) do
-		out[index] = { build = build, tag = Tag(build, index == 1), on = build == current,
-			reset = now ~= nil and now.offs[build.id] > STRAYED }
-	end
-	return out
+	return Build and Build.Builds() or {}
 end
 
 -- Follows a build from now on (by id; nil: whichever the talents fit best again).
 function Spec.Choose(id)
-	local mine = Mine()
-	if not mine then return end
-	mine.build, mine.skip = id, nil
-	stale = true
-	Dress()
-	ns.Refresh()
-	Shy:Fire("SHY_BUILD")
+	if Build then Build.Choose(id) end
 end
 
--- For other addons (ShyGear weighs gear by it): the build followed as { id, name, role, goal }, or nil.
-function T:Build()
-	local build = Spec.Build()
-	if not build then return nil end
-	return { id = build.id, name = build.name, role = build.role, goal = build.goal }
+-- A build picked, here or anywhere: the row asks again, and the window and the card show it.
+Shy:On("SHY_BUILD", function(why)
+	if why ~= "picked" then return end
+	local mine = Mine()
+	if mine then mine.skip = nil end
+	Dress()
+	ns.Refresh()
+end)
+
+-- When the talent points start, for ShyCore's setup step: level 10, or sooner with the account's Talented.
+function T:TalentsFrom()
+	return ns.Legacy and ns.Legacy.TalentsFrom and ns.Legacy.TalentsFrom() or nil
 end
 
 -- For other addons (ShySkin's own talent window marks them): the build's next talents while suggestions are on and
@@ -616,35 +452,14 @@ function T:TalentPlan()
 	return { name = now.name, config = now.config, tree = now.treeID, group = now.group, unspent = now.unspent, nodes = nodes }
 end
 
--- The cooldown manager laid out for a build (ShyCore's lineups): true once written; it shows after a reload.
--- Guarded: the loaded core may predate Shy.Lineup until the client restarts.
-function Spec.Lineup(id)
-	local lineup = Shy.Lineup
-	if not (lineup and lineup.Has(id)) then return false end
-	local name
-	for _, one in ipairs(Spec.Builds()) do
-		if one.build.id == id then name = one.build.name end
-	end
-	local ok, why = lineup.Write(id, name)
-	if not ok then T:Print(why) end
-	return ok
-end
-
--- A build picked from the quest window or the settings: followed, and the cooldown manager laid out for it.
-local function Pick(id)
-	Spec.Choose(id)
-	Shy.Settings.Refresh()
-	if Spec.Lineup(id) then Shy.Reload("Your cooldown manager is laid out for your build. Reload to see it.") end
-end
-
--- The builds as a list in a menu (the card's).
+-- The builds as a list in a menu (the card's). Picking one is ShyCore's (Shy.Build.Pick).
 function Spec.Menu(root)
 	local builds = Spec.Builds()
 	if #builds < 2 then return end
 	local list = root:CreateButton("Leveling build")
 	for _, one in ipairs(builds) do
 		local build = one.build
-		local entry = list:CreateRadio(build.name, function() return Spec.Build() == build end, function() Pick(build.id) end)
+		local entry = list:CreateRadio(build.name, function() return Spec.Build() == build end, function() Build.Pick(build.id) end)
 		entry:SetDetail(one.reset and "needs a talent reset" or one.tag)
 		entry:SetTooltip(build.note and (build.why .. " " .. build.note) or build.why)
 	end
@@ -652,7 +467,7 @@ function Spec.Menu(root)
 	if current and Shy.Lineup and Shy.Lineup.Has(current.id) then
 		list:CreateDivider()
 		local entry = list:CreateButton("Lay out cooldowns", function()
-			if Spec.Lineup(current.id) then Shy.Reload("Your cooldown manager is laid out for your build. Reload to see it.") end
+			if Build.Lineup(current.id) then Shy.Reload(Build.RELOAD) end
 		end)
 		entry:SetTooltip("Lays out your cooldown manager for " .. current.name .. ": main abilities first, buffs you keep up as bars.")
 	end
@@ -834,6 +649,7 @@ local function Look()
 	local route = routing
 	routing = false
 	if not ready or not ns.char then return end
+	Fresh()
 	Greet()
 	Dress()
 	local said = route == "all" and Said()
@@ -870,9 +686,10 @@ end
 local function Seen(_, event)
 	if event == "PLAYER_LEVEL_UP" then
 		-- The new point may be counted a moment after the level-up event.
-		stale = true
+		if Build then Build.Stale() end
 		C_Timer.After(1.5, function()
-			stale, routing = true, "all"
+			if Build then Build.Stale() end
+			routing = "all"
 			Look()
 		end)
 	elseif event == "PLAYER_REGEN_DISABLED" then
@@ -882,7 +699,7 @@ local function Seen(_, event)
 		-- The mouse may have rested on the row through the fight.
 		if over and over:IsVisible() and over:IsMouseOver() and over.stop and over.stop.over then over.stop.over(over) end
 	elseif not QUIET[event] then
-		ready, stale = true, true
+		ready = true          -- (ShyCore reads the talents again on the same events)
 	end
 	if not QUIET[event] then Soon("all") else Soon(Spending() and "route") end
 end
@@ -900,116 +717,12 @@ ns.CardSwitch("suggestions", function(root)
 	Spec.Menu(root)
 end)
 
--- Settings: whether talents are suggested, and for which build.
+-- Settings: whether talents are suggested. (Which build is ShyCore's: Leveling build, in its settings.)
 T:Settings({
 	{ section = "Talents" },
 	{ key = "spec.on", label = "Suggest talents",
 		desc = "With a point to spend, the quest window names your build's next talent. The talent window numbers the next few." },
-	{ label = "Leveling build", words = "spec talents", shown = function() return #Spec.Builds() >= 2 end,
-		default = function()
-			local first = Spec.Builds()[1]
-			return first and first.build.id
-		end,
-		items = function()
-			local items = {}
-			for index, one in ipairs(Spec.Builds()) do
-				items[index] = { value = one.build.id, text = ("%s  (%s)"):format(one.build.name, one.tag) }
-			end
-			return items
-		end,
-		get = function()
-			local build = Spec.Build()
-			return build and build.id
-		end,
-		set = function(v) Pick(v) end,
-		desc = "How you want to play while leveling. A build your talents don't fit needs a reset at a class trainer." },
 })
-
--- The setup window's step: what to play
-
-local TILE, GAP = 96, 8      -- a tile's height (a why of two lines and a caution of two), and between tiles
-
--- The step's page: the class's builds as the setup window's choice tiles, two to a row, each with its
--- tree's icon, what it is for, why, and its caution. The pick is kept in plan.talents.build.
-local function Page(parent, width, plan)
-	local spec = Class()
-	local builds = spec and spec.builds or {}
-	local half = (width - GAP) / 2
-	local f = CreateFrame("Frame", nil, parent)
-	f:SetSize(width, math.ceil(#builds / 2) * (TILE + GAP) - GAP)
-	local tiles = {}
-	for index, build in ipairs(builds) do
-		local tile = Shy.Setup.Tile(f, half, nil, build.name, function()
-			plan.talents.build = build.id
-			f:Refresh()
-		end, TILE, true)
-		tile:SetPoint("TOPLEFT", ((index - 1) % 2) * (half + GAP), -math.floor((index - 1) / 2) * (TILE + GAP))
-		tile.say:SetText(build.why)
-		tile.note:SetText(build.note or "")
-		tiles[index] = tile
-	end
-	function f:Refresh()
-		-- The trees' icons, once the game has its talents (a moment after login).
-		local shown = spec and ready and Tabs(spec)
-		for index, one in ipairs(Spec.Builds()) do
-			local tile = tiles[index]
-			tile:SetIcon(shown and shown[one.build.tab].icon or nil)
-			tile:Paint(one.build.id == plan.talents.build, one.reset and (one.tag .. "  \194\183  needs a talent reset") or one.tag, false,
-				one.reset and C.alert or index == 1 and C.good or nil)
-		end
-	end
-	return f
-end
-
-local function Picked(plan)
-	for _, one in ipairs(Spec.Builds()) do
-		if one.build.id == plan.talents.build then return one.build end
-	end
-end
-
--- The step (Shy.Setup.Step): after the core's on how to quest, so what to play follows it.
-Spec.Step = {
-	id = "talents", order = 23, title = "Talents", glyph = "up",
-	ask = function() return ("Pick what to play, %s"):format(UnitName("player")) end,
-	brief = function(plan)
-		local build = Picked(plan)
-		return build and build.name
-	end,
-	-- When the talent points start: level 10, or sooner with the account's Talented (Legacy.lua).
-	lead = function()
-		local from = ns.Legacy and ns.Legacy.TalentsFrom and ns.Legacy.TalentsFrom() or 10
-		return ("Talent points start at level %d. Change your mind any time from the card's menu."):format(from)
-	end,
-	Plan = function(plan)
-		local build = Spec.Build()
-		plan.talents = { build = build and build.id }
-	end,
-	Build = Page,
-	Lines = function(plan)
-		local build = Picked(plan)
-		if not build then return {} end
-		local lines = { { text = "Leveling build: " .. build.name, sub = build.why } }
-		if Shy.Lineup and Shy.Lineup.Has(build.id) then
-			lines[2] = { text = "Cooldown manager laid out for " .. build.name, sub = "main abilities first, buffs you keep up as bars" }
-		end
-		-- A tank's or a healer's build says how threat reads: on the nameplates and the threat meter.
-		if build.role == "tank" then
-			lines[#lines + 1] = { text = "Nameplates and threat treat you as a tank", sub = "green while you hold aggro, red as you lose it" }
-		elseif build.role == "healer" then
-			lines[#lines + 1] = { text = "Nameplates and threat treat you as a healer", sub = "green while the tank holds aggro, red once it turns on you" }
-		end
-		return lines
-	end,
-	-- Kept with the character, not in a profile: there is nothing to wait for. The cooldown manager's
-	-- lineup shows after the reload that ends the setup.
-	Run = function(plan)
-		if not Picked(plan) then return false end
-		Spec.Choose(plan.talents.build)
-		return Spec.Lineup(plan.talents.build)
-	end,
-}
--- (The tests load the core without its setup window.)
-if Shy.Setup then Shy.Setup.Step(Spec.Step) end
 
 -- Guarded: the loaded Route.lua may predate R.AddErrand until the client restarts.
 if R and R.AddErrand then

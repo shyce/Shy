@@ -16,8 +16,8 @@ if not Shy.Keys then return end
 
 local K = {}
 
--- Your auras, each a list for the keys' data: the aura to keep on (OPTS.keep) is the first of a list you have, and
--- 1 2 3 are your build's, the one it keeps on first.
+-- Your auras, each a list for the keys' data: the aura to keep on (OPTS.keep) is the first of a list you have.
+-- 1 2 3 hold them in the order the game's bar does.
 local RET_AURA = { 7294, 465 }   -- Retribution Aura, Devotion Aura
 local DEVOTION_AURA = { 465 }   -- Devotion Aura
 local HOLY_AURA = { 19746, 465 }   -- Concentration Aura, Devotion Aura
@@ -30,9 +30,10 @@ local FRIEND, Grows = Shy.Keys.FRIEND, Shy.Keys.Grows
 
 -- Retribution and Holy: what a shield's key does for them instead.
 local REPENT = { name = "Repentance", what = "Repentance", SHOW, "/cast {20066}" }
--- Retribution against players: Seal of Justice, whose hits can stun and whose Judgement keeps a runner from
--- getting away (Judgement's kin, on Shift + E).
-local JUSTICE = { name = "Justice", what = "Seal of Justice", SHOW, "/cast {20164}" }
+-- Protection and Holy: Holy Light on V, where the others judge Seal of Justice. Theirs is behind Shift + E.
+local HOLY_LIGHT = { name = "Holy Light", what = "Holy Light", SHOW, "/cast " .. FRIEND .. " {635}" }
+local SWIFT = { name = "Swift Judgement", what = "Swift Judgement, on the enemy under your mouse, or your target",
+	SHOW, ATTACK, "/cast [@mouseover,harm,nodead][] {1310994}" }
 -- Holy and Retribution against players: Divine Favor on Shift + Mouse 4, the same key in both.
 local FAVOR = { name = "Favor", what = "Divine Favor", SHOW, "/cast {20216}" }
 -- Holy: a ward for the tank before a big pull, cast standing still, where the others' Seal of the Crusader is.
@@ -44,9 +45,17 @@ local SEAL = { name = "Seal", what = "Your seal: Seal of Righteousness. Seal of 
 	SHOW, "/cast [known:{20375}] {20375}; {21084}" }
 local FURY = { name = "Seal", what = "Your seal: Seal of Fury, its Judgement taunts. Seal of Righteousness until 10",
 	SHOW, "/cast [known:{1311649}] {1311649}; {21084}" }
--- Holy heals first: the quick heal on Q, where the seal is for the others, and the seal on the heal's key.
+-- Holy heals first: the quick heal on Q, where the seal is for the others. Holy Shock is beside the stop, where
+-- the others' heal is: never on a mouse button, which nudges the pointer off the frame you aimed at. The seal,
+-- cast on yourself, is on the thumb. With ASDF the stop has G: Holy Shock is on T there, and Consecration on W.
 local HEAL = { name = "Heal", role = "heal", what = "Flash of Light. Holy Light until 20",
 	SHOW, Grows(19750, 635) }
+local SHOCK = { name = "Holy Shock", asdf = "T", what = "Holy Shock, on the friend under your mouse, or your enemy",
+	SHOW, "/cast [@mouseover,help,nodead][] {1311606}" }
+local CONSECRATE = { name = "Consecration", asdf = "W", what = "Consecration", SHOW, "/cast {26573}" }
+-- Holy's Oath lasts an hour: sworn on your tank once, beside your other upkeep.
+local OATH = { name = "Oath", what = "Oath of Light, on the friend under your mouse or your target",
+	"#showtooltip {1328548}", "/cast [@mouseover,help,nodead][help,nodead] {1328548}" }
 
 -- A key is named for the one ability it casts; one that casts several as you level has a word true of them all
 -- (Blessing, Heal, Cure), and what every class has is called the same on each (Stop, Wall, Raise, Strike).
@@ -59,13 +68,15 @@ local JOBS = {
 	{ name = "Strike", role = "strike", key = "R", asdf = "R", what = "Holy Strike",
 		SHOW, ATTACK, "/cast {679}" },
 	{ name = "Consecration", key = "T", asdf = "T", what = "Consecration",
-		SHOW, "/cast {26573}" },
+		SHOW, "/cast {26573}", by = { holy = CONSECRATE } },
 	{ name = "Heal", role = "heal", key = "G", asdf = "W", early = "F", asdfEarly = "G", what = "Flash of Light. Holy Light until 20",
-		SHOW, Grows(19750, 635), by = { holy = SEAL } },
+		SHOW, Grows(19750, 635), by = { holy = SHOCK } },
 	{ name = "Exorcism", key = "Z", asdf = "Z", what = "Exorcism",
 		SHOW, "/cast {879}" },
-	{ name = "Holy Light", key = "V", asdf = "V", what = "Holy Light",
-		SHOW, "/cast " .. FRIEND .. " {635}" },
+	-- Seal of Justice, judged on a runner so it can't get away (and its hits can stun a player). A tank stays in Seal
+	-- of Fury, so Protection and Holy have Holy Light here.
+	{ name = "Justice", key = "V", asdf = "V", what = "Seal of Justice: judge it so a runner can't get away",
+		SHOW, "/cast {20164}", by = { prot = HOLY_LIGHT, holy = HOLY_LIGHT } },
 	-- Seal of the Crusader judged first on a long fight: the enemy takes more Holy damage while your strikes land.
 	-- A tank stays in Seal of Fury; a healer has Light's Vigil here.
 	{ name = "Crusader", key = "X", asdf = "X", what = "Seal of the Crusader",
@@ -74,20 +85,18 @@ local JOBS = {
 		SHOW, Grows(4987, 1152) },
 	{ name = "Blessing", key = "SHIFT-4", asdf = "SHIFT-4", stay = true, what = "Blessing of Kings. Blessing of Might until 20",
 		SHOW, Grows(20217, 19740) },
-	-- Righteous Fury is threat alone: a tank's, never a damage dealer's or a healer's.
+	-- Righteous Fury is threat alone: a tank's, never a damage dealer's. A healer's upkeep here is the Oath.
 	{ name = "Righteous Fury", key = "SHIFT-5", asdf = "SHIFT-5", stay = true, what = "Righteous Fury",
-		SHOW, "/cast {25780}", by = { ret = false, retpvp = false, holy = false } },
-	-- The thumb: what you answer with. The stop is on F (G with ASDF), beside the index finger: Mouse 5 is
-	-- too far to reach in a hurry, so it keeps only what is never hurried.
+		SHOW, "/cast {25780}", by = { ret = false, retpvp = false, holy = OATH } },
+	-- The thumb: what you answer with, cast on yourself or your target. The stop is on F (G with ASDF), beside the
+	-- index finger: Mouse 5 is too far to reach in a hurry, so it keeps only what is never hurried.
 	{ name = "Holy Shield", key = "BUTTON4", asdf = "BUTTON4", what = "Holy Shield",
-		SHOW, "/cast {20925}",
-		by = { ret = REPENT, retpvp = REPENT, holy = { name = "Holy Shock", what = "Holy Shock, on a friend or your enemy",
-			SHOW, "/cast [@mouseover,help,nodead][] {1311606}" } } },
+		SHOW, "/cast {20925}", by = { ret = REPENT, retpvp = REPENT, holy = SEAL } },
 	{ name = "Stop", role = "stop", key = "F", asdf = "G", what = "Hammer of Justice",
 		SHOW, "/cast {853}" },
 	-- The rest, in the order you learn them, each on its own key: only the thumb is lent while it waits.
-	-- Shift + Mouse 4 is on the thumb itself until the thumb's own spell comes (Holy Shield, Holy Shock or
-	-- Repentance), and before the wall: Templar's Bulwark is a tank's answer to a hard hit, Divine Protection isn't.
+	-- Shift + Mouse 4 is on the thumb itself until the thumb's own spell comes (Holy Shield or Repentance), and
+	-- before the wall: Templar's Bulwark is a tank's answer to a hard hit, Divine Protection isn't.
 	{ name = "Bulwark", key = "SHIFT-BUTTON4", asdf = "SHIFT-BUTTON4", early = "BUTTON4", asdfEarly = "BUTTON4", stay = true, what = "Templar's Bulwark",
 		SHOW, "/cast {1311015}",
 		by = { ret = false, retpvp = FAVOR, holy = FAVOR } },
@@ -113,11 +122,11 @@ local JOBS = {
 	{ name = "Might", key = "SHIFT-A", asdf = "SHIFT-A", stay = true, what = "Blessing of Might",
 		SHOW, "/cast " .. FRIEND .. " {19740}" },
 	-- With Shift, each key's rarer kin, kept there from the day it comes (no hop onto a key that waits).
-	-- A second Judgement on a cooldown of its own: in Seal of Fury, the taunt for the enemy the mouse is on.
-	{ name = "Swift Judgement", key = "SHIFT-E", asdf = "SHIFT-E", stay = true, what = "Swift Judgement, on the enemy under your mouse, or your target",
-		SHOW, ATTACK, "/cast [@mouseover,harm,nodead][] {1310994}",
-		by = { retpvp = JUSTICE, holy = { name = "Oath", what = "Oath of Light, on the friend under your mouse or your target",
-			"#showtooltip {1328548}", "/cast [@mouseover,help,nodead][help,nodead] {1328548}" } } },
+	-- Holy Light, the big heal, for a build whose V judges Seal of Justice: cast standing, out of the worst of it.
+	-- (until 20 the heal on G is Holy Light, so this waits for Flash of Light to take G)
+	-- A tank's is a second Judgement on a cooldown of its own: in Seal of Fury, the taunt for the enemy the mouse is on.
+	{ name = "Holy Light", key = "SHIFT-E", asdf = "SHIFT-E", stay = true, what = "Holy Light",
+		SHOW, "/cast " .. FRIEND .. " {635}", by = { prot = SWIFT, holy = false } },
 	-- For when your mana runs low; a tank stays in Seal of Fury.
 	{ name = "Wisdom Seal", key = "SHIFT-Q", asdf = "SHIFT-Q", stay = true, what = "Seal of Wisdom",
 		SHOW, "/cast {20166}", by = { prot = false } },
@@ -130,27 +139,22 @@ local JOBS = {
 -- it you can use.
 Shy.Keys.People(JOBS)
 Shy.Keys.Carried(JOBS, { drink = true, stone = true, potion = Shy.Keys.MANA })
--- What you press now and then, each on the first free key of Shift + 6 to =. A tank stays in Seal of Fury, and
--- Retribution against players has Seal of Justice on Shift + E.
+-- What you press now and then, each on the first free key of Shift + 6 to =: what saves a friend before what you
+-- seldom need. A tank stays in Seal of Fury.
 Shy.Keys.Utility(JOBS, {
 	{ name = "Turn Undead", spells = { 10326, 5627, 2878 } },
-	{ name = "Seal of Justice", what = "Seal of Justice: judge it so a runner can't get away", spells = { 20164 },
-		by = { retpvp = false, prot = false } },
-	{ name = "Sense Undead", spells = { 5502 } },
-	{ name = "Seal of Light", spells = { 20349, 20348, 20347, 20165 }, by = { prot = false } },
 	{ name = "Sacrifice", what = "Blessing of Sacrifice", spells = { 20729, 6940 } },
 	{ name = "Intervention", what = "Divine Intervention", spells = { 19752 } },
+	{ name = "Seal of Light", spells = { 20349, 20348, 20347, 20165 }, by = { prot = false } },
+	{ name = "Sense Undead", spells = { 5502 } },
 })
--- 1 2 3: your auras, each the spell itself on the left flyout, beside the game's own bar of them: the one your
--- build keeps on first (the best of it you have), then the other two.
+-- 1 2 3: your auras, each the spell itself on the left flyout. They follow the game's own bar of them, the same
+-- in every build: 1 lights its first icon, whatever aura your build keeps on.
 do
-	local aura = { name = "Aura", what = "Retribution Aura. Devotion Aura until you have it", unpack(RET_AURA) }
-	local calm = { name = "Aura", what = "Concentration Aura. Devotion Aura until you have it", unpack(HOLY_AURA) }
 	local devotion = { name = "Devotion", what = "Devotion Aura", unpack(DEVOTION_AURA) }
 	local retribution = { name = "Retribution", what = "Retribution Aura", unpack(RETRIBUTION_AURA) }
 	local concentration = { name = "Concentration", what = "Concentration Aura", unpack(CONCENTRATION_AURA) }
-	Shy.Keys.Stays(JOBS, { plain = { aura, devotion, concentration }, prot = { devotion, retribution, concentration },
-		holy = { calm, devotion, retribution } })
+	Shy.Keys.Stays(JOBS, { plain = { devotion, retribution, concentration } })
 end
 K.JOBS = JOBS
 
@@ -167,23 +171,23 @@ local PLAY = {
 			{ "Heal", "under half health" }, { "Hands", "about to die" } } },
 	{ from = 20, tip = "Open with Exorcism on undead and demons, and keep Consecration for packs. It eats your mana.",
 		single = { { "Crusader", "on an elite: judge it first" }, { "Exorcism", "on undead or demons" }, { "Seal", "keep it up" },
-			{ "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Heal", "under half health" }, { "Hands", "about to die" } },
+			{ "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Justice", "on a runner" }, { "Heal", "under half health" }, { "Hands", "about to die" } },
 		cleave = { { "Seal", "keep it up" }, { "Consecration", "on 3+ enemies" }, { "Strike" }, { "Judgement" },
 			{ "Stop", "on the hardest hitter" }, { "Heal", "under half health" }, { "Hands", "about to die" } } },
 	{ from = 30, tip = "You kill quickly now. With two on you, Repentance takes one out while you finish the other.",
 		single = { { "Crusader", "on an elite: judge it first" }, { "Exorcism", "on undead or demons" }, { "Seal", "keep it up" },
-			{ "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Heal", "under half health" }, { "Hands", "about to die" } },
+			{ "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Justice", "on a runner" }, { "Heal", "under half health" }, { "Hands", "about to die" } },
 		cleave = { { "Repentance", "on the second one" }, { "Seal", "keep it up" }, { "Consecration", "on 3+ enemies" },
 			{ "Strike" }, { "Judgement" }, { "Stop", "on the hardest hitter" }, { "Heal", "under half health" }, { "Hands", "about to die" } } },
 	{ from = 40, tip = "Swap to Seal of Wisdom when your mana runs low, and when a pull goes wrong Divine Shield gets you out.",
 		single = { { "Crusader", "on an elite: judge it first" }, { "Exorcism", "on undead or demons" }, { "Seal", "keep it up" },
-			{ "Hammer of Wrath", "under 20% health" }, { "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" },
+			{ "Hammer of Wrath", "under 20% health" }, { "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Justice", "on a runner" },
 			{ "Heal", "under half health" }, { "Wisdom Seal", "when your mana runs low" } },
 		cleave = { { "Repentance", "on the second one" }, { "Seal", "keep it up" }, { "Consecration", "on 3+ enemies" },
 			{ "Strike" }, { "Judgement" }, { "Hammer of Wrath", "under 20% health" }, { "Wall", "when it goes wrong" }, { "Hands", "about to die" } } },
 	{ from = 50, tip = "Undead and demons fall in packs to Holy Wrath. Everything else goes down one at a time.",
 		single = { { "Crusader", "on an elite: judge it first" }, { "Exorcism", "on undead or demons" }, { "Seal", "keep it up" },
-			{ "Hammer of Wrath", "under 20% health" }, { "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" },
+			{ "Hammer of Wrath", "under 20% health" }, { "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Justice", "on a runner" },
 			{ "Heal", "under half health" }, { "Wisdom Seal", "when your mana runs low" } },
 		cleave = { { "Holy Wrath", "on undead or demons" }, { "Seal", "keep it up" }, { "Consecration", "on 3+ enemies" },
 			{ "Strike" }, { "Judgement" }, { "Hammer of Wrath", "under 20% health" }, { "Wall", "when it goes wrong" }, { "Hands", "about to die" } } },
@@ -251,25 +255,25 @@ local PLAY = {
 	{ from = 20, build = "holy", tip = "You kill slowly alone, so pull one at a time. In a group, swear your Oath on the tank.",
 		single = { { "Seal", "keep it up" }, { "Exorcism", "on undead or demons" }, { "Judgement" }, { "Strike" },
 			{ "Stop", "to stop a cast" }, { "Heal", "under half health" }, { "Favor", "for a big heal" }, { "Hands", "about to die" } },
-		cleave = { { "Oath", "on your tank" }, { "Seal", "keep it up" }, { "Consecration", "on 3+ enemies" }, { "Strike" },
+		cleave = { { "Oath", "on your tank, once" }, { "Seal", "keep it up" }, { "Consecration", "on 3+ enemies" }, { "Strike" },
 			{ "Judgement" }, { "Heal", "under half health" }, { "Holy Light", "when you can stand still" } } },
 	{ from = 30, build = "holy", tip = "Holy Shock hits or heals at once. Hit with it alone, save it for a sudden drop in a group.",
 		single = { { "Seal", "keep it up" }, { "Holy Shock", "on the enemy, or on you" }, { "Exorcism", "on undead or demons" }, { "Judgement" },
 			{ "Strike" }, { "Stop", "to stop a cast" }, { "Heal", "under half health" }, { "Favor", "for a big heal" } },
-		cleave = { { "Oath", "on your tank" }, { "Holy Shock", "on whoever drops fast" }, { "Heal", "on small hits" },
+		cleave = { { "Oath", "on your tank, once" }, { "Holy Shock", "on whoever drops fast" }, { "Heal", "on small hits" },
 			{ "Holy Light", "on big hits" }, { "Cure", "on a poison or disease" }, { "Hands", "on one about to die" }, { "Consecration", "on 3+ enemies" } } },
 	{ from = 40, build = "holy", tip = "Light's Vigil on the tank before a big pull turns your next Holy Shock into a group heal.",
 		single = { { "Seal", "keep it up" }, { "Holy Shock", "on the enemy, or on you" }, { "Exorcism", "on undead or demons" }, { "Judgement" },
 			{ "Strike" }, { "Stop", "to stop a cast" }, { "Heal", "under half health" }, { "Favor", "for a big heal" },
 			{ "Wisdom Seal", "when your mana runs low" } },
-		cleave = { { "Vigil", "before a big pull" }, { "Oath", "on your tank" }, { "Holy Shock", "on whoever drops fast" },
+		cleave = { { "Vigil", "before a big pull" }, { "Oath", "on your tank, once" }, { "Holy Shock", "on whoever drops fast" },
 			{ "Heal", "on small hits" }, { "Holy Light", "on big hits" }, { "Cure", "on a poison or disease" }, { "Hands", "on one about to die" },
 			{ "Wall", "when they turn on you" } } },
 	{ from = 50, build = "holy", tip = "Keep your mana for the group's heals. Holy Wrath stuns a pack of undead or demons that comes for you.",
 		single = { { "Seal", "keep it up" }, { "Holy Shock", "on the enemy, or on you" }, { "Exorcism", "on undead or demons" },
 			{ "Hammer of Wrath", "under 20% health" }, { "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Heal", "under half health" },
 			{ "Favor", "for a big heal" }, { "Wisdom Seal", "when your mana runs low" } },
-		cleave = { { "Vigil", "before a big pull" }, { "Oath", "on your tank" }, { "Holy Shock", "on whoever drops fast" },
+		cleave = { { "Vigil", "before a big pull" }, { "Oath", "on your tank, once" }, { "Holy Shock", "on whoever drops fast" },
 			{ "Heal", "on small hits" }, { "Holy Light", "on big hits" }, { "Cure", "on a poison or disease" },
 			{ "Holy Wrath", "on undead or demons" }, { "Hands", "on one about to die" }, { "Wall", "when they turn on you" } } },
 }
@@ -277,7 +281,7 @@ K.PLAY = PLAY
 
 local OPTS = {
 	knows = 21084,                           -- Seal of Righteousness: a paladin's from level 1
-	stances = "the aura your build keeps on, then your next two",
+	stances = "Devotion, Retribution and Concentration Aura",
 	-- The aura to keep on: Retribution alone, Devotion as a tank, Concentration as a healer.
 	keep = { plain = RET_AURA, ret = RET_AURA, retpvp = RET_AURA, prot = DEVOTION_AURA, holy = HOLY_AURA },
 	keeps = "aura",

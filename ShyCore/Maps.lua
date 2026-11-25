@@ -16,11 +16,10 @@
 --        pen.quiet: the pen's plain strokes have no halo (a quiet line: the halo is a lit one's)
 --   Shy.Maps.Ribbon(pen, xs, ys, count, color)            -- a ribbon through count points, wide and bright at
 --        the first and fine at the last, in `color` (the trail's, Maps.TrailColor, for none) in a crisp dark case
---        (Maps.CASE) with a comet running along it (Shine);
+--        (Maps.CASE);
 --        xs.depth[i]: point i's level;
 --        xs.fall[i], xs.water[i]: how much of the stretch ending at point i is a slowed fall or crosses
 --        water (swum or walked on), 0 to 1 (Maps.AIR)
---   Shy.Maps.Shine(pen, now)                              -- runs the comet on: call it every frame
 --   Shy.Maps.Start(pen, x, y, head) -> stray              -- a trail laid once (on a plate that slides) begins
 --        where the player at (x, y) now is, clear of a circle `head` round them: the pieces behind are out of
 --        sight, the first cut short. Returns how far the player has strayed from it (lay it again past a little)
@@ -64,7 +63,7 @@
 --
 -- A pen keeps its lines and reuses them stroke after stroke: lay every stroke of a pen between Begin and
 -- Finish each time anything moves (Finish hides what this round didn't use). Several ribbons may share a
--- pen; Shine runs the gleam along all of them.
+-- pen. Nothing on a pen moves by itself: once laid, a pen costs nothing until it is laid again.
 
 local UI = Shy.UI
 
@@ -94,16 +93,10 @@ end
 Maps.EDGE = 0.86             -- how far toward the minimap's rim a pin may sit
 Maps.RIM = 0.98              -- where a line that runs on off the minimap is cut: the rim
 Maps.OVER = 0.85             -- the scale of everything laid over the map's window (Maps.Over, ShyMaps' plate): the map gets the room
--- The ribbon: a tube of light. A pale core (its color `core` of the way to white) on a soft shadow, in a
--- glow of its color, so it stands off any ground whatever the color. Its core's thickness at the start
--- and the end; pieces no longer than `piece` and points no nearer than `least`; its alpha at the end; the
--- core's alpha while the comet isn't passing; seconds per comet. (The core stays all but opaque: where
--- two pieces of a see-through line meet, the seam shows across it.)
--- The comet: a white-hot spark `spark` ribbon widths across in a bloom `bloom` widths across (at
--- `bloomAlpha`), its light rising over `head` of the ribbon ahead of it and fading over `tail` behind;
--- the ribbon's glow is `glow` times a plain stroke's halo at rest and `flare` times as the comet passes.
-Maps.TRAIL = { wide = 5.4, fine = 3, piece = 9, least = 3, fade = 0.92, rest = 1, every = 1.9,
-	spark = 2.2, bloom = 6.5, bloomAlpha = 0.55, head = 0.05, tail = 0.4, glow = 2, flare = 3.6 }
+-- The ribbon: a tube of light in its case (Maps.CASE), so it stands off any ground whatever the color. Its
+-- core's thickness at the start and the end; pieces no longer than `piece` and points no nearer than `least`;
+-- its alpha at the end.
+Maps.TRAIL = { wide = 5.4, fine = 3, piece = 9, least = 3, fade = 0.92 }
 -- A ribbon's case (every ribbon but a journey's): its color inked round with a crisp dark edge, which stands it
 -- off any ground, light or dark, whatever the color. The edge `edge` pixels (pen units) each side and never
 -- under `least` screen pixels, `ink` at `alpha`; the color's own stroke never under `core` screen pixels. Down
@@ -115,7 +108,7 @@ Maps.CASE = { edge = 1.2, least = 1.25, ink = { 0.02, 0.02, 0.03 }, alpha = 0.95
 	gleam = 0.34, light = 0.6, shine = 0.6, full = 7, none = 4.5, spread = 4, shadow = 0.4 }
 -- A journey's look (Ribbon's `look`; Shy.Maps.Trip): in its case as a trail is (Maps.CASE), in the color of
 -- its kind (a flight's, a boat's, a zeppelin's), and told from a trail at a glance: it keeps its width `wide`
--- all the way (a trail tapers), with no gleam down it and no comet along it.
+-- all the way (a trail tapers), with no gleam down it.
 Maps.JOURNEY = { wide = 4.6 }
 -- A stroke off the ground. A level up: its halo's share gained, how much darker and wider its shadow, how
 -- much broader the stroke. edge: how near the world map's edge a line to a place off the map runs, as a
@@ -293,10 +286,6 @@ function Maps.Finish(pen)
 		for _, line in ipairs(pool[i]) do Down(line) end
 	end
 	pool.shown = pool.used
-	if not pen.trail and pen.comet then
-		Down(pen.comet[1])
-		Down(pen.comet[2])
-	end
 end
 
 local function Lighter(color, by)
@@ -307,8 +296,7 @@ end
 Maps.LIGHT = { 0.62, 0.78, 1.00 }
 
 -- The trail's color: the theme's accent, as the theme has it now, so the trail follows it. Its dark case
--- (Maps.CASE) stands it off any ground. The gleam down its middle and the comet's spark are paler: of the
--- way to white.
+-- (Maps.CASE) stands it off any ground. The gleam down its middle is paler: of the way to white.
 local Theme = Shy.Theme
 local function Toward(r, g, b, by)
 	return r + (1 - r) * by, g + (1 - g) * by, b + (1 - b) * by
@@ -319,10 +307,6 @@ end
 local function TrailGleam()
 	local r, g, b = Theme.Accent()
 	return Toward(r, g, b, Maps.CASE.light)
-end
-local function TrailSpark()
-	local r, g, b = Theme.Accent()
-	return Toward(r, g, b, 0.8)
 end
 
 -- A caller's color `by` of the way to white: a color as it was given (a table, or a function the theme reads).
@@ -540,7 +524,6 @@ local function Cased(pen, set, thick, alpha, color, depth, journey)
 	local below = Below(depth)
 	local core = math.max(thick * CRISP * (1 + DEPTH.wide * raised) * (1 + (BELOW.thin - 1) * below) * pen.unit, CASE.core / px)
 	local edge = math.max(CASE.edge * pen.unit, CASE.least / px)
-	-- (Its shadow holds still: the comet flares no glow round a cased ribbon, Shine.)
 	set.cased = true
 	-- The soft shadow under it, turning into a glow of its color as it goes under.
 	local shadow = CASE.shadow * (1 + DEPTH.shade * raised)
@@ -579,8 +562,9 @@ end
 -- How the strokes of a piece look; their widths (.wide, in pen units: a crisp one's to its edges), laid by
 -- Lay. Which is lit, and how many strokes it has.
 local function Dress(pen, set, thick, alpha, color, depth, look, glow, halo)
-	-- (Shine dims a trail's halo between comets.)
+	-- (Whole, as it is laid: nothing changes a stroke's alpha after.)
 	Alpha(set[1], 1)
+	Alpha(set[3], 1)
 	set.cased = nil
 	color = color or Maps.LIGHT
 	glow, halo = glow or 1, halo or color
@@ -621,11 +605,9 @@ local function Dress(pen, set, thick, alpha, color, depth, look, glow, halo)
 end
 
 -- look: a journey's (Maps.JOURNEY): even all the way, in its case, no gleam.
--- glow: the halo this many times a plain stroke's (a trail's, which its comet flares). halo: its color,
--- where that isn't the stroke's (a trail's glow round its pale core).
+-- glow: the halo this many times a plain stroke's. halo: its color, where that isn't the stroke's.
 function Maps.Segment(pen, ax, ay, bx, by, thick, alpha, color, depth, look, glow, halo)
 	local pool = pen.lines
-	pen.laid = (pen.laid or 0) + 1   -- (counts its pieces laid, ever: Shine looks at them again)
 	pool.used = pool.used + 1
 	local set = pool[pool.used]
 	if not set then
@@ -729,8 +711,8 @@ local function Air(pen, piece, i, t, thick, color, fall, water, count)
 	return thick * (1 + (AIR.fall.thin - 1) * fell) * (1 + (AIR.water.thin - 1) * wet), mixed
 end
 
--- Short pieces, each a little finer and fainter than the one before. pen.along says how far along the
--- ribbon each piece is, for Shine. look: a journey's (Maps.JOURNEY) instead: even all the way, still.
+-- Short pieces, each a little finer and fainter than the one before. look: a journey's (Maps.JOURNEY)
+-- instead: even all the way.
 -- With no `color`, a trail wears the trail's color (Maps.TrailColor) in its case (CASE, TRAIL).
 function Maps.Ribbon(pen, xs, ys, count, color, look)
 	local TRAIL = Maps.TRAIL
@@ -761,8 +743,6 @@ function Maps.Ribbon(pen, xs, ys, count, color, look)
 	local whole = 0
 	for i = 2, count do whole = whole + math.sqrt((xs[i] - xs[i - 1]) ^ 2 + (ys[i] - ys[i - 1]) ^ 2) end
 	local sofar, pieces = 0, pen.lines.used
-	pen.along = pen.along or {}
-	pen.lit = pen.lit or {}
 	-- (Where each of a trail's pieces begins and ends along it, for Start.)
 	pen.span0, pen.span1 = pen.span0 or {}, pen.span1 or {}
 	-- (A journey's too, for Start, where no trail shares the pen: a trail's come first.)
@@ -770,23 +750,21 @@ function Maps.Ribbon(pen, xs, ys, count, color, look)
 	-- A journey: in its kind's color, or the trail's (the theme's accent) for none.
 	if look then color = color or Maps.TrailColor end
 	-- A trail: in its case (Maps.CASE), in the trail's color (the theme's accent) or a caller's own, with a
-	-- paler gleam down it and a paler spark on its comet; a glow of its color round it.
-	local glow
+	-- paler gleam down it.
 	if not look then
 		if color then
 			local pale = pen.pale
 			if not pale or pale.of ~= color then
-				pale = { of = color, gleam = Pale(color, Maps.CASE.light), spark = Pale(color, 0.8) }
+				pale = { of = color, gleam = Pale(color, Maps.CASE.light) }
 				pen.pale = pale
 			end
-			pen.gleam, pen.spark = pale.gleam, pale.spark
+			pen.gleam = pale.gleam
 		else
-			color, pen.gleam, pen.spark = Maps.TrailColor, TrailGleam, TrailSpark
+			color, pen.gleam = Maps.TrailColor, TrailGleam
 		end
-		glow, pen.glow = color, color
 	end
 	pen.cased = true
-	-- The way the comet runs and Start follows the player along: its points, and the pixels along it to each.
+	-- The way Start follows the player along: its points, and the pixels along it to each.
 	local path = pen.kept or { x = {}, y = {}, along = {} }
 	pen.kept = path
 	if look then pen.path = path else pen.trail = path end
@@ -807,19 +785,16 @@ function Maps.Ribbon(pen, xs, ys, count, color, look)
 			local along = (sofar + length * (part - 0.5) / parts) / whole
 			pieces = pieces + 1
 			if look then
-				pen.lit[pieces] = Maps.Segment(pen, ax + dx * (part - 1) / parts, ay + dy * (part - 1) / parts, ax + dx * part / parts, ay + dy * part / parts,
+				Maps.Segment(pen, ax + dx * (part - 1) / parts, ay + dy * (part - 1) / parts, ax + dx * part / parts, ay + dy * part / parts,
 					look.wide, 1, color, nil, look)
-				-- (Still: no comet along it.)
-				pen.along[pieces] = false
 				pen.span0[pieces], pen.span1[pieces] = sofar + length * (part - 1) / parts, sofar + length * part / parts
 			else
 				-- (pen.flat: a piece that leads into a ribbon of its own, at that one's start: no taper of its own.)
 				local shape = pen.flat and 0 or along
 				local thick, tint = TRAIL.wide + (TRAIL.fine - TRAIL.wide) * shape, color
 				if fall or water then thick, tint = Air(pen, pieces, i, (part - 0.5) / parts, thick, color, fall, water, count) end
-				pen.lit[pieces] = Maps.Segment(pen, ax + dx * (part - 1) / parts, ay + dy * (part - 1) / parts, ax + dx * part / parts, ay + dy * part / parts,
-					thick, 1 + (TRAIL.fade - 1) * shape, tint, from + (to - from) * (part - 0.5) / parts, nil, TRAIL.flare, glow)
-				pen.along[pieces] = along
+				Maps.Segment(pen, ax + dx * (part - 1) / parts, ay + dy * (part - 1) / parts, ax + dx * part / parts, ay + dy * part / parts,
+					thick, 1 + (TRAIL.fade - 1) * shape, tint, from + (to - from) * (part - 0.5) / parts)
 				pen.span0[pieces], pen.span1[pieces] = sofar + length * (part - 1) / parts, sofar + length * part / parts
 			end
 		end
@@ -831,11 +806,14 @@ function Maps.Ribbon(pen, xs, ys, count, color, look)
 end
 
 -- Start: a trail laid once and slid under the player (on a plate) begins where the player now is.
--- Pieces behind are put out of sight, the first one left is cut short to begin there, and the comet runs
--- from there. Laid again (Begin), the ribbon is whole.
+-- Pieces behind are put out of sight, the first one left is cut short to begin there. Laid again (Begin), the
+-- ribbon is whole.
 -- How the player is followed along it (Start): stretches they may get on in one look (a bend is many short
--- ones), and pixels nearer the next stretch than this one that say a corner was cut.
-local WALK = { ahead = 16, cut = 2 }
+-- ones), and pixels nearer the next stretch than this one that say a corner was cut. step: pixels the start
+-- may lag the player before its piece is cut again: it begins `head` out from them (clear of their arrow) and
+-- comes no nearer than this short of it. (Cutting a piece fits each of its strokes again, a handful of calls
+-- apiece: done at every hundredth of a pixel it was most of a walking frame's cost.)
+local WALK = { ahead = 16, cut = 2, step = 4 }
 
 -- A piece's strokes out of sight, or back.
 local function Cut(set, out)
@@ -895,8 +873,8 @@ local function From(pen, at)
 			pen.headPiece, pen.headAt = k, nil
 		end
 		local t = span1[k] > span0[k] and math.max(0, (at - span0[k]) / (span1[k] - span0[k])) or 0
-		-- (Moved under a hundredth of a pixel: as it stands.)
-		if not pen.headAt or math.abs(pen.headAt - t) * (span1[k] - span0[k]) > pen.unit * 0.01 then
+		-- (Moved under WALK.step pixels: as it stands.)
+		if not pen.headAt or math.abs(pen.headAt - t) * (span1[k] - span0[k]) > pen.unit * WALK.step then
 			pen.headAt = t
 			local sx, sy = set.ax + (set.bx - set.ax) * t, set.ay + (set.by - set.ay) * t
 			for i = 1, set.count do
@@ -968,90 +946,6 @@ function Maps.Start(pen, x, y, head)
 	if bestAt == 2 and bestT == 0 then return math.max(0, off - head) end
 	return off
 end
-
--- The comet: a spark that runs along a ribbon from its start outward, over and over. Ahead of it the
--- ribbon brightens quickly; behind it the light fades slowly, a tail, on whichever of a piece's lines
--- wears the color (pen.lit), and the halo round it flares as it passes.
--- (A journey has none: it is still, Ribbon's look.)
--- A piece in its case, with the lit stroke at rest whole (TRAIL.rest 1), has nothing the comet changes: its
--- stroke is given its alpha once, the first time the pen shines after it was laid (pen.laid, Segment), and
--- left. A pen of such pieces alone (a trail) is not walked again until it is laid again: only its spark moves.
-local Comet
-function Maps.Shine(pen, now)
-	local TRAIL = Maps.TRAIL
-	local used = pen.lines.used
-	local fresh = pen.shone ~= pen.laid or pen.shoneUsed ~= used
-	if fresh or pen.flares then
-		local head, tail, still = TRAIL.head, TRAIL.tail, TRAIL.rest == 1
-		local flares = false
-		for i = 1, used do
-			local along = pen.along[i]
-			if along ~= false then
-				local set = pen.lines[i]
-				if still and set.cased then
-					if fresh then Alpha(set[pen.lit[i] or 3], 1) end
-				else
-					flares = true
-					local phase = (now / TRAIL.every - (along or 0)) % 1
-					local lit = phase < head and phase / head or phase < head + tail and (1 - (phase - head) / tail) ^ 2 or 0
-					-- (In the screen's own steps of alpha: a change too small to see sets nothing.)
-					Alpha(set[pen.lit[i] or 3], math.floor((TRAIL.rest + (1 - TRAIL.rest) * lit) * 255 + 0.5) / 255)
-					if not set.cased then
-						Alpha(set[1], math.floor((TRAIL.glow + (TRAIL.flare - TRAIL.glow) * lit) / TRAIL.flare * 255 + 0.5) / 255)
-					end
-				end
-			end
-		end
-		pen.flares, pen.shone, pen.shoneUsed = flares, pen.laid, used
-	end
-	if pen.trail then Comet(pen, now) end
-end
-
--- The comet's spark on its bloom, where the light peaks (Shine), as wide as the ribbon is there. It comes
--- out of the start and goes into the end, so it never jumps from one to the other.
-Comet = function(pen, now)
-	local TRAIL = Maps.TRAIL
-	local path = pen.trail
-	local whole = path.along[path.n] or 0
-	local comet = pen.comet
-	if not comet then
-		comet = { Unsnapped(pen.owner:CreateTexture(nil, "OVERLAY", nil, 0)), Unsnapped(pen.owner:CreateTexture(nil, "OVERLAY", nil, 1)) }
-		comet[1]:SetTexture(AREA)
-		comet[2]:SetTexture(AREA)
-		if pen.mask then
-			comet[1]:AddMaskTexture(pen.mask)
-			comet[2]:AddMaskTexture(pen.mask)
-		end
-		pen.comet = comet
-	end
-	-- (From where the ribbon now begins: Start.)
-	local begin = math.min(path.from or 0, whole)
-	if path.n < 2 or whole - begin <= 0 then
-		Down(comet[1])
-		Down(comet[2])
-		return
-	end
-	local share = (now / TRAIL.every - TRAIL.head) % 1
-	local s = begin + share * (whole - begin)
-	local at = 2
-	while at < path.n and path.along[at] < s do at = at + 1 end
-	local from, to = path.along[at - 1], path.along[at]
-	local t = to > from and (s - from) / (to - from) or 0
-	local x = path.x[at - 1] + (path.x[at] - path.x[at - 1]) * t
-	local y = path.y[at - 1] + (path.y[at] - path.y[at - 1]) * t
-	local sign = pen.down and -1 or 1
-	local wide = (TRAIL.wide + (TRAIL.fine - TRAIL.wide) * s / whole) * pen.unit
-	local fade = math.min(1, share / 0.06, (1 - share) / 0.1)
-	-- (Its one point, set again: a region's point of the same name takes the place of the old.)
-	for i = 1, 2 do
-		local texture, size = comet[i], i == 1 and TRAIL.bloom or TRAIL.spark
-		texture:SetPoint("CENTER", pen.anchor, pen.point, x, y * sign)
-		texture:SetSize(wide * size, wide * size)
-		Up(texture)
-		Tint(texture, i == 1 and (pen.glow or Maps.TrailColor) or (pen.spark or TrailSpark), fade * (i == 1 and TRAIL.bloomAlpha or 1))
-	end
-end
-
 
 -- A smooth line through points (flat: north, west, north, west, ...), as the game moves a flight or a
 -- ship along such a line: Catmull-Rom, in pieces of no more than `bend` yards. Returns { north = {},

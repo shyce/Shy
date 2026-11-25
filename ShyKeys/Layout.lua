@@ -494,10 +494,9 @@ function Hot.Chord(key)
 	return (IsAltKeyDown() and "ALT-" or "") .. (IsControlKeyDown() and "CTRL-" or "") .. (IsShiftKeyDown() and "SHIFT-" or "") .. key
 end
 
--- The talent build followed (ShyQuest's, when it is there): its id and name, or nil.
+-- The talent build you play (ShyCore's: what your talents are): its id and name, or nil.
 function Keys.Build()
-	local quest = Shy.addons.Quest
-	local build = quest and quest.Build and quest:Build()
+	local build = Shy.Build and Shy.Build.Played()
 	if build then return build.id, build.name end
 end
 

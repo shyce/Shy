@@ -373,12 +373,14 @@ end
 -- Is a cast up? The cast bar showing with a cast or a channel on it (the game keeps it up a moment
 -- after, fading), or Edit Mode showing it; or one just over, the row held open a moment for the next
 -- (Cockpit.lua's hold). The plate opens the cast bar's row for it. In layout mode too: the row stands open
--- with the cast bar's handle in it, to be dragged out (or back in).
+-- with the cast bar's handle in it, to be dragged out (or back in). And all through a fight that holds the row
+-- open (Swing.lua) with no swing timer to stand in it.
 function L.Casting()
 	local bar = _G.PlayerCastingBarFrame
 	if not bar then return false end
 	if Shy.HUD.IsUnlocked() then return true end
 	if ns.Cockpit and ns.Cockpit.CastHeld and ns.Cockpit.CastHeld() then return true end
+	if ns.Swing and ns.Swing.HeldEmpty and ns.Swing.HeldEmpty() then return true end
 	local shown = bar:IsShown()
 	if issecretvalue(shown) or not shown then return false end
 	local manager = _G.EditModeManagerFrame
@@ -928,7 +930,7 @@ function L.Lines(c, now, fit)
 	-- The hand row is open while a cast is up or your weapons swing: it joins the block, and the plate's foot
 	-- goes down with it, the foot row riding the foot still. A cast takes the row from the swing. (The stance
 	-- bar and the totem bar are protected: in a fight the game holds them where they are until it ends, and
-	-- Shy.HUD seats them then; Swing.lua opens the row as a fight begins for a character who swings.)
+	-- Shy.HUD seats them then; Swing.lua opens the row as such a fight begins, and holds it open until it ends.)
 	r.cast = present.cast and now.casting == true
 	r.swing = present.swing and now.swinging == true and not r.cast
 	r.open = r.cast or r.swing

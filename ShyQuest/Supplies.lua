@@ -245,7 +245,7 @@ local function Role()
 	local class = UnitClassBase("player")
 	local role = class and ROLE[class]
 	if type(role) == "table" then
-		local spec = ns.data.specs and ns.data.specs[class]
+		local spec = Shy.Build and Shy.Build.Class()
 		local picked = spec and Tab(spec)
 		if not picked and role.early then return role.early end
 		return spec and role[picked or spec.tab] or "hybrid"

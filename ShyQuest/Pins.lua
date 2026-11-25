@@ -849,11 +849,10 @@ local function Trim(count, head, tail)
 	return Maps.Trim(xs, ys, count, head, tail)
 end
 
--- The ribbon through the trail's first `count` points (Shy.Maps.Ribbon), with its gleam (Shine).
+-- The ribbon through the trail's first `count` points (Shy.Maps.Ribbon).
 local function Ribbon(pen, count, color)
 	Maps.Ribbon(pen, xs, ys, count, color)
 end
-local Shine = Maps.Shine
 
 -- Legs over the ground
 -- On the world map a leg follows the way over the ground between its two places, as the trail does:
@@ -1070,26 +1069,17 @@ local function Cut(count, head, tail)
 	if count > 1 then Ribbon(youPen, count, you.color) end
 end
 
--- Whether the player stands on the lit ground (Ground.Standing), on foot.
-function you.Home()
-	local ground = ns.Ground
-	return not ns.Carried() and ground ~= nil and ground.Standing() or false
-end
-
 local function LayYou()
 	-- Carried (a flight, a ride): no way to walk. Its own line is drawn (Shy.Way.Flight, Shy.Way.Riding).
 	-- you.aloft: it was, when last laid (so the trail comes back on landing).
 	you.aloft = ns.Carried()
-	-- Already on the lit ground: the area is the direction, as on the minimap, and a line to a spot of it
-	-- says nothing. you.home: it was, when last laid (so the trail comes back on leaving it).
-	you.home = you.Home()
 	you.laid = nil
 	-- (Where the trail leads is said for a map that looks ahead along it: Shy.Maps.Lead.)
-	local led = not you.aloft and not you.home and you.to and you.to.stop
+	local led = not you.aloft and you.to and you.to.stop
 	if led and led.north then Maps.Lead(you, led.continent, led.north, led.west) else Maps.Lead(you) end
 	-- (A place someone suggested: the trail to it wears their class's color. Else the theme's.)
 	you.color = you.to and you.to.stop and you.to.stop.color or nil
-	if you.aloft or you.home then
+	if you.aloft then
 		Begin(youPen, 1)
 		Finish(youPen)
 		you.road = nil
@@ -1250,10 +1240,6 @@ end
 -- Whether the trail stands as it was laid: the player where they were, the same place led to and the same
 -- way there. (Asked on the map's timer, which would otherwise lay it all again five times a second.)
 function you.Still()
-	-- (Onto the lit ground or off it: laid again. On it there is none, and nothing more to ask.)
-	local home = you.Home()
-	if home ~= you.home then return false end
-	if home then return true end
 	local laid, to = you.laid, you.to
 	if not laid or laid.to ~= to or ns.Carried() then return false end
 	local position = shownMap and C_Map.GetPlayerMapPosition(shownMap, "player")
@@ -2407,9 +2393,9 @@ function ns.LapStart()
 end
 
 -- Whether a stop stands where a stop of the route does whose ground the player is on (stop.among,
--- Route.lua). That spot is only the nearest of the ground's, so the minimap shows no pin and no way
--- there: it shows the ground, and its spawns as dots (Ground.ChooseMini).
-local function Inside(stop)
+-- Route.lua). There the minimap shows the ground's spawns as dots (Ground.ChooseMini). The pin and the trail
+-- stay: the way may lead under ground, and the ground seen from above says nothing of that.
+local function Among(stop)
 	if not (stop and stop.north) then return false end
 	for _, each in ipairs(R.stops) do
 		if each.among and not each.urgent and (each.kind == "goal" or each.kind == "guide" or each.farm)
@@ -2530,10 +2516,6 @@ local function LayMap(zooming)
 				-- Objectives switched off (the map's filter): the route's places that are only objectives go,
 				-- all but the one led to, which the trail and the arrow still point at.
 				spots[index] = nil
-			elseif Inside(stop) then
-				-- On the ground of this place: its outline and its spawns are the picture, as on the minimap, and
-				-- no pin stands on it nor a line runs to or from it.
-				if pin.lit and not headed then headed = stop end
 			else
 				spots[index] = Place(stop, pin.x, pin.y, "step", pin.lit, pin.number, true)
 				if pin.lit and not heading then heading, headed, led = spots[index], stop, stop end
@@ -2559,13 +2541,9 @@ local function LayMap(zooming)
 		return ((a.x - b.x) * width / scale) ^ 2 + ((a.y - b.y) * height / scale) ^ 2 < (PIN.mapSize * PIN.together) ^ 2
 	end)
 	for _, group in ipairs(groups) do
-		if Inside(group.stop) then
-			if group.lit and not headed then headed = group.stop end
-		else
-			local spot = Place(group.stop, group.at.x, group.at.y, group.kind, group.lit, group.at.count)
-			-- A chosen stop leads whatever else is lit.
-			if group.lit and (not heading or group.stop.chosen) then heading, headed, led = spot, group.stop, group.stop end
-		end
+		local spot = Place(group.stop, group.at.x, group.at.y, group.kind, group.lit, group.at.count)
+		-- A chosen stop leads whatever else is lit.
+		if group.lit and (not heading or group.stop.chosen) then heading, headed, led = spot, group.stop, group.stop end
 	end
 	-- The leading stop always has a pin: if nothing above covers it, it gets its own lit mark, or
 	-- the trail runs to the game's marker for that quest (where the stop is on it: one that stands on
@@ -2575,7 +2553,7 @@ local function LayMap(zooming)
 	if not heading or pointed then
 		local lead = pointed or R.stops[1]
 		local x, y
-		if lead and lead.kind ~= "zone" and lead.north and not Inside(lead) then x, y = PlaceOnMap(lead) end
+		if lead and lead.kind ~= "zone" and lead.north then x, y = PlaceOnMap(lead) end
 		led = x and lead or nil
 		if x and lead.kind == "goal" and theirMarks[lead.actions[1].id] and not lead.stands then
 			heading = { x * width / scale, y * height / scale, 1, PIN.mapSize * LEG.rim }
@@ -2598,8 +2576,7 @@ local function LayMap(zooming)
 	-- step outside its gate). The trail runs to where the way there leaves the map.
 	if not you.to then
 		local lead = R.stops[1]
-		if not (away and away.north) and lead and lead.kind ~= "zone" and lead.kind ~= "fly" and lead.kind ~= "errand" and lead.north
-			and not Inside(lead) then
+		if not (away and away.north) and lead and lead.kind ~= "zone" and lead.kind ~= "fly" and lead.kind ~= "errand" and lead.north then
 			away = lead
 		end
 		if away and away.north and away.continent == W.continent then
@@ -3003,8 +2980,6 @@ local function SetupMap()
 			since = 0
 			if (you.to or you.aloft or ns.Carried()) and not you.Still() then LayYou() end
 		end
-		Shine(youPen, GetTime())
-		if you.roadPen then Shine(you.roadPen, GetTime()) end
 		if ask.alpha ~= ask.want then
 			local step = elapsed / LEG.reveal
 			ask.alpha = ask.want > ask.alpha and math.min(1, ask.alpha + step) or math.max(0, ask.alpha - step)
@@ -3047,7 +3022,8 @@ local ChooseMini
 -- A way that doubles back is long along itself and still close by: the trail is laid on past AHEAD while its
 -- end would stand within AGAIN times the reach of the player, and laid again when its end comes within the
 -- reach all the same. It never stops short where it can be seen to while more of the way lies ahead.
--- STRAY: pixels the player may stray from it before it is laid again from where they are. KEEP: yards
+-- STRAY: pixels the player may stand off it before a join is drawn from them to where it begins (miniAt.Join);
+-- the trail itself is not laid again for that. KEEP: yards
 -- walked before the minimap's own plate is drawn again (the ground's keeps its own). GLIDING: pixels the
 -- pin at the rim may be short of where it is going and be there. WAY_ASKS: times a second the way is asked
 -- for again while the player stands still.
@@ -3105,11 +3081,13 @@ function miniAt.Hold(pin, parent, x, y)
 	end
 end
 
--- The trail's points (xs, ys) on the plate drawn at `shot`, from the player at (north, west) to the leading
--- pin `to`: along the way over the ground where that is known (W.Way, the trail the world map draws too,
--- from the point walked toward on), straight where it isn't. To the place itself, or AHEAD times the
--- minimap's reach along the way, whichever comes first; clear of the player's arrow at one end and of the
--- pin at the other.
+-- The trail's points (xs, ys) on the plate drawn at `shot`, toward the leading pin `to`: along the way over
+-- the ground where that is known (W.Way, the trail the world map draws too), straight from the player at
+-- (north, west) where it isn't. To the place itself, or AHEAD times the minimap's reach along the way, whichever
+-- comes first; clear of the pin at the end.
+-- Along a way it begins at the way's corner behind the player, not where they stand: laid again while they
+-- walk the same stretch, every piece is where it stood and nothing of it is set again (Shy.Maps' strokes set
+-- only what moved). Shy.Maps.Start cuts it to begin clear of the player's arrow.
 -- Returns how many there are. miniAt.short: it stops short of the place.
 local miniPath = { north = {}, west = {} }
 function miniAt.Trail(to, shot, north, west)
@@ -3123,11 +3101,24 @@ function miniAt.Trail(to, shot, north, west)
 	if at == "working" then return 0 end
 	local depth, fall, water = xs.depth, xs.fall, xs.water
 	local px, py = miniAt.On(shot, north, west)
-	xs[1], ys[1], depth[1], fall[1], water[1] = px, py, 0, 0, 0
+	local path, onward
+	if way then
+		path = Smoothed(miniPath, way, stop.north, stop.west)
+		onward = Onward(path, at, north, west)
+	end
+	local behind = onward and onward > 1
+	if behind then
+		local bx, by = miniAt.On(shot, path.north[onward - 1], path.west[onward - 1])
+		xs[1], ys[1], depth[1], fall[1], water[1] = bx, by, path.depth[onward - 1], 0, 0
+	else
+		xs[1], ys[1], depth[1], fall[1], water[1] = px, py, 0, 0, 0
+	end
 	local count = 1
 	-- As far along the way as AHEAD times the minimap's reach, however it winds; and on from there while its
 	-- end would be in sight (within AGAIN times the reach of the player: a way that doubles back).
+	-- (From the player, not from the corner behind them it begins at.)
 	local left = miniAt.AHEAD * miniAt.Reach(shot.radius, shot.square)
+	if behind then left = left + math.sqrt((xs[1] - px) ^ 2 + (ys[1] - py) ^ 2) end
 	local sight = (miniAt.AGAIN * miniAt.Reach(shot.radius, shot.square)) ^ 2
 	-- The next point, the way cut short where it has run as far as it is laid. Whether it was.
 	local function Add(x, y, level, falling, wet)
@@ -3154,8 +3145,7 @@ function miniAt.Trail(to, shot, north, west)
 	end
 	local short = false
 	if way then
-		local path = Smoothed(miniPath, way, stop.north, stop.west)
-		for i = Onward(path, at, north, west), path.n do
+		for i = onward, path.n do
 			local x, y = miniAt.On(shot, path.north[i], path.west[i])
 			if Add(x, y, path.depth[i], path.fall[i], path.water[i]) then
 				short = true
@@ -3176,10 +3166,11 @@ function miniAt.Trail(to, shot, north, west)
 		short = Add(x, y, 0, 0, 0)
 	end
 	-- (The player is on the level the way sets out on.)
-	depth[1] = depth[2] or 0
+	if not behind then depth[1] = depth[2] or 0 end
 	miniAt.short = short
-	-- (Shy.Maps.Start keeps it clear of the arrow as the player walks on.)
-	return Trim(count, LEG.miniYou, short and 0 or to.rim)
+	-- (Shy.Maps.Start keeps it clear of the arrow as the player walks on. From a corner behind them, nothing of
+	-- its start is cut here: that would move with them.)
+	return Trim(count, behind and 0 or LEG.miniYou, short and 0 or to.rim)
 end
 
 -- (A minimap line's unit: LEG.miniLine of the world map's, growing as the minimap is zoomed and with a minimap
@@ -3187,13 +3178,54 @@ end
 function ns.MiniUnit()
 	return LEG.miniLine * miniGrow * math.max(1, UIParent:GetEffectiveScale() / Minimap:GetEffectiveScale())
 end
+-- The join from the player to where the trail now begins, while they stand off its way (STRAY pixels and more):
+-- two points on a pen of its own, laid again only once either end has moved JOIN.step pixels (it stands under the
+-- player's arrow: a pixel or two behind them is never seen), or the plate is drawn anew.
+-- On the way, none. (As the world map's: the way laid once, only the piece to it following the player.)
+local JOIN = { depth = { 0, 0 }, fall = { 0, 0 }, water = { 0, 0 }, step = 2 }
+function miniAt.Join(stray, px, py, shot, plate, to)
+	local join, path = miniAt.join, miniYou.trail
+	if not (stray and stray > miniAt.STRAY and path and path.n > 1 and to and to.stop) then
+		if join.laid then
+			join.laid = nil
+			Begin(join, 1)
+			Finish(join)
+		end
+		return
+	end
+	-- Where the trail begins now (Shy.Maps.Start cut it there).
+	local at, k = path.from or 0, 2
+	while k < path.n and path.along[k] < at do k = k + 1 end
+	local a0, a1 = path.along[k - 1], path.along[k]
+	local t = a1 > a0 and math.max(0, math.min(1, (at - a0) / (a1 - a0))) or 0
+	local tx, ty = path.x[k - 1] + (path.x[k] - path.x[k - 1]) * t, path.y[k - 1] + (path.y[k] - path.y[k - 1]) * t
+	local laid = join.laid
+	local step = JOIN.step ^ 2
+	if laid and laid.shot == shot and laid.gen == shot.gen and (laid.px - px) ^ 2 + (laid.py - py) ^ 2 < step
+		and (laid.tx - tx) ^ 2 + (laid.ty - ty) ^ 2 < step then
+		return
+	end
+	laid = laid or {}
+	join.laid = laid
+	laid.shot, laid.gen, laid.px, laid.py, laid.tx, laid.ty = shot, shot.gen, px, py, tx, ty
+	Begin(join, miniYou.unit)
+	join.anchor, join.flat = plate, true
+	local depth, fall, water = xs.depth, xs.fall, xs.water
+	xs.depth, xs.fall, xs.water = JOIN.depth, JOIN.fall, JOIN.water
+	xs[1], ys[1], xs[2], ys[2] = px, py, tx, ty
+	local count = Trim(2, LEG.miniYou, 0)
+	if count > 1 then Ribbon(join, count, to.stop.color) end
+	xs.depth, xs.fall, xs.water = depth, fall, water
+	Finish(join)
+end
+
 -- The trail to the leading pin `to`, laid on the plate (shot, plate) for the player at (north, west).
 -- (Carried: no way to walk. The flight's or the crossing's own line is drawn.)
 local function LayMiniLines(to, shot, plate, north, west)
 	Begin(miniYou, ns.MiniUnit())
 	miniYou.anchor = plate
 	miniAt.short = false
-	if to and to.stop and to.on and not ns.Carried() and not (Ground and Ground.Standing()) then
+	if to and to.stop and to.on and not ns.Carried() then
 		local count = miniAt.Trail(to, shot, north, west)
 		if count > 1 then Ribbon(miniYou, count, to.stop.color) end
 	end
@@ -3310,12 +3342,13 @@ local function LayMiniWalks(shot, plate)
 	pool.shown = pool.used
 end
 
--- Every frame while anything shows. Standing still with nothing new, only the gleams run on. Walking, the
+-- Every frame while anything shows. Standing still with nothing new, nothing is set. Walking, the
 -- plate slides and the trail's start and the pin at the rim follow; the rest is laid again only for a new
 -- drawing of the plate, or when what it shows changes (miniAt.stale).
 local function PlaceMiniPins()
 	local reach = C_Minimap.GetViewRadius()
-	local radius = Minimap:GetWidth() / 2
+	-- (Kept as the minimap is sized: SetupMini.)
+	local radius = miniAt.radius
 	-- (Where the player is this frame, asked of the game once for everyone who draws by it: the card's arrow,
 	-- the waypoint arrow, this. Each ask hands over new tables.)
 	local north, west = W.Here()
@@ -3337,17 +3370,14 @@ local function PlaceMiniPins()
 	local facing = C_CVar.GetCVarBool("rotateMinimap") and GetPlayerFacing() or 0
 	local square = Shy.MinimapShape() == "SQUARE"
 	local sin, cos = math.sin(facing), math.cos(facing)
-	-- Already on the lit ground: the area is the direction. No ribbon is asked for, and none is kept.
 	-- Carried: no way to walk.
-	local home = Ground and Ground.Standing() or false
 	local carried = ns.Carried() and true or false
-	if home ~= miniAt.home or carried ~= miniAt.carried then miniAt.home, miniAt.carried, miniAt.stale = home, carried, true end
-	if home then miniAt.way, miniAt.wayAt, miniAt.wayTo = nil, nil, nil end
+	if carried ~= miniAt.carried then miniAt.carried, miniAt.stale = carried, true end
 	-- (A way found, or found anew, while the player stands still is laid at once: ShyWay says nothing of it,
 	-- whoever draws the way asks for it again at every frame.)
 	-- (Standing where they stood, with a way laid: asked WAY_ASKS times a second, not at every frame.)
 	local trailTo = miniAt.wayTo
-	if not home and not miniAt.stale and trailTo and miniHeading and miniHeading.stop == trailTo and trailTo.north then
+	if not miniAt.stale and trailTo and miniHeading and miniHeading.stop == trailTo and trailTo.north then
 		local now = GetTime()
 		local still = north == miniAt.north and west == miniAt.west and miniAt.wayAt ~= "working"
 		if not still or now - (miniAt.wayAsked or 0) >= 1 / miniAt.WAY_ASKS then
@@ -3364,10 +3394,7 @@ local function PlaceMiniPins()
 	local shot, plate = miniAt.Carry(v)
 	local drawn = shot ~= miniAt.shot or shot.gen ~= miniAt.gen
 	-- Standing still with nothing new: the plate has not moved, nor anything on it.
-	if not (drawn or miniAt.stale or miniAt.gliding) and north == miniAt.north and west == miniAt.west then
-		Shine(miniYou, GetTime())
-		return
-	end
+	if not (drawn or miniAt.stale or miniAt.gliding) and north == miniAt.north and west == miniAt.west then return end
 	miniAt.north, miniAt.west = north, west
 	miniAt.Mask(radius, square)
 	local px, py = miniAt.On(shot, north, west)
@@ -3380,8 +3407,7 @@ local function PlaceMiniPins()
 	for _, pin in ipairs(miniPins) do
 		local stop = pin.stop
 		if stop then
-			-- (A pin on the spot of ground the player is on shows nothing, and no line runs to or from it.)
-			local here = stop.continent == continent and not pin.inside and not (home and pin == miniHeading)
+			local here = stop.continent == continent
 			local x, y, out = 0, 0, 0
 			if here then
 				-- From the player, as shares of the minimap's range.
@@ -3419,9 +3445,9 @@ local function PlaceMiniPins()
 	-- Else only its start follows them.
 	local to = miniHeading
 	local relay = drawn or miniAt.stale or (to and to.on or false) ~= miniAt.trailOn
+	local stray
 	if not relay then
-		local stray = Maps.Start(miniYou, px, py, LEG.miniYou)
-		relay = stray ~= nil and stray > miniAt.STRAY
+		stray = Maps.Start(miniYou, px, py, LEG.miniYou)
 		-- Laid short of the place (AHEAD of the reach along the way): laid again from here, back to AHEAD,
 		-- once less than AGAIN of the reach is left ahead of the player, before its end comes into sight.
 		local path = miniYou.trail
@@ -3438,8 +3464,9 @@ local function PlaceMiniPins()
 	if relay then
 		miniAt.trailOn = to and to.on or false
 		LayMiniLines(to, shot, plate, north, west)
-		Maps.Start(miniYou, px, py, LEG.miniYou)
+		stray = Maps.Start(miniYou, px, py, LEG.miniYou)
 	end
+	miniAt.Join(stray, px, py, shot, plate, to)
 	-- The walks: laid again for a new drawing of the plate, or walks chosen anew (DrawMini).
 	if drawn or not miniAt.walksLaid then
 		miniAt.walksLaid = true
@@ -3447,7 +3474,6 @@ local function PlaceMiniPins()
 	end
 	miniAt.stale, miniAt.shot, miniAt.gen, miniAt.gliding = false, shot, shot.gen, false
 	if waiter then miniAt.Wait(waiter, px, py, radius, square, scale) end
-	Shine(miniYou, GetTime())
 end
 
 -- Spawn lights on the minimap, as LightMap: the hovered or clicked pin's quests, else the leading stop's.
@@ -3458,7 +3484,7 @@ local function LightMini()
 	if asked then
 		Ground.ChooseMini(asked, T.db.goals, miniView, true, asked == look.mini)
 	else
-		Ground.ChooseMini(on and look.miniHeaded or nil, on and T.db.goals, miniView, nil, nil, on and Inside(look.miniHeaded))
+		Ground.ChooseMini(on and look.miniHeaded or nil, on and T.db.goals, miniView, nil, nil, on and Among(look.miniHeaded))
 	end
 end
 
@@ -3483,7 +3509,6 @@ local function DrawMini()
 			Walkers(stop, lit, walkers)
 			local pin = miniPins:Next()
 			pin.stop, pin.next, pin.rim = stop, false, count and 0 or PIN.miniSize * LEG.rim * miniScale
-			pin.inside = Inside(stop)
 			-- (Shown, faded and placed afresh at the next placement: PlaceMiniPins sets only what changed.)
 			pin.shownAs, pin.alphaAs, pin.hold = nil, nil, nil
 			pin:SetScale(miniScale)
@@ -3602,6 +3627,11 @@ local function SetupMini()
 	miniAt.plate:SetPoint("CENTER", Minimap, "CENTER", 0, 0)
 	miniYou = Pen(miniDriver, "CENTER", Minimap, false, true)
 	miniYou.mask = miniAt.mask
+	miniAt.join = Pen(miniDriver, "CENTER", Minimap, false, true)
+	miniAt.join.mask = miniAt.mask
+	-- The minimap's radius, kept as it is sized: read at every frame, it would be a call into the game each time.
+	miniAt.radius = Minimap:GetWidth() / 2
+	Minimap:HookScript("OnSizeChanged", function(_, width) miniAt.radius = (width or Minimap:GetWidth()) / 2 end)
 	walkPen = Pen(miniDriver, "CENTER", Minimap, false)
 	walkPen.mask = miniAt.mask
 	miniDriver:SetScript("OnUpdate", function(_, elapsed)
@@ -3615,6 +3645,38 @@ local function SetupMini()
 	end)
 	miniDriver:HookScript("OnHide", function() SayGround("mini", nil) end)
 end
+
+-- What decides whether the trail stands on the lit ground, said in chat (finding faults: /shy quest trail).
+T:Command("trail", nil, function()
+	local lead = R.stops[1]
+	local ground = ns.Ground
+	local say = {}
+	local function Add(text) say[#say + 1] = text end
+	Add(("on the lit ground %s, carried %s, lead %s (%s)"):format(tostring(ground and ground.Standing()), tostring(ns.Carried()),
+		tostring(lead and lead.kind), tostring(lead and (lead.title or lead.key))))
+	if lead and lead.north then
+		local level, up = W.Prefer(lead)
+		Add(("found here %s, spawns shown %s; led to level %s up %s; same world %s, known %s"):format(
+			tostring(lead.among ~= nil), tostring(Among(lead)),
+			tostring(level), tostring(up), tostring(lead.continent == W.continent), tostring(W.Known())))
+		local way, at = W.Way(lead.continent, lead.north, lead.west, level, up)
+		if type(way) == "table" then
+			local looks, last = {}, nil
+			for i = 1, way.n do
+				local look = way.look and way.look[i] or 0
+				if look ~= last then looks[#looks + 1] = i .. ":" .. tostring(look) end
+				last = look
+			end
+			Add(("way: %d points, walking toward %s, levels %s"):format(way.n, tostring(at), table.concat(looks, " ")))
+		else
+			Add("way: " .. tostring(way) .. " " .. tostring(at))
+		end
+	end
+	Add(("world map trail to %s (%s), minimap leads %s, its pin shown %s"):format(tostring(you.to and you.to.stop and you.to.stop.kind),
+		you.to and (you.to.off and "off the map" or "on it") or "none", tostring(miniHeading and miniHeading.stop and miniHeading.stop.kind),
+		tostring(miniHeading and miniHeading.on)))
+	for _, line in ipairs(say) do T:Print(line) end
+end)
 
 -- Draw both maps again. What the ground gathered is forgotten here and nowhere else: it is good for as
 -- long as the route and the log are, so opening the map or changing the map shown gathers nothing twice.

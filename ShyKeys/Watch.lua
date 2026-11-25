@@ -6,8 +6,8 @@ local ADDON, ns = ...
 local Shy, UI = Shy, Shy.UI
 local Keys = Shy.Keys
 local DB = ns.DB
-local Bags, Before, Macro, Pick = ns.Bags, ns.Before, ns.Macro, ns.Pick
-local SOON, loading, watched = ns.SOON, ns.loading, ns.watched
+local Bags, Before, Macro, Pick, Several = ns.Bags, ns.Before, ns.Macro, ns.Pick, ns.Several
+local SOON, loading, watched, HOT = ns.SOON, ns.loading, ns.watched, ns.HOT
 
 ---------------------------------------------------------------------------
 -- Kept up: new abilities, the bags, the build
@@ -20,7 +20,33 @@ function Keys.Mine()
 	return watched[1]
 end
 
+-- A job's spell by the game's name: the first it names (the best it comes to), else the job's own name.
+local function Spoken(job)
+	for _, line in ipairs(job) do
+		local id = line:match("{(%d+)}")
+		if id then return C_Spell.GetSpellName(tonumber(id)) or job.name end
+	end
+	return job.name
+end
+
+-- Not following your talents, a layout made on its own keeps the build your keys were laid out for (one you ask
+-- for, or follow, takes the build you play now). The options for it, kept by the entry.
+local function Kept(entry)
+	local db, who = entry.addon.db, UnitGUID("player")
+	local kept = db.keysBuild and db.keysBuild[who]
+	if db.keysFollow == true or kept == nil or not entry.opts.build then return entry.opts end
+	if (entry.opts.build() or "") == kept then return entry.opts end
+	if entry.keptFor ~= kept then
+		local one = kept ~= "" and Shy.Build and Shy.Build.Find(kept)
+		local opts = setmetatable({}, { __index = entry.opts })
+		opts.build = function() return kept ~= "" and kept or nil, one and one.name or nil end
+		entry.keptFor, entry.keptOpts = kept, opts
+	end
+	return entry.keptOpts
+end
+
 -- Jobs that had nothing to do may have now (a spell trained, food bought): they come to their keys, each said.
+-- One whose spells you've lost (a talent dropped) leaves its key, said once for all of them.
 local function Grow()
 	soon = false
 	if InCombatLockdown() then
@@ -31,9 +57,15 @@ local function Grow()
 	for _, entry in ipairs(watched) do
 		if Keys.Has(entry.addon) and not Keys.Old(entry.addon) and not Keys.Paused(entry.addon) and (entry.waiting ~= 0 or entry.stale) then
 			entry.stale = nil
-			local result = Keys.Apply(entry.addon, entry.jobs, entry.opts)
+			local result = Keys.Apply(entry.addon, entry.jobs, Kept(entry))
 			if result then
 				entry.waiting = result.waiting
+				if #result.gone > 0 then
+					local names = {}
+					for i, job in ipairs(result.gone) do names[i] = Spoken(job) end
+					entry.addon:Print(("you don't have %s now, so %s off your keys."):format(Several(names, HOT.named),
+						#names == 1 and "it's" or "they're"))
+				end
 				for _, job in ipairs(result.new) do
 					entry.addon:Print(("%s is on %s now."):format(job.name, Keys.Key(result.at[job.name])))
 				end
@@ -105,13 +137,20 @@ local function Turn()
 	local who = UnitGUID("player")
 	for _, entry in ipairs(watched) do
 		local opts, db = entry.opts, entry.addon.db
-		if opts and opts.build and db.keysFollow == true and Keys.Has(entry.addon) and not Keys.Old(entry.addon) and not Keys.Paused(entry.addon) then
+		if opts and opts.build and Keys.Has(entry.addon) and not Keys.Old(entry.addon) and not Keys.Paused(entry.addon) then
 			local build, name = opts.build()
 			if (db.keysBuild and db.keysBuild[who]) ~= (build or "") then
-				local result = Keys.Apply(entry.addon, entry.jobs, opts)
-				if result then
-					entry.waiting = result.waiting
-					entry.addon:Print(("your keys are laid out for %s now."):format(name or "your talents"))
+				if db.keysFollow == true then
+					local result = Keys.Apply(entry.addon, entry.jobs, opts)
+					if result then
+						entry.waiting = result.waiting
+						entry.addon:Print(("your keys are laid out for %s now."):format(name or "your talents"))
+					end
+				elseif entry.told ~= (build or "") then
+					-- (said once a change: your keys stay as they are until you lay them out)
+					entry.told = build or ""
+					entry.addon:Print(("your talents are %s now. Lay out your keys again to match, or turn on Follow my talents in /shy Keys."):format(
+						name or "another build"))
 				end
 			end
 		end
@@ -124,9 +163,11 @@ function Keys.Watch(addon, jobs, opts)
 	Keys.gen = Keys.gen + 1   -- (whose keys are drawn has changed)
 	if watch then return end
 	watch = CreateFrame("Frame")
-	-- (The spellbook from ShyCore, said only when it really changed: what the keys show is worked out again.)
+	-- (The spellbook from ShyCore, said only when it really changed: what the keys show is worked out again, and
+	-- laid out again, as a spell lost leaves its key even when nothing waits for one.)
 	Shy:On("SHY_SPELLS", function()
 		Keys.gen = Keys.gen + 1
+		for _, entry in ipairs(watched) do entry.stale = true end
 		Later()
 	end)
 	for _, event in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP", "PLAYER_REGEN_ENABLED", "LEARNED_SPELL_IN_SKILL_LINE",
@@ -156,7 +197,6 @@ function Keys.Watch(addon, jobs, opts)
 		end
 	end)
 	Shy:On("SHY_BUILD", Turn)
-	Shy:On("SHY_TALENTS", Turn)
 end
 
 -- What the files after this one use.

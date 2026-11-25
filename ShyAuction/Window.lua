@@ -2,9 +2,12 @@
 -- and closes (its events, its warnings and errors go on working); ours is its child, so it comes and goes with it, and
 -- the game's pieces stay where they are, hidden (Shy.Shop.Veil: each asks its parent for the window, so none may be
 -- moved). The header names it and holds the pages as tabs; the foot is the
--- scan bar (Foot.lua). A page registers itself:
+-- scan bar (Foot.lua), or the page's own. A page registers itself:
 --   ns.AddPage{ key, label, order, Build = function(page) end, Draw = function(page, width, height) end,
---               Count = function() return n, gold end }   -- an optional count after the tab's words (gold: wants you)
+--               Count = function() return n, gold end,   -- an optional count after the tab's words (gold: wants you)
+--               Foot = { Build = function(band, L) end, Draw = function(band, width) end } }
+--   Foot: a foot of its own in the scan bar's place while it is up: a band in the scan bar's make (Foot.Band), L its
+--   measures (pad, market, button, buttonHeight) for what stands in it to line up with the scan bar's.
 -- W.Draw() lays the page in view again (next frame: W.Stale()).
 
 local ADDON, ns = ...
@@ -66,15 +69,22 @@ function W.Draw()
 		tabs:SetBadge(i, gold and n or 0)
 		tabs:SetCount(i, (not gold and n and n > 0) and n or nil)
 		def.frame:SetShown(def.key == current)
+		if def.band then def.band:SetShown(def.key == current) end
 		if def.key == current then
 			if not def.built then
 				def.built = true
 				Safely(def.Build, def.frame)
+				if def.band then Safely(def.Foot.Build, def.band, ns.Foot.L) end
 			end
 			Safely(def.Draw, def.frame, width, height)
+			if def.band then Safely(def.Foot.Draw, def.band, width) end
 		end
 	end
-	if ns.Foot then Safely(ns.Foot.Draw, width) end
+	local own = byKey[current] and byKey[current].band
+	if ns.Foot then
+		ns.Foot.Shown(not own)
+		if not own then Safely(ns.Foot.Draw, width) end
+	end
 end
 
 W.Stale = Shop.Later(function() W.Draw() end)
@@ -120,6 +130,10 @@ local function Build()
 		frame:SetPoint("BOTTOMRIGHT", 0, L.foot)
 		frame:Hide()
 		def.frame = frame
+		if def.Foot then
+			def.band = ns.Foot.Band(body, L.foot)
+			def.band:Hide()
+		end
 	end
 	if ns.Foot then ns.Foot.Build(body, L.foot) end
 	current = byKey[T.db.page] and T.db.page or pages[1].key

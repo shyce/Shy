@@ -23,41 +23,51 @@ local FRIEND, Grows = Shy.Keys.FRIEND, Shy.Keys.Grows
 
 -- Discipline and Holy heal first: their three heals stand where the others' three attacks do, and the
 -- attacks where the heals were. Discipline and Holy each have a spell of their own where Shadow Word: Death is, and
--- Shadow has Vampiric Embrace and Silence where the others have Holy Fire and Shackle Undead.
+-- Shadow has Vampiric Embrace and Silence where the others have Renew and Shackle Undead.
 local function Healer(job) return { disc = job, holy = job } end
 local function Shadow(job) return { shadow = job, shadowpvp = job } end
 local PAIN = { name = "Pain", what = "Shadow Word: Pain", SHOW, "/cast {589}" }
 local BLAST = { name = "Mind Blast", what = "Mind Blast", SHOW, "/cast {8092}" }
 -- (a healer's nuke, and the shield and wand build's: Smite, by the word every class's nuke has)
 local SMITE = { name = "Bolt", role = "bolt", what = "Smite", SHOW, "/cast {585}" }
+-- Discipline's nuke: Smite, then Penance, on the friend under your mouse or your enemy.
+local PENANCE_BOLT = { name = "Bolt", role = "bolt", what = "Penance, on the friend under your mouse, or your target. Smite until 30",
+	SHOW, "/cast [known:{402174},@mouseover,help,nodead][known:{402174}] {402174}; {585}" }
 local HEAL = { name = "Heal", role = "heal", what = "Greater Heal, with Inner Focus when it is ready. Heal until 40",
 	"#showtooltip [known:{2060}] {2060}; {2054}", "/cast {14751}", Grows(2060, 2054) }
 local RENEW = { name = "Renew", role = "renew", what = "Renew", SHOW, "/cast " .. FRIEND .. " {139}" }
 local QUICK = { name = "Quick Heal", what = "Flash Heal. Lesser Heal until 20", SHOW, Grows(2061, 2050) }
 local CONTROL = { name = "Control", what = "Mind Control", SHOW, "/cast {605}" }
 local SILENCE = { name = "Silence", what = "Silence", SHOW, "/cast {15487}" }
-local EMBRACE = { name = "Embrace", what = "Vampiric Embrace", SHOW, "/cast {15286}" }
+-- (with ASDF on Z: X is under the ring finger that holds S, and you keep Embrace up on the run)
+local EMBRACE = { name = "Embrace", asdf = "Z", what = "Vampiric Embrace", SHOW, "/cast {15286}" }
 local PENANCE = { name = "Penance", what = "Penance, on the friend under your mouse, or your target",
 	SHOW, "/cast [@mouseover,help,nodead][] {402174}" }
 local NOVA = { name = "Holy Nova", what = "Holy Nova", SHOW, "/cast {15237}" }
+local INFUSION = { name = "Infusion", what = "Power Infusion, on the friend under your mouse, or your target, or you",
+	SHOW, "/cast " .. FRIEND .. " {10060}" }
 -- Shield and wand: the wand is the build's damage, so it takes the easiest key, Mind Blast R and Smite the wand's.
 local WAND = { name = "Wand", role = "wand", what = "Shoot your wand", SHOW, "/cast !{5019}" }
--- Shadow: Devouring Plague on T, the area key (Devouring Contagion spreads it), and the big heal on B. You can't heal
--- in Shadowform, so Shadow's heals drop it first.
+-- Shadow: Devouring Plague on T, the area key (Devouring Contagion spreads it). You can't heal in Shadowform, so
+-- Shadow's heals drop it first: Flash Heal on V, Renew on B (on X until Vampiric Embrace takes it; Z with ASDF),
+-- the big heal behind Shift.
 local PLAGUE = { name = "Plague", what = "Devouring Plague", SHOW, "/cast {2944}" }
 local FORMHEAL = { name = "Heal", role = "heal", what = "Greater Heal. Heal until 40. Drops Shadowform first",
 	"#showtooltip [known:{2060}] {2060}; {2054}", "/cancelform", Grows(2060, 2054) }
 -- Shadow takes Inner Focus late, for Mind Blast: on a key of its own, where the healers' Prayer of Mending is.
 -- (the other builds spend it on the big heal, which casts it first)
 local FOCUS = { name = "Inner Focus", what = "Inner Focus", SHOW, "/cast {14751}" }
-local FORMRENEW = { name = "Renew", role = "renew", what = "Renew. Drops Shadowform first",
-	SHOW, "/cancelform", "/cast " .. FRIEND .. " {139}" }
-local FORMQUICK = { name = "Quick Heal", what = "Flash Heal. Lesser Heal until 20. Drops Shadowform first",
+local FORMRENEW = { name = "Renew", role = "renew", key = "B", asdf = "B", early = "X", asdfEarly = "Z",
+	what = "Renew. Drops Shadowform first", SHOW, "/cancelform", "/cast " .. FRIEND .. " {139}" }
+-- (with ASDF on X, which Embrace leaves: you stand still to cast it)
+local FORMQUICK = { name = "Quick Heal", asdf = "X", what = "Flash Heal. Lesser Heal until 20. Drops Shadowform first",
 	SHOW, "/cancelform", Grows(2061, 2050) }
 
 -- A key is named for the one ability it casts; one that casts several as you level has a word true of them all
 -- (Heal, Quick Heal, Disease), and what every class has is called the same on each (Stop, Bolt, Wand, Raise).
 -- Each job's key as you move: key with WASD, asdf with ASDF (S forward, F back: the hand a key further right).
+-- A spell cast on the friend under your mouse is never on a mouse button: pressing one nudges the pointer off
+-- the frame you aimed at.
 local JOBS = {
 	-- The fight, under the fingers that are free while you move. The nuke is first, so it is R's from level 1.
 	{ name = "Bolt", role = "bolt", key = "R", asdf = "R", what = "Smite. Mind Flay if you have it",
@@ -66,70 +76,73 @@ local JOBS = {
 		SHOW, "/cast {589}", by = Healer(RENEW) },
 	{ name = "Mind Blast", key = "E", asdf = "E", what = "Mind Blast",
 		SHOW, "/cast {8092}", by = { disc = QUICK, holy = QUICK, wand = WAND } },
-	-- With ASDF the wand goes over the running finger: you shoot it standing still, and G is kept for an instant cast on the run.
+	-- With ASDF the wand goes over the running finger: you shoot it standing still.
 	{ name = "Wand", role = "wand", key = "Z", asdf = "W", early = "F", what = "Shoot your wand",
 		SHOW, "/cast !{5019}", by = { wand = SMITE } },
 	-- A healer's Smite stands on R until the big heal is learned (16), then goes to T.
 	{ name = "Heal", role = "heal", key = "T", asdf = "T", early = "R", asdfEarly = "R", what = "Greater Heal, with Inner Focus when it is ready. Heal until 40",
 		"#showtooltip [known:{2060}] {2060}; {2054}", "/cast {14751}", Grows(2060, 2054),
-		by = { disc = SMITE, holy = SMITE, shadow = PLAGUE, shadowpvp = PLAGUE } },
-	-- With ASDF the stop takes G, so Renew (a healer's Pain) is on Z there; it stands on G until the stop comes.
-	{ name = "Renew", role = "renew", key = "G", asdf = "Z", asdfEarly = "G", what = "Renew",
-		SHOW, "/cast " .. FRIEND .. " {139}", by = { disc = PAIN, holy = PAIN, shadow = FORMRENEW, shadowpvp = FORMRENEW } },
-	{ name = "Quick Heal", key = "V", asdf = "V", what = "Flash Heal. Lesser Heal until 20",
-		SHOW, Grows(2061, 2050), by = { disc = BLAST, holy = BLAST, shadow = FORMQUICK, shadowpvp = FORMQUICK } },
-	{ name = "Fade", key = "X", asdf = "X", what = "Fade",
-		SHOW, "/cast {586}" },
+		by = { disc = PENANCE_BOLT, holy = SMITE, shadow = PLAGUE, shadowpvp = PLAGUE } },
+	-- The shield, every build's, on the friend under your mouse or you: beside the stop. With ASDF the stop has G,
+	-- so it is on V, the index finger's other key.
+	{ name = "Shield", role = "shield", key = "G", asdf = "V", what = "Power Word: Shield",
+		SHOW, "/cast " .. FRIEND .. " {17}" },
+	-- With ASDF the shield has V, so this is on Z.
+	{ name = "Quick Heal", key = "V", asdf = "Z", what = "Flash Heal. Lesser Heal until 20",
+		SHOW, Grows(2061, 2050), by = { disc = PAIN, holy = PAIN, shadow = FORMQUICK, shadowpvp = FORMQUICK } },
+	-- Renew; a healer's Mind Blast, which has Q's Renew; Shadow's Vampiric Embrace, which keeps you healed in Shadowform.
+	{ name = "Renew", role = "renew", key = "X", asdf = "X", what = "Renew",
+		SHOW, "/cast " .. FRIEND .. " {139}", by = { disc = BLAST, holy = BLAST, shadow = EMBRACE, shadowpvp = EMBRACE } },
 	{ name = "Dispel", key = "C", asdf = "C", what = "Dispel Magic, on whoever is under your mouse, or your target, or you",
 		SHOW, "/cast [@mouseover,exists,nodead][exists,nodead][@player] {527}" },
 	-- Devouring Plague costs too much to cast without Devouring Contagion, which only Shadow takes: Shadow has it on
-	-- T, and the big heal here. The other builds leave the far key empty.
+	-- T, and Renew here. The other builds leave the far key empty.
 	{ name = "Plague", key = "B", asdf = "B", what = "Devouring Plague",
-		SHOW, "/cast {2944}", by = { shadow = FORMHEAL, shadowpvp = FORMHEAL, wand = false, disc = false, holy = false } },
+		SHOW, "/cast {2944}", by = { shadow = FORMRENEW, shadowpvp = FORMRENEW, wand = false, disc = false, holy = false } },
 	{ name = "Fortitude", key = "SHIFT-4", asdf = "SHIFT-4", stay = true, what = "Power Word: Fortitude",
 		SHOW, "/cast " .. FRIEND .. " {1243}" },
 	{ name = "Inner Fire", key = "SHIFT-5", asdf = "SHIFT-5", stay = true, what = "Inner Fire",
 		SHOW, "/cast {588}" },
-	-- The thumb: what you answer with. The stop is on F (G with ASDF), beside the index finger: Mouse 5 is
-	-- too far to reach in a hurry, so it keeps only what is never hurried.
-	{ name = "Shield", role = "shield", key = "BUTTON4", asdf = "BUTTON4", what = "Power Word: Shield",
-		SHOW, "/cast " .. FRIEND .. " {17}" },
+	-- The thumb: what you answer with, cast on yourself. The stop is on F (G with ASDF), beside the index finger:
+	-- Mouse 5 is too far to reach in a hurry.
+	{ name = "Fade", key = "BUTTON4", asdf = "BUTTON4", what = "Fade",
+		SHOW, "/cast {586}" },
 	{ name = "Stop", role = "stop", key = "F", asdf = "G", what = "Psychic Scream",
 		SHOW, "/cast {8122}" },
-	{ name = "Infusion", key = "SHIFT-BUTTON4", asdf = "SHIFT-BUTTON4", what = "Power Infusion",
-		SHOW, "/cast " .. FRIEND .. " {10060}" },
 	{ name = "Shackle", key = "SHIFT-F", asdf = "SHIFT-G", what = "Shackle Undead",
 		SHOW, "/cast {9484}", by = Shadow(SILENCE) },
 	-- The number row: what your people's priests alone are taught, each people its own two (the one that guards you
-	-- on 4, the other on 5), and the ward every priest has, on 3 beside them.
+	-- on 4, the other on 6), the ward every priest has on 3, and the raise on 5, as every class's is.
 	-- (they stay on their keys from the level they are learned: neither hops over the easy keys meanwhile)
 	{ name = "Gift", key = "4", asdf = "4", spare = "MULTIACTIONBAR4BUTTON4", stay = true, what = "Your race's defensive priest spell",
 		race = Shy.Keys.Gifts("PRIEST", 1) },
-	{ name = "Second Gift", key = "5", asdf = "5", spare = "MULTIACTIONBAR4BUTTON5", stay = true, what = "Your race's other priest spell",
+	{ name = "Second Gift", key = "6", asdf = "6", spare = "MULTIACTIONBAR4BUTTON6", stay = true, what = "Your race's other priest spell",
 		race = Shy.Keys.Gifts("PRIEST", 2) },
 	{ name = "Fear Ward", key = "3", asdf = "3", stay = true, what = "Fear Ward, on the friend under your mouse, or your target, or you",
 		SHOW, "/cast " .. FRIEND .. " {6346}" },
 	-- With Shift: each key's rarer kin.
-	-- (Holy Fire is Holy's opener; Discipline's and the wand build's Mind Blast does that job)
+	-- (Holy Fire is Holy's opener; Discipline's and the wand build's Mind Blast does that job. Shadow's big heal here.)
 	-- With ASDF the little finger holds Shift and the ring finger S, so Shift + Q is a stretch that stops you: an
 	-- opener cast every pull takes Shift + E there, and Mana Burn, which you seldom cast, has Shift + Q.
 	{ name = "Holy Fire", key = "SHIFT-Q", asdf = "SHIFT-E", what = "Holy Fire",
-		SHOW, "/cast {14914}", by = { shadow = EMBRACE, shadowpvp = EMBRACE, wand = false, disc = false } },
+		SHOW, "/cast {14914}", by = { shadow = FORMHEAL, shadowpvp = FORMHEAL, wand = false, disc = false } },
 	-- (a fight with another player's mana: PvP's alone)
 	{ name = "Mana Burn", key = "SHIFT-E", asdf = "SHIFT-Q", what = "Mana Burn",
 		SHOW, "/cast {8129}", by = { shadow = false, wand = false, disc = false, holy = false } },
-	-- The nuke's rarer kin: Shadow Word: Death finishes; Discipline's Penance, Holy's Holy Nova.
+	-- The nuke's rarer kin: Shadow Word: Death finishes; the wand build's Penance, Holy's Holy Nova. (Discipline's
+	-- Penance is its nuke, on T.)
 	{ name = "Death", key = "SHIFT-R", asdf = "SHIFT-R", what = "Shadow Word: Death",
-		SHOW, "/cast {1309595}", by = { disc = PENANCE, wand = PENANCE, holy = NOVA } },
+		SHOW, "/cast {1309595}", by = { disc = false, wand = PENANCE, holy = NOVA } },
 	-- (a group heal: the healers'; Shadow PvP has Mind Control here)
 	{ name = "Prayer", key = "SHIFT-T", asdf = "SHIFT-T", what = "Prayer of Healing",
 		SHOW, "/cast {596}", by = { shadow = false, shadowpvp = CONTROL, wand = false } },
-	{ name = "Raise", role = "raise", key = "BUTTON5", asdf = "BUTTON5", stay = true, what = "Resurrection, on the dead friend under your mouse or your target, or the one you click next",
+	{ name = "Raise", role = "raise", key = "5", asdf = "5", stay = true, spare = "MULTIACTIONBAR4BUTTON5", what = "Resurrection, on the dead friend under your mouse or your target, or the one you click next",
 		"#showtooltip {2006}", "/cast " .. Shy.Keys.DEAD .. " {2006}" },
-	-- With ASDF, Shift + W would lift the running finger: Mending, kept on the tank every ten seconds, takes Shift + F,
-	-- the index finger's own key (a Mending pressed instead of a step back does no harm). Shadow has Inner Focus here.
+	-- The shield's rarer kin. With ASDF, Shift + W would lift the running finger: it takes Shift + F, the index
+	-- finger's own key (pressed instead of a step back, it does no harm). Prayer of Mending, kept on the tank
+	-- every ten seconds; Power Infusion for a build that takes it; Shadow's Inner Focus.
 	{ name = "Mending", key = "SHIFT-G", asdf = "SHIFT-F", what = "Prayer of Mending",
-		SHOW, "/cast " .. FRIEND .. " {401859}", by = Shadow(FOCUS) },
+		SHOW, "/cast " .. FRIEND .. " {401859}", by = { shadow = FOCUS, shadowpvp = FOCUS, disc = INFUSION, wand = INFUSION } },
 	-- Shift + A side-steps too: a blessing does no harm there.
 	{ name = "Spirit", key = "SHIFT-A", asdf = "SHIFT-A", what = "Divine Spirit",
 		SHOW, "/cast " .. FRIEND .. " {14752}" },
@@ -226,22 +239,26 @@ local PLAY = {
 		single = { { "Shield", "to open" }, { "Pain", "keep it up" }, { "Mind Blast", "mana to spare" }, { "Wand" },
 			{ "Quick Heal", "under half health" }, { "Stop", "to break off and heal" } },
 		cleave = { { "Shield", "on whoever is hit" }, { "Renew", "on your tank" }, { "Heal", "when your tank drops" },
-			{ "Quick Heal", "in a hurry" }, { "Pain", "on each enemy" }, { "Wand", "mana to spare" } } },
+			{ "Quick Heal", "in a hurry" }, { "Pain", "on each enemy" }, { "Wand", "mana to spare" },
+			{ "Dispel", "on a spell on a friend" }, { "Fade", "when they turn on you" } } },
 	{ from = 30, build = "disc", tip = "Penance hits the enemy or heals a friend under the mouse. Keep a shield on whoever is taking hits.",
-		single = { { "Shield", "to open" }, { "Pain", "keep it up" }, { "Penance", "when it's ready" }, { "Wand" },
+		single = { { "Shield", "to open" }, { "Pain", "keep it up" }, { "Bolt", "when it's ready" }, { "Wand" },
 			{ "Mind Blast", "mana to spare" }, { "Quick Heal", "under half health" }, { "Stop", "to break off and heal" } },
-		cleave = { { "Shield", "on whoever is hit" }, { "Renew", "on your tank" }, { "Penance", "on your tank" },
-			{ "Heal", "when your tank drops" }, { "Quick Heal", "in a hurry" }, { "Pain", "mana to spare" } } },
+		cleave = { { "Shield", "on whoever is hit" }, { "Renew", "on your tank" }, { "Bolt", "on your tank" },
+			{ "Heal", "when your tank drops" }, { "Quick Heal", "in a hurry" }, { "Pain", "mana to spare" },
+			{ "Dispel", "on a spell on a friend" }, { "Fade", "when they turn on you" } } },
 	{ from = 40, build = "disc", tip = "Shield and Penance carry you. Save Power Infusion for a hard pull and Greater Heal for big hits.",
-		single = { { "Shield", "to open" }, { "Pain", "keep it up" }, { "Penance", "when it's ready" }, { "Mind Blast", "mana to spare" },
+		single = { { "Shield", "to open" }, { "Pain", "keep it up" }, { "Bolt", "when it's ready" }, { "Mind Blast", "mana to spare" },
 			{ "Wand" }, { "Heal", "under half health" }, { "Stop", "to break off and heal" } },
-		cleave = { { "Shield", "on whoever is hit" }, { "Renew", "on your tank" }, { "Penance", "on your tank" },
-			{ "Heal", "when your tank drops" }, { "Infusion", "a hard pull" }, { "Quick Heal", "in a hurry" } } },
+		cleave = { { "Shield", "on whoever is hit" }, { "Renew", "on your tank" }, { "Bolt", "on your tank" },
+			{ "Heal", "when your tank drops" }, { "Infusion", "a hard pull" }, { "Quick Heal", "in a hurry" },
+			{ "Dispel", "on a spell on a friend" }, { "Fade", "when they turn on you" } } },
 	{ from = 50, build = "disc", tip = "Your shields soak more than ever. Keep one on your tank, Renew them, and Penance whatever needs it most.",
-		single = { { "Shield", "to open" }, { "Pain", "keep it up" }, { "Penance", "when it's ready" }, { "Mind Blast", "mana to spare" },
+		single = { { "Shield", "to open" }, { "Pain", "keep it up" }, { "Bolt", "when it's ready" }, { "Mind Blast", "mana to spare" },
 			{ "Wand" }, { "Heal", "under half health" }, { "Stop", "to break off and heal" } },
-		cleave = { { "Shield", "on whoever is hit" }, { "Renew", "on your tank" }, { "Penance", "on your tank" },
-			{ "Heal", "when your tank drops" }, { "Infusion", "a hard pull" }, { "Quick Heal", "in a hurry" } } },
+		cleave = { { "Shield", "on whoever is hit" }, { "Renew", "on your tank" }, { "Bolt", "on your tank" },
+			{ "Heal", "when your tank drops" }, { "Infusion", "a hard pull" }, { "Quick Heal", "in a hurry" },
+			{ "Dispel", "on a spell on a friend" }, { "Fade", "when they turn on you" } } },
 
 	-- Holy: Holy Fire and Smite alone; Renew and the big heal on your tank, Holy Nova for packs.
 	{ from = 10, build = "holy", tip = "Alone, Smite, Pain and your wand. With a tank, keep Renew on them and heal when they drop.",
@@ -253,22 +270,26 @@ local PLAY = {
 		single = { { "Holy Fire", "to open" }, { "Pain", "keep it up" }, { "Mind Blast", "when it's ready" }, { "Bolt" }, { "Wand", "mana running low" },
 			{ "Quick Heal", "under half health" }, { "Stop", "to break off and heal" } },
 		cleave = { { "Renew", "on your tank" }, { "Heal", "when your tank drops" }, { "Holy Nova", "when they're close" },
-			{ "Shield", "on whoever is hit" }, { "Quick Heal", "in a hurry" }, { "Pain", "on each enemy" } } },
+			{ "Shield", "on whoever is hit" }, { "Quick Heal", "in a hurry" }, { "Pain", "on each enemy" },
+			{ "Dispel", "on a spell on a friend" }, { "Fade", "when they turn on you" } } },
 	{ from = 30, build = "holy", tip = "Holy Fire, Mind Blast and Smite hit hard but cost mana. In a group, Renew your tank and Holy Nova the pack.",
 		single = { { "Holy Fire", "to open" }, { "Pain", "keep it up" }, { "Mind Blast", "when it's ready" }, { "Bolt" },
 			{ "Wand", "mana running low" }, { "Heal", "under half health" }, { "Stop", "to break off and heal" } },
 		cleave = { { "Renew", "on your tank" }, { "Heal", "when your tank drops" }, { "Holy Nova", "when they're close" },
-			{ "Prayer", "when all are hurt" }, { "Shield", "on whoever is hit" }, { "Quick Heal", "in a hurry" } } },
+			{ "Prayer", "when all are hurt" }, { "Shield", "on whoever is hit" }, { "Quick Heal", "in a hurry" },
+			{ "Dispel", "on a spell on a friend" }, { "Fade", "when they turn on you" } } },
 	{ from = 40, build = "holy", tip = "Prayer of Mending on your tank before a pull, Holy Nova when they close in, Greater Heal if it goes wrong.",
 		single = { { "Holy Fire", "to open" }, { "Pain", "keep it up" }, { "Mind Blast", "when it's ready" }, { "Bolt" },
 			{ "Wand", "mana running low" }, { "Heal", "under half health" }, { "Stop", "to break off and heal" } },
 		cleave = { { "Mending", "on your tank" }, { "Renew", "on your tank" }, { "Heal", "when your tank drops" }, { "Shield", "on whoever is hit" },
-			{ "Holy Nova", "when they're close" }, { "Prayer", "when all are hurt" }, { "Quick Heal", "in a hurry" } } },
+			{ "Holy Nova", "when they're close" }, { "Prayer", "when all are hurt" }, { "Quick Heal", "in a hurry" },
+			{ "Dispel", "on a spell on a friend" }, { "Fade", "when they turn on you" } } },
 	{ from = 50, build = "holy", tip = "Smite and Holy Fire still kill fast. Holy Nova and Mending turn a pack's hits into healing.",
 		single = { { "Holy Fire", "to open" }, { "Pain", "keep it up" }, { "Mind Blast", "when it's ready" }, { "Bolt" },
 			{ "Wand", "mana running low" }, { "Heal", "under half health" }, { "Stop", "to break off and heal" } },
 		cleave = { { "Mending", "on your tank" }, { "Renew", "on your tank" }, { "Heal", "when your tank drops" }, { "Shield", "on whoever is hit" },
-			{ "Holy Nova", "when they're close" }, { "Prayer", "when all are hurt" }, { "Quick Heal", "in a hurry" } } },
+			{ "Holy Nova", "when they're close" }, { "Prayer", "when all are hurt" }, { "Quick Heal", "in a hurry" },
+			{ "Dispel", "on a spell on a friend" }, { "Fade", "when they turn on you" } } },
 }
 K.PLAY = PLAY
 

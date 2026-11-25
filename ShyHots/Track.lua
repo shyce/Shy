@@ -88,6 +88,8 @@ function K.ReadStats()
 	if bonus ~= nil and not Secret(bonus) then power = bonus end
 end
 
+function K.Power() return power end
+
 -- Whether a unit is who a cast names: by its name alone, or its name with what the game adds to it.
 local function Named(unit, target)
 	local name = UnitName(unit)
@@ -418,7 +420,7 @@ function K.Report()
 	end
 	local learned = 0
 	for _ in pairs(T.db.shares) do learned = learned + 1 end
-	out[#out + 1] = ("%d tick sizes learned; healing power %.0f"):format(learned, power)
+	out[#out + 1] = ("%d tick sizes and %d heal sizes learned; healing power %.0f"):format(learned, ns.Sizes.Learned(), power)
 	out[#out + 1] = ""
 	for _, line in ipairs(log) do out[#out + 1] = line end
 	return table.concat(out, "\n")

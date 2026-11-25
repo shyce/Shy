@@ -1,5 +1,5 @@
 -- Legacy points as a route errand. With a Legacy point to spend, a card row names the next Legacy
--- talent in an order made for leveling (Data/Specs.lua, ns.data.legacy). It is read through C_Traits
+-- talent in an order made for leveling (Data/Legacy.lua, ns.data.legacy). It is read through C_Traits
 -- the way the game's Legacy window reads it: one pool of points for the whole account, three trees,
 -- one config per tree.
 --   Talented comes first in the order. Each of its ranks starts a character's class talent points a

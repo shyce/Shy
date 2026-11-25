@@ -2655,7 +2655,11 @@ local function Slide(north, west)
 	placed.dx, placed.dy, placed.unslid = dx, dy, true
 	-- The rim arcs are of the minimap's edge, not of the ground. A step hides the frame they are on.
 	-- Left up, they stay on the chrome and follow the player while the ground slides away.
-	if placed.rimFrame and placed.rimFrame:IsShown() and dx * dx + dy * dy > 1e-4 then placed.rimFrame:Hide() end
+	-- (placed.rimUp: whether it was last shown, kept here: asking the frame is a call at every step.)
+	if placed.rimUp and dx * dx + dy * dy > 1e-4 then
+		placed.rimUp = false
+		placed.rimFrame:Hide()
+	end
 end
 -- Let a flight, a boat or a crossing ride the plate. The view is the minimap's now (Maps.Mini).
 -- While the quest ground is up, that shot is the one that moves. While it is not, a shot is held
@@ -2865,9 +2869,11 @@ function Ground.PlaceMini(continent, north, west, reach, radius, sin, cos, squar
 				placed.rimKey, placed.rimBands = rimKey, Ground.Rims(mini.fills, north, west, reach, sin, cos, square)
 			end
 			Ground.LayRims(placed.rimBands, radius, square)
-			placed.rimFrame:SetShown(#rimLines > 0)
+			placed.rimUp = #rimLines > 0
+			placed.rimFrame:SetShown(placed.rimUp)
 			Shy.Clock("minimap rim"):Lap(debugprofilestop() - started)
 		elseif placed.rimFrame then
+			placed.rimUp = false
 			placed.rimFrame:Hide()
 		end
 		-- The dots, under the pointers, fading out at the rim as they do.
@@ -2907,6 +2913,7 @@ function Ground.PlaceMini(continent, north, west, reach, radius, sin, cos, squar
 		-- (Drawn again: the next slide is made, whatever it was made for before.)
 		placed.slid, placed.unslid = nil, nil
 	elseif placed.rimFrame then
+		placed.rimUp = false
 		placed.rimFrame:Hide()
 	end
 	Finish(miniSheet.edge, miniSheet.glow, miniSheet.gleam, miniSheet.rimEdge, miniSheet.rimGlow)
@@ -2969,6 +2976,7 @@ function Ground.SetupMini()
 	-- arc with it the moment the player steps (Slide).
 	local rim = CreateFrame("Frame", nil, clip)
 	placed.rimFrame = rim
+	placed.rimUp = rim:IsShown()
 	rim:SetAllPoints()
 	rim:SetFrameLevel(level)
 	rim:Hide()

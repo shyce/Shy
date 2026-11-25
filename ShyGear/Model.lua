@@ -30,7 +30,7 @@ ns.ROLES = {
 }
 local R = ns.ROLES
 
--- Hand-set: the same for each of ShyQuest's talent builds, by class and build id.
+-- Hand-set: the same for each leveling talent build (ShyCore's), by class and build id.
 ns.BUILDS = {
 	WARRIOR = {
 		protsolo = { hand = "melee", armored = true, shield = true, tough = 1, damage = 0.9, shoot = 0.05, regen = 0.06 },
@@ -53,7 +53,8 @@ ns.BUILDS = {
 		bmpvp    = { hand = "ranged", armored = true, shoot = 1, tough = 0.7, mana = 0.25, regen = 0.1 },
 	},
 	PALADIN = {
-		ret     = { hand = "melee", armored = true, damage = 1, spell = 0.1, heal = 0.1, tough = 0.3, mana = 0.15, regen = 0.1 },
+		-- Ret's seals, judgements and Holy Strike gain 0.29 to 0.43 of your spell damage a hit, so it counts for ret.
+		ret     = { hand = "melee", armored = true, damage = 1, spell = 0.4, heal = 0.1, tough = 0.3, mana = 0.15, regen = 0.1 },
 		holy    = { heal = 1, damage = 0.2, spell = 0.05, tough = 0.3, mana = 0.7, regen = 0.35 },
 		prot    = { hand = "melee", armored = true, shield = true, tough = 1, damage = 0.5, spell = 0.2, heal = 0.05, mana = 0.3, regen = 0.1 },
 		holypvp = { heal = 1, damage = 0.25, spell = 0.15, tough = 0.9, mana = 0.5, regen = 0.15 },

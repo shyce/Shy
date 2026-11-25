@@ -143,6 +143,8 @@
 --   Theme.Letter(fs, opts)       -- UI.Letter: a string of Shy's own not set through Theme.Face wears it too;
 --                                -- opts.least (an effect worn at the least), opts.ground (the color it stands on:
 --                                -- its ink the readable one on it); false lets either go
+--   Theme.HoldPlain(fs, on)     -- plain words whatever the effect, while on (found words on badges); false: a
+--                                -- string that wears no effect
 --   Theme.Centre(fs, to, x, y), Theme.Lead(fs), Theme.Run(fs)  -- words on a point, or beginning where plain ones do,
 --                                -- whatever they wear ("Where letters stand")
 -- A preset's `text` is a Theme.TEXTS key (none: the look's own) and `textStrength` 0 to 1 (none: 0).
@@ -2494,6 +2496,8 @@ end
 
 -- What a lettered string wears: the effect, whether its ink is light, and whether the client outlines it.
 function Effect.Worn(fs, l)
+	-- Held plain by its owner (found words on badges: Theme.HoldPlain).
+	if l.plain then return "plain", Effect.Light(fs), false end
 	local effect = Theme.TextEffect()
 	-- A control's words (a button's, a dropdown's value: lettered with no ground) wear a shadow at the most.
 	if l.control then effect = (effect ~= "plain" or l.least) and "shadow" or "plain" end
@@ -2533,6 +2537,7 @@ local function Letter(fs, l)
 		if light then fs:SetShadowColor(0, 0, 0, 1) else fs:SetShadowColor(1, 1, 1, 0.5) end
 	else
 		fs:SetShadowOffset(0, 0)
+		fs:SetShadowColor(0, 0, 0, 0)
 	end
 	if copied then Effect.Copy(fs, l, light and 0 or 1) else Effect.Uncopy(l) end
 end
@@ -2625,6 +2630,20 @@ function Theme.Letter(fs, opts)
 	end
 	Effect.Apply(fs)
 	return fs
+end
+
+-- Words held plain for a while, whatever the effect: found words on badges, where a shadow or outline would muddy
+-- the ink on them (UI.Marks). One effect serves a string's every word, so the whole string stands plain. on false:
+-- the effect again. False for a string that wears no effect (its owner sets its shadow itself).
+function Theme.HoldPlain(fs, on)
+	local l = Effect.lettered[fs]
+	if not l then return false end
+	on = on and true or nil
+	if l.plain ~= on then
+		l.plain = on
+		Effect.Apply(fs)
+	end
+	return true
 end
 
 -- Words that stand on a face of their own (a button's) wear the shadow it asks for wherever the effect is a shadow:

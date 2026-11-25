@@ -26,7 +26,8 @@
 --   box:SetText(text)   box:GetText()   box:Focus()   box.edit
 --
 -- UI.Marks: found words in a line of text, each on a badge: a plate of your color under the whole word, the word
--- in the ink that reads on it. For a line that doesn't wrap.
+-- in the ink that reads on it. For a line that doesn't wrap. While it carries badges the line has no shadow: one
+-- shadow serves a font string's every word, and under a badge's ink it would muddy the word.
 --   local marks = UI.Marks(fontString)
 --   marks:Set(text, ranges)   text: plain. ranges: from, to byte pairs, a word each (none: the text alone)
 local Shy = Shy
@@ -318,6 +319,22 @@ function UI.Marks(fs)
 	measure:Hide()
 	local marks = { plates = {} }
 	local plates = marks.plates
+	local kept   -- the shadow the line had, while badges took it away: { x, y, r, g, b, a }
+	local function Shadow(off)
+		-- (Words that wear the theme's text effect are held plain by it: it letters them again as they change.)
+		if Theme.HoldPlain(fs, off) then return end
+		if off and not kept then
+			local x, y = fs:GetShadowOffset()
+			local r, g, b, a = fs:GetShadowColor()
+			kept = { x, y, r, g, b, a }
+			fs:SetShadowOffset(0, 0)
+			fs:SetShadowColor(0, 0, 0, 0)
+		elseif not off and kept then
+			fs:SetShadowOffset(kept[1], kept[2])
+			fs:SetShadowColor(kept[3], kept[4], kept[5], kept[6])
+			kept = nil
+		end
+	end
 	local function Wide(text)
 		measure:SetText(text)
 		return measure:GetUnboundedStringWidth() or 0
@@ -373,9 +390,15 @@ function UI.Marks(fs)
 			end
 		end
 		for i = n + 1, #plates do plates[i]:Hide() end
+		local badged = false
+		for i = 1, n do
+			if plates[i]:IsShown() then badged = true end
+		end
+		Shadow(badged)
 	end
 	function marks:Hide()
 		for i = 1, #plates do plates[i]:Hide() end
+		Shadow(false)
 	end
 	return marks
 end

@@ -1,5 +1,50 @@
 # Changelog
 
+## 5.2.11 (25 Nov 2026)
+
+### Changed
+- **ShyQuest:** You won't be sent on an escort through elites at your level or higher. It comes back once you outlevel them
+
+### Fixed
+- **ShyCore:** Text boxes didn't follow their window when it was resized. They stretch with it now
+- **ShyQuest:** New escort quests were taken for you and set off at once. They're left for you to start now
+- **ShyQuest:** The trail and pin vanished when you stood on a spot's ground. They stay now, since the way may lead underground
+- **ShyWay:** The trail to Sarltooth in the Wetlands went round the hills. It goes up the planks now
+
+## 5.2.10 (25 Nov 2026)
+
+### Fixed
+- **ShyQuest:** You were sent back to the trainer for spells you already knew. It checks your spellbook now
+
+## 5.2.9 (25 Nov 2026)
+
+### Added
+- **ShyBags:** Your currencies show in your bags, all your characters together. Your gold shows the ones you carry
+- **ShyCore:** Your story on the away screen. Gold on all your characters, crates, Merchant's Favor and Honor, over the game's statistics rolling up
+- **ShyCore:** Seven new game options in setup. Interact key, sharper picture, fuller grass, heavier weather, farther nameplates, camera past small things, shorter loading screens
+- **ShyCrates:** Your crate count covers all your characters when ShyBags is on. It counts crates in bags, bank and mail
+- **ShyCrates:** Waylaid Crates. See what fills each one, priced on its tooltip. A crate button on your bags opens a window to fill them, and the auction house gets a Crates page with a shopping list
+- **ShyHots:** It knows how big each of your heals is now, with your gear and talents. Forget what it learned in Settings after a talent change
+- **ShySkin:** A heal on your action bars shows how much of it would land. A strip fills with what the friend is missing
+- **ShySkin:** Vendors that sell gear for a currency sort for you. Best for you, Cheapest or Level. Your currency shows beside your gold
+
+### Changed
+- **ShyCore:** Your keys and gear follow the build your talents make, even without ShyQuest. A spell you lose leaves its key
+- **ShyDock:** You pick the console's layout, size and bars right in Settings. No trip to the Screen room
+- **ShyFrames:** Your heal on a frame is mint where it lands and soft red where it'd be wasted. The bar's end lights gold when over half would be wasted
+- **ShyKeys:** A new icon. It shows four keys laid out like the movement keys
+- **ShyPaladin:** Your auras sit on 1, 2 and 3 in the same order as the game's bar. Devotion, Retribution, Concentration in every build
+- **ShyQuest:** The trail on your maps holds still now. The spark that ran along it is gone, and walking costs less
+- **ShyQuest:** Late-level guides from 34 to 60 are planned again. Some routes visit different zones now
+- **ShyQuest:** Quest data rebuilt for the newest quests and what they pay. Guides are planned again, so a few routes changed
+- **ShySkin:** Vendors that sell plans now sort by what the plan makes. Plans need your skill, so the ones you can learn come first
+- **ShyTip:** Item, unit and object tooltips get one set of extra lines from every addon. A card can wear a tab, like Equipped, over its top edge
+
+### Fixed
+- **ShyCore:** Search words in the Settings list had a shadow that muddied the badge behind them. They're plain now
+- **ShyDock:** The cast bar landed on your stance bar in a fight. The row now opens when the fight starts and stays open until it ends
+- **ShyFrames:** Mouse 3, 4 and 5 did nothing over a party or raid frame. They press the key's button on your bars now, so a heal lands on that friend
+
 ## 5.2.8 (23 Nov 2026)
 
 ### Added

@@ -152,6 +152,37 @@ function Safety.Near(map, north, west, careful)
 	return found
 end
 
+-- The hostile creatures `keep(npc)` picks whose spawns lie within `reach` yards (REACH_CAREFUL at most) of a way,
+-- in Data.lua's places format: each once, in the order the way meets them.
+function Safety.Along(places, reach, keep)
+	local found, seen = {}, {}
+	local function Look(map, north, west)
+		for _, spawn in ipairs(Round(OnMap(map), north, west)) do
+			local npc = spawn.npc
+			if not seen[npc] and W.Between(north, west, spawn.north, spawn.west) <= reach and keep(npc) then
+				seen[npc] = true
+				found[#found + 1] = npc
+			end
+		end
+	end
+	for _, place in ipairs(places) do
+		local points, last = place.points, nil
+		for i = 1, #points - 1, 2 do
+			local continent, north, west = W.ToWorld(place.map, points[i], points[i + 1])
+			if continent and north then
+				-- Looked at every `reach` yards along the way, so nothing between two points is missed.
+				local steps = last and math.max(1, math.ceil(W.Between(last[1], last[2], north, west) / reach)) or 1
+				for step = last and 1 or steps, steps do
+					local share = step / steps
+					Look(place.map, last and last[1] + (north - last[1]) * share or north, last and last[2] + (west - last[2]) * share or west)
+				end
+				last = { north, west }
+			end
+		end
+	end
+	return found
+end
+
 local said = {}              -- the note last worked out: { key, text }
 
 local function Note(stop)

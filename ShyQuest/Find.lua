@@ -1831,7 +1831,6 @@ local function Lay(_, width, height)
 	side:SetSize(SIDE, tall)
 	rule:SetHeight(tall)
 	input:SetWidth(listW)
-	input.box:SetWidth(listW)
 	scroll:SetSize(listW, height - HEADER - 10 - SEARCH - 10 - PAD)
 	scroll.content:SetWidth(listW - 14)
 	for _, row in ipairs(rows) do

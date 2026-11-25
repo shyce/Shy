@@ -308,6 +308,53 @@ local function Model()
 
 	local core = Settings.told[Shy.core.suffix]
 	if core then Group(core, nil) end
+	-- The game's own settings: switched right here, the same way setup and the Game room switch them.
+	local setup = Shy.Setup
+	if setup and setup.GAME then
+		local key = "room game"
+		local group = model.kept and model.kept[key] or { head = { isHead = true }, tail = { blank = true, h = S.TAIL }, hits = {} }
+		group.head.group, group.head.h, group.tail.group = group, S.HEAD, group
+		group.key, group.addon, group.room, group.plain = key, Shy.core, "game", true
+		group.title, group.mark = "Game", Shy.core.mark
+		group.tagline = "The game's own settings."
+		group.where = group.title
+		group.entries = {}
+		groups[#groups + 1] = group
+		byKey[key] = group
+		local named, order = {}, {}
+		for _, def in ipairs(setup.GAME) do
+			if not named[def.group] then
+				named[def.group] = {}
+				order[#order + 1] = def.group
+			end
+			local list = named[def.group]
+			list[#list + 1] = def
+		end
+		for _, name in ipairs(order) do
+			local section = Add(group, Synthetic(doorEntries, "game section " .. name, function()
+				return { section = name, shown = function()
+					for _, def in ipairs(named[name]) do
+						if setup.Listed(def) then return true end
+					end
+					return false
+				end }
+			end))
+			section.under = nil
+			for _, def in ipairs(named[name]) do
+				Add(group, Synthetic(doorEntries, "game " .. def.key, function()
+					return { label = def.title, desc = def.desc, words = def.group .. " game option",
+						shown = function() return setup.Listed(def) end,
+						enabled = function()
+							if setup.Owned(def) then return false, def.holder end
+							return true
+						end,
+						get = function() return setup.Is(def) end,
+						set = function(on) setup.Switch(def, on) end,
+						apply = function() end }
+				end), section)
+			end
+		end
+	end
 	for _, category in ipairs(Shy.Listed(function(a) return Settings.told[a.suffix] ~= nil end)) do
 		for _, addon in ipairs(category.addons) do Group(Settings.told[addon.suffix], category.title) end
 	end
@@ -325,11 +372,6 @@ local function Model()
 			door.label, door.desc = "/shy " .. command.word, command.help
 			doors[#doors + 1] = door
 		end
-	end
-	for _, def in ipairs(Shy.Setup and Shy.Setup.GAME or {}) do
-		doors[#doors + 1] = Synthetic(doorEntries, "game " .. def.key, function()
-			return { room = "game", label = def.title, desc = def.desc, words = def.group }
-		end)
 	end
 	for i, door in ipairs(doors) do
 		local key = "room " .. door.room
@@ -860,7 +902,9 @@ local function Head(item)
 		if row.made then return end
 		row.made = true
 		local last
-		if group.door then
+		if group.plain then
+			-- (The game's own settings: no Defaults. All of them back as the game ships them would surprise.)
+		elseif group.door then
 			row.go = UI.Button(row, "Open", 64, function() Hub.Open(group.room) end)
 			row.go:SetHeight(22)
 			row.go:SetPoint("RIGHT", row, "TOPRIGHT", -S.PAD, -24)

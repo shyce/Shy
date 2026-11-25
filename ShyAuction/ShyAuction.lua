@@ -16,6 +16,13 @@
 --                           true, or false while the auction house isn't open or the window isn't ours
 --   T:Find(item)            at the auction house, its window on Buy with that item (an item ID) picked and the
 --                           auction house asked what is listed of it: true, or false as T:Show
+--   T:IsOpen()              true while you stand at the auction house
+--   T:AddPage(def)          a page of another addon's in the window, as Window.lua's own (key, label, order, Build, Draw,
+--                           Count, Foot): at load, before the auction house first opens. T:Redraw() lays it again next frame
+--   T:Quote(item, count)    asks the price of count of a commodity, from a click: true, or false while one is being paid
+--   T:Pay()                 pays the quote that stands, from a click: true, or false with none
+--   T:Quoted()              item, count, total, paying of the quote that stands (total nil while asked; paying while
+--                           paid and not yet bought), or nil
 --   T:Market()              your market's key ("US-PvP-Alliance") and when it was last scanned (by you or anyone)
 --   T:CraftPlan(r)          what a recipe is worth to make here (Craft.lua has r and the answer): its worth, the cost of
 --                           its reagents (a vendor's or the auction house's, the cheaper), the profit, what you lack and can afford,
@@ -23,7 +30,8 @@
 --   T:CraftUnit(item)       copper one costs you to get, and from where ("vendor" | "auction" | nil, "none")
 --   T:CraftRank(plans)      plans, the best profit first, the unpriced last
 -- Bus: SHY_AUCTION (why, ...): "scan" (count) as a scan ends, "price" (item) as a search sees one, "refused" (the
---      server didn't answer a scan), "shown" / "closed" with the auction house.
+--      server didn't answer a scan), "shown" / "closed" with the auction house, "quote" (item, count, total),
+--      "bought" (item, count) and "failed" (item) as a purchase goes.
 
 local ADDON, ns = ...
 
@@ -218,6 +226,26 @@ function T:Find(item)
 	ns.BuyPage.Pick(item)
 	return true
 end
+
+function T:IsOpen()
+	return ns.Scan.IsOpen() == true
+end
+
+function T:AddPage(def)
+	ns.AddPage(def)
+end
+
+function T:Redraw()
+	ns.Window.Stale()
+end
+
+function T:Quote(item, count)
+	if type(item) ~= "number" or type(count) ~= "number" or count < 1 or not ns.Scan.IsOpen() then return false end
+	return ns.Purchase.Quote(item, count)
+end
+
+function T:Pay() return ns.Purchase.Pay() end
+function T:Quoted() return ns.Purchase.Quoted() end
 
 function T:Scanning()
 	return ns.Scan.State()

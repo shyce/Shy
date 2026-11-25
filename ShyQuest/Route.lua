@@ -234,6 +234,9 @@ end
 -- Returns true, or false, reason, and "level" when the reason is the quest's level.
 function R.Worth(quest, giver)
 	if quest.level > L.Level() + TRIP.hard then return false, "Level " .. quest.level .. ": too high for now", "level" end
+	-- An escort through elites your level or higher waits until you outlevel them (Escort.Perilous).
+	local elite = ns.Escort and ns.Escort.Perilous(quest.id)
+	if elite then return false, ("The walk passes elite %s, level %d"):format(elite.name, elite.maxLevel), "elite" end
 	if not giver then return true end
 	local trip = Trip(quest, giver)
 	if not trip then return false, "Part of it is on another continent" end

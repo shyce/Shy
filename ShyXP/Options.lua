@@ -1,5 +1,5 @@
--- Settings: what your bars show, then each place's own (under the action bars, the stats window), reputation,
--- the hover and the pace. Where the bars go is picked on tiles, in setup and in the /shy window's Screen room.
+-- Settings: where your bars go and what they show, then each place's own (under the action bars, the stats window),
+-- reputation, the hover and the pace. Where they go is also picked on tiles, in setup and in the Screen room.
 
 local ADDON, ns = ...
 local T, S = ns.T, ns.Stats
@@ -19,11 +19,9 @@ local function Tipped()
 	return false, "Stats on hover is off."
 end
 
-local function PlaceNow()
-	local now = ns.Place()
-	for _, place in ipairs(ns.Places()) do
-		if place.value == now then return place.text end
-	end
+-- Where your bars go: the list, setup and the Screen room's tiles all pick it this one way.
+local function Put(place)
+	if T.db.place ~= place then ns.SetPlace(place) end
 end
 
 -- A color changed: the bars are said again, nothing laid out.
@@ -64,9 +62,9 @@ local list = {
 		if ns.Rep and T.db.repAtTop ~= top then ns.Rep.SetAtTop(T.db.repAtTop) end
 		ns.Refresh()
 	end,
-	{ label = "Where your bars go", button = "Change", says = PlaceNow, words = "place quest window action bars stats window move",
-		run = function() Shy.Hub.OpenAt("screen", HEAD) end,
-		desc = "On the quest window, under your action bars or in the stats window. You pick in the Screen room." },
+	{ key = "place", label = "Where your bars go", words = "place quest window action bars stats window move",
+		items = function() return ns.Places() end, get = function() return ns.Place() end, set = function(v) Put(v) end,
+		desc = "On the quest window, under your action bars or in the stats window." },
 	{ note = "The quest window is hidden, so they show in the stats window.", alert = true, shown = StandsIn },
 	{ key = "bubbles", label = "Bubbles", words = "5% twenty segments", shown = function() return not GameBars() end,
 		desc = "Marks every 5% on your bars, 20 bubbles a level." },
@@ -184,10 +182,6 @@ local function PlaceTiles(parent, width, get, set)
 		for _, tile in ipairs(tiles) do tile:Paint(tile.value == now) end
 	end
 	return f
-end
-
-local function Put(place)
-	if T.db.place ~= place then ns.SetPlace(place) end
 end
 
 if not (Shy.Setup and Shy.Setup.Step) then return end

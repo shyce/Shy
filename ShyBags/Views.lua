@@ -2,6 +2,10 @@
 --   Views.Gold()            { hand, mail, sold, today, week, ever, rows = { { guid, char, hand, mail, sold, note } } }
 --   Views.Results(text)     { { item, id, name, quality, total, places = n, chips = { { who, class, text, soon } } } }
 --   Views.Left(when)        "2 days left", and whether that is soon
+--   Views.Currencies()      your currencies on this realm, the most held first: { { id, name, icon, total,
+--                           rows = { { guid, char, n } } } }
+--   Views.Carried(c, most)  the few a character's foot shows: those it put on its backpack, else its largest, at most
+--                           `most`: { { id, icon, n } }
 
 local ADDON, ns = ...
 local Store = ns.Store
@@ -21,6 +25,50 @@ function Views.Left(when)
 	if left < 3600 then return "under an hour left", true end
 	if left < 86400 then return Count(math.floor(left / 3600), "hour") .. " left", true end
 	return Count(math.floor(left / 86400), "day") .. " left", left < SOON
+end
+
+function Views.Currencies()
+	local by, out = {}, {}
+	for _, entry in ipairs(Store.List()) do
+		local c = entry.char
+		if not c.skip then
+			for id, n in pairs(c.currencies or {}) do
+				local cur = by[id]
+				if not cur then
+					local info = C_CurrencyInfo.GetCurrencyInfo(id)
+					cur = { id = id, name = info and info.name or ("Currency " .. id), icon = info and info.iconFileID, total = 0, rows = {} }
+					by[id] = cur
+					out[#out + 1] = cur
+				end
+				cur.total = cur.total + n
+				cur.rows[#cur.rows + 1] = { guid = entry.guid, char = c, n = n }
+			end
+		end
+	end
+	table.sort(out, function(a, b)
+		if a.total ~= b.total then return a.total > b.total end
+		return a.id < b.id
+	end)
+	for _, cur in ipairs(out) do table.sort(cur.rows, function(a, b) return a.n > b.n end) end
+	return out
+end
+
+function Views.Carried(c, most)
+	local out, mine = {}, c and c.currencies or {}
+	local shown = c and c.backpack or {}
+	local any = next(shown) ~= nil
+	for id, n in pairs(mine) do
+		if not any or shown[id] then
+			local info = C_CurrencyInfo.GetCurrencyInfo(id)
+			out[#out + 1] = { id = id, icon = info and info.iconFileID, n = n }
+		end
+	end
+	table.sort(out, function(a, b)
+		if a.n ~= b.n then return a.n > b.n end
+		return a.id < b.id
+	end)
+	for i = most + 1, #out do out[i] = nil end
+	return out
 end
 
 function Views.Gold()
@@ -409,6 +457,7 @@ do
 	local GOLD = 360                       -- the wing's width
 	local HAND, SOLD, MAIL = 86, 80, 70    -- column widths, from the right
 	local HEAD, FOOT = 40, 24              -- height above the rows (total, headings) and below (AH income)
+	local CUR, CURHEAD = 16, 20            -- a currency's line, and its heading's room (with the rule over it)
 
 	local function Column(parent, size, color, right, width)
 		local fs = Rounded(parent, size, color)
@@ -496,6 +545,80 @@ do
 		Line(plate, "BOTTOM", 20)
 		plate.sums = Rounded(plate, 10)
 		plate.sums:SetPoint("BOTTOMLEFT", 8, 6)
+
+		-- Currencies (Merchant's Favor) over the auction sums: each, all your characters' together; a hover says who.
+		plate.curRule = plate:CreateTexture(nil, "ARTWORK")
+		plate.curRule:SetHeight(1)
+		UI.Paint(plate.curRule, C.border, 0.65)
+		plate.curHead = Rounded(plate, 9, C.dim)
+		plate.curHead:SetText("CURRENCIES")
+		plate.curLines = {}
+	end
+
+	local function CurrencyLine(i)
+		local line = plate.curLines[i]
+		if line then return line end
+		line = CreateFrame("Frame", nil, plate)
+		line:SetHeight(CUR)
+		line:EnableMouse(true)
+		line.fill = line:CreateTexture(nil, "BACKGROUND")
+		line.fill:SetAllPoints()
+		UI.Paint(line.fill, C.row)
+		line.fill:Hide()
+		line.icon = line:CreateTexture(nil, "ARTWORK")
+		line.icon:SetSize(12, 12)
+		line.icon:SetPoint("LEFT", 2, 0)
+		line.total = Column(line, 10.5, C.text, 2, HAND)
+		line.name = Rounded(line, 10.5)
+		line.name:SetPoint("LEFT", line.icon, "RIGHT", 6, 0)
+		line.name:SetPoint("RIGHT", line.total, "LEFT", -6, 0)
+		line:SetScript("OnEnter", function(self)
+			self.fill:Show()
+			local rows = {}
+			for _, held in ipairs(self.cur.rows) do
+				local class = held.char.class and C_ClassColor.GetClassColor(held.char.class)
+				rows[#rows + 1] = { text = Store.Name(held.char), color = class and { class.r, class.g, class.b } or C.text,
+					right = BreakUpLargeNumbers(held.n), rightColor = C.text }
+			end
+			UI.Tip(self, self.cur.name, nil, { side = "RIGHT", note = BreakUpLargeNumbers(self.cur.total), sections = { { rows = rows } } })
+		end)
+		line:SetScript("OnLeave", function(self)
+			self.fill:Hide()
+			UI.TipHide(self)
+		end)
+		plate.curLines[i] = line
+		return line
+	end
+
+	-- The currencies' room over the foot, laid from the bottom up; returns how tall it is.
+	local function DrawCurrencies(list)
+		local n = #list
+		plate.curRule:SetShown(n > 0)
+		plate.curHead:SetShown(n > 0)
+		for i = 1, math.max(n, #plate.curLines) do
+			local line = i <= n and CurrencyLine(i) or plate.curLines[i]
+			if i <= n then
+				local cur = list[i]
+				line.cur = cur
+				line.icon:SetTexture(cur.icon or 134400)
+				line.name:SetText(cur.name)
+				line.total:SetText(BreakUpLargeNumbers(cur.total))
+				line:ClearAllPoints()
+				line:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 6, FOOT + 2 + (n - i) * CUR)
+				line:SetPoint("RIGHT", plate, "RIGHT", -9, 0)
+				line:Show()
+			else
+				line:Hide()
+			end
+		end
+		if n == 0 then return 0 end
+		local top = FOOT + 2 + n * CUR
+		plate.curHead:ClearAllPoints()
+		plate.curHead:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 8, top + 3)
+		plate.curRule:ClearAllPoints()
+		plate.curRule:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 6, top + CURHEAD - 2)
+		plate.curRule:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", -6, top + CURHEAD - 2)
+		return n * CUR + CURHEAD
 	end
 
 	function wing.Show(_, _, _, rows)
@@ -505,7 +628,8 @@ do
 		plate.waiting:SetText(waiting > 0 and ("+ " .. Coins(waiting) .. " waiting") or "")
 		local dim = function(text) return Shy.Theme.Wrap(C.dim, text) end
 		plate.sums:SetText(dim("AUCTIONS MADE   today ") .. Coins(gold.today) .. dim("    7 days ") .. Coins(gold.week) .. dim("    all time ") .. Coins(gold.ever))
-		plate:List(gold.rows, "No characters on this realm yet.", rows, HEAD + FOOT - 3)
+		local currencies = DrawCurrencies(Views.Currencies())
+		plate:List(gold.rows, "No characters on this realm yet.", rows, HEAD + FOOT + currencies - 3)
 		return GOLD, "Gold", Count(#gold.rows, "character"), ""
 	end
 end

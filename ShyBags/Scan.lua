@@ -1,4 +1,4 @@
--- Scans this character's bags, key ring, bank and gold as they change.
+-- Scans this character's bags, key ring, bank, gold and currencies (Merchant's Favor) as they change.
 -- BAG_UPDATE marks a bag dirty; BAG_UPDATE_DELAYED ends the burst and reads each dirty bag once.
 
 local ADDON, ns = ...
@@ -111,10 +111,48 @@ local function Money()
 	Store.Touch("money")
 end
 
+-- Your currencies: c.currencies = { [id] = how many } of every one you have some of; c.backpack = { [id] = true } for
+-- those you told the game to show on your backpack. Read from the game's currency list, and by number those another
+-- of your characters has (the list leaves out what sits under a folded heading).
+local function Currencies()
+	local c = Store.Me()
+	if not c then return end
+	local have, shown, ids = {}, {}, {}
+	for i = 1, C_CurrencyInfo.GetCurrencyListSize() or 0 do
+		local info = C_CurrencyInfo.GetCurrencyListInfo(i)
+		if info and not info.isHeader and info.currencyID then
+			ids[info.currencyID] = true
+			if info.isShowInBackpack then shown[info.currencyID] = true end
+		end
+	end
+	for _, entry in ipairs(Store.List()) do
+		for id in pairs(entry.char.currencies or {}) do ids[id] = true end
+	end
+	for id in pairs(ids) do
+		local info = C_CurrencyInfo.GetCurrencyInfo(id)
+		local n = info and info.quantity
+		if n and not issecretvalue(n) and n > 0 then have[id] = n end
+	end
+	c.currencies, c.backpack = have, shown
+	Store.Touch("currency")
+end
+
+-- (The game says a currency changed several times over at login: read once, next frame.)
+local currencyDue = false
+local function CurrenciesSoon()
+	if currencyDue then return end
+	currencyDue = true
+	C_Timer.After(0, function()
+		currencyDue = false
+		Currencies()
+	end)
+end
+
 function Scan.All()
 	for bag in pairs(HELD) do dirty[bag] = true end
 	Flush()
 	Money()
+	Currencies()
 end
 
 function Scan.Init()
@@ -126,6 +164,7 @@ function Scan.Init()
 	events:RegisterEvent("BANKFRAME_CLOSED")
 	events:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
 	events:RegisterEvent("BANK_TABS_CHANGED")
+	events:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
 	events:SetScript("OnEvent", function(_, event, bag)
 		if event == "BAG_UPDATE" then
 			dirty[bag] = true
@@ -133,6 +172,8 @@ function Scan.Init()
 			Flush()
 		elseif event == "PLAYER_MONEY" then
 			Money()
+		elseif event == "CURRENCY_DISPLAY_UPDATE" then
+			CurrenciesSoon()
 		elseif event == "BANKFRAME_CLOSED" then
 			atBank = false
 		else

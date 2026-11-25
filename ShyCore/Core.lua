@@ -1210,10 +1210,9 @@ do
 		return not roles or roles[role] or false
 	end
 
-	-- The build you follow (ShyQuest's), when it is there: its role, and its name.
+	-- The build you play (Build.lua): its role, and its name.
 	local function Built()
-		local quest = Shy.addons.Quest
-		local build = quest and quest.Build and quest:Build()
+		local build = Shy.Build and Shy.Build.Played()
 		if build and BUILT[build.role] then return BUILT[build.role], build.name end
 	end
 

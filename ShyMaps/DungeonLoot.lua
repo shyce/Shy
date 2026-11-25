@@ -82,7 +82,6 @@ local shown = {}             -- item -> rows showing it now (painted again as th
 local verdicts = {}          -- item -> ShyGear's verdict (false: none), until the gear changes
 local late = {}              -- who is told when a list is to be picked again
 local waiting = false
-local own = false            -- the hover being filled is one of these rows': it says where it drops already
 
 local function Gear()
 	local gear = Shy.addons.Gear
@@ -250,10 +249,10 @@ local function Paint(row)
 	if not data.mine and row.sub:GetUnboundedStringWidth() > left then row.sub:SetText(short) end
 end
 
+-- (A row of these says where it drops already: its hover leaves that out, row.saysWhere.)
 local function Tip(row)
-	own = true
+	row.saysWhere = true
 	UI.GameTipAt(row):SetItemByID(row.data.item)
-	own = false
 	GameTooltip:Show()
 end
 
@@ -400,11 +399,11 @@ function Loot.Bar(parent, onChange)
 	return bar
 end
 
--- Any item's hover says where it drops (T.db.drops): the likeliest two, and how many more.
-local function Where(tip, data)
-	if own or not (T.db and T.db.drops) or (tip ~= GameTooltip and tip ~= ItemRefTooltip) then return end
-	local item = data and data.id
-	if not item or issecretvalue(item) then return end
+-- Any item's hover says where it drops (T.db.drops): the likeliest two, and how many more. A section of it (Shy.Tips),
+-- kept for good: where a thing drops doesn't change.
+local function Where(about, tip)
+	local item = about.id
+	if type(item) ~= "number" then return end
 	local drops = J.Drops(item)
 	if not drops then return end
 	table.sort(drops, function(x, y) return (x.chance or -1) > (y.chance or -1) end)
@@ -417,7 +416,11 @@ local function Where(tip, data)
 	end
 	if #drops > L.most then tip:AddLine(("and %d more places"):format(#drops - L.most), C.dim[1], C.dim[2], C.dim[3]) end
 end
-Shy.OnTip(Enum.TooltipDataType.Item, "where it drops", Where)
+Shy.Tips.Add({ id = "where it drops", order = 30, on = function() return T.db ~= nil and T.db.drops == true end,
+	stamp = function() return 1 end, build = function(about, out)
+		if not (type(about.owner) == "table" and about.owner.saysWhere) then Where(about, out) end
+	end,
+	per = function(about) return type(about.owner) == "table" and about.owner.saysWhere and 1 or 0 end })
 
 -- The game told of an item a row asked for: the rows showing it say so, and a list picked without it is picked again.
 local events = CreateFrame("Frame")

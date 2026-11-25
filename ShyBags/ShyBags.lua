@@ -8,6 +8,10 @@
 --                   screen) or "screen" (the default bar); :SetBagButtons(where) changes it at once
 --   :BagsKey()      the key that opens the bags, as the game writes it, or nil with none bound
 --   :Count(itemID)  total on the account, and who has them where
+--   :Gold()         your characters' gold: { hand, mail, sold, chars } (copper carried, in mailboxes, from auctions sold)
+--   :Currency(id)   how many of a currency your characters hold
+--   :Total(ids)     how many of these items your characters hold anywhere (ids: { [itemID] = true }). These three
+--                   are kept until ShyBags reads something again: cheap to ask often
 --   :RegisterKeyword({ word, help, test })   a search keyword
 --   :Room()         free, total ordinary slots (no key ring, quiver, soul bag or profession bag)
 --   :Cheapest(n)    up to n items that can be dropped or sold, cheapest first; each

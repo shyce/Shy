@@ -1,6 +1,7 @@
--- Verdict lines in item tooltips (GameTooltip and ItemRefTooltip only, not the comparison tooltips):
+-- Verdict lines in item tooltips (a section, Shy.Tips: the game's and a clicked link's, not the comparison tooltips):
 -- one line to read at a glance ("Upgrade for Arms: +4% damage, +2% survival", with the bags' arrow; what it
--- takes away in red), and under it, dim, only what changes how to take it. What each stat is worth is ShyTip's comparison's.
+-- takes away in red), and under it, dim, only what changes how to take it. What each stat is worth is ShyTip's comparison's:
+-- where its card shows that, for an item in the place of one you wear, the line is the verdict alone ("Upgrade for Arms").
 
 local ADDON, ns = ...
 local T = ns.T
@@ -16,18 +17,10 @@ local function Glyph(file, color)
 	return ("|T%s%s:14:14:0:0:32:32:0:32:0:32:%d:%d:%d|t "):format(ns.MEDIA, file, r, g, b)
 end
 
--- Tooltip data carries a GUID for a bag item, a hyperlink otherwise.
-local function Link(data)
-	if not data then return end
-	local guid, link = data.guid, data.hyperlink
-	if issecretvalue(guid) or issecretvalue(link) then return end
-	if guid then return C_Item.GetItemLinkByGUID(guid) end
-	return link
-end
+local verdicts = 0   -- goes up whenever ShyGear says its verdicts may have changed: what was said is let go
 
-local function OnItem(tip, data)
-	if not T.db.tooltip or (tip ~= GameTooltip and tip ~= ItemRefTooltip) then return end
-	local link = Link(data)
+local function OnItem(about, tip)
+	local link = about.link
 	if type(link) ~= "string" or issecretvalue(link) or C_Item.IsEquippedItem(link) then return end
 	local v = ns.Judge(link)
 	if not v or v.kind == "cant" then return end
@@ -35,17 +28,20 @@ local function OnItem(tip, data)
 	local C = UI.colors
 	-- What an upgrade costs you stands out in red; a worse item's line stays quiet throughout.
 	local better = v.kind == "upgrade" or v.kind == "later"
-	local words = ns.Words(v, better and C.bad or nil)
+	-- (ShyTip's comparison says the numbers under this line: once is enough.)
+	local compared = v.over ~= nil and Shy.Tip ~= nil and Shy.Tip.Compares ~= nil and Shy.Tip.Compares()
+	local words = not compared and ns.Words(v, better and C.bad or nil) or nil
 	local build = ns.ForName()
 	local upgrade = build and ("Upgrade for " .. build) or "Upgrade"
+	local said = words and (": " .. words) or ""
 	if v.kind == "upgrade" then
-		Add(tip, Glyph("Up", C.good) .. upgrade .. ": " .. words, C.good)
+		Add(tip, Glyph("Up", C.good) .. upgrade .. said, C.good)
 	elseif v.kind == "later" then
-		Add(tip, Glyph("Soon", C.alert) .. ("%s at level %d: %s"):format(upgrade, v.later, words), C.alert)
+		Add(tip, Glyph("Soon", C.alert) .. ("%s at level %d"):format(upgrade, v.later) .. said, C.alert)
 	elseif T.db.worse then
 		local who = build and (" for " .. build) or ""
 		if v.kind == "worse" then
-			Add(tip, "Worse" .. who .. ": " .. words, C.dim)
+			Add(tip, "Worse" .. who .. said, C.dim)
 		else
 			Add(tip, "About the same" .. who, C.dim)
 		end
@@ -63,5 +59,8 @@ local function OnItem(tip, data)
 end
 
 function ns.SetupTooltip()
-	Shy.OnTip(Enum.TooltipDataType.Item, "is it better", OnItem)
+	Shy.Tips.Add({ id = "is it better", order = 10, on = function() return T.db.tooltip == true end,
+		-- (Worse gear's line is a setting of its own: it is in the stamp too.)
+		stamp = function() return verdicts * 2 + (T.db.worse and 1 or 0) end, build = OnItem })
+	Shy:On("SHY_GEAR", function() verdicts = verdicts + 1 end)
 end

@@ -412,7 +412,7 @@ end
 
 -- What is worn, as a card of its own beside the item's: built from the game's data for its tooltip, so
 -- no tooltip has to be up for it. It is told from the card under the mouse at a glance, not by a
--- sentence: a tick on its picture, the game's one word at its head, and a grey light where the other
+-- sentence: the game's one word on a tab over it, a tick on its picture, and a grey light where the other
 -- has its color. Returns its content and signature; nil when the game can't say it or any of it is secret.
 local function Worn(item)
 	local guid, link = Open(item.guid), Open(item.hyperlink)
@@ -427,7 +427,7 @@ local function Worn(item)
 	if type(written) ~= "table" or type(id) ~= "number" then return nil end
 	local L = Enum.TooltipDataLineType
 	local GOLD = { NORMAL_FONT_COLOR:GetRGB() }
-	local content = { card = true, kind = EQUIPPED, light = C.dim, about = "Worn:" .. id, least = LEAST, body = {} }
+	local content = { card = true, tab = EQUIPPED, light = C.dim, about = "Worn:" .. id, least = LEAST, body = {} }
 	local rows
 	for _, line in ipairs(written) do
 		local what, text, right = line.type, line.leftText, line.rightText
@@ -501,7 +501,9 @@ local function Say(tip, label, open)
 	local GOLD = item and { NORMAL_FONT_COLOR:GetRGB() } or nil
 	if word then
 		content.title, content.titleColor = first.text, first.color
-		content.kind = label or first.right or (not item and word or nil)
+		-- (The game's comparison header stands on a tab over the card: "Equipped", "If equipped together".)
+		content.kind = not label and (first.right or (not item and word or nil)) or nil
+		content.tab = label
 		if icon then content.seat = IconSeat(icon, first.color) end
 		if item then
 			local quality = Quality(data)
@@ -596,6 +598,10 @@ local function Say(tip, label, open)
 			end
 		end
 	end
+
+	-- What addons add to it (Shy.Tips): their sections as they built them, kept until they change.
+	local sections = data and Shy.Tips and Shy.Tips.For(tip, data)
+	for _, block in ipairs(sections or {}) do body[#body + 1] = block end
 
 	-- A unit takes the colors ShyTip.lua chose for its tooltip.
 	if unit then
@@ -1162,6 +1168,17 @@ local HOVERS = { "GameTooltip", "SettingsTooltip" }
 
 function Wing.Start()
 	if clock then return end
+	-- Addons' sections are drawn on the cards; where no card stands in for a tooltip, they are written on it.
+	if Shy.Tips then
+		local hosted = {}
+		Shy.Tips.Drawn(function(tip)
+			return On() and hosted[tip] == true and not Formless(tip) and not Unplaceable(tip)
+		end)
+		for _, name in ipairs(HOVERS) do
+			if _G[name] then hosted[_G[name]] = true end
+		end
+		hosted[ItemRefTooltip] = true
+	end
 	-- (a key's button: the card leads with the key, so the tooltip itself needs no lines of it)
 	if Shy.Keys then Shy.Keys.Carded = function() return true end end
 	clock = CreateFrame("Frame")
@@ -1174,6 +1191,8 @@ end
 
 -- Re-syncs every tooltip after a setting changes.
 function Wing.Apply()
+	-- (Whether cards stand in changes what addons' sections say: ShyGear's numbers or none.)
+	if Shy.Tips then Shy.Tips.Changed() end
 	for _, host in ipairs(hosts) do
 		host.said = nil
 		if host.tip:IsShown() then Safe(Sync, host) elseif host.up then Safe(Down, host) end

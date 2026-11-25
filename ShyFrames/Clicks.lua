@@ -12,7 +12,8 @@
 --
 -- The frames are secure, so everything is set out of a fight (ns.AfterCombat):
 --   a mouse click   is the frame's own attributes ("shift-type1" = "spell", "shift-spell1"): the game casts, on
---                   the frame's unit. An input with no binding does what it always did.
+--                   the frame's unit. An input with no binding does what it always did, but Mouse 3 to 5:
+--                   the frame would swallow them, so they press what their key does on your bars (C.Through).
 --   a key           can't be an attribute of the frame. Each has a secure button of its own (KEYS.helpers); as
 --                   the mouse comes onto a frame, a snippet of the game's restricted code hands that frame's
 --                   unit to them and binds the keys to them, for as long as the mouse is there (ENTER, LEAVE).
@@ -180,12 +181,57 @@ function C.Registered(binds)
 	return list
 end
 
+-- Mouse 3, 4 and 5 over a frame go to the frame, never to the key they're bound to. One with no click of its own
+-- here presses that key's button on your bars instead, so a key's heal lands on whoever is in the frame.
+local BARS = { MULTIACTIONBAR1 = "MultiBarBottomLeft", MULTIACTIONBAR2 = "MultiBarBottomRight", MULTIACTIONBAR3 = "MultiBarRight",
+	MULTIACTIONBAR4 = "MultiBarLeft", MULTIACTIONBAR5 = "MultiBar5", MULTIACTIONBAR6 = "MultiBar6", MULTIACTIONBAR7 = "MultiBar7" }
+local HELD = { "", "alt-", "ctrl-", "shift-", "alt-ctrl-", "alt-shift-", "ctrl-shift-", "alt-ctrl-shift-" }
+
+-- The button a binding presses, by name, and the mouse button it presses it with; nil for a binding that
+-- presses no button.
+local function Pressed(command)
+	local n = command:match("^ACTIONBUTTON(%d+)$")
+	if n then return "ActionButton" .. n, "LeftButton" end
+	local bar, i = command:match("^(MULTIACTIONBAR%d)BUTTON(%d+)$")
+	if bar and BARS[bar] then return BARS[bar] .. "Button" .. i, "LeftButton" end
+	return command:match("^CLICK ([^:]+):(.+)$")
+end
+
+-- Mouse 3 to 5, with any keys held, that have no click of their own here: input -> the macro that presses
+-- their key's button (it presses on the way down or up as your bars do); and all of it in a line, to tell
+-- whether it changed.
+local wearing = ""      -- the line the frames last wore
+function C.Through(binds)
+	local through, said = {}, {}
+	local down = GetCVarBool("ActionButtonUseKeyDown") and " 1" or ""
+	for n = 3, 5 do
+		for _, held in ipairs(HELD) do
+			local input = held .. n
+			if binds[input] == nil then
+				local name, click = Pressed(GetBindingAction(held:upper() .. "BUTTON" .. n) or "")
+				if name then
+					through[input] = ("/click %s %s%s"):format(name, click, down)
+					said[#said + 1] = input .. "=" .. through[input]
+				end
+			end
+		end
+	end
+	return through, table.concat(said, ";")
+end
+
 local worn = setmetatable({}, { __mode = "k" })   -- a frame's button -> the attributes it was given
 
-local function Dress(button, binds, clicks)
+local function Dress(button, binds, clicks, through)
 	-- (nil clears one: the frame's own "*type1" and "*type2" answer again.)
 	for _, name in ipairs(worn[button] or {}) do button:SetAttribute(name, nil) end
 	local set = {}
+	for input, text in pairs(through) do
+		local mods, n = Parts(input)
+		button:SetAttribute(mods .. "type" .. n, "macro")
+		button:SetAttribute(mods .. "macrotext" .. n, text)
+		set[#set + 1] = mods .. "type" .. n
+		set[#set + 1] = mods .. "macrotext" .. n
+	end
 	for input, what in pairs(binds) do
 		local mods, n = Parts(input)
 		if n then
@@ -262,8 +308,10 @@ end
 function C.Apply()
 	ns.AfterCombat("clicks", function()
 		local binds = C.Binds()
+		local through, line = C.Through(binds)
 		local clicks = C.Registered(binds)
-		for _, frame in ipairs(F.list) do Dress(frame.button, binds, clicks) end
+		wearing = line
+		for _, frame in ipairs(F.list) do Dress(frame.button, binds, clicks, through) end
 		Keys(binds)
 	end)
 end
@@ -724,5 +772,20 @@ function C.Listen()
 		for _, panel in ipairs(panels) do
 			if panel:IsVisible() then panel:Refresh() end
 		end
+	end)
+	-- Your key bindings changed, or whether your bars cast on the way down: what Mouse 3 to 5 press on a frame.
+	-- (A layout of your keys binds many at once: they are looked at once, after.)
+	local keys, waiting = CreateFrame("Frame"), false
+	-- (one that leaves Mouse 3 to 5 as they were dresses no frame)
+	local Again = Shy.Clocked("ShyFrames clicks", function()
+		waiting = false
+		if select(2, C.Through(C.Binds())) ~= wearing then C.Apply() end
+	end)
+	keys:RegisterEvent("UPDATE_BINDINGS")
+	keys:RegisterEvent("CVAR_UPDATE")
+	keys:SetScript("OnEvent", function(_, event, name)
+		if waiting or (event == "CVAR_UPDATE" and name ~= "ActionButtonUseKeyDown") then return end
+		waiting = true
+		C_Timer.After(0, Again)
 	end)
 end

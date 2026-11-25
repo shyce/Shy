@@ -14,7 +14,7 @@ local P = ns.Parts
 local L = { side = 160, gap = 10, card = 248, row = 34, rung = 22, ladder = 6, step = 8, head = 60 }
 
 local page, side, search, cats, mid, scroll, list, head, card
-local state = { find = "", cat = nil, open = nil, rows = {}, pick = nil, ladder = {}, count = 1, quote = nil }
+local state = { find = "", cat = nil, open = nil, rows = {}, pick = nil, ladder = {}, count = 1 }
 
 -- The game's categories (its own table, read only), a level of them at a time; never the WoW Token's.
 local cats_
@@ -114,7 +114,8 @@ local function Search()
 end
 
 local function Pick(item, key)
-	state.pick, state.key, state.quote, state.ladder = item, key or C_AuctionHouse.MakeItemKey(item), nil, {}
+	state.pick, state.key, state.ladder = item, key or C_AuctionHouse.MakeItemKey(item), {}
+	ns.Purchase.Drop()
 	ns.lastPick = item   -- (the Farm tab's For an item)
 	state.count = 1
 	Search()
@@ -148,17 +149,18 @@ local function Ladder()
 	return out
 end
 
--- Buying.
+-- Buying (a commodity through ns.Purchase, the one way the family buys by the count).
+local function Quote()
+	local item, count, total = ns.Purchase.Quoted()
+	if item == state.pick and count == state.count then return total end
+end
+
 local function Buy(rung)
 	if state.commodity then
-		if state.quote then
-			ns.Note("ConfirmCommoditiesPurchase", state.pick, state.count)
-			C_AuctionHouse.ConfirmCommoditiesPurchase(state.pick, state.count)
-			state.quote = nil
+		if Quote() then
+			ns.Purchase.Pay()
 		else
-			ns.Note("StartCommoditiesPurchase", state.pick, state.count)
-			C_AuctionHouse.StartCommoditiesPurchase(state.pick, state.count)
-			state.asking = true
+			ns.Purchase.Quote(state.pick, state.count)
 		end
 	elseif rung and rung.auction then
 		ns.Note("PlaceBid", rung.auction, rung.buyout)
@@ -308,8 +310,9 @@ local function DrawCard(width, height)
 				total, left = total + take * rung.unit, left - take
 			end
 		end
-		if state.quote then
-			card.buy:SetLabel(("Pay %s"):format(UI.Money(state.quote, true, 12)))
+		local quote = Quote()
+		if quote then
+			card.buy:SetLabel(("Pay %s"):format(UI.Money(quote, true, 12)))
 			card.buy:SetPrimary(true)
 		else
 			card.buy:SetLabel(("Buy %d"):format(state.count))
@@ -406,7 +409,8 @@ local function Build(frame)
 		card.rungs[i] = r
 	end
 	card.stepper = Shop.Stepper(card, { height = 24, max = "Max", onChange = function(n)
-		state.count, state.quote = n, nil
+		state.count = n
+		ns.Purchase.Drop()
 		ns.Window.Stale()
 	end })
 	card.stepper:SetPoint("TOPLEFT", 0, -L.head - 116 - L.ladder * L.rung)
@@ -473,25 +477,18 @@ ns.BuyPage = { state = state, Parts = function() return list, card, search end, 
 -- What the auction house says.
 local events = CreateFrame("Frame")
 for _, event in ipairs({ "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", "AUCTION_HOUSE_BROWSE_RESULTS_ADDED", "COMMODITY_SEARCH_RESULTS_UPDATED",
-	"ITEM_SEARCH_RESULTS_UPDATED", "COMMODITY_PRICE_UPDATED", "COMMODITY_PURCHASE_SUCCEEDED", "COMMODITY_PURCHASE_FAILED",
+	"ITEM_SEARCH_RESULTS_UPDATED", "COMMODITY_PURCHASE_SUCCEEDED", "COMMODITY_PURCHASE_FAILED",
 	"AUCTION_HOUSE_CLOSED", "PLAYER_MONEY", "ITEM_KEY_ITEM_INFO_RECEIVED" }) do
 	events:RegisterEvent(event)
 end
 events:SetScript("OnEvent", Shy.Clocked("auction: buy", function(_, event, ...)
 	if event == "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED" or event == "AUCTION_HOUSE_BROWSE_RESULTS_ADDED" then
 		Heard()
-	elseif event == "COMMODITY_PRICE_UPDATED" then
-		local unit, total = ...
-		if state.asking and not issecretvalue(total) then
-			state.asking, state.quote = nil, total
-		end
-		ns.Window.Stale()
 	elseif event == "COMMODITY_PURCHASE_SUCCEEDED" or event == "COMMODITY_PURCHASE_FAILED" then
-		state.quote, state.asking = nil, nil
 		if state.pick then Search() end
 		ns.Window.Stale()
 	elseif event == "AUCTION_HOUSE_CLOSED" then
-		state.quote, state.asking, state.asked = nil, nil, nil
+		state.asked = nil
 	else
 		ns.Window.Stale()
 	end

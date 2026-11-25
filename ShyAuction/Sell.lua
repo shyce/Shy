@@ -51,6 +51,16 @@ local plan = {}
 -- at) still counts as yours. Forgotten as the auction house closes.
 local sellable = {}
 
+-- The list holds still for the visit: each item's place (worth first, as the auction house opened or a whole scan
+-- ended; what comes into your bags after, after them) and the market and vendor prices its row shows. A search for
+-- the item picked (its card's live listings) moves nothing. item -> { rank, unit, vendor }; forgotten as the auction
+-- house closes or a whole scan ends.
+local held, ranks = {}, 0
+local function Forget()
+	wipe(held)
+	ranks = 0
+end
+
 -- Posted from first: a stack you aren't moving, the biggest.
 local function BySize(a, b)
 	if a.locked ~= b.locked then return not a.locked end
@@ -88,20 +98,36 @@ local function Read()
 			end
 		end
 	end
+	local new = {}
 	for _, g in ipairs(goods) do
 		table.sort(g.stacks, BySize)
 		g.location = g.stacks[1].location
-		local price = ns.Book.Price(g.item)
-		g.unit = price and price.market
-		local _, _, _, _, _, _, _, _, _, _, sell = C_Item.GetItemInfo(g.item)
-		g.vendor = sell or 0
+		local h = held[g.item]
+		if not h then
+			local price = ns.Book.Price(g.item)
+			h = { unit = price and price.market }
+			held[g.item] = h
+			new[#new + 1] = g
+		end
+		-- (The vendor's price is kept once the game has it: an item not yet loaded says none at first.)
+		if not h.vendor then
+			local _, _, _, _, _, _, _, _, _, _, sell = C_Item.GetItemInfo(g.item)
+			if sell then h.vendor = sell else C_Item.RequestLoadItemDataByID(g.item) end
+		end
+		g.unit, g.vendor = h.unit, h.vendor or 0
 		g.worth = (g.unit or 0) * g.count
 	end
-	table.sort(goods, function(a, b)
+	-- Newcomers take their places after the rest, worth first among themselves.
+	table.sort(new, function(a, b)
 		if (a.unit ~= nil) ~= (b.unit ~= nil) then return a.unit ~= nil end
 		if a.worth ~= b.worth then return a.worth > b.worth end
 		return a.item < b.item
 	end)
+	for _, g in ipairs(new) do
+		ranks = ranks + 1
+		held[g.item].rank = ranks
+	end
+	table.sort(goods, function(a, b) return held[a.item].rank < held[b.item].rank end)
 	-- What went up since the last press: what left your bags while it was sent (the auction house took it), counted to it.
 	local run = state.run
 	if run then
@@ -687,6 +713,8 @@ end
 ns.AddPage({ key = "sell", label = "Sell", order = 2, Build = Build, Draw = Draw, Count = Count })
 -- (Exposed for inspection.)
 ns.SellPage = { state = state, Parts = function() return list, card end, Post = Post }
+-- A whole scan read the prices afresh: the list is ranked by them again.
+Shy:On("SHY_AUCTION", function(why) if why == "scan" then Forget() end end)
 
 local events = CreateFrame("Frame")
 for _, event in ipairs({ "BAG_UPDATE_DELAYED", "AUCTION_HOUSE_AUCTION_CREATED", "COMMODITY_SEARCH_RESULTS_UPDATED", "ITEM_SEARCH_RESULTS_UPDATED",
@@ -730,6 +758,7 @@ events:SetScript("OnEvent", Shy.Clocked("auction: sell", function(_, event, arg)
 		Settled()
 		if event == "AUCTION_HOUSE_CLOSED" then
 			wipe(sellable)
+			Forget()
 			state.asked = nil
 		end
 	end

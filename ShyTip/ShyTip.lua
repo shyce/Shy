@@ -426,9 +426,11 @@ function ns.GlanceOf(tip)
 	return glances[tip]
 end
 
--- MarksDanger: ShyQuest skips its own danger warning while this is on.
+-- MarksDanger: ShyQuest skips its own danger warning while this is on. Compares: an item's card shows what it would
+-- replace, each stat's change and its worth (Compare.lua): ShyGear's line then says only its verdict.
 Shy.Tip = {
 	MarksDanger = function() return db ~= nil and db.danger == true end,
+	Compares = function() return db ~= nil and db.replace == true and ns.Compare ~= nil end,
 	Glance = function(tip, about) glances[tip] = about end,
 }
 

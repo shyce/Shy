@@ -17,6 +17,17 @@ local KEY_EMPTY = 0.6   -- an empty button's key: dim, there to say which key pr
 
 local bars
 
+-- Heal fit: a heal's button carries a strip up its right edge, inside the frame, clear of the words on it.
+-- Filled from the foot, mint is what of it would land on the friend you'd
+-- cast it on (the one under your mouse, else your target, else you), soft red what would be wasted. The heal's
+-- size is ShyHots' (the tables with your healing power and talents). What is missing is the game's, heals on
+-- their way counted, and goes to the bar unread, so it works in a fight. It shows only while they're hurt.
+-- Nothing runs while nothing changes.
+local FIT = { width = 3, inset = 2, seam = 0.7, track = 0.9, shade = 0.85, shadeWidth = 14, poll = 0.1, art = "Interface\\Buttons\\WHITE8X8" }
+local FIT_BARS = { "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarLeft", "MultiBarRight",
+	"MultiBar5", "MultiBar6", "MultiBar7" }
+local fit = { strips = {}, shown = 0 }   -- button -> its strip; how many show; the unit drawn; a draw waiting
+
 -- Edit Mode scales the button's holder, so the font size is divided by that scale.
 local function PaintName(kit, button)
 	local size = math.floor(NAME / button.container:GetScale() + 0.5)
@@ -89,6 +100,150 @@ local function PaintExtra(m, kit)
 	if not m.opt.hotkeys then kit:Hide(button.HotKey) end
 end
 
+-- Heal fit
+
+local function Plain(x) return x ~= nil and not issecretvalue(x) end
+
+-- A friend you can heal, there and alive. What the game keeps is no answer.
+local function Helpable(unit)
+	local there = UnitExists(unit)
+	if not Plain(there) or not there then return false end
+	local help, dead = UnitCanAssist("player", unit), UnitIsDeadOrGhost(unit)
+	return Plain(help) and Plain(dead) and help and not dead
+end
+
+-- Whom a heal key lands on: as the keys' own macros choose.
+local function Whom()
+	if Helpable("mouseover") then return "mouseover" end
+	if Helpable("target") then return "target" end
+	return "player"
+end
+
+local function DrawFit()
+	local unit = Whom()
+	fit.unit = unit
+	local missing = UnitHealthMissing(unit, true)
+	local hurt = UnitHealthPercent(unit, true, Shy.UI.HurtCurve())
+	for _, strip in pairs(fit.strips) do
+		if strip.size then
+			if strip.most ~= strip.size then
+				strip.most = strip.size
+				strip:SetMinMaxValues(0, strip.size)
+			end
+			strip:SetValue(missing)
+			strip:SetAlpha(hurt)
+		end
+	end
+end
+
+-- While it shows the friend under your mouse, a look now and then for them going: the game says when one
+-- comes under it, not when one goes.
+local Poll
+Poll = Shy.Clocked("ShySkin heal fit", function()
+	fit.polling = false
+	if fit.unit ~= "mouseover" or fit.shown == 0 then return end
+	if not Helpable("mouseover") then return DrawFit() end
+	fit.polling = true
+	C_Timer.After(FIT.poll, Poll)
+end)
+
+local Draw = Shy.Clocked("ShySkin heal fit", function()
+	fit.waiting = false
+	DrawFit()
+	if fit.unit == "mouseover" and not fit.polling then
+		fit.polling = true
+		C_Timer.After(FIT.poll, Poll)
+	end
+end)
+
+-- Drawn once on the next frame, however many changes come before it.
+local function MarkFit()
+	if fit.shown == 0 or fit.waiting then return end
+	fit.waiting = true
+	C_Timer.After(0, Draw)
+end
+
+-- What one cast of the button's spell heals; nil for anything that is no heal on one friend.
+local function HealOn(button)
+	local hots = Shy.addons.Hots
+	local action = button.action
+	if not (hots and hots.HealSize) or not Plain(action) or not HasAction(action) then return nil end
+	local spell = C_ActionBar.GetSpell(action)
+	if not Plain(spell) then return nil end
+	return hots:HealSize(spell)
+end
+
+local function NewStrip(button)
+	local strip = CreateFrame("StatusBar", nil, button)
+	strip:SetPoint("TOPRIGHT", button, "TOPRIGHT", -RIM, -RIM - FIT.inset)
+	strip:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -RIM, RIM + FIT.inset)
+	strip:SetWidth(FIT.width)
+	strip:SetOrientation("VERTICAL")
+	strip:SetFrameLevel(button:GetFrameLevel() + 4)   -- over the cooldown's swipe
+	strip:SetStatusBarTexture(FIT.art)
+	local good, bad = Shy.UI.colors.good, Shy.UI.colors.bad
+	strip:SetStatusBarColor(good[1], good[2], good[3], 1)
+	local track = strip:CreateTexture(nil, "BACKGROUND")
+	track:SetAllPoints()
+	track:SetTexture(FIT.art)
+	track:SetVertexColor(bad[1], bad[2], bad[3], FIT.track)
+	-- A shade behind it, deepest at the edge and gone toward the middle, so it reads on any picture.
+	local shade = strip:CreateTexture(nil, "BACKGROUND", nil, -8)
+	shade:SetColorTexture(1, 1, 1, 1)
+	shade:SetGradient("HORIZONTAL", CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, FIT.shade))
+	shade:SetPoint("TOPRIGHT", strip, "TOPRIGHT", 0, 0)
+	shade:SetPoint("BOTTOMRIGHT", strip, "BOTTOMRIGHT", 0, 0)
+	shade:SetWidth(FIT.shadeWidth)
+	-- A dark hairline beside it, so it stands off the picture.
+	local seam = strip:CreateTexture(nil, "BORDER")
+	seam:SetColorTexture(0, 0, 0, FIT.seam)
+	seam:SetPoint("TOPRIGHT", strip, "TOPLEFT", 0, 0)
+	seam:SetPoint("BOTTOMRIGHT", strip, "BOTTOMLEFT", 0, 0)
+	seam:SetWidth(1)
+	strip:SetAlpha(0)
+	fit.strips[button] = strip
+	return strip
+end
+
+-- Which buttons hold a heal, and how big: when the bars, a size or the switch change.
+local function FitButtons(m)
+	local on = m.on and m.opt.fit and Shy.addons.Hots ~= nil
+	local shown = 0
+	for _, name in ipairs(FIT_BARS) do
+		local bar = _G[name]
+		for _, button in ipairs(bar and bar.actionButtons or {}) do
+			local size = on and HealOn(button) or nil
+			local strip = fit.strips[button]
+			if size then
+				strip = strip or NewStrip(button)
+				strip.size = size
+				strip:Show()
+				shown = shown + 1
+			elseif strip and strip.size then
+				strip.size = nil
+				strip:Hide()
+			end
+		end
+	end
+	fit.shown = shown
+	MarkFit()
+end
+
+local function WatchFit(m)
+	local events = CreateFrame("Frame")
+	for _, event in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_HEAL_PREDICTION", "UPDATE_MOUSEOVER_UNIT",
+		"PLAYER_TARGET_CHANGED" }) do
+		events:RegisterEvent(event)
+	end
+	events:SetScript("OnEvent", function(_, event, unit)
+		-- (a change to someone else's health, while it's you or your target that is shown, changes nothing)
+		local drawn = fit.unit
+		if Plain(unit) and (drawn == "player" or drawn == "target") and unit ~= drawn then return end
+		MarkFit()
+	end)
+	Shy:On("SHY_HEAL_SIZES", function() FitButtons(m) end)
+end
+
 local function PaintMainBar(m, kit)
 	local bar = MainActionBar
 	kit:Hide(bar.BorderArt)
@@ -119,6 +274,8 @@ ns.Module({
 			desc = "Each button shows its key. Without it, the red out-of-range mark goes too." },
 		{ key = "macros", label = "Macro names", default = true,
 			desc = "A macro's name shows along the bottom of its button." },
+		{ key = "fit", label = "Heal fit", default = true, shown = function() return Shy.addons.Hots ~= nil end,
+			desc = "A heal's button shows in mint how much would land on whoever you'd heal. Red is what would be wasted." },
 	},
 
 	Hook = function(m)
@@ -148,6 +305,7 @@ ns.Module({
 		hooksecurefunc(MainActionBar, "UpdateDividers", function(self)
 			if m.on then ns.HideDividers(m.kit, self) end
 		end)
+		WatchFit(m)
 		-- Slot contents changed: refill once on the next frame, however many events arrive.
 		local slots = CreateFrame("Frame")
 		for _, event in ipairs({ "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR",
@@ -164,6 +322,7 @@ ns.Module({
 				for _, bar in ipairs(bars) do
 					for _, button in ipairs(bar.actionButtons) do PaintFill(m, m.kit, button) end
 				end
+				FitButtons(m)
 			end)
 		end)
 	end,
@@ -175,9 +334,13 @@ ns.Module({
 		PaintExtra(m, kit)
 		PaintMainBar(m, kit)
 		ns.Claim("barText", true)
+		FitButtons(m)
 	end,
 
 	Clear = function(m)
-		if not m.on then ns.Claim("barText", false) end
+		if not m.on then
+			ns.Claim("barText", false)
+			FitButtons(m)
+		end
 	end,
 })

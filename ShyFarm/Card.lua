@@ -523,7 +523,6 @@ function ns.CreateCard(parent, box)
 			self.ask.input:ClearAllPoints()
 			self.ask.input:SetPoint("TOPLEFT", 0, -20)
 			self.ask.input:SetWidth(inner - 66)
-			self.ask.input.box:SetWidth(inner - 66)
 			self.ask.cancel:ClearAllPoints()
 			self.ask.cancel:SetPoint("TOPRIGHT", 0, -21)
 			y = y + K.ASK

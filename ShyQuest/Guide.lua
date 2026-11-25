@@ -923,10 +923,12 @@ local function Barred(quest, guide)
 	return L.Unoffered(quest) or (data ~= nil and (L.Lacks(data) or (not guide.run and L.Hidden(data))))
 end
 
--- Whether the chain to `quest` (not in the log, not done) is let go: lost for good, or not worth catching up.
+-- Whether the chain to `quest` (not in the log, not done) is let go: lost for good, not worth catching up, or an
+-- escort through elites your level or higher (Escort.Perilous: back once you outlevel them).
 -- A dungeon run asks for its quests gray or not, and only lets go of one that can't be had.
 local function ChainGone(quest, guide)
 	if L.Lost(quest, guide.run ~= nil) then return true end
+	if ns.Escort and ns.Escort.Perilous(quest) then return true end
 	local data = not guide.run and D.Quest(quest)
 	return data and not ns.Route.Catching(data) or false
 end

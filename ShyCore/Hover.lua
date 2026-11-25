@@ -422,6 +422,20 @@ end
 
 local PLATE   -- (a unit's plate's measures and the housing's: set where the plate is made, below)
 
+-- The housing: the look's mini border (its own smaller, simpler make of the look's frame, `mini`), at the hovers'
+-- strength, dressed again whenever the look changes. No brackets. It stands PLATE.house past the frame's own rect
+-- all round, in every look, so its frame keeps clear of the words (the forged make's edge too, in the hovers' own
+-- cut-corner art). A card's tab wears the same.
+local function Housed(f)
+	local grow = { -PLATE.house, -PLATE.house, -PLATE.house, -PLATE.house }
+	UI.Panel(f, { hud = true, mini = true, brackets = false, line = false, fill = C.tip, looks = { to = f, inset = grow, fill = grow } })
+	f.shyEdge:SetTexture(MEDIA .. "HoverEdge")
+	f.shyEdge:SetTextureSliceMargins(8, 8, 8, 8)
+	f.shyEdge:ClearAllPoints()
+	f.shyEdge:SetPoint("TOPLEFT", -PLATE.house, PLATE.house)
+	f.shyEdge:SetPoint("BOTTOMRIGHT", PLATE.house, -PLATE.house)
+end
+
 local function Build()
 	local f = CreateFrame("Frame", nil, UIParent)
 	f:SetFrameStrata("TOOLTIP")
@@ -430,18 +444,9 @@ local function Build()
 	f.seats = {}
 	built[#built + 1] = f
 
-	-- The housing: the look's mini border (its own smaller, simpler make of the look's frame, `mini`), at the hovers'
-	-- strength, dressed again whenever the look changes; a meaning's wash over its face and the accent as light in its
-	-- top edge. No brackets, and the foot is part of the housing, not a separate piece.
-	-- It stands PLATE.house past the hover's own rect all round, in every look, so its frame keeps clear of the words
-	-- (the forged make's edge too, in the hovers' own cut-corner art).
-	local grow = { -PLATE.house, -PLATE.house, -PLATE.house, -PLATE.house }
-	UI.Panel(f, { hud = true, mini = true, brackets = false, line = false, fill = C.tip, looks = { to = f, inset = grow, fill = grow } })
-	f.shyEdge:SetTexture(MEDIA .. "HoverEdge")
-	f.shyEdge:SetTextureSliceMargins(8, 8, 8, 8)
-	f.shyEdge:ClearAllPoints()
-	f.shyEdge:SetPoint("TOPLEFT", -PLATE.house, PLATE.house)
-	f.shyEdge:SetPoint("BOTTOMRIGHT", PLATE.house, -PLATE.house)
+	-- The housing, a meaning's wash over its face and the accent as light in its top edge. The foot is part of the
+	-- housing, not a separate piece.
+	Housed(f)
 	f.wash = f:CreateTexture(nil, "BACKGROUND", nil, -3)
 	f.wash:SetPoint("TOPLEFT", 2, -2)
 	f.wash:SetPoint("BOTTOMRIGHT", -2, 2)
@@ -611,22 +616,6 @@ end
 
 -- The housing as content asks for it: no plate under it, the top light (the accent, content.light, or
 -- white on a kept or staying hover; content.pulse animates it in OnUpdate), the edge and the wash.
-local function Dress(f, content)
-	if f.plateOn then PlateOff(f) end
-	UI.Tint(f.light, (f.kept or f.stays) and WHITE or content.light or Theme.Accent)
-	f.light:SetAlpha(1)
-	-- A meaning's edge (an item's quality): the frame in it, a fifth of the way back to white so its art still reads;
-	-- else the look's own.
-	local edge = content.edge
-	if edge then
-		UI.SetBorder(f, { edge[1] + (1 - edge[1]) * 0.2, edge[2] + (1 - edge[2]) * 0.2, edge[3] + (1 - edge[3]) * 0.2 })
-	else
-		UI.SetBorder(f, Theme.skin.metal)
-	end
-	local wash = content.wash
-	f.wash:SetShown(wash ~= nil)
-	if wash then f.wash:SetColorTexture(wash[1], wash[2], wash[3], wash[4] or 0.15) end
-end
 
 -- The card (content.card): the form every hover is drawn in.
 --
@@ -641,6 +630,7 @@ end
 --     about = anything,                 -- identity: a different `about` starts as a chip again
 --     title =, titleColor =, seat =,
 --     kind = "Spell",                   -- dim word at the head's right (shown once open)
+--     tab = "Equipped",                 -- a word on a tab over the card's top edge: what the card is, before anything on it
 --     way = { arrow = file, turn = function() return radians end, says = function() return "240 yd" end },
 --                                       -- the way to it: that arrow turning at the head's right, the
 --                                       -- distance (the kind word) before it, said again five times a second
@@ -697,6 +687,68 @@ local BLACK = { 0, 0, 0 }
 -- A card's buttons (block.actions): their height, the room over them under the hairline, between two, and what
 -- a button wants round its words.
 local ACTIONS = { tall = 22, above = 7, gap = 6, pad = 24, words = 13 }   -- words: a button's (UI.Button), in the title face
+
+-- content.tab: a word on a tab standing on the card's top edge ("Equipped" over what you wear), so what the card
+-- is reads before anything on it. The tab wears the card's housing and light and stands behind the card, so the
+-- card's edge runs across its foot and the two read as one piece. It is kept on screen with the card.
+-- Its height, the room at either end, its word's size, the tick before the word and the gap after it.
+local TAB = { tall = 20, pad = 9, size = 9, tick = 9, gap = 4 }
+local function Tab(f, words, light)
+	local tab = f.tab
+	if not words then
+		if tab and tab:IsShown() then
+			tab:Hide()
+			f:SetClampRectInsets(-PLATE.house, PLATE.house, PLATE.house, -PLATE.house)
+		end
+		return
+	end
+	if not tab then
+		tab = CreateFrame("Frame", nil, f)
+		Housed(tab)
+		tab.light = tab:CreateTexture(nil, "ARTWORK", nil, 1)
+		tab.light:SetTexture(MEDIA .. "HoverLight")
+		tab.light:SetPoint("TOPLEFT", 4, 0)
+		tab.light:SetPoint("TOPRIGHT", -4, 0)
+		tab.light:SetHeight(LIGHT)
+		-- (The tick and word stand in the part over the card's edge.)
+		tab.tick = tab:CreateTexture(nil, "OVERLAY")
+		tab.tick:SetSize(TAB.tick, TAB.tick)
+		tab.tick:SetPoint("LEFT", TAB.pad, PLATE.house)
+		Hover.Glyph(tab.tick, "check", TAB.tick)
+		tab.word = UI.Words(tab, UI.TextFont(TAB.size), C.text)
+		tab.word:SetPoint("LEFT", tab.tick, "RIGHT", TAB.gap, 0)
+		-- (Its foot under the card's edge, so the two join: the card stands over it.)
+		tab:SetPoint("BOTTOMLEFT", f, "TOPLEFT", CARD.side, -PLATE.house)
+		tab:SetHeight(TAB.tall)
+		f.tab = tab
+	end
+	tab:SetFrameLevel(math.max(0, f:GetFrameLevel() - 1))
+	tab.word:SetText(Caps(words))
+	tab:SetWidth(TAB.pad * 2 + TAB.tick + TAB.gap + math.ceil(tab.word:GetUnboundedStringWidth()))
+	UI.Tint(tab.light, light)
+	UI.SetBorder(tab, Theme.skin.metal)
+	tab:Show()
+	f:SetClampRectInsets(-PLATE.house, PLATE.house, TAB.tall, -PLATE.house)
+end
+
+local function Dress(f, content)
+	if f.plateOn then PlateOff(f) end
+	local light = (f.kept or f.stays) and WHITE or content.light or Theme.Accent
+	UI.Tint(f.light, light)
+	f.light:SetAlpha(1)
+	Tab(f, content.tab, light)
+	-- A meaning's edge (an item's quality): the frame in it, a fifth of the way back to white so its art still reads;
+	-- else the look's own.
+	local edge = content.edge
+	if edge then
+		UI.SetBorder(f, { edge[1] + (1 - edge[1]) * 0.2, edge[2] + (1 - edge[2]) * 0.2, edge[3] + (1 - edge[3]) * 0.2 })
+	else
+		UI.SetBorder(f, Theme.skin.metal)
+	end
+	local wash = content.wash
+	f.wash:SetShown(wash ~= nil)
+	if wash then f.wash:SetColorTexture(wash[1], wash[2], wash[3], wash[4] or 0.15) end
+end
 
 local function Face(size, face)
 	if face == "lined" then return UI.TextFont(size, "OUTLINE") end   -- for text drawn over the world
@@ -1829,6 +1881,7 @@ local function Plate(f, about, wide)
 
 	local bar = plate.bar
 	f.plateOn = true
+	if f.tab then f.tab:Hide() end
 	plate:Show()
 	f.light:SetAlpha(0)
 	-- As long as the name needs, and never shorter than the card under it.
@@ -2126,7 +2179,7 @@ local NAME_MOST = 40
 -- and the distance at the head's right; the text, then each section's rows under its heading, its
 -- words and its bar. With no title the strip is the name. `width` is the widest it may grow.
 local function Said(content, width)
-	local said = { card = true, seat = content.seat, light = content.light, pulse = content.pulse, edge = content.edge, wash = content.wash,
+	local said = { card = true, seat = content.seat, light = content.light, pulse = content.pulse, edge = content.edge, wash = content.wash, tab = content.tab,
 		hints = content.hints, extras = content.extras, most = math.max(CARD.most, (width or WIDTH) - 4), body = {} }
 	local body = said.body
 	local strip = content.strip ~= "" and content.strip or nil

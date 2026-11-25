@@ -136,7 +136,61 @@ function ns.T:Banked()
 	return Held("bank")
 end
 
+-- For other addons: totals over your characters on this realm, each kept until ShyBags reads something again.
+--   :Gold()          { hand, mail, sold, chars }: copper carried, waiting in mailboxes, and from auctions sold
+--   :Currency(id)    how many of a currency they hold
+--   :Total(ids)      how many of these items they hold, everywhere ShyBags reads (ids: a set, { [itemID] = true })
+local stamp = 0
+local gold, goldAt
+local currencies, currenciesAt = {}, nil
+local totals = setmetatable({}, { __mode = "k" })   -- ids -> { at = stamp, n }
+
+function ns.T:Gold()
+	if goldAt ~= stamp then
+		gold = gold or {}
+		gold.hand, gold.mail, gold.sold, gold.chars = 0, 0, 0, 0
+		for _, entry in ipairs(Store.List()) do
+			local c = entry.char
+			if not c.skip then
+				local mail, sold = ns.Ledger.Waiting(c)
+				gold.hand, gold.mail, gold.sold = gold.hand + (c.money or 0), gold.mail + mail, gold.sold + sold
+				gold.chars = gold.chars + 1
+			end
+		end
+		goldAt = stamp
+	end
+	return gold
+end
+
+function ns.T:Currency(id)
+	if currenciesAt ~= stamp then
+		wipe(currencies)
+		for _, entry in ipairs(Store.List()) do
+			if not entry.char.skip then
+				for each, n in pairs(entry.char.currencies or NONE) do currencies[each] = (currencies[each] or 0) + n end
+			end
+		end
+		currenciesAt = stamp
+	end
+	return currencies[id] or 0
+end
+
+function ns.T:Total(ids)
+	local kept = totals[ids]
+	if kept and kept.at == stamp then return kept.n end
+	local n = 0
+	for _, entry in ipairs(Store.List()) do
+		local by = ById(Index.Of(entry.guid))
+		for id in pairs(ids) do
+			for _, e in ipairs(by[id] or NONE) do n = n + e.count end
+		end
+	end
+	totals[ids] = { at = stamp, n = n }
+	return n
+end
+
 Shy:On("SHY_BAGS_SCANNED", function(guid)
 	byChar[guid] = nil
+	stamp = stamp + 1
 	if guid == Store.Guid() then wipe(held) end
 end)

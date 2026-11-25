@@ -453,17 +453,19 @@ local function OnObject(tip, data)
 	end
 end
 
-local function OnItem(tip, data)
-	if not T.db.hover.items or Theirs("tooltips") or not Ours(tip, data, ItemRefTooltip) then return end
-	local id = data.id
-	if issecretvalue(id) or type(id) ~= "number" then return end
-	H.Item(tip, I.Item(id), id)
+-- An item's section (Shy.Tips): what quests want it for. It hangs on the log, your bags and your party, so it is
+-- kept only a moment (the registry's own), not by a stamp.
+local function OnItem(about, out)
+	local id = about.id
+	if type(id) ~= "number" then return end
+	H.Item(out, I.Item(id), id)
 end
 
 Shy:On("SHY_LOGIN", function()
 	Shy.OnTip(Enum.TooltipDataType.Unit, "a quest's creature", OnUnit)
 	Shy.OnTip(Enum.TooltipDataType.Object, "a quest's object", OnObject)
-	Shy.OnTip(Enum.TooltipDataType.Item, "a quest's item", OnItem)
+	Shy.Tips.Add({ id = "a quest's item", order = 20, on = function() return T.db.hover.items and not Theirs("tooltips") end,
+		build = OnItem })
 	-- In a hover the mark before a quest's name is drawn whole, as the row's lead (tooltips, and the
 	-- lines Tips.lua writes for pins and the tracker).
 	for _, kind in ipairs({ "goal", "pickup", "turnin" }) do

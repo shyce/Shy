@@ -35,7 +35,11 @@
 -- every click and confirmation behaves as default; a count is BuyMerchantItem a purchase at a time, or Blizzard's
 -- own confirmation where the game asks first. Something of yours let go of anywhere on the window is sold, through
 -- Blizzard's own handlers.
--- Not included: single-item repair, guild repair, the spec filter, alternate currency totals.
+-- A currency's vendor (Merchant's Favor's) sorts beside the strip: Best (for you: ShyGear's upgrades,
+-- the most first, then what you can wear later, soonest first, then the rest, what you can't use last), Price or
+-- Level (what you can wear now, highest first, then what you grow into); a good's word is what ShyGear found ("+4% damage", "at level 34", "can't use"). A vendor that takes a
+-- currency shows what you have of it in the foot, beside your gold.
+-- Not included: single-item repair, guild repair, the spec filter.
 
 local ADDON, ns = ...
 local UI = Shy.UI
@@ -48,6 +52,7 @@ local WIN = Talk and Talk.WIN
 
 local L = {
 	strip = 24, stripTop = 8, stripFoot = 6,   -- the filter's strip under the band: its height, the room over and under it
+	stripGap = 6,                          -- between its two lines, where it takes two
 	search = 150, searchLeast = 96,        -- the search box, and the least it is worth showing at
 	top = 2,                               -- from the strip to the sheet's first line
 	cap = 18,                              -- a caption's line
@@ -72,9 +77,12 @@ local L = {
 }
 local DOT = " \194\183 "
 local ALL, FOR_YOU, BACK = 1, 2, 3   -- the strip's choices
+local BEST, CHEAP, LEVEL = 1, 2, 3   -- a gear vendor's sorts
 
 local WORDS = {
-	title = "Vendor", modes = { "All", "For you", "Buyback" }, search = "Search",
+	title = "Vendor", modes = { "All", "For you", "Buyback" }, search = "Search", sorts = { "Best", "Price", "Level" },
+	cant = "can't use", worse = "no better", same = "about the same", atLevel = "at level %d", needs = "needs level %d",
+	skill = "needs %d skill", trade = "another trade", cantWear = "can't wear it",
 	buy = "TO BUY", sale = "FOR SALE", forYou = "FOR YOU", sold = "BUY BACK",
 	none = "Nothing for sale", noBack = "Nothing to buy back", noneForYou = "Nothing here stands out for you",
 	noFind = "Nothing by that name",
@@ -135,18 +143,57 @@ end
 local function Insight(g)
 	g.have = g.id and C_Item.GetItemCount(g.id) or 0
 	local gear = Shy.addons.Gear
-	if gear and gear.Judge and gear.MarkFor and g.link and C_Item.IsEquippableItem(g.link) then
+	g.wearable = g.link ~= nil and C_Item.IsEquippableItem(g.link) or nil
+	if g.wearable and gear and gear.Judge and gear.MarkFor then
 		local ok, verdict = pcall(gear.Judge, gear, g.link)
-		g.gear = ok and verdict and gear:MarkFor(verdict) or nil
+		g.verdict = ok and verdict or nil
+		g.gear = g.verdict and gear:MarkFor(g.verdict) or nil
 	end
+	g.level = g.link and select(5, C_Item.GetItemInfo(g.link)) or nil
 	if g.id and select(6, C_Item.GetItemInfoInstant(g.id)) == Enum.ItemClass.Recipe then
 		g.known = Known(g)
 		g.learn = not g.known and g.info.isUsable == true
+		-- A recipe is worth what it makes: that item judged as gear (and its level), your skill against its rank.
+		local teach = ns.recipeTeaches and ns.recipeTeaches[g.id]
+		if teach then
+			g.recipe = true
+			local skill = C_SkillInfo.GetSkillLineInfoByID(teach[2])
+			g.skill, g.skillAt = skill and skill.rank or 0, teach[3]
+			local makes = teach[1] > 0 and ("item:" .. teach[1]) or nil
+			if makes and C_Item.IsEquippableItem(makes) then
+				g.level = select(5, C_Item.GetItemInfo(makes)) or nil
+				if gear and gear.Judge and gear.MarkFor and not g.known then
+					local ok, verdict = pcall(gear.Judge, gear, makes)
+					g.verdict = ok and verdict or nil
+					g.gear = g.verdict and gear:MarkFor(g.verdict) or nil
+				end
+			end
+		end
+	end
+end
+
+-- The currencies this vendor takes (Merchant's Favor), in the order its goods first ask them: { id, icon, have }; and
+-- what a good costs in the first one it asks (g.spend), to sort by.
+local function Costs(g)
+	if not g.info.hasExtendedCost then return end
+	for i = 1, GetMerchantItemCostInfo(g.index) or 0 do
+		local texture, value, link = GetMerchantItemCostItem(g.index, i)
+		local id = type(link) == "string" and not issecretvalue(link) and tonumber(link:match("currency:(%d+)"))
+		if id and value then
+			g.spend = g.spend or value
+			local wallet = visit.wallet
+			if not wallet.has[id] then
+				local about = C_CurrencyInfo.GetCurrencyInfo(id)
+				wallet.has[id] = true
+				wallet[#wallet + 1] = { id = id, icon = texture or (about and about.iconFileID), have = about and about.quantity or 0 }
+			end
+		end
 	end
 end
 
 local function ReadGoods()
 	wipe(goods)
+	visit.wallet = { has = {} }
 	visit.waiting = nil
 	for index = 1, GetMerchantNumItems() do
 		local info = C_MerchantFrame.GetItemInfo(index)
@@ -156,6 +203,7 @@ local function ReadGoods()
 			end
 			local g = { index = index, info = info, id = GetMerchantItemID(index), link = GetMerchantItemLink(index) }
 			Insight(g)
+			Costs(g)
 			goods[#goods + 1] = g
 		end
 	end
@@ -492,6 +540,15 @@ local function Repair()
 	Stale()
 end
 
+-- A gear vendor's sort.
+local function SetSort(i)
+	if (visit.sort or BEST) == i then return end
+	PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
+	visit.sort = i
+	own.area:SetVerticalScroll(0)
+	Refresh()
+end
+
 -- The strip's choice.
 local function SetMode(i)
 	if (visit.mode or ALL) == i then return end
@@ -641,11 +698,15 @@ local function Row(i)
 	row.title:SetPoint("TOPLEFT", L.rowLeft, -6)
 	row.cost = Text(row, UI.NameFont(11), C.dim)
 	row.cost:SetPoint("BOTTOMLEFT", L.rowLeft, 6)
-	row.sub = Text(row, UI.NameFont(10), C.dim)
-	row.sub:SetPoint("LEFT", row.cost, "RIGHT", 7, 0)
 	row.tag = Text(row, UI.NameFont(10), C.dim)
 	row.tag:SetPoint("BOTTOMRIGHT", -L.rowEnd, 6)
 	row.tag:SetJustifyH("RIGHT")
+	row.tag:SetWordWrap(false)
+	row.sub = Text(row, UI.NameFont(10), C.dim)
+	row.sub:SetPoint("LEFT", row.cost, "RIGHT", 7, 0)
+	-- (Cut short at the word, never run under it.)
+	row.sub:SetPoint("RIGHT", row.tag, "LEFT", -8, 0)
+	row.sub:SetWordWrap(false)
 
 	row.SplitStack = SplitStack
 	row.UpdateTooltip = RowEnter
@@ -695,7 +756,11 @@ local function Build()
 	strip:SetFrameLevel(box:GetFrameLevel() + 3)
 	own.strip = strip
 	own.filter = UI.Segments(strip, WORDS.modes, SetMode, { height = L.strip })
-	own.filter:SetPoint("LEFT")
+	own.filter:SetPoint("TOPLEFT")
+	-- (A gear vendor's sort, beside it.)
+	own.sort = UI.Segments(strip, WORDS.sorts, SetSort, { height = L.strip })
+	own.sort:SetPoint("LEFT", own.filter, "RIGHT", 10, 0)
+	own.sort:Hide()
 	own.search = Shop.Search(strip, WORDS.search, function(text)
 		if (visit.find or "") == text then return end
 		visit.find = text ~= "" and text or nil
@@ -703,7 +768,7 @@ local function Build()
 		Stale()
 	end)
 	own.search:SetHeight(L.strip - 2)
-	own.search:SetPoint("RIGHT")
+	own.search:SetPoint("TOPRIGHT", 0, -1)
 
 	-- The foot: your gold in its middle, always. With a good picked, its count at the left end (to step or type,
 	-- Max on its plate) and Buy with the sum at the right end, a fixed place each: nothing Buy's words do can move
@@ -861,8 +926,49 @@ end
 
 -- What stands out for you among the goods: wanted by a quest or your supplies, an upgrade, a recipe to learn.
 local function ForYou(g)
-	return g.wanted or g.stock or g.gear == "upgrade" or g.learn or false
+	return g.wanted or g.stock or g.gear == "upgrade" or g.gear == "later" or g.learn or false
 end
+
+-- Best for you: upgrades (the most first: gear, and recipes you can learn that make it), what you can wear later (the
+-- soonest first), recipes you can learn, the rest of the gear, recipes you need more skill for (the nearest first),
+-- what you can't use, anything else (in the vendor's order), recipes you know, recipes of another trade.
+local RANK = { upgrade = 1, later = 2, learn = 3, same = 4, worse = 5, skill = 6, cant = 7, other = 8, known = 9, trade = 10 }
+local function Kind(g)
+	if g.recipe then
+		if g.known then return "known" end
+		if g.skill == 0 then return "trade" end
+		if g.skill < g.skillAt then return "skill" end
+	end
+	local v = g.verdict
+	if v and RANK[v.kind] then return v.kind end
+	if g.recipe then return "learn" end
+	return g.wearable and "cant" or "other"
+end
+local function Rank(g) return RANK[Kind(g)] end
+local function Spend(g) return g.spend or g.info.price or 0 end
+local SORTS = {
+	[BEST] = function(a, b)
+		local x, y = Rank(a), Rank(b)
+		if x ~= y then return x < y end
+		local v, w = a.verdict, b.verdict
+		if x == 1 and (v.score or 0) ~= (w.score or 0) then return (v.score or 0) > (w.score or 0) end
+		if x == 2 and (v.later or 0) ~= (w.later or 0) then return (v.later or 0) < (w.later or 0) end
+		if x == RANK.skill and a.skillAt ~= b.skillAt then return a.skillAt < b.skillAt end
+		return a.index < b.index
+	end,
+	[CHEAP] = function(a, b)
+		if Spend(a) ~= Spend(b) then return Spend(a) < Spend(b) end
+		return a.index < b.index
+	end,
+	-- What you can wear now first, the highest of it first; then what you grow into, the nearest first.
+	[LEVEL] = function(a, b)
+		local me = UnitLevel("player")
+		local x, y = a.level or 0, b.level or 0
+		if (x <= me) ~= (y <= me) then return x <= me end
+		if x ~= y then return (x <= me) == (x > y) end
+		return a.index < b.index
+	end,
+}
 
 -- The buy button (or "Bought") of a card; its hover says only what its face can't. Returns the room the name and
 -- the count have left of `room`.
@@ -943,6 +1049,15 @@ local function Lit(row, on)
 	row.lit:SetShown(on)
 end
 
+-- ShyGear's word for an upgrade, its biggest gain alone ("+13% survival"): the rest is on the item's card.
+local function GearWords(v)
+	local gear = Shy.addons.Gear
+	if not (gear and gear.Words) then return nil end
+	local ok, words = pcall(gear.Words, gear, v)
+	if not (ok and type(words) == "string" and words ~= "") then return nil end
+	return words:match("^([^,]+)") or words
+end
+
 local function FillGood(row, g)
 	local info = g.info
 	row.kind, row.good = "good", g
@@ -964,9 +1079,18 @@ local function FillGood(row, g)
 	row.sub:SetText(table.concat(said, DOT))
 	-- The word that matters most, and its color: a quest's gold, your supplies' accent, an upgrade's green.
 	local word, tone = "", C.dim
+	local v = g.verdict
+	local kind = Kind(g)
 	if g.wanted then word, tone = WORDS.quest, C.alert
 	elseif g.stock then word, tone = WORDS.restock, C.hot
-	elseif g.gear == "upgrade" then word, tone = WORDS.upgrade, C.good
+	elseif kind == "known" then word = WORDS.known
+	elseif kind == "trade" then word = WORDS.trade
+	elseif kind == "skill" then word, tone = WORDS.skill:format(g.skillAt), C.alert
+	elseif v and v.kind == "upgrade" then word, tone = GearWords(v) or WORDS.upgrade, C.good
+	elseif v and v.kind == "later" then word, tone = v.later and WORDS.atLevel:format(v.later) or WORDS.upgrade, C.hot
+	elseif v and v.kind == "cant" then word = g.recipe and WORDS.cantWear or WORDS.cant
+	elseif v and v.kind == "worse" then word = WORDS.worse
+	elseif v and v.kind == "same" then word = WORDS.same
 	elseif g.learn then word, tone = WORDS.learn, C.hot
 	elseif g.known then word = WORDS.known end
 	row.tag:SetText(word)
@@ -1255,15 +1379,31 @@ local function DrawBand(s, repairs, wide)
 end
 
 -- The strip: its counts, the choice lit, and the search where there is room for it.
+-- The strip: the filter, a currency vendor's sort and the search on one line where they fit; else the filter alone
+-- on the first and the rest on a second, so a narrow window loses none of them. Returns how tall it is.
 local function DrawStrip(width, mode, backs, forYou)
 	own.strip:SetWidth(width)
 	own.filter:SetCount(ALL, #goods)
 	own.filter:SetCount(FOR_YOU, forYou > 0 and forYou or nil)
 	own.filter:SetCount(BACK, backs > 0 and backs or nil)
 	if own.filter.selected ~= mode then own.filter:Select(mode) end
-	local room = width - own.filter:GetWidth() - 10
+	local sorts = visit.gearVendor == true and mode ~= BACK
+	own.sort:SetShown(sorts)
+	if sorts and own.sort.selected ~= (visit.sort or BEST) then own.sort:Select(visit.sort or BEST) end
+	local filter, sort = own.filter:GetWidth(), sorts and own.sort:GetWidth() or 0
+	local wrapped = filter + 10 + (sorts and sort + 10 or 0) + L.searchLeast > width
+	local y = wrapped and -(L.strip + L.stripGap) or 0
+	own.sort:ClearAllPoints()
+	if wrapped then own.sort:SetPoint("TOPLEFT", 0, y) else own.sort:SetPoint("LEFT", own.filter, "RIGHT", 10, 0) end
+	local used = wrapped and 0 or filter + 10
+	local room = width - used - (sorts and sort + 10 or 0)
+	own.search:ClearAllPoints()
+	own.search:SetPoint("TOPRIGHT", 0, y - 1)
 	own.search:SetShown(room >= L.searchLeast)
 	own.search:SetWidth(math.min(L.search, math.max(L.searchLeast, room)))
+	local tall = wrapped and L.strip * 2 + L.stripGap or L.strip
+	own.strip:SetHeight(tall)
+	return tall
 end
 
 -- The sheet: what to buy as cards, then the goods the strip asks for (or what you sold) in columns, down the first
@@ -1363,6 +1503,16 @@ end
 
 -- Your gold in the foot's middle; short of room there, in the middle of what the two ends leave; gone with none.
 -- left, right: what stands at each end (0: nothing), from the foot's edges.
+-- Your gold, and what you have of each currency this vendor takes (Merchant's Favor) before it.
+local function Purse()
+	local parts = {}
+	for _, c in ipairs(visit.wallet or {}) do
+		parts[#parts + 1] = ("|T%s:12:12:0:0|t %s"):format(tostring(c.icon or ""), BreakUpLargeNumbers(c.have))
+	end
+	parts[#parts + 1] = UI.Money(GetMoney(), nil, 12)
+	return table.concat(parts, DOT)
+end
+
 local function LayGold(gold, wide, left, right)
 	local from, to = left > 0 and left + L.apart or 0, wide - (right > 0 and right + L.apart or 0)
 	local x = 0
@@ -1377,7 +1527,7 @@ end
 -- count can come to.
 local function DrawFoot(mode, wide)
 	local B, shell = own.b, own.shell
-	own.gold:SetText(UI.Money(GetMoney(), nil, 12))
+	own.gold:SetText(Purse())
 	local gold = own.gold:GetUnboundedStringWidth()
 	gold = (issecretvalue(gold) or not gold) and 0 or gold
 	local foot = wide - 4
@@ -1436,7 +1586,7 @@ local function DrawSellFoot(wide)
 	own.deal:Hide()
 	own.hint:Hide()
 	own.hintOne:Hide()
-	own.gold:SetText(UI.Money(GetMoney(), nil, 12))
+	own.gold:SetText(Purse())
 	local gold = own.gold:GetUnboundedStringWidth()
 	gold = (issecretvalue(gold) or not gold) and 0 or gold
 	local bags, sale = Bags(), visit.sale
@@ -1465,6 +1615,8 @@ Draw = function()
 	Shop.Size(f, math.min(wide, WIN.w), f:GetHeight())
 
 	ReadGoods()
+	-- A currency's vendor (Merchant's Favor's): sorted for you. Any other keeps its own order.
+	visit.gearVendor = #visit.wallet > 0
 	local backs = GetNumBuybackItems()
 	local orders = ReadOrders()
 	local forYou = 0
@@ -1488,6 +1640,8 @@ Draw = function()
 			local name = g.info.name
 			if (mode == ALL or ForYou(g)) and (not find or (name and name:lower():find(find, 1, true))) then list[#list + 1] = g end
 		end
+		-- A gear vendor's goods in the sort picked; any other's in the vendor's own order.
+		if visit.gearVendor then table.sort(list, SORTS[visit.sort or BEST]) end
 	end
 
 	-- What to sell, with ShyBags; its page only while there is a sale list to show.
@@ -1500,7 +1654,7 @@ Draw = function()
 	DrawBand(Services(repairs), repairs, wide)
 	-- The sheet's width (the window's, less the band's inset, the area's and the scroll bar's) and the area's height.
 	local width = math.floor(wide - 4 - (WIN.pad - 2) - 6 - L.bar)
-	local room = tall - (UI.HEAD.window.line + UI.LINE) - WIN.band - WIN.foot - 6 - L.stripTop - L.strip - L.stripFoot
+	local room = tall - (UI.HEAD.window.line + UI.LINE) - WIN.band - WIN.foot - 6 - L.stripTop - L.stripFoot
 	own.strip:SetShown(not selling)
 	own.area:ClearAllPoints()
 	if selling then
@@ -1517,7 +1671,7 @@ Draw = function()
 		own.stock:Show()
 		own.b.sell:Hide()
 		own.b.back:Hide()
-		DrawStrip(width, mode, backs, forYou)
+		room = room - DrawStrip(width, mode, backs, forYou)
 		DrawSheet(orders, list, mode, width, room)
 		DrawFoot(mode, wide)
 	end

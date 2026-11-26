@@ -40,24 +40,30 @@ function P.Facts(item)
 	return quality, sell or 0, bind == 1
 end
 
+-- The family's prices (Shy.Price). None until the client restarts with the ShyCore that has them.
+local Price = Shy.Price
+
+-- What a vendor pays for one: the family's, else the loot data's while the game hasn't loaded the item.
 function P.Vendor(item)
-	local _, sell = P.Facts(item)
-	return sell
+	local sell = Price and Price.Vendor(item)
+	if sell then return sell end
+	local _, known = P.Facts(item)
+	return known
 end
 
--- The auction house's price and when it was seen: the auction addon's book where it is on (its scans), else what
--- this addon read itself.
+-- The auction house's price and when it was seen: the family's, where what this addon read itself is one book.
 local function Market(item)
-	local house = Shy.addons.Auction
-	if house and house.Price then
-		local price = house:Price(item)
-		if price then return price.market, price.at end
-		return nil
-	end
-	local entry = Book(item)
-	return entry and entry.ah, entry and entry.at
+	if not Price then return nil end
+	return Price.Auction(item)
 end
 P.Auction = Market
+
+if Price then
+	Price.Book(function(item)
+		local entry = T.db and Book(item)
+		return entry and entry.ah, entry and entry.at
+	end)
+end
 
 -- Whether auction prices are offered at all: the auction addon keeps them, or you let this one read them.
 function P.Auctions()

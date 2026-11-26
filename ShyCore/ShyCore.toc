@@ -3,8 +3,8 @@
 ## Notes: The look, layout and setup every ShyUI addon shares |cff888888/shy|r
 ## Author: Shyce Cream
 ## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffUI|r
-## Version: 5.2.11
-## X-Date: 2026-11-25
+## Version: 5.2.14
+## X-Date: 2026-11-26
 ## IconTexture: Interface\AddOns\ShyCore\Media\ShyCoreMarkColor
 ## SavedVariables: ShyCoreDB
 ## AddonCompartmentFunc: ShyCore_OnCompartmentClick
@@ -33,6 +33,7 @@ Tips.lua
 List.lua
 Search.lua
 Shop.lua
+Price.lua
 Fold.lua
 Hub.lua
 Settings.lua

@@ -2002,6 +2002,7 @@ local LOOK = {
 	ahead = 12,  -- todo steps from the place on whose needs are checked
 	reach = 80,  -- ... within this many steps
 	guides = 4,  -- earlier guides in the chain WorkOnQuest searches
+	lent = 40,   -- ... and Lent, for a quest an earlier guide took that you skipped: the whole chain back
 	-- A needed step that doesn't apply yet (it waits on a skill, say) is unlocked by the step just
 	-- before it: returns the nearest earlier step that live state says is still todo, clearing its tick.
 	gate = 3,  -- applicable steps looked back over
@@ -2092,7 +2093,8 @@ end
 
 -- The guide's step that finishes `quest` in the log (this guide or an earlier one in the chain).
 -- Collect may stand after its hand-in in the file, or only in the guide before this one.
-local function WorkOnQuest(home, quest)
+-- `far`: how many guides back to look (LOOK.guides when not given).
+local function WorkOnQuest(home, quest, far)
 	if not QuestOpen(quest) then return nil end
 	local best
 	local function Try(which)
@@ -2130,8 +2132,9 @@ local function WorkOnQuest(home, quest)
 	end
 	Try(home)
 	local back = home
-	for _ = 1, LOOK.guides do
+	for _ = 1, far or LOOK.guides do
 		back = Prior(back)
+		if not back then break end
 		Try(back)
 	end
 	return best
@@ -2248,6 +2251,57 @@ local function CarriedWork(guide, at)
 	end
 end
 
+-- The place (`at`) takes a quest that waits on one this guide has no step for. Claws from the Deep comes
+-- before Reclaiming Goods (28-30), but only the 20-22 guide takes it. If you skipped that, its steps there
+-- are the way: take it, do it, hand it in. Returns that guide's step as a live entry, or nil.
+-- (Only the place: a step further on gets its turn. Whether a chain is worth going back for is ChainGone's.)
+local function Lent(guide, at)
+	local step = Step(guide, at)
+	if not (step and Wanted(step) and not Side(step)) then return nil end
+	local state, parts = Evaluate(guide, step)
+	if state ~= "todo" then return nil end
+	local asks = Asks(guide)
+	for _, part in ipairs(parts) do
+		local id = part.element.command == "accept" and not part.done and not part.dropped and Ids(part.element)[1]
+		local data = id and not L.Has(id) and D.Quest(id)
+		local quest = data and L.Before(data)
+		for _ = 1, CHAIN do
+			-- (A quest this guide takes itself is First's.)
+			if not quest or asks.accept[quest] or asks.turnin[quest] then break end
+			local before = D.Quest(quest)
+			if not before then break end
+			local work = WorkOnQuest(guide, quest, LOOK.lent)
+			if work then return work end
+			local command = (L.Has(quest) and "turnin") or (L.CanStart(before) and "accept") or nil
+			if command then
+				local back = guide
+				for _ = 1, LOOK.lent do
+					back = Prior(back)
+					if not back then break end
+					for _, index in ipairs(Asks(back)[command][quest] or NOTHING) do
+						local lent = Step(back, index)
+						if Wanted(lent) and not Side(lent) then
+							local now, theirs = Evaluate(back, lent)
+							if now == "todo" then
+								-- Only that quest's parts stay.
+								for _, other in ipairs(theirs) do
+									local about = QUEST[other.element.command] and Ids(other.element)[1]
+									if about and about ~= quest then other.dropped, other.can, other.done = ABSENT, false, false end
+								end
+								local entry = InsertBefore(lent, theirs, nil, quest)
+								entry.guide = back
+								return entry
+							end
+						end
+					end
+				end
+				break
+			end
+			quest = L.Before(before)
+		end
+	end
+end
+
 -- The prerequisite step to do before the place (`at`), as a live entry, or nil.
 local function First(guide, at)
 	local found = {}
@@ -2309,6 +2363,7 @@ local function First(guide, at)
 			end
 		end
 	end
+	return Lent(guide, at)
 end
 
 -- A dungeon's step behind the place, still to do: one that came in after the guide passed its steps
@@ -2603,6 +2658,60 @@ local function Scan(guide)
 		return false
 	end
 
+	-- A flight that has lost its reason. The guide flies you somewhere for the steps after the flight. When every
+	-- one of them fell away for you (a quest you never took, another class's), the flight is passed. So is the
+	-- flight onward from a town you never flew to, unless you're in that zone anyway. The route then flies you from
+	-- where you are. ("Fly to Lakeshire" then "fly to Stormwind" became one flight from Darkshire.)
+	local function Flies(step)
+		for _, element in ipairs(step.elements) do
+			if element.command == "fly" and (not element.cond or Applies(element.cond)) then return true end
+		end
+		return false
+	end
+	-- Whether a step between two travel steps fell away: nil when it doesn't count (a side step), false when it
+	-- is there for you (to do or done).
+	local function FellAway(step)
+		if Side(step) then return nil end
+		if not Wanted(step) then return true end
+		local state = Evaluate(guide, step)
+		return state ~= "todo" and state ~= "done"
+	end
+	local function Idle(index)
+		local step = Step(guide, index)
+		if not Flies(step) then return false end
+		-- What it flies you to: up to the next travel step, all of it gone.
+		local gone = false
+		for later = index + 1, #guide.raw do
+			local after = Step(guide, later)
+			local fell = FellAway(after)
+			if fell == false then
+				local state, parts = Evaluate(guide, after)
+				if state == "todo" and OnlyTravel(parts) and gone then return true end
+				break
+			end
+			gone = gone or fell == true
+		end
+		-- What would have flown you here: the flight before it. Passed without flying, and nothing left to do since,
+		-- you were never brought to this flight master. Unless you're here anyway.
+		local here = At(step)
+		if not (W.Known() and here) or (here.map == W.map and here.continent == W.continent) then return false end
+		for earlier = index - 1, 1, -1 do
+			local before = Step(guide, earlier)
+			if Wanted(before) and not Side(before) then
+				local state = Evaluate(guide, before)
+				if state == "todo" then return false end
+				if Flies(before) then
+					for number in pairs(saved.latched[earlier] or NOTHING) do
+						local element = before.elements[number]
+						if element and element.command == "fly" then return false end
+					end
+					return true
+				end
+			end
+		end
+		return false
+	end
+
 	-- A side step runs until its target step is behind `index`; if the target is itself a
 	-- side step, for as long as that one runs.
 	local function Lasts(entry, index, depth)
@@ -2631,7 +2740,7 @@ local function Scan(guide)
 			local state, parts, total, hard = Evaluate(guide, step)
 			-- Auto-pass a soft travel step once you're beyond it, unless the player went back to it (held).
 			if state == "todo" and not hard and index >= from and not saved.held[index] and OnlyTravel(parts)
-				and (Passed(index) or Arrived(index)) then
+				and (Passed(index) or Arrived(index) or Idle(index)) then
 				if settled then saved.done[index] = true end
 				state = "done"
 			end
@@ -4069,6 +4178,16 @@ function G.Uses(id)
 		local asks = Asks(guide)
 		if asks.accept[id] or asks.turnin[id] or asks.complete[id] or asks.collect[id] then return true end
 		guide, seen = Following(guide), seen + 1
+	end
+	-- A live step about it, an earlier guide's among them (Lent): it's on the way, not a stray.
+	for _, list in ipairs({ G.active, G.behind }) do
+		for _, entry in ipairs(list) do
+			for _, part in ipairs(entry.parts) do
+				local command, ids = part.element.command, Ids(part.element)
+				local about = (command == "collect" and ids[3]) or (QUEST[command] and ids[1])
+				if about == id and not part.dropped then return true end
+			end
+		end
 	end
 	return false
 end

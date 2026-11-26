@@ -23,8 +23,9 @@
 --
 -- At the band's top right, with ShyBags: Sell, with how many things and what they come to. It turns the sheet into
 -- what to sell (ShyBags' sale list, weighed by vendor and auction house prices and by ShyGear): junk, outgrown gear,
--- what isn't worth listing, all ticked, and what the auction house pays more for, not ticked, each under the family's
--- group heads, a row each with why and its price. Untick what you keep (ShyBags remembers it for ten levels, for good
+-- what isn't worth listing, all ticked; what the auction house pays more for and Misc (everything else a vendor buys),
+-- not ticked. Each is under the family's group heads, a row each with why, the vendor's price and the auction
+-- house's, the better one lit. Untick what you keep (ShyBags remembers it for ten levels, for good
 -- at the highest); the foot's Sell sells the ticked, a few a second; Back to the goods turns the sheet back.
 -- ShyBags reports its own selling and repairing as SHY_BAGS_SOLD / SHY_BAGS_REPAIRED; anything else is noticed as junk
 -- or a repair cost that was there and is gone.
@@ -100,10 +101,12 @@ local WORDS = {
 	gone = "The vendor has none left",
 	sellKey = "Sell", goodsKey = "Back to the goods", sellIt = "Sell", selling = "Selling %d of %d",
 	sellNone = "Nothing in your bags a vendor should have.",
-	sellGroups = { junk = "Junk", outgrown = "Outgrown gear", plain = "Not worth listing", house = "Better at the auction house" },
+	sellGroups = { junk = "Junk", outgrown = "Outgrown gear", plain = "Not worth listing", house = "Better at the auction house", misc = "Misc" },
 	sellSays = { junk = "Grey items and leftovers from finished quests.", outgrown = "Bound gear worse than what you wear, or that you can't use.",
-		plain = "The auction house pays no more for these than a vendor.", house = "The auction house pays more. Tick one to sell it here anyway." },
-	houseSays = "auction house %s", sellTip = "Untick what you want to keep. You won't be asked about it again for ten levels.",
+		plain = "The auction house pays no more for these than a vendor.", house = "The auction house pays more. Tick one to sell it here anyway.",
+		misc = "Everything else in your bags. Nothing here is ticked until you tick it." },
+	vendorPays = "Vendor", housePays = "Auction", noPrice = "not known",
+	sellTip = "Untick what you want to keep. You won't be asked about it again for ten levels.",
 }
 local SELL = "sell"   -- the sheet as what to sell
 
@@ -1170,7 +1173,7 @@ end
 
 -- The sell page
 
-local SELLROW = { tall = 36, gap = 2, box = 16, slot = Slot.SIZES.compact, head = 26, between = 6, indent = 22, price = 92 }
+local SELLROW = { tall = 36, gap = 2, box = 16, slot = Slot.SIZES.compact, head = 26, between = 6, indent = 22, coins = 11, edge = 6, apart = 10 }
 
 local function SellHead(i)
 	local h = own.sellHeads[i]
@@ -1189,7 +1192,7 @@ local function SellHead(i)
 end
 
 -- A thing to sell: its tick, its picture (its count on it), its name in its quality's color and under it why; at the
--- right, what a vendor pays, and under it what the auction house would. A click anywhere on it ticks it.
+-- right, what a vendor pays and under it what the auction house would, the better one lit. A click ticks it.
 local function SellRow(i)
 	local row = own.sellRows[i]
 	if row then return row end
@@ -1212,19 +1215,20 @@ local function SellRow(i)
 	row.count = row.pic:CreateFontString(nil, "OVERLAY")
 	row.slot:Count(row.count)
 	local left = SELLROW.box + 10 + SELLROW.slot + 9
-	row.money = Text(row, UI.NameFont(12), C.text)
-	row.money:SetPoint("TOPRIGHT", -6, -5)
+	-- Two prices, the sums at the right; their words and the name stand where the page's widest sum leaves room.
+	row.money = Text(row, UI.TextFont(SELLROW.coins), C.dim)
+	row.money:SetPoint("TOPRIGHT", -SELLROW.edge, -5)
 	row.money:SetJustifyH("RIGHT")
-	row.house = Text(row, UI.TextFont(10), C.dim)
-	row.house:SetPoint("BOTTOMRIGHT", -6, 6)
+	row.house = Text(row, UI.TextFont(SELLROW.coins), C.dim)
+	row.house:SetPoint("BOTTOMRIGHT", -SELLROW.edge, 5)
 	row.house:SetJustifyH("RIGHT")
+	row.moneyWord = Text(row, UI.TextFont(SELLROW.coins), C.dim)
+	row.houseWord = Text(row, UI.TextFont(SELLROW.coins), C.dim)
 	row.name = Text(row, UI.NameFont(12), C.text)
 	row.name:SetPoint("TOPLEFT", left, -5)
-	row.name:SetPoint("RIGHT", row, "RIGHT", -(SELLROW.price + 8), 0)
 	row.name:SetWordWrap(false)
 	row.why = Text(row, UI.TextFont(10), C.dim)
 	row.why:SetPoint("BOTTOMLEFT", left, 6)
-	row.why:SetPoint("RIGHT", row, "RIGHT", -(SELLROW.price + 8), 0)
 	row.why:SetWordWrap(false)
 	row:SetScript("OnClick", function(self) TickRow(self.r) end)
 	row:SetScript("OnEnter", function(self)
@@ -1242,6 +1246,14 @@ local function SellRow(i)
 	return row
 end
 
+-- One price line: its word, then the sum. The one it fetches more at in full, the other quiet.
+local function PriceLine(label, at, word, copper, lit)
+	label:SetText(word)
+	UI.Ink(label, lit and C.text or C.dim)
+	at:SetText(copper and UI.Money(copper, false, SELLROW.coins, at) or WORDS.noPrice)
+	UI.Ink(at, lit and C.hot or C.dim)
+end
+
 local function FillSell(row, r)
 	row.r = r
 	row.icon:SetTexture(r.icon or 134400)
@@ -1252,12 +1264,37 @@ local function FillSell(row, r)
 	local color = r.quality and ColorManager.GetColorDataForItemQuality(r.quality)
 	if color then row.name:SetTextColor(color.r, color.g, color.b) else UI.Ink(row.name, C.text) end
 	row.why:SetText(r.why or "")
-	row.money:SetText(Shop.Money(r.value or 0))
-	UI.Ink(row.money, r.checked and C.text or C.dim)
-	row.house:SetText(r.house and WORDS.houseSays:format(Shop.Money(r.house)) or "")
-	UI.Ink(row.house, (r.kind == "house") and C.good or C.dim)
+	local auction = r.best == "auction"
+	PriceLine(row.moneyWord, row.money, WORDS.vendorPays, r.value or 0, not auction)
+	row.house:SetShown(r.auctionable == true)
+	row.houseWord:SetShown(r.auctionable == true)
+	if r.auctionable then PriceLine(row.houseWord, row.house, WORDS.housePays, r.house, auction) end
 	row.tick:Refresh()
 	row:SetAlpha(r.checked and 1 or 0.75)
+end
+
+local function Wide(text)
+	if not text:IsShown() then return 0 end
+	local w = text:GetUnboundedStringWidth()
+	return (issecretvalue(w) or not w) and 0 or w
+end
+
+-- The prices as one column down the page: as wide as its widest sum, the words lined up at its left.
+local function LayPrices(count)
+	local sums, words = 0, 0
+	for i = 1, count do
+		local row = own.sellRows[i]
+		sums = math.max(sums, Wide(row.money), Wide(row.house))
+		words = math.max(words, Wide(row.moneyWord), Wide(row.houseWord))
+	end
+	local at = SELLROW.edge + sums + SELLROW.apart + words
+	for i = 1, count do
+		local row = own.sellRows[i]
+		row.moneyWord:SetPoint("TOPLEFT", row, "TOPRIGHT", -at, -5)
+		row.houseWord:SetPoint("BOTTOMLEFT", row, "BOTTOMRIGHT", -at, 5)
+		row.name:SetPoint("RIGHT", row, "RIGHT", -(at + SELLROW.apart), 0)
+		row.why:SetPoint("RIGHT", row, "RIGHT", -(at + SELLROW.apart), 0)
+	end
 end
 
 local function DrawSell(width)
@@ -1306,6 +1343,7 @@ local function DrawSell(width)
 		end
 		y = y + SELLROW.between
 	end
+	LayPrices(ri)
 	for i = hi + 1, #own.sellHeads do own.sellHeads[i]:Hide() end
 	for i = ri + 1, #own.sellRows do own.sellRows[i]:Hide() end
 	own.sellNone:SetShown(hi == 0)

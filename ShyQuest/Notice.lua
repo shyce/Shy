@@ -466,7 +466,7 @@ function T:TalkPasses(quest)
 	local info = D.Quest(quest)
 	if ns.char.hidden[quest] then return true end
 	if info and info.classes then return false end
-	if not T.db.repeatable and C_QuestLog.IsRepeatableQuest(quest) then return true end
+	if not T.db.repeatable and C_QuestLog.IsRepeatableQuest(quest) and not (info and L.Hands(info)) then return true end
 	if info and not T.db.lowLevel and L.Outgrown(info) then return true end
 	local gray
 	if info then gray = L.Trivial(info.level or 0) else gray = C_QuestLog.IsQuestTrivial(quest) end

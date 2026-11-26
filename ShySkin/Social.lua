@@ -15,8 +15,10 @@
 --   two, onto a group to move it; not in a fight), raid info. In a party, convert to raid.
 -- The ignore list and raid info are pages of the window, reached from Friends and Raid.
 --
--- Nothing here is secure (raid names don't target, as the game's do), so the window moves and turns its pages in a
--- fight; while one is on, the raid page keeps what it showed until it ends.
+-- Its × is secure: it presses the game's own close button, which closes the window in a fight too (the game's
+-- window is protected there once its raid names are made). So the window stays where it is in a fight. Nothing
+-- else is secure (raid names don't target, as the game's do): it turns its pages in a fight, and while one is on,
+-- the raid page keeps what it showed until it ends.
 
 local ADDON, ns = ...
 local UI = Shy.UI
@@ -1354,11 +1356,26 @@ local function PaintTab(tab, on)
 	tab.badge:SetShown(n > 0)
 end
 
-local function Close()
-	local f = Frame()
-	-- The game's window is protected while its raid names are made: in a fight, Escape closes it.
-	if InCombatLockdown() and f:IsProtected() then return end
-	HideUIPanel(f)
+-- The ×: a secure button pressing the game's own close button, so the window closes as the game closes it, in a
+-- fight too. Set up out of one.
+local function CloseKey(box, f)
+	local close = CreateFrame("Button", "ShySkinSocialClose", box.head, "SecureActionButtonTemplate")
+	close:RegisterForClicks("AnyUp")
+	close:SetSize(HEAD.close, HEAD.close)
+	close:SetPoint("RIGHT", box.head, "TOPRIGHT", -HEAD.pad + 2, -box.head.mid)
+	close:SetFrameLevel(box.head:GetFrameLevel() + 10)
+	close.glyph = close:CreateTexture(nil, "OVERLAY")
+	close.glyph:SetTexture(UI.CLOSE_GLYPH)
+	UI.GlyphFit(close.glyph, HEAD.glyph)
+	close.glyph:SetPoint("CENTER")
+	UI.KeyPress(close, { glyphs = { close.glyph }, sink = { close.glyph } })
+	local function Arm()
+		close:SetAttribute("useOnKeyDown", false)
+		close:SetAttribute("type1", "click")
+		close:SetAttribute("clickbutton", f.CloseButton)
+	end
+	if InCombatLockdown() then ns.AfterCombat("social:close", Arm) else Arm() end
+	return close
 end
 
 local BUILD = { friends = BuildFriends, requests = BuildRequests, join = BuildJoin, raid = BuildRaid,
@@ -1371,10 +1388,11 @@ local function Build()
 		width = L.w, height = L.h,
 		point = { "LEFT", "LEFT", 60, 30 },
 		shown = function() return M ~= nil and M.on == true end,
-		inCombat = true,
-		head = { size = "window", title = Global("SOCIAL_UI_FRIENDS_TAB_NAME"), close = Close },
+		secure = true, inCombat = true,
+		head = { size = "window", title = Global("SOCIAL_UI_FRIENDS_TAB_NAME"), close = false },
 	})
 	own.box = box
+	own.close = CloseKey(box, f)
 	-- Opens and closes with the game's window.
 	box:SetParent(f)
 	-- Its pages stand on its body: clear of the look's work round the edge (UI.Body).
@@ -1403,9 +1421,14 @@ local function Emptied(kit)
 	local attic = Shop.AtticOf(f)
 	local kids = {}
 	for _, kid in ipairs({ f:GetChildren() }) do
-		if kid ~= own.box and kid ~= attic and not kid:IsForbidden() and not (locked and kid:IsProtected()) then kids[#kids + 1] = kid end
+		if kid ~= own.box and kid ~= attic and kid ~= f.CloseButton and not kid:IsForbidden() and not (locked and kid:IsProtected()) then kids[#kids + 1] = kid end
 	end
 	Shop.PutAway(f, unpack(kids))
+	-- The game's close stays on its window, unseen, for our × to press: it closes what it stands on.
+	if f.CloseButton then
+		f.CloseButton:SetAlpha(0)
+		f.CloseButton:EnableMouse(false)
+	end
 	for _, region in ipairs({ f:GetRegions() }) do kit:Hide(region) end
 	if mouse == nil then mouse = f:IsMouseEnabled() end
 	f:EnableMouse(false)
@@ -1533,6 +1556,10 @@ local function Clear(m)
 	ns.AfterCombat("social:clear", function()
 		if M.on then return end
 		Shop.BringBack(f)
+		if f.CloseButton then
+			f.CloseButton:SetAlpha(1)
+			f.CloseButton:EnableMouse(true)
+		end
 		if mouse ~= nil then f:EnableMouse(mouse) end
 		if own.box then Shy.HUD.Update(own.box) end
 	end)

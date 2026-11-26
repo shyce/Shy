@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.2.11" src="https://img.shields.io/badge/version-5.2.11-29b3ff"></a>
-  <img alt="released 25 Nov 2026" src="https://img.shields.io/badge/released-25_Nov_2026-4a5568">
-  <img alt="tests 38,403 passed" src="https://img.shields.io/badge/tests-38%2C403_passed-4ade80">
+  <a href="CHANGELOG.md"><img alt="version 5.2.14" src="https://img.shields.io/badge/version-5.2.14-29b3ff"></a>
+  <img alt="released 26 Nov 2026" src="https://img.shields.io/badge/released-26_Nov_2026-4a5568">
+  <img alt="tests 38,477 passed" src="https://img.shields.io/badge/tests-38%2C477_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,16 +93,19 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.2.11
+## What's new in 5.2.14
 
 ### Changed
-- **ShyQuest:** You won't be sent on an escort through elites at your level or higher. It comes back once you outlevel them
+- **ShyChat:** Esc closes the whisper window you're in. The game's own whisper windows stay shut. Commands you type there run
+- **ShyChat:** Esc closes the whisper window you're in. The typing row no longer says who it goes to
+- **ShySkin:** The vendor's sell page lists everything a vendor buys and shows where each item fetches more
+- **ShySkin:** The flight map shows the whole map again. It no longer zooms in on the flights you have
 
 ### Fixed
-- **ShyCore:** Text boxes didn't follow their window when it was resized. They stretch with it now
-- **ShyQuest:** New escort quests were taken for you and set off at once. They're left for you to start now
-- **ShyQuest:** The trail and pin vanished when you stood on a spot's ground. They stay now, since the way may lead underground
-- **ShyWay:** The trail to Sarltooth in the Wetlands went round the hills. It goes up the planks now
+- **ShySkin:** Right-click menus cut off a name like "Invite to gro..." on first open. They fit the words now
+- **ShySkin:** Right-click menus on players failed in instances. They open and light up as they should now
+- **ShySkin:** The ├ù on the social window did nothing in a fight. It closes the window now
+- **ShyWay:** The flight line jumped to the wrong leg when a flight came back past where it started. It follows your real position now
 
 [Every release](CHANGELOG.md)
 

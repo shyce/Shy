@@ -53,7 +53,9 @@ local TAKE_OFF = 30          -- seconds from asking for a flight within which th
 local SHORTEST = 5           -- seconds: less than this was no flight
 local WATCH = 0.25           -- seconds between looks at whether the character is in the air
 local BEND = 15              -- yards: the curve is drawn in pieces no longer than this
-local SEEK = 80              -- points looked over past the last one passed, for where the player is now
+-- Following the player along the line: how much faster than its pace they may fly, yards ahead looked at on top,
+-- and how near a point must be to be where they are.
+local FASTEST, SLACK, NEAR = 1.5, 60, 60
 
 local board                  -- the flight master's map as it last opened: [slot] = { to, key, yards }
 local asked                  -- the point taken from it, and when: { offer, at }
@@ -223,20 +225,24 @@ end
 -- The line
 
 -- A line (Shy.Maps.Smooth) with: flight, key, continent, ends (each hop's last point), hops (the node each
--- hop lands at), at (the point the player was last at).
+-- hop lands at), before (yards flown on another map before it), at (the point the player was last at) and
+-- seen (when).
 local line
 
 -- The line of a flight by its node chain ("2>4>6"); nil when a path of it is unknown.
 local function Lined(key)
 	local all = Shy.Way.data.flightWays
 	if not all then return nil end
-	local hops, points, last, continent = {}, {}, {}, nil
+	local hops, points, last, continent, before = {}, {}, {}, nil, 0
 	for node in key:gmatch("%d+") do hops[#hops + 1] = tonumber(node) end
 	for i = 2, #hops do
 		local way = all[hops[i - 1]] and all[hops[i - 1]][hops[i]]
 		if not way then return nil end
-		-- (A path onto another map: what comes after it is what is flown there.)
+		-- (A path onto another map: what comes after it is what is flown there. The yards flown before it are kept.)
 		if continent and continent ~= way[1] then
+			for j = 3, #points - 1, 2 do
+				before = before + math.sqrt((points[j] - points[j - 2]) ^ 2 + (points[j + 1] - points[j - 1]) ^ 2)
+			end
 			wipe(points)
 			wipe(last)
 		end
@@ -249,7 +255,7 @@ local function Lined(key)
 	end
 	local made = Maps.Smooth(points, BEND)
 	if not made then return nil end
-	made.key, made.continent, made.ends, made.hops = key, continent, {}, {}
+	made.key, made.continent, made.ends, made.hops, made.before = key, continent, {}, {}, before
 	for hop, point in ipairs(last) do made.ends[hop] = made.point[point] end
 	-- (A path onto another map drops the hops before it.)
 	for i = #hops - #last + 1, #hops do made.hops[#made.hops + 1] = hops[i] end
@@ -279,11 +285,58 @@ local function Last()
 	return flight.stopAt or line.n
 end
 
--- The point of the line the player at (north, west) is at: anywhere on it at first (after a reload,
--- mid-flight), then only onward.
+-- Seconds a yard of the line takes: the flight's own time over its length where that is known (on another
+-- map first, those yards too), else a flight's speed at the pace flights have kept.
+local function Rate()
+	if flight.seconds and line and line.n and line.along[line.n] > 0 then
+		return flight.seconds / (line.along[line.n] + (line.before or 0))
+	end
+	return Pace() / Flight.Speed()
+end
+
+-- The passes of the line from point `from` that come within NEAR yards of the player (a line that loops, or
+-- flies into a town and out the way it came, passes the same ground twice). Of these, the closest point of
+-- the one nearest `expect` yards along it; nil with none.
+local function Pass(north, west, from, expect)
+	local near, best, off = NEAR * NEAR, nil, math.huge
+	local i = from
+	while i <= line.n do
+		if (line.north[i] - north) ^ 2 + (line.west[i] - west) ^ 2 <= near then
+			local close, least = i, (line.north[i] - north) ^ 2 + (line.west[i] - west) ^ 2
+			while i < line.n do
+				local away = (line.north[i + 1] - north) ^ 2 + (line.west[i + 1] - west) ^ 2
+				if away > near then break end
+				i = i + 1
+				if away < least then close, least = i, away end
+			end
+			local by = math.abs(line.along[close] - expect)
+			if by < off then best, off = close, by end
+		end
+		i = i + 1
+	end
+	return best
+end
+
+-- The point of the line the player at (north, west) is at, only ever onward. It looks only as far ahead as the
+-- flight can have flown since the last look, so a loop's later pass close by is never taken for it. Far from all
+-- of that (a jump, the first look, the line come in from another map), the pass near them that is nearest where
+-- the clock puts them; with none, the nearest point at first and where it was after.
 local function Passed(north, west)
-	local best = Maps.Nearest(line, north, west, line.at or 1, line.at and math.min(line.n, line.at + SEEK) or line.n)
-	line.at = best
+	local now, at = GetTime(), line.at
+	local best
+	if at then
+		local gone = (now - line.seen) / Rate()
+		local reach = line.along[at] + gone * FASTEST + SLACK
+		local to = at
+		while to < line.n and line.along[to + 1] <= reach do to = to + 1 end
+		local away
+		best, away = Maps.Nearest(line, north, west, at, math.min(line.n, to + 1))
+		if away > NEAR then best = Pass(north, west, at, line.along[at] + gone) or best end
+	else
+		local expect = (now - flight.started) / Rate() - (line.before or 0)
+		best = Pass(north, west, 1, expect) or Maps.Nearest(line, north, west, 1, line.n)
+	end
+	line.at, line.seen = best, now
 	return best
 end
 
@@ -326,13 +379,6 @@ local function TakeOff(offer, started, rough)
 	end
 	flight = { to = offer.to, key = offer.key, yards = offer.yards, seconds = seconds, sure = sure, started = started, rough = rough, names = named }
 	Tell()
-end
-
--- Seconds a yard of the line takes: the flight's own time over its length where that is known, else a
--- flight's speed at the pace flights have kept.
-local function Rate()
-	if flight.seconds and line and line.n and line.along[line.n] > 0 then return flight.seconds / line.along[line.n] end
-	return Pace() / Flight.Speed()
 end
 
 -- Asked to land early: the flight lands where the hop it is on ends. It is now a flight there, counted down

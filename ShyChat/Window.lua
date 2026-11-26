@@ -77,8 +77,8 @@ end
 -- Putting the line in with SetText marks it as ours. The box's own Enter then runs it, and a protected
 -- slash command (/target and the rest) is refused. Those lines go to a secure button instead: Enter
 -- clicks it, and the box is emptied first so its handler has nothing protected left to run.
--- A typing row of ShyChat's own (a whisper's) runs nothing itself: every command typed there goes to the button,
--- and after it the row stays, emptied, to go on talking.
+-- A typing row of ShyChat's own (a whisper's): its protected commands go to the button, the rest are run by the
+-- game's own reading of a typed line (W.Run); after either the row stays, emptied, to go on talking.
 local RECALL = "ShyChatRecall"
 local recall, armedBox, armedText, handing, combatWatch
 local placed = {}   -- edit box -> secure line we put there, until it is sent or replaced
@@ -99,13 +99,27 @@ local function SecureLine(text)
 	if command and IsSecureCmd(command) then return text end
 end
 
--- The line Enter hands to the button from this box, or nil: a chat box's protected commands, any command in ours.
+-- The line Enter hands to the button from this box, or nil: a protected command (a chat box's or ours).
 local function Runs(box, text)
-	if own[box] then
-		if issecretvalue(text) or type(text) ~= "string" then return nil end
-		return text:find("^/[^%s/]") and text or nil
-	end
 	return SecureLine(text)
+end
+
+-- A command typed in a row of ours that isn't protected (/rl, /dance, /s hi): run as the chat box would run it, by
+-- the game's own reading of a line, in a box of ours the way the game runs a macro's lines. Unknown: the game's
+-- help line, in the main chat.
+local runner
+function W.Run(text)
+	if not runner then
+		runner = Mixin(CreateFrame("EditBox"), ChatFrameEditBoxBaseMixin)
+		runner:SetAutoFocus(false)
+		runner:Hide()
+		runner:SetStickyType("SAY")
+		runner.chatFrame = DEFAULT_CHAT_FRAME
+	end
+	runner:SetChatType("SAY")
+	runner:SetText(text)
+	runner:SendText()
+	runner:SetText("")
 end
 
 local function Unbind()

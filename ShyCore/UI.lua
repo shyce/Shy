@@ -6415,7 +6415,24 @@ local function MenuBuild()
 			self.footLeft:SetPoint("BOTTOMLEFT", MENU.edge + rail + MENU.inset, MENU.edge + 5)
 			self.foot:SetPoint("BOTTOMRIGHT", -(MENU.edge + MENU.inset + 2), MENU.edge + 5)
 		end
+		-- A face drawn for the first time can measure short as the rows are laid out ("Invite to gro..."). Once it
+		-- is drawn, a row cut short lays the menu out again, once.
+		if not self.again then C_Timer.After(0, function() self:Refit() end) end
 		return #items, view, height, onY
+	end
+
+	function f:Refit()
+		if not self:IsShown() then return end
+		for _, row in ipairs(self.rows) do
+			local cut = row:IsShown() and row.text:IsTruncated()
+			if not issecretvalue(cut) and cut then
+				self.again = true
+				self:Fill()
+				self.again = nil
+				self.area:Update()
+				return
+			end
+		end
 	end
 
 	f:SetScript("OnShow", function(self) self:RegisterEvent("GLOBAL_MOUSE_DOWN") end)

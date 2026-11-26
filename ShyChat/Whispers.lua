@@ -9,6 +9,7 @@
 -- Keys go where you were: Enter to the conversation you last typed in (or the one open in the chat) while it shows,
 -- the reply keys to the person's conversation, and "/" to the chat box as ever. A command typed in a conversation's
 -- row runs as the chat box's do (Window.lua). The keys are override bindings of our own, set only out of a fight.
+-- Esc in a window's typing row closes it, as its × does.
 -- Conversations are kept per character, and the head's whispers notice counts the ones with news.
 
 local ADDON, ns = ...
@@ -259,14 +260,15 @@ local function Ink(edit, words, c)
 	edit.header:SetText(words)
 	edit.header:SetTextColor(c[1], c[2], c[3])
 	edit:SetTextColor(c[1], c[2], c[3])
-	edit:SetTextInsets(8 + edit.header:GetStringWidth() + 4, 8, 0, 0)
+	edit:SetTextInsets(words == "" and 8 or 8 + edit.header:GetStringWidth() + 4, 8, 0, 0)
 end
 
--- The typing row: "To Mira:" in the whisper's color, the words after it; "Command:" while a command is typed.
+-- The typing row: your words in the whisper's color (the window already says who they go to); "Command:" before
+-- them while a command is typed.
 local function Header(w, talk)
 	w.command = false
 	local info = Kind(talk, false)
-	Ink(w.edit, "To " .. talk.first .. ":", { info.r, info.g, info.b })
+	Ink(w.edit, "", { info.r, info.g, info.b })
 end
 
 local function Typed(w)
@@ -429,9 +431,10 @@ local function Wanted(w)
 	return w.open == true and not w.min and db.whispers and not Held()
 end
 
--- Only you close a window, with its ×. It isn't one of the windows Esc closes: Esc leaves its typing row, then
--- opens the game menu as ever, and the game's own sweeps of those windows (as a reload logs in, when the UI is
--- shown again, when you lose control) pass it by. Not closed when it steps aside (a fight, the setting off,
+-- Only you close a window: with its ×, or Esc in its typing row. It isn't one of the windows the game's Esc
+-- closes: those the game also sweeps (as a reload logs in, when the UI is shown again, when you lose control),
+-- and the game's list of Esc handlers can't take one of ours (written from an addon, every Esc after it runs as
+-- ours, and the game's own steps there are refused). Not closed when it steps aside (a fight, the setting off,
 -- the dock), whoever asks the HUD to show it again.
 local function Closed(w)
 	if quiet or not Wanted(w) then return end
@@ -537,13 +540,10 @@ local function Build(w)
 	edit.header:SetFontObject(ChatFontNormal)
 	edit.header:SetPoint("LEFT", 8, 0)
 	edit:SetScript("OnEnterPressed", function(self) Wh.Send(w, self) end)
-	-- Esc leaves the row; Enter no longer comes back to a window (the chat's open conversation still takes it).
+	-- Esc closes the window, as its × does. In the chat it only leaves the row (the chat stays).
 	edit:SetScript("OnEscapePressed", function(self)
 		self:ClearFocus()
-		if talkTo == w and w ~= host then
-			talkTo = nil
-			Keys()
-		end
+		if w ~= host then w.box:Hide() end
 	end)
 	edit:SetScript("OnTabPressed", function()
 		local now = 1
@@ -1125,8 +1125,15 @@ function Wh.Send(w, edit)
 		return
 	end
 	if text:find(COMMAND) then
-		T:Print(InCombatLockdown() and "commands typed in a whisper run once the fight is over. Your message is still in the box."
-			or "that command didn't run. Your message is still in the box.")
+		-- A protected one (/target) runs only through the chat's button: here it couldn't.
+		if IsSecureCmd(text:match("^(/[^%s]+)")) then
+			T:Print(InCombatLockdown() and "that command can't run from a whisper in a fight. Your message is still in the box."
+				or "that command didn't run. Your message is still in the box.")
+			return
+		end
+		ns.Window.Run(text)
+		edit:AddHistoryLine(text)
+		edit:SetText("")
 		return
 	end
 	if C_ChatInfo.InChatMessagingLockdown() then

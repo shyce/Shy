@@ -1,5 +1,34 @@
 # Changelog
 
+## 5.2.14 (26 Nov 2026)
+
+### Changed
+- **ShyChat:** Esc closes the whisper window you're in. The game's own whisper windows stay shut. Commands you type there run
+- **ShyChat:** Esc closes the whisper window you're in. The typing row no longer says who it goes to
+- **ShySkin:** The vendor's sell page lists everything a vendor buys and shows where each item fetches more
+- **ShySkin:** The flight map shows the whole map again. It no longer zooms in on the flights you have
+
+### Fixed
+- **ShySkin:** Right-click menus cut off a name like "Invite to gro..." on first open. They fit the words now
+- **ShySkin:** Right-click menus on players failed in instances. They open and light up as they should now
+- **ShySkin:** The ├ù on the social window did nothing in a fight. It closes the window now
+- **ShyWay:** The flight line jumped to the wrong leg when a flight came back past where it started. It follows your real position now
+
+## 5.2.13 (25 Nov 2026)
+
+### Fixed
+- **ShyQuest:** From the Ashes was handed in without destroying the attack plans. The guide sends you to each one first
+- **ShyQuest:** A quest you skipped in a guide far back wasn't picked up again. The guide sends you back for it now
+- **ShyQuest:** "Fly to Menethil Harbor" stayed on the card after you'd walked into town. It clears now
+- **ShyQuest:** A quest that waited on one you'd skipped in an earlier guide got stuck. The guide sends you back for it now
+- **ShyQuest:** Seeking the Kor Gem was hidden or skipped when The Test of Righteousness needed its gem. It's offered and routed right now
+
+## 5.2.12 (25 Nov 2026)
+
+### Fixed
+- **ShyQuest:** Blackfathom Deeps quests sent you away by boat before you could pick them up. They come first now
+- **ShyQuest:** The guide flew you to a town you'd skipped. It passes that flight now and flies you from where you are
+
 ## 5.2.11 (25 Nov 2026)
 
 ### Changed

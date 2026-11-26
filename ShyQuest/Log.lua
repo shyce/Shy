@@ -738,6 +738,25 @@ function L.Lacks(quest)
 	return true
 end
 
+-- A repeatable quest that is the way to something a quest in your log still needs. Seeking the Kor Gem
+-- gives the Purified Kor Gem for The Test of Righteousness. It's part of that quest, so the setting doesn't hide it.
+function L.Hands(quest)
+	local offer = D.Offer(quest.id)
+	for _, each in ipairs(offer and offer.items or {}) do
+		local item = D.Item(each.item)
+		for _, way in ipairs(item and item.given or {}) do
+			if way == quest.id then
+				for _, asker in ipairs(item.asks or {}) do
+					local index = L.Has(asker) and L.GoalOf(asker, "i", item.id)
+					local goal = index and L.Goals(asker)[index]
+					if goal and not goal.finished then return true end
+				end
+			end
+		end
+	end
+	return false
+end
+
 -- Every rule a quest is offered by. `out` nil: false at the first one failed (L.CanStart). A table:
 -- each one failed is added to it as { what, id, value } and the walk goes on (L.Missing).
 local function Rules(quest, inHand, byData, out)
@@ -746,7 +765,7 @@ local function Rules(quest, inHand, byData, out)
 	if flags:find("g", 1, true) then return Stop(out, "raid") end
 	if L.Has(id) then return Stop(out, "log") end
 	if flags:find("r", 1, true) then
-		if not T.db.repeatable and not Miss(out, "repeatable") then return false end
+		if not T.db.repeatable and not L.Hands(quest) and not Miss(out, "repeatable") then return false end
 	elseif L.Done(id) then
 		return Stop(out, "done")
 	end

@@ -112,6 +112,21 @@ local function SyncTimestamps(db)
 	end
 end
 
+-- The game's own whisper windows ("popout": a window or tab of its own for each whisper) would open beside ours:
+-- whispers stay in the chat while ours are on, and your choice comes back after.
+local function SyncWhisperMode(db)
+	local theirs = GetCVar("whisperMode")
+	if db.whispers and ns.Whispers then
+		if theirs ~= "inline" then
+			db.savedWhisperMode = theirs
+			SetCVar("whisperMode", "inline")
+		end
+	elseif db.savedWhisperMode then
+		SetCVar("whisperMode", db.savedWhisperMode)
+		db.savedWhisperMode = nil
+	end
+end
+
 -- The game colors every sender name by class at "0" and none at "1". Off is none, whatever it was before.
 local function SyncClassColors(db)
 	local want = db.classColors and "0" or "1"
@@ -140,6 +155,7 @@ function T:Apply()
 	local db = self.db
 	SyncTimestamps(db)
 	SyncClassColors(db)
+	SyncWhisperMode(db)
 	ns.Format.RebuildChannels()
 	ns.Format.RebuildMentions()
 	ns.Window.ApplyAll()

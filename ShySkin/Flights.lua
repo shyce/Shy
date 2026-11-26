@@ -10,7 +10,7 @@
 -- other flight, the quickest first, each with its zone, its cost and its time in the air (dim and "~" while it is an
 -- estimate: never flown). With no flight asked for, the list alone.
 -- Right, the game's flight map in a frame of the theme's look (a housing of its own: the look's border, and what it
--- lays round a content it holds, a well or rivets, L.frame wide), drawn in on the flights you have, its points as the
+-- lays round a content it holds, a well or rivets, L.frame wide), the whole of it as the game draws it, its points as the
 -- family's marks: where you are in the color for yes, the rest in steel; the one picked lit, the way it flies drawn
 -- hop by hop (the way of the one under the mouse while it is there) with the points it passes. A mark's hover names
 -- it with its time, cost and stops.
@@ -47,7 +47,6 @@ local L = {
 	pills = -44,                           -- the band's second line, under who the flight master is
 	mark = 18, picked = 24, hovered = 22, stop = 12,   -- the map's marks: a flight, the one picked, under the mouse, passed on the way
 	apart = 18 / 580,                      -- marks nearer than this share of the map shown stand apart (as the game's map has them)
-	zoom = 2, margin = 0.07,               -- the map is drawn in at most this far, this share of it clear round the flights
 	frame = 7,                             -- the map's frame: this much of its housing shows round it, inside the look's border
 	route = 3,                             -- the way's width, in pixels
 	again = 0.5,                           -- seconds within which a second click on the one picked takes it
@@ -71,7 +70,6 @@ local visit = {}     -- this visit: role, want (the slot your guide asks for), w
 local spots = {}     -- slot -> { slot, kind, full, name, zone, x, y, cost, seconds, timed }: the map's points as last read
 local order = {}     -- ... in the map's order
 local flights = {}   -- ... the ones you can fly to but your guide's, the quickest first
-local view = { x = 0, y = 0, span = 1 }   -- the part of the map shown: its top left and how much of it, as shares
 local picked         -- the slot picked
 local hovered        -- the slot under the mouse (its row or its mark)
 local clicked        -- the last click on the one picked: { slot, at }
@@ -92,28 +90,9 @@ end
 
 -- Reading the map
 
--- The part of the map shown: the flights you have with L.margin clear round them, never drawn in past L.zoom.
-local function Shown()
-	local x0, y0, x1, y1
-	for _, f in ipairs(order) do
-		if f.kind ~= "DISTANT" then
-			x0, y0 = math.min(x0 or f.x, f.x), math.min(y0 or f.y, f.y)
-			x1, y1 = math.max(x1 or f.x, f.x), math.max(y1 or f.y, f.y)
-		end
-	end
-	if not x0 then
-		view.x, view.y, view.span = 0, 0, 1
-		return
-	end
-	local span = math.min(1, math.max(1 / L.zoom, math.max(x1 - x0, y1 - y0) + 2 * L.margin))
-	view.span = span
-	view.x = math.max(0, math.min(1 - span, (x0 + x1) / 2 - span / 2))
-	view.y = math.max(0, math.min(1 - span, (y0 + y1) / 2 - span / 2))
-end
-
 -- Marks nearer each other than L.apart move apart, the later from the earlier, as the game's own map places them.
 local function Apart()
-	local near = L.apart * view.span
+	local near = L.apart
 	local placed = {}
 	for _, f in ipairs(order) do
 		if f.kind ~= "DISTANT" then
@@ -159,7 +138,6 @@ local function Read()
 		end
 	end
 	table.sort(flights, Sooner)
-	Shown()
 	Apart()
 end
 
@@ -526,12 +504,10 @@ local function Wears(f)
 	return f.slot == visit.want and GUIDE or TRAVEL
 end
 
--- The map: the part of it your flights are on; every point as a mark; the way of the one under the mouse (else the one
+-- The map: the whole of it; every point as a mark; the way of the one under the mouse (else the one
 -- picked) drawn hop by hop, the points it passes marked small.
 DrawMap = function()
 	local side = own.side - 2 * own.rim - 2   -- (the art: inside the frame, and the sheet's hairline)
-	local span = view.span
-	own.art:SetTexCoord(view.x, view.x + span, view.y, view.y + span)
 	local shown = Flight(hovered) or Flight(picked)
 	local hops = shown and Hops(shown.slot) or NONE
 	own.way = shown and Wears(shown) or nil
@@ -541,7 +517,7 @@ DrawMap = function()
 	local lift = own.pins:GetFrameLevel()
 	local i = 0
 	for _, f in ipairs(order) do
-		local x, y = (f.x - view.x) / span, (f.y - view.y) / span
+		local x, y = f.x, f.y
 		local stop = f.kind == "DISTANT"
 		if (not stop or passed[f.slot]) and x >= 0 and x <= 1 and y >= 0 and y <= 1 then
 			i = i + 1
@@ -572,7 +548,7 @@ DrawMap = function()
 	for _, hop in ipairs(hops) do
 		local a, b = spots[hop[1]], spots[hop[2]]
 		if a and b then
-			Maps.Segment(pen, (a.x - view.x) / span * side, (a.y - view.y) / span * side, (b.x - view.x) / span * side, (b.y - view.y) / span * side,
+			Maps.Segment(pen, a.x * side, a.y * side, b.x * side, b.y * side,
 				L.route, 1, own.way, nil, Maps.JOURNEY)
 		end
 	end

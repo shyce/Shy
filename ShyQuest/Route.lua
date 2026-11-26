@@ -305,7 +305,8 @@ end
 -- how = "kill" | "use" | "sells" | "holds" | "drops" | "gives", quest } for out[n].
 -- A creature listed with no drop chance that gives or takes quests hands the item over (a quest's
 -- reward, or a word with them): "gives", never something to kill. Where the item is had only as the
--- reward of a quest they take (item.given), `quest` is that quest.
+-- reward of a quest they take (item.given), `quest` is that quest. With that quest in your log and not done,
+-- they're left out, unless `owed`.
 -- `needs`: the list is of an item the quest needs and doesn't count, by its name.
 local function RewardOf(item, npc)
 	if not item.given then return nil end
@@ -320,7 +321,7 @@ local function RewardOf(item, npc)
 	return nil
 end
 
-function GoalPlaces(token, out, ground, from, every)
+function GoalPlaces(token, out, ground, from, every, owed)
 	local needs
 	-- chance: the percent of kills an item drops from, where the data says.
 	local function Add(thing, how, chance, quest)
@@ -381,9 +382,15 @@ function GoalPlaces(token, out, ground, from, every)
 				if thing and not out and (source.kind ~= "v" or L.Friendly(thing)) and not (source.kind == "n" and D.Dropless(source.id, item.id)) then
 					local gives = source.kind == "n" and not source.chance and (thing.gives or thing.takes) ~= nil
 					local how = source.kind == "v" and "sells" or source.kind == "o" and "holds" or gives and "gives" or "drops"
-					-- (A creature is in reach by its level whatever it is said to give; only a shop is not fought.)
-					Found(thing, how, source.chance, gives and RewardOf(item, source.id) or nil, source.kind == "n" and how ~= "sells")
-					if how == "drops" and not source.chance then found[#found][3] = least end
+					local reward = gives and RewardOf(item, source.id) or nil
+					-- Their quest in your log and not done: they can't hand it over yet. That quest's own stops are the way,
+					-- and its hand-in is where you get it. (`owed`: kept, for what that quest still costs.)
+					local entry = reward and not owed and L.entries[reward]
+					if not (entry and not entry.complete) then
+						-- (A creature is in reach by its level whatever it is said to give; only a shop is not fought.)
+						Found(thing, how, source.chance, reward, source.kind == "n" and how ~= "sells")
+						if how == "drops" and not source.chance then found[#found][3] = least end
+					end
 				end
 			end
 			for _, id in ipairs(item.more or {}) do
@@ -1062,6 +1069,13 @@ local function NearestGoal(id, quest)
 			for _, token in ipairs(L.Asked(goal)) do
 				GoalPlaces(token, lists, nil, sources)
 				GoalPlaces(token, grounds, true)
+			end
+			-- Nowhere known for what it asks: where it was seen to advance in this game (D.GoalSeen).
+			local seen = #lists == from and D.GoalSeen(id, index)
+			if seen and #seen > 0 then
+				lists[#lists + 1] = seen
+				grounds[#lists] = seen
+				sources[#lists] = { name = (goal.text or ""):gsub(":?%s*%d+/%d+%s*$", ""), how = "loot", quest = id }
 			end
 			for i = from + 1, #lists do whose[i] = index end
 			pinned[index] = Pinned(grounds, sources, from + 1, #lists)
@@ -2612,7 +2626,7 @@ local Owed   -- below
 -- (`inner`: this is that quest's own cost, and a reward it needs in turn is not followed).
 local function Effort(token, count, inner)
 	local lists, from = {}, {}
-	GoalPlaces(token, lists, true, from)
+	GoalPlaces(token, lists, true, from, nil, true)
 	local best, alone, fights
 	for i, places in ipairs(lists) do
 		local how, chance, quest = from[i].how, from[i].chance, from[i].quest
@@ -3141,6 +3155,16 @@ R.journeysOpen = nil -- true while a journey of the route as last built was stil
 R.JOURNEY_SLACK = 100 -- yards farther from the stop than when its journey was worked out before it is again
 R.JUMP = 60          -- yards between two pulses that nobody runs: a hearthstone, a portal
 
+-- Where a journey first boards a ride, on the continent it sets out on. Nil where it walks all the way.
+local function Boards(journey, world)
+	for i = 1, journey and journey.n or 0 do
+		local leg = journey[i]
+		if leg.by ~= "walk" then
+			return leg.from and leg.from.world == world and leg.from.north and leg.from or nil
+		end
+	end
+end
+
 -- Told where you are at every pulse (ShyQuest.lua). A kept journey sets out from where you walked. Carried by
 -- a flight or a boat, or moved further than anyone runs, you're somewhere else, and each is worked out again.
 -- Being flown nearer to the stop isn't walking along its journey. ("Fly to Ironforge" stayed after landing there.)
@@ -3193,12 +3217,17 @@ local function WithJourneys(route)
 			-- (Walking along it only brings you nearer; farther from the stop than when it was worked out, you
 			-- were carried off or went the other way, and it is worked out again.)
 			local away = W.Between(fromN, fromW, stop.north, stop.west)
+			-- (Nearer the stop isn't enough where it rides. Walking along it also brings you nearer its first ride.
+			-- Farther from that, you took another way there, by the road or a swim. "Fly to Menethil Harbor"
+			-- stayed after you'd walked into Menethil.)
+			local board = kept and kept.board
+			local strayed = board and W.Between(fromN, fromW, board.north, board.west) > kept.boarding + R.JOURNEY_SLACK
 			-- (Kept only through a walk: a route chosen again for anything else, a quest or a setting, works it
 			-- out again; those are seldom, a walk's every few dozen yards.)
 			-- (And only from the same start: a journey from here is not the one from where an errand before it
 			-- leaves the character, a bank or where the hearthstone lands.)
 			if R.held and kept and kept.toN == stop.north and kept.toW == stop.west and kept.level == level and kept.up == up
-				and kept.origin == origin and away <= (kept.away or 0) + R.JOURNEY_SLACK then
+				and kept.origin == origin and away <= (kept.away or 0) + R.JOURNEY_SLACK and not strayed then
 				journey = kept.journey
 			else
 				local state
@@ -3210,8 +3239,10 @@ local function WithJourneys(route)
 					R.journeyKept[key], R.journeysOpen = nil, true
 					stop.finding = true
 				else
+					board = Boards(journey, here.world)
 					R.journeyKept[key] = { journey = journey, toN = stop.north, toW = stop.west, level = level, up = up,
-						fromN = fromN, fromW = fromW, away = away, origin = origin }
+						fromN = fromN, fromW = fromW, away = away, origin = origin, board = board,
+						boarding = board and W.Between(fromN, fromW, board.north, board.west) }
 				end
 			end
 			Shy.Clock("route: journeys"):Lap(debugprofilestop() - from)

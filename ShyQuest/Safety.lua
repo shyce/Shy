@@ -32,7 +32,8 @@ Safety.SPAN = 5                            -- levels a creature's range may span
 local NAMED = 1                            -- creatures named in the note; the rest are counted
 local LOW, LOW_CAREFUL = 0.35, 0.5         -- share of health under which the alert shows
 local FADE = 0.1                           -- ... fading in over this much more
-local COMING, COMING_CAREFUL = 40, 60      -- seconds of breath under which it warns (amber, over the head)
+local COMING, COMING_CAREFUL = 40, 60      -- seconds of breath under which it warns (in the head, breath's blue)
+local BREATH = { 0.50, 0.82, 1.00 }        -- breath's own color: its bar's in the drawer (ShySkin's Timers.lua)
 local AIR, AIR_CAREFUL = 20, 30            -- ... and is urgent (red, down under the character)
 
 -- Careful play: the hardcore route or a hardcore realm.
@@ -342,8 +343,10 @@ local function Air()
 	local urgent = left <= (careful and AIR_CAREFUL or AIR)
 	-- The weave is full as it first shows and runs out with the air, so its length tells the time left.
 	local span = breath and coming or timer.max / 1000
+	-- Breath in its own blue and its bubbles, as its bar in the drawer: the bar became the head.
 	Alarm.Raise(AIR_ALARM, {
-		priority = 20, warn = not urgent, fly = urgent, covers = timer.name, title = (timer.label or ""):upper(),
+		priority = 20, warn = not urgent, fly = urgent, covers = timer.name, title = timer.label or "",
+		sign = breath and "breath" or nil, color = breath and BREATH or nil,
 		right = ("%ds"):format(math.max(0, math.ceil(left))),
 		share = math.max(0, math.min(1, left / span)),
 	})

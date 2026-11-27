@@ -14,13 +14,15 @@
 --   Shy.Alarm.Raise(id, {
 --       priority = 10,                    -- the highest raised shows
 --       warn = true, or fly = true,       -- a warning or urgent (else quiet)
---       title = "BREATH",                 -- the plate's words
+--       title = "Breath",                 -- the plate's words
 --       under = "Major Healing Potion",   -- optional: the line under them
 --       right = "13s",                    -- optional: at the plate's right end (in the head, at the end of the title's line)
 --       icon = fileID | path,             -- a picture in the circle (round; dim = true greys it: not ready), or
 --       sign = name | path,               -- a head sign (Shy.Top.Make.SIGNS), a hover glyph's name or a file
 --                                         -- drawn for 24 units, in the circle's light (else the exclamation
 --                                         -- mark)
+--       color = { r, g, b },              -- optional: a warning's own color (breath's blue, as its bar in the drawer);
+--                                         -- urgent is crimson whatever it is about
 --       share = 0.6,                      -- optional: the weave drains to this share; under LOW it beats quicker
 --                                         -- (a secret, your health as the game evaluates it, is shown as is)
 --       alpha = function() end,           -- optional, quiet: its strength, read on Raise and Update (may be a
@@ -64,7 +66,7 @@ local VOICE = 100                  -- the head's voice for it: over every other
 local CRIMSON = Theme.COMBO[#Theme.COMBO]   -- urgent
 local AMBER = Theme.COMBO[3]               -- coming
 local WHITE = { 1, 1, 1 }
-local SAMPLE = { title = "BREATH", right = "13s", share = 0.45 }
+local SAMPLE = { title = "Breath", sign = "breath", right = "13s", share = 0.45 }
 
 local alarms = {}                  -- id -> def
 local up                           -- the id showing
@@ -155,7 +157,7 @@ local function Card(parent)
 	c.right:SetJustifyH("RIGHT")
 
 	function c:Set(def)
-		local tone = def.warn and AMBER or CRIMSON
+		local tone = def.warn and (def.color or AMBER) or CRIMSON
 		UI.Tint(self.drain.fill, tone, 1)
 		UI.Tint(self.halo, tone, 1)
 		UI.Tint(self.glow, tone, 1)
@@ -269,7 +271,7 @@ local function Voice(def, tone)
 		return
 	end
 	-- (The plate is a bar: as long as its own words, whatever was said before it.)
-	Shy.Notices.Voice("alarm", { priority = VOICE, glyph = ALERT, color = tone, fill = tone, share = def.share, pulse = true, title = def.title, titleColor = WHITE,
+	Shy.Notices.Voice("alarm", { priority = VOICE, glyph = def.sign or ALERT, color = tone, fill = tone, share = def.share, pulse = true, title = def.title, titleColor = WHITE,
 		under = def.under, right = def.right })
 end
 
@@ -387,7 +389,7 @@ local function Show()
 	end
 	card:Set(def)
 	if stage == "warn" then
-		Voice(def, AMBER)
+		Voice(def, def.color or AMBER)
 		card:Hide()
 	elseif stage == "fly" then
 		if not card:IsShown() then Voice(def, CRIMSON) end

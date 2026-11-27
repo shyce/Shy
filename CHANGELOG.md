@@ -1,5 +1,17 @@
 # Changelog
 
+## 5.2.17 (27 Nov 2026)
+
+### Added
+- **ShyCore:** Shy spots addons doing a job it already does. A "Your addons" page lets you switch them off, and What's new lists each release's changes
+- **ShyKeys:** "/shy keys force" lays out every key, even the ones you kept or moved. Put back still brings yours home
+
+### Changed
+- **ShyCore:** Drag the head and the whole column at the top goes with it. The zone line drops its coordinates
+- **ShyGroup:** Your run, the replies waiting and the routes friends suggest sit in one row group under the head
+- **ShyQuest:** Running out of air shows in the head as blue bubbles. The time left stays put at the end of the bar
+- **ShyQuest:** Food and water come in whole stacks. A half stack took a bag slot all the same
+
 ## 5.2.16 (26 Nov 2026)
 
 ### Added

@@ -2,6 +2,7 @@
 -- have learned, so a spell arrives on its key as you train it.
 --
 --   ns.Keys.Run()     lays them out and says what was done (/shy mage keys)
+--   ns.Keys.Run("force")  every key, even ones you kept or moved (/shy mage keys force)
 --   ns.Keys.List()    every key and what it does, as text
 --
 -- The mana gem's key uses the gem you carry and conjures one when you carry none.
@@ -357,12 +358,12 @@ function K.Apply()
 	return Shy.Keys.Apply(T, JOBS, OPTS)
 end
 
-function K.Run()
+function K.Run(typed)
 	if not ns.isMage then
 		T:Print("your keys are laid out on a mage only.")
 		return
 	end
-	Shy.Keys.Run(T, JOBS, OPTS)
+	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)
 end
 
 function K.List()

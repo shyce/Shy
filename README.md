@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.2.16" src="https://img.shields.io/badge/version-5.2.16-29b3ff"></a>
-  <img alt="released 26 Nov 2026" src="https://img.shields.io/badge/released-26_Nov_2026-4a5568">
-  <img alt="tests 38,777 passed" src="https://img.shields.io/badge/tests-38%2C777_passed-4ade80">
+  <a href="CHANGELOG.md"><img alt="version 5.2.17" src="https://img.shields.io/badge/version-5.2.17-29b3ff"></a>
+  <img alt="released 27 Nov 2026" src="https://img.shields.io/badge/released-27_Nov_2026-4a5568">
+  <img alt="tests 38,912 passed" src="https://img.shields.io/badge/tests-38%2C912_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,21 +93,17 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.2.16
+## What's new in 5.2.17
 
 ### Added
-- **ShyCore:** Numbered pins show the order of things. Setup pages, talents, crates and key steps use them
-- **ShyCore:** A grid shows while you move or size things. Pieces snap to its lines, and you can turn that off
-- **ShySkin:** Talents you hold that your build doesn't take get a crimson ring. Hover says why and how to move the point
+- **ShyCore:** Shy spots addons doing a job it already does. A "Your addons" page lets you switch them off, and What's new lists each release's changes
+- **ShyKeys:** "/shy keys force" lays out every key, even the ones you kept or moved. Put back still brings yours home
 
 ### Changed
-- **ShyAuction:** Sell picks your price for you. It won't undercut below a floor you set, and it says why. Space posts the next item in the queue
-- **ShyKeys:** Mage, druid and the other classes' keys moved. Wand on Z, armor on Shift + 5, talent picks match the new build
-- **ShyQuest:** A creature you must kill shows as one line with its raid mark. The run banner scrolls with the card, and flights get no timer plate
-- **ShyQuest:** Quests, items and the leveling guides match the new game build
-
-### Fixed
-- **ShyKeys:** The game moved your turn and strafe keys at log-in. They stay as you set them now
+- **ShyCore:** Drag the head and the whole column at the top goes with it. The zone line drops its coordinates
+- **ShyGroup:** Your run, the replies waiting and the routes friends suggest sit in one row group under the head
+- **ShyQuest:** Running out of air shows in the head as blue bubbles. The time left stays put at the end of the bar
+- **ShyQuest:** Food and water come in whole stacks. A half stack took a bag slot all the same
 
 [Every release](CHANGELOG.md)
 

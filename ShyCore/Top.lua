@@ -12,18 +12,24 @@
 --                                            -- no room and what stands under it closes up (a preview still
 --                                            -- draws it). Its owner calls Shy.Top.Apply() when that changes
 --   } })
---   Shy.Top.Plan(drawn)   -- the column from the top: { { id, title, box, y, width, height, scale, sample,
---                         -- passing }, ... } in screen units, y its top edge's distance under the screen's.
+--   Shy.Top.Plan(drawn)   -- the column from the top: { { id, title, box, y, x, rel, width, height, scale, sample,
+--                         -- passing }, ... } in screen units, y its top edge's distance under the screen's, x the
+--                         -- column's middle across from the screen's, rel its top under the column's first piece's.
 --                         -- drawn: as a setup leaves it (every piece in its place, nothing of the game's over it)
---   Shy.Top.Foot()        -- where the column ends, as a distance under the screen's top
+--   Shy.Top.Foot()        -- where the column ends, as a distance under the screen's top (nothing of it stands
+--                         -- there while it is Moved)
+--   Shy.Top.Moved()       -- the player put the head somewhere else: the whole column stands there with it
 --   Shy.Top.Apply()       -- arranges again
 --   Shy.Top.Look(id, picture, width, height)   -- the game's piece drawn by an addon of ours:
 --                         -- its picture and size stand for it; Shy.Top.Look(id) gives the game's back
 --
--- A place in the column is a box's home: a piece is dragged out of it like any other, the rest close up,
--- and let go of near its place it is the column's again. A piece keeps its place whether it shows or not,
--- so nothing moves because something else came up. The game's own widgets at the top (a battleground's
--- score) stand over the column while any show.
+-- The column is one piece, led by the head (the notices' circle and plate, `top = { head = true }`). The rest
+-- are part of it (HUD.Lead): no handle, place, size or lock of their own. Dragging the head, or any piece of
+-- it, moves the whole column; sized, all of it takes the head's size. In layout mode the head's mover lies
+-- over the whole column. Without a head each piece is a place of its own: dragged out of the column the rest
+-- close up, and let go of near its place it is the column's again.
+-- A piece keeps its place whether it shows or not, so nothing moves because something else came up. The
+-- game's own widgets at the top (a battleground's score) stand over the column while any show.
 --
 -- A piece whoever arranges the screen has given a home of their own (a box docked in a deck, a stack by
 -- the chat) is theirs for as long: it is out of the column and takes no room in it, and is the column's
@@ -44,7 +50,8 @@ local SEAM = 4    -- between two pieces
 Top.SEAM = SEAM
 local ZONE = { w = 420, h = 84, line = 32 }    -- room for the zone's name, whose land it is and the area; a line of the name
 
-local gave = setmetatable({}, { __mode = "k" })     -- box -> the place the column last gave it
+local gave = setmetatable({}, { __mode = "k" })     -- box -> the home the column last gave it
+local at = setmetatable({}, { __mode = "k" })       -- box -> { pos, base }: where it was planned last (Apply)
 local theirs = setmetatable({}, { __mode = "k" })   -- box -> true while another arranger's home has it
 local giving = false                                 -- inside Top.Apply: a home set now is the column's own
 
@@ -53,12 +60,17 @@ local function Same(a, b)
 end
 
 local Soon, Widen      -- (defined below: "Next frame, once" and "One width")
+local Lead, Cover      -- (defined below: "One piece")
 local Under, Indent    -- (defined below, "The drawer": the room a piece leaves under it; how far one in it is set in)
 local Relay            -- (defined below, "The tray": every tray lays its cells again)
 -- The drawer under the head (below, "The drawer"): the pieces hanging in it, the head it hangs from while it
 -- stands, and the last piece in it.
 local wrapping = setmetatable({}, { __mode = "k" })
 local headBox, lastBox
+-- Where the column hangs from now (Apply): its head, which leads it; the column's middle across from the screen's;
+-- `base`, what a piece's place (pos) is measured down from; `home`, how far under the screen's top the head stands
+-- at home.
+local column = { x = 0, base = 0, home = 0 }
 local watched = setmetatable({}, { __mode = "k" })
 
 -- A piece coming or going makes room or gives it back: the column is arranged again the next frame.
@@ -120,18 +132,56 @@ local function Start()
 	return EDGE
 end
 
+local function HeadOf(list)
+	for _, box in ipairs(list) do
+		if box.top.head then return box end
+	end
+end
+
+-- The head stands where the player put it: the column hangs from there.
+local function Moved(head)
+	return head ~= nil and HUD.IsPlaced(head)
+end
+
+function Top.Moved()
+	return Moved(column.head)
+end
+
+-- Where the column hangs from: its middle across from the screen's, and its first piece's top under the screen's
+-- top. At home, the top's middle, under the game's widgets there. With the head put elsewhere, the head's top
+-- stands where it was put (`rel` under the first piece's) and the rest under it.
+local function Origin(head, rel)
+	if Moved(head) then
+		local left, bottom, width, height = head:GetLeft(), head:GetBottom(), head:GetWidth(), head:GetHeight()
+		if left and bottom and width and height and not (issecretvalue(left) or issecretvalue(bottom)) then
+			local k = head:GetEffectiveScale() / UIParent:GetEffectiveScale()
+			return (left + width / 2) * k - UIParent:GetWidth() / 2, UIParent:GetHeight() - (bottom + height) * k - rel
+		end
+	end
+	return 0, Start()
+end
+
 function Top.Plan(drawn)
-	local list, y = {}, drawn and EDGE or Start()
-	for _, box in ipairs(Members()) do
+	local members = Members()
+	local head = HeadOf(members)
+	local list, y, headAt = {}, 0, 0
+	for _, box in ipairs(members) do
 		local scale = box:GetScale()
 		local height = box:GetHeight() * scale
-		list[#list + 1] = { id = box.id, title = box.title, box = box, y = y, width = box:GetWidth() * scale, height = height,
+		if box == head then headAt = y end
+		list[#list + 1] = { id = box.id, title = box.title, box = box, rel = y, width = box:GetWidth() * scale, height = height,
 			scale = scale, sample = box.top.sample, passing = box.top.passing }
-		-- A piece the player has elsewhere takes no room: its place is kept for it, where it would stand.
-		-- Nor does one with nothing to show now: what stands under it closes up (and glides, Apply).
-		if drawn or (Showing(box) and not HUD.IsPlaced(box)) then y = y + height + (not drawn and Under(box) or SEAM) end
+		-- A piece the player has elsewhere takes no room: its place is kept for it, where it would stand. (The head
+		-- always takes its room: the column goes where it goes.) Nor does one with nothing to show now: what
+		-- stands under it closes up (and glides, Apply).
+		if drawn or (Showing(box) and (box == head or not HUD.IsPlaced(box))) then
+			y = y + height + (not drawn and Under(box) or SEAM)
+		end
 	end
-	return list
+	local x, start = 0, EDGE
+	if not drawn then x, start = Origin(head, headAt) end
+	for _, piece in ipairs(list) do piece.x, piece.y = x, start + piece.rel end
+	return list, head, headAt
 end
 
 -- Where the column ends: how far under the screen's top the next piece would begin. For what stands
@@ -139,6 +189,7 @@ end
 -- ShyDock seats an encounter's bar there).
 function Top.Foot()
 	local foot = Start()
+	if Top.Moved() then return foot end
 	for _, piece in ipairs(Top.Plan()) do
 		if Showing(piece.box) and not HUD.IsPlaced(piece.box) then foot = math.max(foot, piece.y + piece.height + Under(piece.box)) end
 	end
@@ -151,11 +202,21 @@ local GLIDE = 0.2
 local gliding = setmetatable({}, { __mode = "k" })   -- box -> { from, to, at } (distances under the top)
 local glider
 
-local function Home(box, y)
+-- A piece's home, `pos` under the column's base: on the column's axis, set in as far as the head's drawer sets it,
+-- at the head's size. The head's own home is its place at the top, wherever the player has it: let go of near
+-- there, it goes home.
+local function Home(box, pos)
 	local _, shift = Indent(box)
-	local home = { "TOP", "TOP", shift, -y }
+	local x, y, scale = column.x, column.base + pos, nil
+	if box == column.head and Moved(box) then
+		x, y = 0, column.home
+	elseif box.leader then
+		scale = box.leader:GetScale()
+	end
+	local home = { "TOP", "TOP", x + shift * (scale or 1), -y }
+	gave[box] = home
 	giving = true
-	if not Same(box.defaultPoint, home) then HUD.SetHome(box, home) end
+	if not Same(box.defaultPoint, home) or box.givenScale ~= scale then HUD.SetHome(box, home, scale) end
 	giving = false
 end
 
@@ -197,34 +258,46 @@ function Top.Apply()
 		return
 	end
 	arranging = true
+	Lead()
 	Widen()
 	if Top.Wrap then Top.Wrap() end
 	local now, quiet = GetTime(), InCombatLockdown()
-	for _, piece in ipairs(Top.Plan()) do
-		local box, y = piece.box, piece.y
-		local was, g = gave[box], gliding[box]
-		gave[box] = { "TOP", "TOP", 0, -y }
+	local plan, head, headAt = Top.Plan()
+	-- Measured from the screen's top while the column is at home (the game's widgets push it down, and it glides),
+	-- from the column's own top while the head is elsewhere (dragged, it moves as one).
+	local moved = Moved(head)
+	column.head, column.home = head, Start() + headAt
+	column.x = moved and plan[1] and plan[1].x or 0
+	column.base = moved and plan[1] and plan[1].y - plan[1].rel or 0
+	for _, piece in ipairs(plan) do
+		local box = piece.box
+		local pos = piece.y - column.base
+		local was, g = at[box], gliding[box]
+		-- (Planned from another base: the column was moved, or put back. It stands there at once.)
+		if was and math.abs(was.base - column.base) > 0.01 then was, g, gliding[box] = nil, nil, nil end
+		at[box] = { pos = pos, base = column.base }
 		local up = Showing(box)
 		local arriving = up and wasUp[box] == false
 		wasUp[box] = up
 		-- (What hangs in the drawer comes with the drawer, which slides out under it: it never folds down over the head.)
 		if arriving and was and not quiet and not HUD.IsUnlocked() and not Top.Hung(box) then
 			-- (Folds down out of the piece over it, as a hover's foot comes down.)
-			gliding[box] = { from = y - FOLD, to = y, at = now }
-			Home(box, y - FOLD)
+			gliding[box] = { from = pos - FOLD, to = pos, at = now }
+			Home(box, pos - FOLD)
 			glider = glider or CreateFrame("Frame")
 			glider:SetScript("OnUpdate", Glide)
-		elseif g and math.abs(g.to - y) < 0.01 then
+		elseif g and math.abs(g.to - pos) < 0.01 then
 			-- (Already on its way there.)
-		elseif was and not quiet and box:IsVisible() and math.abs(-was[4] - y) > 0.5 then
-			gliding[box] = { from = g and Along(g, now) or -was[4], to = y, at = now }
+		elseif was and not quiet and box:IsVisible() and math.abs(was.pos - pos) > 0.5 then
+			gliding[box] = { from = g and Along(g, now) or was.pos, to = pos, at = now }
 			glider = glider or CreateFrame("Frame")
 			glider:SetScript("OnUpdate", Glide)
 		else
 			gliding[box] = nil
-			Home(box, y)
+			Home(box, pos)
 		end
 	end
+	Cover(plan, head)
 	if Top.Follow then Top.Follow() end
 	arranging = false
 	if again then
@@ -252,6 +325,47 @@ local function Given(box, point)
 	Soon()
 end
 
+-- One piece
+-- The head leads every other piece standing in the column (HUD.Lead): a press that drags one drags the head, and
+-- the rest are placed from wherever it stands. A piece out of the column (someone else's, or shown elsewhere) is
+-- its own again. Without a head in the column, each piece is.
+function Lead()
+	local members = Members()
+	local head = HeadOf(members)
+	local inside = {}
+	for _, box in ipairs(members) do inside[box] = true end
+	HUD.Each(function(box)
+		if box.top and not box.foreign then HUD.Lead(box, inside[box] and head or nil) end
+	end)
+end
+
+-- In layout mode the column is the head's: its mover lies over all of it, and what lines up with the column lines
+-- up with all of it (HUD.Cover). The cover hangs from the head's top, so it goes where the head goes.
+local cover, covering
+function Cover(plan, head)
+	if covering and covering ~= head then HUD.Cover(covering, covering) end
+	covering = head
+	if not head then return end
+	if not cover then
+		cover = CreateFrame("Frame", nil, UIParent)
+		cover:EnableMouse(false)
+	end
+	if head.cover ~= cover then HUD.Cover(head, cover) end
+	local top, foot, wide, headTop = nil, nil, head:GetWidth() * head:GetScale(), nil
+	for _, piece in ipairs(plan) do
+		if piece.box == head then headTop = piece.y end
+		if piece.box == head or Showing(piece.box) then
+			top = math.min(top or piece.y, piece.y)
+			foot = math.max(foot or 0, piece.y + piece.height)
+			wide = math.max(wide, piece.width)
+		end
+	end
+	if not (top and headTop) then return end
+	cover:ClearAllPoints()
+	cover:SetPoint("TOP", head, "TOP", 0, headTop - top)
+	cover:SetSize(wide, math.max(1, foot - top))
+end
+
 -- One width
 -- Every plate in the column is as wide as the widest needs to be, and each stands with its ring's middle
 -- under the head's circle's middle (SPINE in from its box's left), so the column reads as one piece:
@@ -268,7 +382,8 @@ local width = 0
 function Widen()
 	local most = 0
 	for box, want in pairs(wants) do
-		if box.top and Showing(box) and not HUD.IsPlaced(box) and not (box.awayFn ~= nil and box.awayFn() == true) then
+		if box.top and not theirs[box] and Showing(box) and (box == column.head or not HUD.IsPlaced(box))
+			and not (box.awayFn ~= nil and box.awayFn() == true) then
 			most = math.max(most, want + (Indent(box)))
 		end
 	end
@@ -441,7 +556,7 @@ end
 -- the next and the last stands on the drawer's foot. Nothing in it wears a frame, a ring or room of its own. The
 -- pieces in it stand right under the head whatever their order (Rank), the head's own list (`top.hangs`) first of
 -- all. The drawer slides out from under the plate as the first cell comes and back as the last goes (at once in a
--- fight). A piece the player has put elsewhere, or any in layout mode (each is placed by itself), is a tray of its own.
+-- fight). A piece the player has put elsewhere, or someone else arranges (a deck's), is a tray of its own.
 --   top.foot = function() end    -- the head's: how far over its box's foot its plate's foot stands (the box's units)
 --   top.hangs = function() end   -- the head's: a frame of its own hanging in the drawer now (its list), or nil
 --   Top.Hung(box)         -- whether a piece hangs in the head's drawer
@@ -642,24 +757,23 @@ local function Follow(elapsed)
 end
 Top.Follow = Follow
 
--- Who hangs in it: the pieces that say so, in the column's place, showing, out of layout mode, under a head that is
--- in its place too; the drawer stands while any does, or the head's own list is open (under a head put anywhere).
+-- Who hangs in it: the pieces that say so, in the column's place and showing, under the head wherever it stands;
+-- the drawer stands while any does, or the head's own list is open. In layout mode too: the column is one piece
+-- there as in play, each piece in it showing what it would say.
 local function Wrap()
 	local now, head, last, n = {}, nil, nil, 0
-	if not HUD.IsUnlocked() then
-		for _, box in ipairs(Members()) do
-			if box.top.wrap and Showing(box) and box:IsShown() then
-				if box.top.head then
-					head = box
-				elseif not HUD.IsPlaced(box) then
-					now[box] = true
-					last = box
-					n = n + 1
-				end
+	for _, box in ipairs(Members()) do
+		if box.top.wrap and Showing(box) and box:IsShown() then
+			if box.top.head then
+				head = box
+			elseif not HUD.IsPlaced(box) then
+				now[box] = true
+				last = box
+				n = n + 1
 			end
 		end
 	end
-	if not head or HUD.IsPlaced(head) then
+	if not head then
 		wipe(now)
 		last, n = nil, 0
 	end
@@ -784,11 +898,13 @@ end
 -- head's alone: nothing in a tray is round, and nothing in it has room of its own round it.
 --   Top.Tray(box, { least = 150, lay = function() end }) -> tray
 --       a column piece's tray. In the head's drawer the box is its cells and the drawer frames them; by itself
---       (layout mode, a place the player gave it) the box is the tray, the look's mini border round the cells
+--       (a place the player gave it, a deck) the box is the tray, the look's mini border round the cells
 --       (border-box). `lay`: the piece lays its cells again (the column's width, who hangs or the look changed)
 --   tray:Fit(need, tall) -> width, inset
 --       need: the widest its cells' words need; tall: its cells' height all together (0: none). Sizes the box and
 --       tells the column: a cell is `width` wide, the first `inset` in from the box's top left (tray.width, .inset)
+--   tray:Fix(width)   the width someone else gives the box (a deck's column), nil: the column's again. Docked in
+--       a deck (HUD.SetDocked) the deck is its housing: it wears none of its own
 --   Top.Make.Cell(parent, kind) -> cell   (kind: "Button" for one that is clicked)
 --   cell:Set({ sign = a hover glyph's name, file = art drawn for GLYPH units, icon = a picture (in a slot),
 --       mark = an item's quality color round its slot, color = its meaning's, name, nameColor, right, rightColor,
@@ -1140,18 +1256,24 @@ end
 
 function Tray:Fit(need, tall)
 	local box = self.box
-	local hung = Top.Hung(box)
-	local e = hung and 0 or Border(self.house)
+	local bare = Top.Hung(box) or box.docked == true
+	local e = bare and 0 or Border(self.house)
 	need = math.max(need or 0, self.least)
 	-- (The column may lay every tray again as it takes this one's want: not this one, which is being laid.)
 	self.fitting = true
 	Top.Want(box, tall > 0 and need + 2 * e or 0)
 	self.fitting = nil
-	local wide = math.max(need + 2 * e, Top.Width(box))
+	local wide = self.fixed or math.max(need + 2 * e, Top.Width(box))
 	self.inset, self.width = e, wide - 2 * e
-	self.house:SetShown(not hung and tall > 0)
+	self.house:SetShown(not bare and tall > 0)
 	HUD.Resize(box, wide, math.max(tall, CELL.ROW) + 2 * e)
 	return self.width, e
+end
+
+function Tray:Fix(width)
+	if self.fixed == width then return end
+	self.fixed = width
+	if self.lay then self.lay() end
 end
 
 function Relay()
@@ -1162,13 +1284,13 @@ end
 
 -- A sign in the head's circle, in the arrow's make (the waypoint arrow there): the dial's ring, the weave on
 -- its dark face and a soft light in its middle, all in the color's light (Theme.Hot), the sign in it too.
--- The head's own signs (HeadSigns.tga: news, a place discovered, the server's word, the bags full, a level,
--- an alarm, a caught error) fill the face as the arrow's emblem does once there, EMBLEM units, drawn for it;
+-- The head's own signs (HeadSigns.blp, every size drawn at its own: news, a place discovered, the server's word, the bags full, a level,
+-- an alarm, a caught error, air running out) fill the face as the arrow's emblem does once there, EMBLEM units, drawn for it;
 -- any other (a hover glyph's name, or a file drawn for SIGN units) stands at SIGN.
 --   Top.Make.SIGNS: the sheet's names, in its order
 --   Top.Make.Sign(texture, sign) -> the size to show it at
 --   Top.Make.Light(color) -> { r, g, b }: the color's light (a palette table, { r, g, b } or a function)
-Make.SIGNS = { "news", "go", "talk", "full", "level", "alert", "bug" }
+Make.SIGNS = { "news", "go", "talk", "full", "level", "alert", "bug", "breath" }
 Make.EMBLEM, Make.SIGN = 44, 24
 local SIGN_CELL = {}
 for i, name in ipairs(Make.SIGNS) do SIGN_CELL[name] = i - 1 end
@@ -1418,6 +1540,12 @@ local function Begin()
 	end
 	Shy:On("SHY_HUD_MOVED", Mine)
 	Shy:On("SHY_HUD_RESIZED", Mine)
+	-- The head moved: the column goes with it now, not a frame later (what it leads hung from it for the drag, and
+	-- is placed again as it is let go of). Sized, the rest take its size.
+	Shy:On("SHY_HUD_MOVED", function(box)
+		if box ~= nil and box == column.head then Top.Apply() end
+	end)
+	Shy:On("SHY_HUD_SCALED", Mine)
 	-- Placed again by anything else (a reset, another Edit Mode layout, a setup): a piece may be back in the
 	-- column, or out of it.
 	hooksecurefunc(HUD, "Apply", Shy.Clocked("top: a box applied", Mine))

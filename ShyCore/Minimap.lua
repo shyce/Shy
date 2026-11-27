@@ -43,8 +43,23 @@ function Shy.WriteMenu(root, done)
 	-- The setup window first, on its own: the quick way back to every choice made in it.
 	if Shy.Setup then
 		root:CreateButton("Set up", Then(function() Shy.Setup.Open() end)):SetIcon({ Theme.MarkArt(Shy.MEDIA .. "SetupMark", UI.MENU_ROW.icon) })
-		root:CreateDivider()
 	end
+	-- What's new again, told or not.
+	if Shy.News then
+		root:CreateButton("What's new", Then(function() Shy.News.Open(true) end)):SetIcon(UI.MenuGlyph("info"))
+	end
+	-- The addons Shy does, while there are any: how many are still on and not kept, beside it.
+	local others = Shy.Others and Shy.Others.Doubled(true) or {}
+	if #others > 0 then
+		local row = root:CreateButton("Your addons", Then(function() Shy.Others.Open(true) end))
+		row:SetIcon(UI.MenuGlyph("options"))
+		local due = 0
+		for _, entry in ipairs(Shy.Others.Doubled()) do
+			if Shy.Others.On(entry) then due = due + 1 end
+		end
+		if due > 0 then row:SetDetail(UI.Wrap(UI.colors.alert, due == 1 and "1 to look at" or (due .. " to look at"))) end
+	end
+	if Shy.Setup or Shy.News or #others > 0 then root:CreateDivider() end
 	-- (ShyMonitor loads as it is first asked for.)
 	local fresh = Shy.Errors and Shy.Errors.Fresh() or 0
 	local monitor = root:CreateButton("Task manager", Then(function() Shy.Monitor() end))

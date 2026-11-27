@@ -2,8 +2,8 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffWay|r
 ## Notes: Finds you the quickest way anywhere: on foot, or by flight, boat, zeppelin, tram or portal
 ## Author: Shyce Cream
-## Version: 5.2.16
-## X-Date: 2026-11-26
+## Version: 5.2.17
+## X-Date: 2026-11-27
 ## IconTexture: Interface\AddOns\ShyWay\Media\ShyWayMarkColor
 ## Dependencies: ShyCore
 ## Group: ShyCore

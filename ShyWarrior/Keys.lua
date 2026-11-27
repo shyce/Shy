@@ -2,6 +2,7 @@
 -- stance and by what you have learned, so an ability arrives on its key as you train it.
 --
 --   ns.Keys.Run()     lays them out and says what was done (/shy warrior keys)
+--   ns.Keys.Run("force")  every key, even ones you kept or moved (/shy warrior keys force)
 --   ns.Keys.List()    every key and what it does, as text
 --
 -- The rule on every key: an ability that needs another stance takes you there on the first press and is used
@@ -411,7 +412,7 @@ function K.Apply()
 	return Shy.Keys.Apply(T, JOBS, OPTS)
 end
 
-function K.Run()
+function K.Run(typed)
 	if not ns.isWarrior then
 		T:Print("your keys are laid out on a warrior only.")
 		return
@@ -420,7 +421,7 @@ function K.Run()
 		T:Print("restart the game once: your keys need a file it only loads then.")
 		return
 	end
-	Shy.Keys.Run(T, JOBS, OPTS)
+	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)
 end
 
 function K.List()

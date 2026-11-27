@@ -576,9 +576,17 @@ end
 
 function Hot.Take(opts, quiet)
 	if InCombatLockdown() then return nil, "combat" end
-	local result = { bound = 0, cleared = 0, kept = 0 }
+	local result = { bound = 0, cleared = 0, kept = 0, freed = 0 }
 	local state = HotState(not quiet)
 	if not state or (quiet and not state.on) then return result end
+	-- Forced (Keys.Run): every key you kept is the board's again, and the key picked for its ability with it.
+	local forced = Keys.forced and not quiet
+	if forced then
+		local book = HotBook()
+		for _ in pairs(book.keep or EMPTY) do result.freed = result.freed + 1 end
+		book.keep = nil
+		if book.standIn then wipe(book.standIn) end
+	end
 	local want, order = Keys.Board(opts)
 	local homes, taken = {}, {}
 	-- Set before what a set is brought up to now (quiet too: it is the next log-in): once, the side keys strafe
@@ -590,6 +598,11 @@ function Hot.Take(opts, quiet)
 	for kept, at in pairs(book.standIn or EMPTY) do picked[at] = kept end
 	for _, key in ipairs(order) do
 		local command = want[key]
+		if command and forced and TheirKey(state, key) then
+			-- (bound to something else by you since: taken all the same, what you bound kept for Put back)
+			state.was[key], state.set[key] = nil, nil
+			result.freed = result.freed + 1
+		end
 		if command and not quiet and TheirKey(state, key) then
 			if picked[key] then
 				-- (the key you picked for an ability, bound to something else since or let go: the pick goes)
@@ -632,7 +645,7 @@ function Hot.Take(opts, quiet)
 		if result.kept > 0 then want, order = Keys.Board(opts) end
 		local before = state.on == true
 		Strays(want, order, function(key)
-			if before and state.set[key] == nil then return end
+			if before and state.set[key] == nil and not forced then return end
 			if HotSet(state, key, "") then result.cleared = result.cleared + 1 end
 		end)
 		state.on, state.at = true, state.at or time()

@@ -132,11 +132,15 @@ local function Aim(dial, turn, heading, elapsed)
 	end
 end
 
--- "Teldrassil  45.2, 33.1"
+-- "Teldrassil": the zone alone. No coordinates: the guide says where.
 local function Where(place)
-	local name = W.MapName(place.map)
-	local at = ("%.1f, %.1f"):format(place.x / 100, place.y / 100)
-	return name and (name .. "  " .. at) or at
+	return W.MapName(place.map) or ""
+end
+
+-- "437 yd  ·  Teldrassil", or the distance alone where the zone has no name.
+local function Away(yards, place)
+	local where = Where(place)
+	return Far(yards) .. " yd" .. (where ~= "" and ("  \194\183  " .. where) or "")
 end
 
 -- What a stop is for (ns.StopSign, as the card's dial and tag have it): the emblem that fills the dial once
@@ -684,11 +688,10 @@ local function HeadWrite()
 		voice.underColor = offColor
 		return
 	end
-	local where = Where(target)
 	if yards then
-		saying = Upper(Far(yards) .. " yd  ·  " .. where)
+		saying = Upper(Away(yards, target))
 	else
-		saying = Upper(where .. (W.Known() and "  (another continent)" or ""))
+		saying = Upper(Where(target) .. (W.Known() and "  (another continent)" or ""))
 	end
 	-- Close to a cliff the way goes down or water it walks over: the spell to cast, in its picture.
 	local cue = yards and ns.Glide and ns.Glide.Cue(target.continent, target.north, target.west, target.floor, target.up)
@@ -962,7 +965,7 @@ local function HeadSample(parent, widest)
 		if among then
 			f:Say(title, Upper(R.Found(stop) or "Found around here"), C.good)
 		elseif yards then
-			f:Say(title, Upper(Far(yards) .. " yd  ·  " .. Where(place)))
+			f:Say(title, Upper(Away(yards, place)))
 		else
 			f:Say(title, Upper(Where(place)))
 		end

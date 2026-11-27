@@ -48,6 +48,19 @@ function Keys.Apply(addon, jobs, opts)
 		if not wanted[name] then Drop(name) end
 	end
 	Moved(made, before, opts)
+	-- Forced (Keys.Run): a key you moved goes back to its own button, and leaves the ones you put it on.
+	if Keys.forced then
+		for name, slots in pairs(pinned) do
+			for _, slot in ipairs(slots) do
+				if C_ActionBar.GetActionText(slot) == name or Owns(name, before, GetActionInfo(slot)) then
+					PickupAction(slot)
+					ClearCursor()
+				end
+			end
+			result.unpinned = (result.unpinned or 0) + 1
+		end
+		wipe(pinned)
+	end
 	-- Asked for by you (Keys.Run: the command, the button): a key you took off every bar comes back. One you moved
 	-- to another button stays there. (Laid out on its own, at a level or a talent, it stays off as you left it.)
 	if Keys.asked then
@@ -437,9 +450,18 @@ end
 
 -- asked: the choice was made where every key it changes is shown (the keys' panel, setup). Not asked (a chat
 -- command), hotkeys that would take a key of yours lay nothing out: the keys' page opens to show each one.
-function Keys.Run(addon, jobs, opts, asked)
+-- typed: the words after the command. "force" lays out every key as it comes: keys you kept or bound yourself
+-- are the hotkeys' again, and keys you moved go back to their own buttons. Put back still brings back yours.
+function Keys.Run(addon, jobs, opts, asked, typed)
 	opts = opts or {}
-	if not asked and Keys.Mode() == "shy" and not Hot.On() and not InCombatLockdown() then
+	local word = strtrim(tostring(typed or "")):lower():gsub("^%-+", "")
+	if word ~= "" and word ~= "force" then
+		addon:Print(("nothing is changed: \"%s\" isn't a word the keys know. Add force to lay out every key, even ones you kept or moved."):format(
+			strtrim(tostring(typed))))
+		return
+	end
+	local force = word == "force"
+	if not asked and not force and Keys.Mode() == "shy" and not Hot.On() and not InCombatLockdown() then
 		-- (every one a hand relies on said by name, the rest counted)
 		local taking, musts = 0, {}
 		for _, entry in ipairs(Hot.Yours(opts)) do
@@ -458,9 +480,9 @@ function Keys.Run(addon, jobs, opts, asked)
 			return
 		end
 	end
-	Keys.asked = true
+	Keys.asked, Keys.forced = true, force or nil
 	local ok, result, why, space = pcall(Keys.Lay, addon, jobs, opts)
-	Keys.asked = nil
+	Keys.asked, Keys.forced = nil, nil
 	if not ok then error(result, 0) end
 	if why == "macros" then
 		addon:Print(("your keys aren't laid out: they need %d macros and there is room for %d. Delete %d you don't use, this character's or the account's, then lay them out. Nothing was changed."):format(
@@ -505,6 +527,15 @@ function Keys.Run(addon, jobs, opts, asked)
 	end
 	if result.kept > 0 then
 		print(("  %d keys you moved stay where you put them."):format(result.kept))
+	end
+	if (result.unpinned or 0) > 0 then
+		print(result.unpinned == 1 and "  A key you'd moved is back on its own button."
+			or ("  %d keys you'd moved are back on their own buttons."):format(result.unpinned))
+	end
+	local freed = result.hot and result.hot.freed or 0
+	if freed > 0 then
+		print(freed == 1 and "  A key you'd kept for yourself is one of your hotkeys again."
+			or ("  %d keys you'd kept for yourself are your hotkeys again."):format(freed))
 	end
 	for _, entry in ipairs(result.left) do
 		local job = entry[1]

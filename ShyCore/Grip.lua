@@ -156,7 +156,7 @@ pin:SetSize(1, 1)
 -- "size", "shape", "scale", or nil while the handle does nothing.
 local function Mode(h)
 	local box = h.box
-	if box.retired or box.still or Act.Busy(box) or not Act.Active(box) then return nil end
+	if box.retired or box.still or box.leader or Act.Busy(box) or not Act.Active(box) then return nil end
 	-- A game window that is no piece of the screen (HUD.GripFrame): it scales, or the engine sizes it as the
 	-- game's own corner does. Locked, its sides are gone.
 	-- One that shapes itself (ShySkin's spellbook, which flows): its owner is told how far the handle went.

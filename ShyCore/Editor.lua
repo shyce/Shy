@@ -18,6 +18,7 @@ local panel, group, piece
 local current          -- the layout ShyCoreDB.hud belongs to
 local editing = false  -- Edit Mode is open
 local snaps = {}       -- layout -> its table as last saved, while Edit Mode is open
+local UNKNOWN = ""     -- the snap's key while the game's layout isn't known yet (no realm name, no layouts)
 
 -- The panel for a picked piece
 
@@ -69,6 +70,7 @@ local function Build()
 	panel:Hide()
 	local head = UI.Head(panel, { title = "", close = function() Act.Select(nil) end })
 	panel.extras = {}   -- widgets a piece's own `panel` function laid out last time
+	panel.parts = {}    -- box -> its "On" box, for the pieces of another that can be switched off (HUD.Lead)
 	panel.title = head.title
 
 	group = UI.Group()
@@ -139,14 +141,34 @@ local function Fill()
 	panel.size:SetShown(sized)
 	if sized then Put(panel.size, 38) end
 	Put(panel.lock, 20)
+	-- The pieces it leads that can be switched off (the column's under the head): an "On" box each, by its name.
+	for _, check in pairs(panel.parts) do check:Hide() end
+	HUD.Each(function(box)
+		if box.leader ~= piece or not box.switch then return end
+		local check = panel.parts[box]
+		if not check then
+			check = group:Checkbox(panel, box.title,
+				function() return box.switch.get() == true end,
+				function(on)
+					box.switch.set(on)
+					HUD.Switched(box)
+				end,
+				{ desc = box.switch.hint })
+			panel.parts[box] = check
+		end
+		Put(check, 20)
+	end)
 	for _, widget in ipairs(panel.extras) do widget:Hide() end
 	wipe(panel.extras)
-	if piece.panel then
-		piece.panel(panel, function(widget, height)
-			panel.extras[#panel.extras + 1] = widget
-			Put(widget, height)
-		end, group, WIDTH - 2 * PAD)
+	local function Extra(widget, height)
+		panel.extras[#panel.extras + 1] = widget
+		Put(widget, height)
 	end
+	if piece.panel then piece.panel(panel, Extra, group, WIDTH - 2 * PAD) end
+	-- The controls of the pieces it leads (the group piece's settings, under the head): theirs are its panel's.
+	HUD.Each(function(box)
+		if box.leader == piece and box.panel then box.panel(panel, Extra, group, WIDTH - 2 * PAD) end
+	end)
 	Put(panel.across, 22)
 	Put(panel.place, 22)
 	panel.scale:SetEnabled(sized or Act.HasSize(piece))   -- a width and height given by its corner count too
@@ -193,7 +215,9 @@ end
 
 -- A switch's setting changed elsewhere (its addon's options): the panel's "On" follows.
 Shy:On("SHY_SWITCH", function(id)
-	if panel and panel:IsShown() and piece and (id == nil or piece.id == id) then group:Refresh() end
+	if not (panel and panel:IsShown() and piece) then return end
+	local box = id and HUD.Find(id)
+	if id == nil or piece.id == id or (box and box.leader == piece) then group:Refresh() end
 end)
 
 Shy:On("SHY_HUD_MOVING", function(box)
@@ -247,6 +271,7 @@ local function Fold()
 end
 
 local function Snap(key, data)
+	key = key or UNKNOWN
 	if editing and not snaps[key] then snaps[key] = Shy.CopyTable(data) end
 end
 
@@ -278,7 +303,7 @@ end
 -- Puts back every layout changed since Edit Mode last saved, as Edit Mode does with its own.
 function E.Revert()
 	for key, data in pairs(snaps) do
-		local target = key == current and core.db.hud or core.db.layouts[key]
+		local target = key == (current or UNKNOWN) and core.db.hud or core.db.layouts and core.db.layouts[key]
 		if target then
 			wipe(target)
 			for id, saved in pairs(Shy.CopyTable(data)) do target[id] = saved end

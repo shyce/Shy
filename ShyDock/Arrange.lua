@@ -20,10 +20,10 @@ ns.Arrange = A
 local GAP = ns.Console.SEAM
 
 -- Box ids stacked in the deck, floor up (the deck stands under the minimap).
-local DECK = { "shyquest", "shygroup-status" }
+local DECK = { "shyquest", "shy.party" }
 -- Box ids with a tab in the deck's header. ShyXP's stats stand in no deck: their tab switches the
 -- level a deck box shows for them (ShyQuest's strip).
-local TABS = { "shyquest", "shyxp", "shygroup-status" }
+local TABS = { "shyquest", "shyxp", "shy.party" }
 
 -- The top left's column: a farming session (ShyFarm) tight in the corner where how to play stands, and how to
 -- play (ShyCore's keys guide) under it while the session shows; with none, how to play has the corner (its own

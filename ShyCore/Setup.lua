@@ -56,6 +56,7 @@
 --                              any others, Finish does what was picked there.
 --   Shy.Setup.Show(id)         to a step's page
 --   Shy.Setup.Done()           this character has been set up (Finish ran for it), as its record says
+--   Shy.Setup.Away()           the window was offered and put away this session (Not now, Esc): it won't come again
 --   Shy.Setup.Untouched()      Global has only ever been used by one character
 --
 --   Shy.Setup.GAME             game settings: { key, group, title, desc, want = { cvar = value },
@@ -2516,6 +2517,7 @@ local function Build(box)
 end
 
 function S.IsOpen() return win.open end
+function S.Away() return win.away == true end
 
 -- For a step whose page draws what setup will leave (ShyDock's screen): does the open window's plan
 -- switch this game setting on.

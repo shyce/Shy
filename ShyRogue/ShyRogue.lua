@@ -75,6 +75,7 @@ if ns.isRogue then
 	-- For finding faults: pick pocket totals. Not listed.
 	T:Command("loot", nil, function() ns.PrintLoot() end)
 	if Shy.Keys then
-		T:Command("keys", "lay out your keys and macros, for every level", function() ns.Keys.Run() end)
+		T:Command("keys", "lay out your keys and macros, for every level", function(rest) ns.Keys.Run(rest) end)
+		T:Command("keys force", "lay out every key, even ones you kept or moved", function() ns.Keys.Run("force") end)
 	end
 end

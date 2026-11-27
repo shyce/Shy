@@ -20,7 +20,8 @@ local ADDON, ns = ...
 --                                       -> { placed, waiting, bound, left = { { job, why } }, new = { job }, learns }
 --   Shy.Keys.Revert(addon)              the macros made here go, and every button and key is as it was before
 --                                       the first layout.  -> { put, lost } (buttons put back; ones that couldn't be)
---   Shy.Keys.Run / Shy.Keys.Back        the same two, said in chat
+--   Shy.Keys.Run / Shy.Keys.Back        the same two, said in chat. Run(addon, jobs, opts, asked, "force"): every
+--                                       key laid out, even ones you kept or moved
 --   Shy.Keys.Watch(addon, jobs, opts)   from then on: a job comes to its key when it first has something to do
 --                                       (said in chat), a job from the bags follows what the bags hold, and the
 --                                       whole layout follows the talent build

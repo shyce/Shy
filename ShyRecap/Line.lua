@@ -1,6 +1,6 @@
 -- The on-screen recap line (a Shy.HUD box) and the ledger a click on it opens.
--- The line leads the column down from the top's middle (Shy.Top gives it its place there, over the
--- Return to Graveyard button and the waypoint arrow). The ledger opens downward from it.
+-- The line is a row in the drawer under the head at the top's middle (Shy.Top's tray), with the bars and the
+-- messages. The ledger opens downward from the drawer's foot.
 -- The ledger never opens unasked: a click opens it, another closes it, Shift-click shares.
 
 local ADDON, ns = ...
@@ -12,6 +12,7 @@ local GAP = 5    -- between the line and the ledger
 local HOME = { "TOP", "TOP", 0, -4 }   -- until the column places it
 
 local box, line, ledger
+local tray             -- the line's tray: in the head's drawer, or by itself
 local hold             -- the ledger's own box, hung from the line: sized apart from it
 local test             -- the sample view shown by "/shy recap test"
 local viewing          -- an earlier death shown in the ledger instead of the line's
@@ -31,15 +32,17 @@ local function Fold()
 	HUD.Update(hold)
 end
 
--- The ledger's box is as large as the ledger and hangs from the line: below it, or above it when there
--- is no room below (each measured at its own size). Its grip scales it about the point it hangs by.
+-- The ledger's box is as large as the ledger and hangs from the drawer the line is in (from the line by
+-- itself): below it, or above it when there is no room below (each measured at its own size). Its grip
+-- scales it about the point it hangs by.
 local function Hang()
 	if not ledger:IsShown() then return end
 	HUD.Resize(hold, ledger:GetWidth(), ledger:GetHeight())
-	local below = box:GetBottom()
-	local over = below ~= nil and (ledger:GetHeight() + GAP) * hold:GetScale() > below * box:GetScale()
+	local from = Shy.Top.Hung(box) and Shy.Top.Drawer() or line
+	local below = from:GetBottom()
+	local over = below ~= nil and (ledger:GetHeight() + GAP) * hold:GetScale() > below * from:GetEffectiveScale() / UIParent:GetEffectiveScale()
 	hold.grip.hung = over and "BOTTOM" or "TOP"
-	HUD.Attach(hold, line, over and "BOTTOM" or "TOP", over and "TOP" or "BOTTOM", 0, over and GAP or -GAP)
+	HUD.Attach(hold, from, over and "BOTTOM" or "TOP", over and "TOP" or "BOTTOM", 0, over and GAP or -GAP)
 end
 
 local function Tell(view)
@@ -53,23 +56,17 @@ local function Unfold(view)
 	Tell(view)
 end
 
--- While a ghost can go back (the game's button shows), the line carries the way back at its end: one
--- ribbon, the killer and then the action, ShyCore's own (Shy.Top.Graveyard), the line's plaque under both.
--- The line is the column's width (Shy.Top.Width: the widest plate any piece up there needs), its ring's
--- middle under the head's circle's, so the column reads as one piece. The way back to the graveyard is a
--- row of the column's own under it, as wide.
-local function Ghost()
-	if not box then return end
-	local Top = Shy.Top
-	local ring = Top.Make.RING
-	local need = line:Need()
-	Top.Want(box, box:IsShown() and need or 0)
-	local plate = math.max(need, Top.Width())
-	line:SetWidth(plate + ring / 2)
+-- The line in its tray: as wide as the column's rows, from the drawer's inner face to its inner face (by
+-- itself, inside its own border).
+local function Lay()
+	if not (box and tray) then return end
+	local width, inset = tray:Fit(line:Need(), box:IsShown() and LINE.h or 0)
+	line:SetWidth(width)
 	line:ClearAllPoints()
-	line:SetPoint("TOPLEFT", box, "TOPLEFT", Top.SPINE - ring / 2, 0)
-	HUD.Resize(box, plate + 2 * Top.SPINE, LINE.h)
+	line:SetPoint("TOPLEFT", box, "TOPLEFT", inset, -inset)
+	line:Rule(Shy.Top.Hung(box))
 	line:Tick()
+	Hang()
 end
 
 function ns.Refresh()
@@ -81,7 +78,7 @@ function ns.Refresh()
 		line:Set(ns.Death.Sample())   -- a sample to position in layout mode
 	end
 	HUD.Update(box)
-	Ghost()
+	Lay()
 	if not view then
 		Fold()
 	elseif ledger:IsShown() then
@@ -141,12 +138,15 @@ local function Menu(root)
 	root:CreateButton("Close", CloseLine)
 end
 
--- The line as a picture, for a drawing of the screen: a made-up death, and nothing on it takes the mouse.
+-- The line as a picture, for a drawing of the screen: a made-up death in a tray by itself, and nothing on it
+-- takes the mouse.
 local function Picture(parent)
-	local picture = ns.CreateLine(parent)
+	local f = CreateFrame("Frame", nil, parent)
+	f:EnableMouse(false)
+	local picture = ns.CreateLine(f)
 	picture:Set(ns.Death.Sample())
 	picture.close:EnableMouse(false)
-	return picture
+	return Shy.Top.Make.Still(f, math.max(LINE.w, picture:Need()), { picture })
 end
 
 function ns.SetupLine()
@@ -163,11 +163,14 @@ function ns.SetupLine()
 			end,
 			hint = "What killed you, when you die",
 		},
-		top = { order = 10, sample = Picture, passing = true },
+		-- A row in the drawer under the head, after breath and fatigue.
+		top = { order = 10, sample = Picture, passing = true, wrap = true },
 	})
+	box:SetFrameStrata("DIALOG")
 	line = ns.CreateLine(box)
 	line:SetPoint("TOPLEFT")
 	line.onClose = CloseLine
+	tray = Shy.Top.Tray(box, { lay = Lay })
 
 	-- The ledger stands in a box of its own, so its corners and sides size it apart from the line and
 	-- the size is kept. The box is carried: where it stands is the line's to say (Hang), never kept.
@@ -216,10 +219,10 @@ function ns.SetupLine()
 	end)
 	HUD.Manage(box, line, Menu)
 
-	-- The column's width changed: the line is laid at it.
-	Shy:On("SHY_TOP_WIDTH", Ghost)
-	box:HookScript("OnShow", Ghost)
-	box:HookScript("OnHide", Ghost)
+	-- (The column's width, who hangs and the look are its tray's to tell: Lay. Shown or hidden, it takes its room or
+	-- gives it back.)
+	box:HookScript("OnShow", Lay)
+	box:HookScript("OnHide", Lay)
 
 	local events = CreateFrame("Frame")
 	events:RegisterEvent("PLAYER_ALIVE")

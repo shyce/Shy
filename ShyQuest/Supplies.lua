@@ -5,7 +5,7 @@
 --     combat and with no vendor, bank, mail, trade or craft open, over the fights fought while
 --     carrying some; a guess by class and talents until enough are seen), times the fights before
 --     the next vendor on the way (the guide's places, else the log's quests). Short of what those
---     fights take is running low. A caster's water is a stack at least (CASTER_WATER).
+--     fights take is running low. It comes in whole stacks, one at least: a part stack takes a slot all the same.
 --   Topping up: not low, but short of TOP_UP of the carry, in a town with a seller: a row to top up there.
 --   Counted: food, drink and potions the character can use that restore at least GOOD of a full
 --     bar, or of the best sold for the level when that is less; a weaker one for its share of that.
@@ -72,8 +72,7 @@ local MARGIN = 1.25          -- carried over what the fights ahead take
 local LEAST_FIGHTS = 20      -- enough for this many whatever lies ahead
 local MOST_FIGHTS = 150      -- fights ahead reckoned with, at most
 local LOG_FIGHTS = 60        -- ... with no guide: about an hour's
-local LEAST_CARRY, MOST_CARRY = 10, 80
-local CASTER_WATER = 20      -- a class that lives on its mana carries a stack of water at least
+local MOST_CARRY = 80
 local TOP_UP = 0.5           -- in a town with a seller, short of this share of the carry: a row to top up
 local TOWN = 300             -- yards: a place this near a seller is a stop to restock at
 local AHEAD = 40             -- guide places looked at for the fights ahead
@@ -82,7 +81,6 @@ local BACKPACK, LAST_BAG = 0, 4    -- Enum.BagIndex.Backpack to Bag_4
 local GOOD = 0.5             -- restores at least this share of the bar, or of the best sold, to count
 local COMMON = 5             -- sellers an item needs to set what "the best sold" is
 local SHARE = 1 / 3          -- of the gold left after training, this much at most goes to supplies
-local TOP_UP = 0.5           -- at a vendor, a kind at or under this share of its amount is offered too
 local REAGENT_MOST = 20      -- automatic: one stack of a reagent, up to this many
 local LISTED = 800           -- yards: running low, a seller this near gets a row on the card
 local LISTED_OUT = 2000      -- the same with no food or water left
@@ -128,7 +126,7 @@ local function Load()
 			heal = potion and health or 0, mana = potion and mana or 0,
 			foodShare = tonumber(foodShare) or 0, waterShare = tonumber(waterShare) or 0,
 			price = tonumber(f[5]) or 0, lot = math.max(1, tonumber(f[6]) or 1),
-			sold = sold, common = sold ~= "" and commas + 1 >= COMMON, potion = potion,
+			sold = sold, common = sold ~= "" and commas + 1 >= COMMON, potion = potion, stack = math.max(1, tonumber(f[10]) or 1),
 		}
 	end
 	for id, text in pairs(ns.data.mats or {}) do
@@ -379,6 +377,18 @@ local function Ahead(kind)
 	return fights
 end
 
+-- The most a commonly sold item of a kind restores at this level, and how many of it stack.
+local function Best(kind, level)
+	local known = best[kind]
+	if known and known[1] == level then return known[2], known[3] end
+	local most, stack, field = 0, 1, SIZED[kind].field
+	for _, item in pairs(items) do
+		if item.common and item.level <= level and item[field] > most then most, stack = item[field], item.stack end
+	end
+	best[kind] = { level, most, stack }
+	return most, stack
+end
+
 -- The automatic amount for a kind, or for a reagent; for food and water also what the fights
 -- before the next vendor take.
 local function Auto(key, item)
@@ -389,10 +399,11 @@ local function Auto(key, item)
 		local rate = Rate(key)
 		if rate <= 0 then return 0 end
 		local fights = Ahead(key)
-		local carry = math.ceil(rate * math.max(fights, LEAST_FIGHTS) * MARGIN / 5) * 5
-		-- (A caster's water: a stack at least, however little it was seen to drink. A dry spell is a dead caster.)
-		local least = (key == "water" and Role() == "caster") and CASTER_WATER or LEAST_CARRY
-		return math.min(MOST_CARRY, math.max(least, carry)), math.ceil(rate * fights)
+		-- (Whole stacks of what's sold: a part stack takes a bag slot all the same.)
+		Load()
+		local _, stack = Best(key, level)
+		local carry = math.ceil(rate * math.max(fights, LEAST_FIGHTS) * MARGIN / stack) * stack
+		return math.min(math.max(MOST_CARRY, stack), carry), math.ceil(rate * fights)
 	elseif key == "heal" then
 		return level >= 10 and 5 or 0
 	elseif key == "mana" then
@@ -417,18 +428,6 @@ end
 local function Gives(item, kind, bar)
 	local about = SIZED[kind]
 	return item[about.field] + (about.share and item[about.share] * bar / 100 or 0)
-end
-
--- The most a commonly sold item of a kind restores at this level.
-local function Best(kind, level)
-	local known = best[kind]
-	if known and known[1] == level then return known[2] end
-	local most, field = 0, SIZED[kind].field
-	for _, item in pairs(items) do
-		if item.common and item.level <= level and item[field] > most then most = item[field] end
-	end
-	best[kind] = { level, most }
-	return most
 end
 
 -- The gold for supplies, and what is kept back for the trainer. What the trainer asks is a price weighed.

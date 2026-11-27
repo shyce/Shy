@@ -134,6 +134,11 @@ local function Arrange()
 		if not Shy.Alarm.Covers(timer) then live[#live + 1] = timer end
 	end
 	table.sort(live, function(a, b) return (KINDS[a] or OTHER).order < (KINDS[b] or OTHER).order end)
+	-- Layout mode with nothing running: what it would show, so the drawer stands there as it does in play.
+	local sample = #live == 0 and HUD.IsUnlocked()
+	if sample then
+		for _, s in ipairs(SAMPLE) do live[#live + 1] = s[1] end
+	end
 	-- (A bar the alert took is taken out of the rows while it fades, and back among them once it has.)
 	for timer, i in pairs(was) do
 		if Shy.Alarm.Covers(timer) and active[timer] then
@@ -151,7 +156,9 @@ local function Arrange()
 			r = Shy.Top.Make.Cell(box)
 			rows[i] = r
 		end
-		need = math.max(need, Dress(r, timer, active[timer].label))
+		local s = sample and SAMPLE[i]
+		need = math.max(need, Dress(r, timer, s and s[2] or active[timer].label))
+		if s then Draw(r, s[3], s[4]) end
 		r.timer = timer
 	end
 	Lay()
@@ -179,7 +186,7 @@ local function Tick()
 	Fold()
 	for i, timer in ipairs(live) do
 		local a, r = active[timer], rows[i]
-		local progress = Plain(GetMirrorTimerProgress(timer))
+		local progress = a and Plain(GetMirrorTimerProgress(timer))
 		if progress and a.max and a.max > 0 then
 			Draw(r, progress / a.max, progress / 1000, a.paused)
 		end
@@ -228,9 +235,10 @@ end
 function Tm.Live()
 	local list = {}
 	for i, timer in ipairs(live) do
-		local r = rows[i]
-		list[#list + 1] = { timer = timer, label = active[timer].label, share = r.share, left = r.right:GetText(),
-			paused = active[timer].paused, row = r }
+		local r, a = rows[i], active[timer]
+		-- (A sample, in layout mode: its words as drawn.)
+		list[#list + 1] = { timer = timer, label = a and a.label or r.name:GetText(), share = r.share, left = r.right:GetText(),
+			paused = a and a.paused, row = r, sample = a == nil or nil }
 	end
 	return list
 end
@@ -266,6 +274,10 @@ local function Build()
 	end)
 	-- The alert took a timer up, or let it go.
 	Shy:On("SHY_ALARM", function()
+		if Tm.on then Safe(Arrange) end
+	end)
+	-- Layout mode opened or closed: the samples come or go.
+	Shy:On("SHY_HUD_LAYOUT", function()
 		if Tm.on then Safe(Arrange) end
 	end)
 end

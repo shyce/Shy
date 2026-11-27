@@ -1,29 +1,33 @@
--- What's new: a release that brings something you'd want to know of says so as you log in, once for the account.
--- An item belongs to one release: it shows only while that release is the one you run, so updating past it, or
--- any update after, says nothing of it. Keep it short: a title and a line or two. An item may also list the
--- switches this character turned off that bear on it, each ticked to turn back on with one click, or left as they
--- are: asked once on each character.
--- Nobody is told before their character is set up (a fresh install: everything is new to it), and nothing comes
--- up in a fight or over the setup window.
+-- What's new: a window as you log in after an update, for what the release brings.
+--   What changed: every release's notes since the account last saw them (Shy.CHANGES, Data/Changes.lua), newest
+--   first, each line the addon it is about and what you'll notice. A long list scrolls.
+--   A release's own story (Shy.News.Add): a title and a line or two, shown while that release is the one you run.
+--   It may list the switches this character turned off that bear on it, each ticked to turn back on.
+-- Nobody is told before their character is set up (a fresh install: everything is new to it), and nothing comes up
+-- in a fight, over the setup window or over Your addons (Others.lua).
 --   Shy.News.Add(item)   item = { id, release = "5.2.6", addon (whose version: "ShyCore"), title, icon,
 --                                 lines = { "a sentence", ... },
 --                                 off = function() return { { text = "a switch", on = function() end }, ... } end }
---   Shy.News.Due()       the items this character hasn't been told of, or asked about
---   Shy.News.Open(all)   the window: what's due, or every item of this release (/shy news)
--- Account-wide, outside profiles: ShyCoreDB.news = { seen = { [id] = true }, asked = { [character] = { [id] = true } } }
+--   Shy.News.Due()       the stories this character hasn't been told of, or asked about
+--   Shy.News.Open(all)   the window: what's due, or with `all` this release's notes and stories (/shy news)
+-- Account-wide, outside profiles: ShyCoreDB.news = { seen = { [id] = true }, saw = "5.2.16" (the notes read up to),
+--                                                    asked = { [character] = { [id] = true } } }
 
 local Shy = Shy
 local UI, P = Shy.UI, Shy.Profiles
 local core = Shy.core
 local C = UI.colors
+local max = math.max
 
 local News = { items = {} }
 Shy.News = News
 core.keep.news = true
 
 local K = {
-	WIDTH = 440, PAD = 14, GAP = 6, LINE_GAP = 4, ITEM_GAP = 10,
-	TITLE = 13, TEXT = 12, ICON = 16, STAR = 10, BOX = 16, BUTTON = 24, LEAST_BUTTON = 110,
+	WIDTH = 460, PAD = 14, GAP = 6, LINE_GAP = 3, ITEM_GAP = 10,
+	TITLE = 13, TEXT = 12, SMALL = 11, ICON = 16, STAR = 10, BOX = 16, BUTTON = 24, LEAST_BUTTON = 110,
+	CHANGES = 250,     -- the tallest the notes stand before they scroll
+	RELEASES = 3,      -- the most releases /shy news shows
 	WAIT = 4,          -- seconds after logging in before it is asked
 	AGAIN = 10,        -- seconds before asking again, while a fight or setup is in the way
 	TRIES = 30,
@@ -96,9 +100,42 @@ function News.Current()
 	return out
 end
 
+-- "5.2.16" before "5.2.9": a version as numbers, compared one by one.
+local function Before(a, b)
+	local x, y = {}, {}
+	for n in a:gmatch("%d+") do x[#x + 1] = tonumber(n) end
+	for n in b:gmatch("%d+") do y[#y + 1] = tonumber(n) end
+	for i = 1, max(#x, #y) do
+		if (x[i] or 0) ~= (y[i] or 0) then return (x[i] or 0) < (y[i] or 0) end
+	end
+	return false
+end
+
+-- The releases whose notes are due: those after the ones read, up to the one running. Never read here (the notes
+-- came in with this release): the one running alone. With `all`, the newest few up to it, read or not.
+local function Releases(all)
+	local book, running, out = Book(), asking or Running("ShyCore"), {}
+	if not (book and running) then return out end
+	for _, release in ipairs(Shy.CHANGES or {}) do
+		local upto = not Before(running, release.version)
+		local unread = book.saw and Before(book.saw, release.version) or (not book.saw and release.version == running)
+		if upto and (all or unread) then out[#out + 1] = release end
+		if all and #out >= K.RELEASES then break end
+	end
+	return out
+end
+
+-- "26 Nov" from "2026-11-26".
+local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
+local function Day(date)
+	local month, day = date:match("^%d+%-(%d+)%-(%d+)$")
+	month = month and MONTHS[tonumber(month)]
+	return month and (tonumber(day) .. " " .. month) or ""
+end
+
 -- The window
 
-local win, open, shown, picks
+local win, open, shown, picks, notes
 local made = {}            -- the regions laid on the body last time: hidden before the next lay
 
 local function Clear()
@@ -112,8 +149,8 @@ local function Keep(region)
 end
 
 -- Running words, wrapping at their width (as the error window's are).
-local function Para(parent, color, width, text)
-	local fs = UI.Words(parent, UI.TextFont(K.TEXT), color)
+local function Para(parent, color, width, text, size)
+	local fs = UI.Words(parent, UI.TextFont(size or K.TEXT), color)
 	fs:SetJustifyV("TOP")
 	fs:SetWordWrap(true)
 	fs:SetWidth(width)
@@ -121,7 +158,7 @@ local function Para(parent, color, width, text)
 	return fs
 end
 
--- Told and asked: every item shown is seen, and this character asked about each.
+-- Told and asked: the notes read, every story shown seen and this character asked about each.
 local function Settle()
 	local book = Book()
 	if not book then return end
@@ -130,6 +167,8 @@ local function Settle()
 		book.seen[item.id] = true
 		asked[item.id] = true
 	end
+	local running = Running("ShyCore")
+	if running and (not book.saw or Before(book.saw, running)) then book.saw = running end
 end
 
 local function Close()
@@ -165,16 +204,96 @@ local function Create()
 		Settle()
 		Close()
 	end)
+	win.go:SetPrimary(true)
 end
 
--- What's new, item by item; then what this character turned off, ticked to come back.
-local function Lay(items)
+-- A section's heading: its name in the head's ink.
+local function Heading(body, text, y)
+	local head = Keep(UI.Text(body, text, K.TITLE, true, C.head))
+	head:SetPoint("TOPLEFT", K.PAD, -y)
+	return y + K.TITLE + K.GAP
+end
+
+-- The notes, release by release in a scroll area: the version and its date, then each group (Added, Changed,
+-- Fixed) under its name, each line the addon it is about and what changed.
+local function Notes(body, y, inner)
+	local area = notes
+	if not area then
+		area = UI.ScrollArea(body, inner, K.CHANGES)
+		notes = area
+		area.made = {}
+	end
+	for _, region in ipairs(area.made) do region:Hide() end
+	wipe(area.made)
+	local wide, at, ends = inner - 14, 0, {}
+	-- (Each kept with how far down the list it stands.)
+	local function Hold(region)
+		area.made[#area.made + 1] = region
+		region.shyAt = at
+		region:Show()
+		return region
+	end
+	for r, release in ipairs(shown.releases) do
+		if r > 1 then at = at + K.ITEM_GAP end
+		local name = Hold(UI.Text(area.content, release.version, K.TEXT, true, C.head))
+		name:SetPoint("TOPLEFT", 0, -at)
+		if Day(release.date) ~= "" then
+			local date = Hold(UI.Text(area.content, Day(release.date), K.SMALL, false, C.dim))
+			date:SetPoint("LEFT", name, "RIGHT", 8, 0)
+		end
+		at = at + K.TEXT + K.GAP
+		for _, group in ipairs(release.groups) do
+			local kind = Hold(UI.Text(area.content, group.title:upper(), 10, true, C.dim))
+			kind:SetPoint("TOPLEFT", 0, -at)
+			at = at + 10 + K.LINE_GAP + 1
+			for _, line in ipairs(group) do
+				local scope = line[1] == "Release" and "Shy" or line[1]
+				local said = scope ~= "" and (UI.Wrap(C.head, scope) .. "  " .. line[2]) or line[2]
+				local text = Hold(Para(area.content, C.text, wide - K.STAR - K.GAP, said))
+				text:SetPoint("TOPLEFT", K.STAR + K.GAP, -at)
+				local star = Hold(area.content:CreateTexture(nil, "ARTWORK"))
+				star:SetTexture(Shy.MEDIA .. "GlyphStar")
+				star:SetSize(K.STAR, K.STAR)
+				Shy.Theme.Tint(star, Shy.Theme.Accent)
+				star:SetPoint("TOPLEFT", 0, -at - 2)
+				text.shyEnd = at + math.ceil(text:GetStringHeight())
+				ends[#ends + 1] = text.shyEnd
+				at = text.shyEnd + K.LINE_GAP
+			end
+			at = at + K.GAP - K.LINE_GAP
+		end
+	end
+	at = at - K.GAP
+	area.content:SetHeight(max(at, 1))
+	-- (Cut between two lines, never through one.)
+	local tall = at
+	if at > K.CHANGES then
+		tall = 0
+		for _, e in ipairs(ends) do
+			if e <= K.CHANGES then tall = max(tall, e) end
+		end
+	end
+	area:SetHeight(tall)
+	area:ClearAllPoints()
+	area:SetPoint("TOPLEFT", body, "TOPLEFT", K.PAD, -y)
+	area:Show()
+	area:Update()
+	return y + tall + K.ITEM_GAP + K.GAP
+end
+
+-- The notes, then this release's stories and what this character turned off for them, ticked to come back.
+local function Lay()
 	Clear()
 	local body, W = win.body, K.WIDTH
 	local inner = W - 2 * K.PAD
 	local y = UI.HEAD.window.line + UI.LINE + K.PAD
 	picks = {}
-	for _, item in ipairs(items) do
+	if notes then notes:Hide() end
+	if #shown.releases > 0 then
+		y = Heading(body, #shown.releases == 1 and "What changed" or "What changed since you last played", y)
+		y = Notes(body, y, inner)
+	end
+	for _, item in ipairs(shown) do
 		local x = K.PAD
 		if item.icon then
 			local icon = Keep(body:CreateTexture(nil, "ARTWORK"))
@@ -201,9 +320,7 @@ local function Lay(items)
 		y = y + K.ITEM_GAP
 	end
 	if #picks > 0 then
-		local head = Keep(UI.Text(body, "You turned these off", K.TITLE, true, C.head))
-		head:SetPoint("TOPLEFT", K.PAD, -y)
-		y = y + K.TITLE + K.GAP
+		y = Heading(body, "You turned these off", y)
 		local say = Keep(Para(body, C.dim, inner, "They work with what's new. Untick any you want to keep off."))
 		say:SetPoint("TOPLEFT", K.PAD, -y)
 		y = y + math.ceil(say:GetStringHeight()) + K.GAP
@@ -228,20 +345,21 @@ local function Lay(items)
 	UI.BodyFit(win, W, y + K.BUTTON + K.PAD)
 end
 
--- What's due, or with `all` every item of this release; nothing to show, nothing shown.
+-- What's due, or with `all` this release's notes and stories; nothing to show, nothing shown.
 function News.Open(all)
 	local items = all and News.Current() or News.Due()
-	if #items == 0 then return false end
+	items.releases = Releases(all)
+	if #items == 0 and #items.releases == 0 then return false end
 	if not win then Create() end
 	shown = items
-	Lay(items)
+	Lay()
 	open = true
 	Shy.HUD.Update(win)
 	win:Raise()
 	return true
 end
 
-function News.Window() return win, picks, shown end
+function News.Window() return win, picks, shown, notes end
 
 -- Whether no character on the account has been set up yet: a fresh install.
 local function Fresh()
@@ -252,8 +370,8 @@ local function Fresh()
 	return true
 end
 
--- As you log in: once the game has settled, out of a fight and with the setup window shut. A character not yet
--- set up is told nothing. On a fresh install what is new now is noted as seen: it is all new to them.
+-- As you log in: once the game has settled, out of a fight, with the setup window and Your addons shut. A character
+-- not set up yet is told nothing. On a fresh install the notes and stories are noted as read: it is all new to them.
 local tries = 0
 local function Try()
 	local book = Book()
@@ -262,22 +380,24 @@ local function Try()
 	if not book.started and Fresh() then
 		book.started = true
 		for _, item in ipairs(News.items) do book.seen[item.id] = true end
+		book.saw = Running("ShyCore")
 		return
 	end
 	book.started = true
 	if setup and not setup.Done() then return end
-	if InCombatLockdown() or (setup and setup.IsOpen()) then
+	local others = Shy.Others and Shy.Others.IsOpen()
+	if InCombatLockdown() or (setup and setup.IsOpen()) or others then
 		tries = tries + 1
 		if tries < K.TRIES then C_Timer.After(K.AGAIN, Try) end
 		return
 	end
-	if not News.Open() then return end
+	News.Open()
 end
 
 Shy:On("SHY_LOGIN", function() C_Timer.After(K.WAIT, Try) end)
--- /shy news: this release's news, told or not. /shy news 5.2.6: that release's, whatever runs (to look over news
--- before its release ships).
-Shy.Command("news", "what's new in this release, and anything you turned off that goes with it", function(rest)
+-- /shy news: this release's news, told or not. /shy news 5.2.6: that release's, whatever
+-- runs (to look over news before its release ships).
+Shy.Command("news", "what's new in this release", function(rest)
 	asking = rest and rest:match("^%d+%.%d+%.%d+$") or nil
 	local ok, opened = pcall(News.Open, true)
 	asking = nil

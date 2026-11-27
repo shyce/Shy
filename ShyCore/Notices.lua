@@ -319,8 +319,8 @@ local function Cell(id)
 		self.hot = true
 		self.light:SetAlpha(HOT)
 		self.glow:SetAlpha(self.lit and self.glow:GetAlpha() or 0.3)
-		-- (The list says it all while it is open.)
-		if list and list:IsShown() then return end
+		-- (The list says it all while it is open; nothing pops up while the column is in hand.)
+		if (list and list:IsShown()) or HUD.InHand() then return end
 		UI.Tip(self, def.title or "", Value(def.says, def), { side = "BOTTOM", note = Value(def.note, def),
 			sections = Value(def.sections, def) })
 	end)
@@ -836,8 +836,16 @@ function Lay()
 	local left, right, lip = Shy.Top.Bay()
 	if hung then width = math.max(width, list.need + left + right) end
 	Shy.Top.Want(box, bar and 0 or width)
+	local own = width
 	if not bar then width = math.max(width, Shy.Top.Width()) end
 	width = math.ceil(width * ppu / 2) * 2 / ppu
+	-- A voice with a weave (breath running out): what stands at the end of its line (the time left) hangs from the
+	-- bar's right end, right-aligned, so it rides the end as the plate glides wider or narrower (the drawer under it)
+	-- and a count growing shorter keeps its last digit where it was.
+	if voice ~= nil and voice.fill ~= nil and beside then
+		strip.right:ClearAllPoints()
+		strip.right:SetPoint("TOPRIGHT", strip, "TOPRIGHT", -(own - x - words), -(base - size * TITLE_SHARE))
+	end
 	Look(plaque)
 	strip:SetHeight(high)
 	-- (The box: the plate and the circle's half either side, so the plate stands on the axis.)
@@ -1050,13 +1058,8 @@ local function Tick(_, elapsed)
 	end
 end
 
--- Your level, and where you are: the head's own voice.
-
-local function Coords()
-	local _, x, y = Shy.HereOn(true)
-	if not x or (x == 0 and y == 0) then return nil end
-	return ("%.1f, %.1f"):format(x * 100, y * 100)
-end
+-- Your level, and where you are: the head's own voice. The area and the zone, no coordinates: the guide says
+-- where to go.
 
 local function Caps(text)
 	if text == nil or issecretvalue(text) then return text end
@@ -1071,12 +1074,10 @@ local LEVEL = {
 		return area
 	end,
 	under = function()
-		local zone, at = GetZoneText(), Coords()
-		local area = GetMinimapZoneText()
+		local zone, area = GetZoneText(), GetMinimapZoneText()
 		-- (In a place with one name the zone's isn't said twice.)
-		if not issecretvalue(zone) and not issecretvalue(area) and zone == area then zone = nil end
-		if zone and at then return Caps(zone) .. "  ·  " .. at end
-		return zone and Caps(zone) or at or ""
+		if not issecretvalue(zone) and not issecretvalue(area) and zone == area then return "" end
+		return Caps(zone) or ""
 	end,
 }
 
@@ -1381,7 +1382,7 @@ local function Mouse(frame)
 	end)
 	frame:SetScript("OnEnter", function(self)
 		local def = speaking and voices[speaking]
-		if def and def.hover then def.hover(self) end
+		if def and def.hover and not HUD.InHand() then def.hover(self) end
 	end)
 	frame:SetScript("OnLeave", function(self) UI.TipHide(self) end)
 end
@@ -1391,6 +1392,8 @@ local function Build()
 	box = HUD.Create({
 		id = "shy.notices", title = "Head",
 		width = 200, height = CIRCLE,
+		-- (In layout mode its mover lies over the whole column it leads: its name at its top, on the head.)
+		label = "TOP",
 		point = { "TOP", "TOP", 0, -4 },
 		shown = function() return true end,
 		grip = false,
@@ -1454,6 +1457,11 @@ local function Build()
 	end)
 	box:SetScript("OnShow", Snap)
 	box:HookScript("OnHide", Close)
+	-- Picked up (by the head or any piece of the column it leads): the hover it had up goes at once, and none
+	-- comes while it is dragged (Mouse).
+	Shy:On("SHY_HUD_MOVING", function(moving)
+		if moving == box then UI.TipHide(nil, true) end
+	end)
 	local events = CreateFrame("Frame")
 	for _, event in ipairs({ "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "PLAYER_LEVEL_UP", "PLAYER_XP_UPDATE",
 		"ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD" }) do

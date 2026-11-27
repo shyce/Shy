@@ -93,6 +93,9 @@
 --   Shy.HUD.Cover(box, frame)           -- the box's mover lies over `frame` instead of the box (a deck's column)
 --   Shy.HUD.SetCarried(box, on)         -- another piece moves it (a box docked in a deck): no mover of its own,
 --                                       -- nothing snaps to it; its own size and lock are kept
+--   Shy.HUD.Lead(box, leader)           -- the box is part of `leader` (the top's column under its head): no mover,
+--                                       -- handles, place, size or lock of its own, nothing snaps to it, and a
+--                                       -- press that drags it drags the leader. nil frees it. HUD.Leader(box)
 --   Shy.HUD.Release(box)                -- keeps the box where it stands, as a position the player set
 --   Shy.HUD.Dock(box, side)             -- a `dock` window docked on side ("LEFT", "RIGHT", true: the side it
 --                                       -- had), or free where it stands (false). Shy.HUD.Docked(box): the side
@@ -181,6 +184,7 @@ local waiting = {}         -- secure boxes with changes to apply after combat
 local Follow               -- places again what is docked to a box (Docking, below)
 local Rect                 -- a box's rectangle in UIParent units (Dragging with snapping, below)
 local MoverShown           -- whether a box's mover shows (Boxes, below)
+local dragging             -- the box in hand (Dragging with snapping, below)
 local GRID, SNAP = 16, 8
 local SEAM = 4             -- the gap two pieces keep: a dragged box snaps this far off another's side
 local SEAT = 24            -- a box let go of this near its home goes home
@@ -188,6 +192,13 @@ local MIN_SCALE, MAX_SCALE = 0.5, 2
 
 local function Saved(box)
 	return core.db.hud[box.id]
+end
+
+-- The piece a box is part of (HUD.Lead), else the box itself: what a press on it drags.
+local function Lead(box)
+	local n = 0
+	while box.leader and n < 8 do box, n = box.leader, n + 1 end
+	return box
 end
 
 -- Drops a box's entry once nothing in it differs from where and how the box starts.
@@ -570,7 +581,10 @@ function HUD.Apply(box)
 		if Follow then Follow(box) end
 		return
 	end
-	local saved = Saved(box)
+	-- Part of a piece in hand: it hangs from it for the drag, and is placed again as it is let go of.
+	if box.leader and dragging and Lead(box) == dragging then return end
+	-- (Part of another piece, nothing of its own counts: an entry from before, or another layout's.)
+	local saved = not box.leader and Saved(box) or nil
 	local scale = saved and saved.scale or box.givenScale or 1
 	if math.abs(box:GetScale() - scale) > 0.0001 then
 		box:SetScale(scale)
@@ -833,10 +847,10 @@ local function Snap(box, left, bottom, width, height)
 	Y(SEAM, SEAM)
 	Y(sh - SEAM - fh, sh - SEAM)
 
-	-- Other pieces, except `still` and carried ones (they move with their host) and windows: edge on edge,
+	-- Other pieces, except `still`, carried and led ones (they move with their host) and windows: edge on edge,
 	-- or beside one, touching or a seam apart (whichever is nearer).
 	for _, other in ipairs(boxes) do
-		if other ~= box and not other.still and not other.carried and not other.window and Visible(other) then
+		if other ~= box and not other.still and not other.carried and not other.leader and not other.window and Visible(other) then
 			local ol, ob, ow, oh = Rect(Face(other))
 			if ol then
 				local right, top = ol + ow, ob + oh
@@ -905,8 +919,6 @@ local function Snap(box, left, bottom, width, height)
 	end
 	return l - dx, b - dy
 end
-
-local dragging
 
 -- Whatever is docked to `host` is placed against it again: it moved, changed size, or was placed anew, so a
 -- side may have run out of room or the tops may now take a window off the screen's foot.
@@ -1157,6 +1169,9 @@ local function StopDrag()
 		Remember(box)
 	end
 	Follow(box)
+	for _, other in ipairs(boxes) do
+		if other.leader and Lead(other) == box then HUD.Apply(other) end
+	end
 	Look(box)
 	guideV:Hide()
 	guideH:Hide()
@@ -1172,6 +1187,7 @@ end
 -- moved by re-anchoring, since it isn't set movable; from where the press began (cx, cy), so it
 -- doesn't lag the cursor by the distance a press travels before it becomes a drag.
 local function StartDrag(box, cx, cy)
+	box = Lead(box)
 	dragging = box
 	Shy:Fire("SHY_HUD_MOVING", box)
 	Look(box)
@@ -1207,6 +1223,15 @@ local function StartDrag(box, cx, cy)
 		end
 		box:StartMoving()
 		driver:SetScript("OnUpdate", function() Snap(box, Rect(box)) end)   -- guides only
+	end
+	-- What it leads hangs from it where it stands, so the engine moves them as one.
+	local bl, bb = Rect(box)
+	for _, other in ipairs(boxes) do
+		local ol, ob = Rect(other)
+		if other.leader and Lead(other) == box and bl and ol then
+			local s = Scaled(other)
+			HUD.Attach(other, box, "BOTTOMLEFT", "BOTTOMLEFT", (ol - bl) / s, (ob - bb) / s)
+		end
 	end
 	-- This client sometimes never delivers the mouse-up to a dragged frame.
 	driver:RegisterEvent("GLOBAL_MOUSE_UP")
@@ -1387,6 +1412,7 @@ local function WatchPending()
 	-- Off before the drag begins: should it fail, this doesn't run again every frame.
 	driver:SetScript("OnUpdate", nil)
 	box.wasDragged = true
+	Lead(box).wasDragged = true
 	StartDrag(box, fromX, fromY)
 end
 
@@ -1417,52 +1443,54 @@ local function OpenMenu(box, owner, extra)
 			root:SetSub("Size, lock and position")
 			root:SetIcon(UI.MenuGlyph("window"))
 		end
+		-- Part of another piece: its size, lock and place are that piece's.
+		local piece = Lead(box)
 		-- A box that offers its own sizes (ownSize) has no use for these.
-		if Scalable(box) and not box.ownSize then
+		if Scalable(piece) and not piece.ownSize then
 			local size = root:CreateButton("Size")
 			size:SetIcon(UI.MenuGlyph("size"))
 			for _, scale in ipairs(SIZES) do
 				size:CreateRadio(math.floor(scale * 100 + 0.5) .. "%",
-					function() return math.abs(box:GetScale() - scale) < 0.02 end,
-					function() SetScale(box, scale) end)
+					function() return math.abs(piece:GetScale() - scale) < 0.02 end,
+					function() SetScale(piece, scale) end)
 			end
 		end
 		local align = root:CreateButton("Center")
 		align:SetIcon(UI.MenuGlyph("center"))
-		align:CreateButton("Across the screen", function() Center(box, true) end)
-		align:CreateButton("Up and down", function() Center(box, false) end)
+		align:CreateButton("Across the screen", function() Center(piece, true) end)
+		align:CreateButton("Up and down", function() Center(piece, false) end)
 		-- Docked to another than its made host, the switch says so and lets it go; free, it docks back to its made one.
-		local by = DockSide(box) and Host(box)
-		if by or (box.dock and MadeHost(box)) then
-			local label = (by and by ~= MadeHost(box)) and ("Docked to " .. (by.title or "a window")) or (box.dock.label or "Docked")
-			root:CreateCheckbox(label, function() return DockSide(box) ~= nil end, function()
-				if DockSide(box) then
-					HUD.Dock(box, false)
+		local by = DockSide(piece) and Host(piece)
+		if by or (piece.dock and MadeHost(piece)) then
+			local label = (by and by ~= MadeHost(piece)) and ("Docked to " .. (by.title or "a window")) or (piece.dock.label or "Docked")
+			root:CreateCheckbox(label, function() return DockSide(piece) ~= nil end, function()
+				if DockSide(piece) then
+					HUD.Dock(piece, false)
 				else
-					Keep(box).dockTo = nil
-					HUD.Dock(box, true)
+					Keep(piece).dockTo = nil
+					HUD.Dock(piece, true)
 				end
 			end)
 		end
-		root:CreateCheckbox("Lock in place", function() return IsLocked(box) end, function()
-			local saved = Keep(box)
+		root:CreateCheckbox("Lock in place", function() return IsLocked(piece) end, function()
+			local saved = Keep(piece)
 			saved.locked = not saved.locked or nil
-			Look(box)
+			Look(piece)
 		end)
-		root:CreateButton(box.editMode and "Back to Edit Mode's place" or "Reset position", function()
-			local saved = Saved(box)
+		root:CreateButton(piece.editMode and "Back to Edit Mode's place" or "Reset position", function()
+			local saved = Saved(piece)
 			if saved then saved.x, saved.y, saved.top, saved.dock, saved.dockTo = nil, nil, nil, nil, nil end
-			Tidy(box)
-			HUD.Apply(box)
-			Shy:Fire("SHY_HUD_MOVED", box)
+			Tidy(piece)
+			HUD.Apply(piece)
+			Shy:Fire("SHY_HUD_MOVED", piece)
 		end):SetIcon(UI.MenuGlyph("reset"))
-		local saved = Saved(box)
-		local scaled = Scalable(box) and saved and saved.scale and math.abs(saved.scale - (box.foreign and box.homeScale or 1)) > 0.001
+		local saved = Saved(piece)
+		local scaled = Scalable(piece) and saved and saved.scale and math.abs(saved.scale - (piece.foreign and piece.homeScale or 1)) > 0.001
 		if scaled or (saved and saved.w) then
-			root:CreateButton(box.editMode and "Back to Edit Mode's size" or "Reset size", function() ResetScale(box) end):SetIcon(UI.MenuGlyph("reset"))
+			root:CreateButton(piece.editMode and "Back to Edit Mode's size" or "Reset size", function() ResetScale(piece) end):SetIcon(UI.MenuGlyph("reset"))
 		end
 		root:CreateDivider()
-		if box.editMode then
+		if piece.editMode then
 			-- Edit Mode opens through a secure button: from addon code its manager would run tainted.
 			local edit = root:CreateButton("Edit Mode")
 			edit:SetSecure({ type = "macro", macrotext = SLASH_EDITMODE1 })
@@ -1476,7 +1504,7 @@ end
 -- Boxes
 
 function MoverShown(box)
-	if not unlocked or box.still or box.carried or box.retired or not Active(box) then return false end
+	if not unlocked or box.still or box.carried or box.leader or box.retired or not Active(box) then return false end
 	if box.awayFn ~= nil and box.awayFn() == true then return false end
 	-- Edit Mode shows its own frames; a ghost it leaves out (its own setting for that frame off) keeps ours.
 	if alongside and box.editMode and not (box.ghost and not Visible(box.foreign)) then return false end
@@ -1962,10 +1990,12 @@ function HUD.Manage(box, frame, menu, when)
 	frame:EnableMouse(true)
 	frame:HookScript("OnMouseDown", function(_, button)
 		box.wasDragged = false
-		if button ~= "LeftButton" or unlocked or not Active(box) or Busy(box) then return end
+		-- (Part of another piece: that piece is what moves, and what is locked.)
+		local held = Lead(box)
+		if button ~= "LeftButton" or unlocked or not Active(box) or Busy(held) then return end
 		if when and not when() then return end
-		if IsLocked(box) then
-			if HUD.OnLocked then HUD.OnLocked(box) end   -- its corner shows why (Grip.lua)
+		if IsLocked(held) then
+			if HUD.OnLocked then HUD.OnLocked(held) end   -- its corner shows why (Grip.lua)
 			return
 		end
 		Press(box)
@@ -2007,6 +2037,24 @@ function HUD.SetCarried(box, on)
 	if box.carried == on then return end
 	box.carried = on
 	if box.mover then box.mover:SetShown(MoverShown(box)) end
+end
+
+-- A led box is part of its leader. Nothing of its own is kept: its entry goes (a place, size or lock from
+-- before). Its owner gives it its home and size (SetHome) as the leader moves and sizes.
+function HUD.Lead(box, leader)
+	if leader == box then leader = nil end
+	if box.leader == leader then return end
+	box.leader = leader
+	if leader then
+		core.db.hud[box.id] = nil
+		if selected == box then Select(nil) end
+	end
+	if box.mover then box.mover:SetShown(MoverShown(box)) end
+	HUD.Apply(box)
+end
+
+function HUD.Leader(box)
+	return box.leader
 end
 
 function HUD.IsDragging(box)
@@ -2054,7 +2102,7 @@ function HUD.Room(except)
 	local cx, cy = sw / 2, sh / 2
 	local rects = {}
 	for _, box in ipairs(boxes) do
-		if box ~= except and not box.window and not box.still and not box.carried and Visible(box) then
+		if box ~= except and not box.window and not box.still and not box.carried and not box.leader and Visible(box) then
 			local l, b, w, h = Rect(Face(box))
 			if l and w > 0 and h > 0 then rects[#rects + 1] = { l, b, l + w, b + h } end
 		end
@@ -2074,6 +2122,7 @@ function HUD.Room(except)
 end
 
 function HUD.IsPlaced(box)
+	if box.leader then return false end
 	local saved = Saved(box)
 	return saved ~= nil and saved.x ~= nil
 end
@@ -2081,6 +2130,7 @@ end
 -- Has the player made the box their own: placed it, sized it, scaled it or docked it elsewhere (what Tidy
 -- keeps an entry for, but a lock).
 function HUD.IsChanged(box)
+	if box.leader then return false end
 	local saved = Saved(box)
 	if not saved then return false end
 	if saved.x or saved.w or saved.dock ~= nil then return true end
@@ -2090,6 +2140,7 @@ end
 -- Where the player put a box, as a copy to keep somewhere else (nil: they didn't), and given back: for a
 -- place that is the player's screen's rather than a profile's (the setup window, opened as profiles change).
 function HUD.Spot(box)
+	if box.leader then return nil end
 	local saved = Saved(box)
 	if not (saved and saved.x) then return nil end
 	return { x = saved.x, y = saved.y, scale = saved.scale, top = saved.top }

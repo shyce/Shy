@@ -3,8 +3,8 @@
 ## Notes: The look, layout and setup every ShyUI addon shares |cff888888/shy|r
 ## Author: Shyce Cream
 ## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffUI|r
-## Version: 5.2.16
-## X-Date: 2026-11-26
+## Version: 5.2.17
+## X-Date: 2026-11-27
 ## IconTexture: Interface\AddOns\ShyCore\Media\ShyCoreMarkColor
 ## SavedVariables: ShyCoreDB
 ## AddonCompartmentFunc: ShyCore_OnCompartmentClick
@@ -47,6 +47,7 @@ Frames.lua
 Top.lua
 Notices.lua
 Alarm.lua
+Party.lua
 Editor.lua
 Grip.lua
 Drawer.lua
@@ -55,6 +56,7 @@ Maps.lua
 Trip.lua
 Way.lua
 Setup.lua
+Others.lua
 News.lua
 Chooser.lua
 Immersion.lua
@@ -72,4 +74,6 @@ Data\Lineups.lua
 Data\Builds.lua
 Data\Instances.lua
 Data\Tails.lua
+Data\Changes.lua
+Data\Others.lua
 Instances.lua

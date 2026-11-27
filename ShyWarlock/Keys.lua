@@ -3,6 +3,7 @@
 -- ASDF (asdf: S forward, F back, the hand a key further right), and the guide to playing names its jobs.
 --
 --   ns.Keys.Run()     lays them out and says what was done (/shy warlock keys)
+--   ns.Keys.Run("force")  every key, even ones you kept or moved (/shy warlock keys force)
 --   ns.Keys.List()    every key and what it does, as text
 --
 -- A stone's key uses the stone you carry and makes one when you carry none.
@@ -268,12 +269,12 @@ function K.Apply()
 	return Shy.Keys.Apply(T, JOBS, OPTS)
 end
 
-function K.Run()
+function K.Run(typed)
 	if not ns.isWarlock then
 		T:Print("your keys are laid out on a warlock only.")
 		return
 	end
-	Shy.Keys.Run(T, JOBS, OPTS)
+	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)
 end
 
 function K.List()

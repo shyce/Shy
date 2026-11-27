@@ -2,6 +2,7 @@
 -- have learned, so a spell arrives on its key as you train it.
 --
 --   ns.Keys.Run()     lays them out and says what was done (/shy priest keys)
+--   ns.Keys.Run("force")  every key, even ones you kept or moved (/shy priest keys force)
 --   ns.Keys.List()    every key and what it does, as text
 --
 -- A heal, a shield or a blessing goes to the friend the mouse is on, else the friend you have targeted, else you.
@@ -318,12 +319,12 @@ function K.Apply()
 	return Shy.Keys.Apply(T, JOBS, OPTS)
 end
 
-function K.Run()
+function K.Run(typed)
 	if not ns.isPriest then
 		T:Print("your keys are laid out on a priest only.")
 		return
 	end
-	Shy.Keys.Run(T, JOBS, OPTS)
+	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)
 end
 
 function K.List()

@@ -4,15 +4,14 @@
 -- Record text is saved plain values, never secret, so measuring it is safe.
 
 local ADDON, ns = ...
-local UI, Theme, Skin, B = Shy.UI, Shy.Theme, Shy.Skin, Shy.Brand
+local UI, Theme, Skin = Shy.UI, Shy.Theme, Shy.Skin
 local C = UI.colors
 
--- The line: `left` and `right` are where its words begin and end; `close` is how far in the x stands,
--- clear of the bottom right corner, which resizes the line.
--- The line is the column's make (Shy.Top.Make): a plaque begun behind the steel ring with the killing sign,
--- pointed at its right end, 24 tall like every row up there.
-local LINE = { w = 360, h = 24, left = 30, right = 50, close = 24 }
-local SIGN = 12                -- the killing sign in the ring: the small glyphs are drawn for 12 units
+-- The line: `left` and `right` are where its words begin and end; `close` is how far in the x stands.
+-- The line is a row of the column's tray (Shy.Top.Make.Cell), in the drawer under the head with the rest: the
+-- killing sign on its tab, who killed you, how long ago, and the x.
+local CELL = Shy.Top.Make.CELL
+local LINE = { w = 360, h = CELL.ROW, left = CELL.TAB + CELL.PAD, right = 30, close = 4 }
 local LEDGER = { w = 460, top = 56, step = 23, row = 22, foot = 30, pad = 14, bar = 70, inner = 418, prior = 20 }
 ns.LINE, ns.LEDGER = LINE, LEDGER
 
@@ -117,10 +116,9 @@ end
 
 -- The line
 
--- The plate width the line's words want, from its ring's middle to its point (the column lays every plate
--- at the widest such: Shy.Top.Want).
+-- The width the line's words want (its tray is laid at the widest the column's rows want: Shy.Top.Want).
 local function LineNeed(line)
-	local need = LINE.left - Shy.Top.Make.RING / 2 + math.ceil(line.name:GetUnboundedStringWidth()) + 10
+	local need = LINE.left + math.ceil(line.name:GetUnboundedStringWidth()) + 10
 		+ math.ceil(line.ago:GetUnboundedStringWidth()) + LINE.right
 	if line.more:IsShown() then need = need + 4 + math.ceil(line.more:GetUnboundedStringWidth()) end
 	if line.verb:IsShown() then need = need + 4 + math.ceil(line.verb:GetUnboundedStringWidth()) end
@@ -156,53 +154,43 @@ local function LineTick(line)
 	LineFit(line)
 end
 
--- Its light along the top is the killing blow's red, full and glowing round the ring until the death's
--- ledger has been opened, then quiet.
+-- Until the death's ledger has been opened the row is lit: the killing blow's red weave across it, its light
+-- along the top full and the sign in the red. Then it goes quiet: no weave, the light faint, the sign dim.
 local function LineLight(line)
 	local fresh = not line.view.death.seen
+	local cell = line.cell
+	cell:Set({ sign = "kill", color = Theme.Harm, fill = fresh and Theme.Harm or nil })
+	cell:Share(1)
+	-- (The cell's own words stand aside: the line lays its own.)
+	cell.name:Hide()
+	cell.right:Hide()
+	line.light:SetAlpha(1)
 	UI.Tint(line.light, Theme.Harm, fresh and 0.9 or 0.35)
 	UI.Tint(line.sign, fresh and Theme.Harm or C.dim)
-	line.glow:SetShown(fresh)
-	Shy.Top.Make.Look(line.plaque)
 end
 
 function ns.CreateLine(parent)
 	local Make = Shy.Top.Make
 	local line = CreateFrame("Frame", nil, parent)
 	line:SetSize(LINE.w, LINE.h)
-	local top = (LINE.h - Make.TALL) / 2
-	line.plaque = Make.Plaque(line)
-	Make.Shape(line, line.plaque, top, Make.RING / 2, true)
-	Make.Look(line.plaque)
-	line.glow = line:CreateTexture(nil, "BACKGROUND", nil, -7)
-	line.glow:SetTexture(B.GLOW)
-	line.glow:SetBlendMode("ADD")
-	line.glow:SetSize(44, 44)
-	line.glow:SetPoint("CENTER", line, "LEFT", Make.RING / 2, 0)
-	UI.Tint(line.glow, Theme.Harm, 0.45)
-	-- (The line is the column's width: what stands at its right end rides its point.)
-	line.light = line:CreateTexture(nil, "ARTWORK")
-	line.light:SetTexture(Shy.MEDIA .. "HoverLight")
-	line.light:SetHeight(Make.LIGHT)
-	line.light:SetPoint("TOPLEFT", line, "TOPLEFT", Make.RING - 4, -top)
-	line.light:SetPoint("TOPRIGHT", line, "TOPRIGHT", -Make.POINT, -top)
-	line.ring = Make.Ring(line)
-	line.ring:SetPoint("CENTER", line, "LEFT", Make.RING / 2, 0)
-	UI.Tint(line.ring, Theme.skin.metal)
-	line.sign = line:CreateTexture(nil, "OVERLAY")
-	line.sign:SetSize(SIGN, SIGN)
-	line.sign:SetPoint("CENTER", line.ring, "CENTER")
-	Shy.Hover.Glyph(line.sign, "kill", SIGN)
-	UI.Concentric(line.ring, line.sign)
+	line.tall = LINE.h   -- (a row of a tray: Shy.Top.Make.Still stands it)
+	local cell = Make.Cell(line)
+	cell:SetAllPoints()
+	line.cell = cell
+	-- The cell's meter is the fresh death's weave, its flare the light along its top, its tab's sign the killing one.
+	line.glow, line.light, line.sign = cell.bar, cell.flare, cell.glyph
+	function line:Rule(on) cell:Rule(on) end
+	local over = cell.over
 
-	line.name = Text(line, UI.NameFont(13))
-	line.name:SetPoint("LEFT", LINE.left, 0)
-	line.more = Text(line, UI.NameFont(12), C.dim)
+	line.name = Text(over, UI.NameFont(13))
+	line.name:SetPoint("LEFT", line, "LEFT", LINE.left, CELL.NAME_Y)
+	line.more = Text(over, UI.NameFont(12), C.dim)
 	line.more:SetPoint("LEFT", line.name, "RIGHT", 4, 0)
-	line.verb = Text(line, UI.TextFont(12), C.dim)
-	line.ago = Brand(line, 12, C.head, "RIGHT")
-	line.ago:SetPoint("RIGHT", line, "RIGHT", -LINE.right, 0)
+	line.verb = Text(over, UI.TextFont(12), C.dim)
+	line.ago = Brand(over, 12, C.head, "RIGHT")
+	line.ago:SetPoint("RIGHT", line, "RIGHT", -LINE.right, CELL.RIGHT_Y)
 	line.close = Close(line)
+	line.close:SetFrameLevel(over:GetFrameLevel() + 1)
 	line.close:SetPoint("RIGHT", line, "RIGHT", -LINE.close, 0)
 
 	line.Set, line.Tick, line.Light, line.Need = LineSet, LineTick, LineLight, LineNeed

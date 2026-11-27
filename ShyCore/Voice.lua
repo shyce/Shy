@@ -71,6 +71,8 @@ Shy.Voice = V
 core.keep.voice = true   -- ShyCoreDB.voice: the quest lines each character has heard, the account's
 
 local OTHER = "Spoken"   -- its global
+-- Never put forward to turn off: Shy plays its voices.
+if Shy.Others then Shy.Others.Beside(OTHER, "Shy") end
 local API = 1            -- the version of its API this was written for
 local PARTS = { "quests", "gossip" }
 local LOOK = 0.05        -- seconds between looks at a line playing: as often as its own captions look
@@ -504,13 +506,13 @@ end
 
 -- At home at the top of the screen's empty middle, under what runs along the top: what Shy's layout leaves
 -- open, and clear of your character and the bars. Under the top's column as it stands whole (Shy.Top.Plan:
--- every piece in its place, showing or not, so it is the same in play and in layout mode), and under anything
--- else across the middle up there (HUD.Room).
+-- every piece in its place, showing or not, so it is the same in play and in layout mode; none of it while the
+-- player has the column elsewhere), and under anything else across the middle up there (HUD.Room).
 local UNDER = 8   -- its gap under what runs along the top
 local function Home()
 	if not V.stand or HUD.IsPlaced(V.stand) then return end
 	local left, _, right, top = HUD.Room(V.stand)
-	if Shy.Top and Shy.Top.Plan then
+	if Shy.Top and Shy.Top.Plan and not Shy.Top.Moved() then
 		local foot = 0
 		for _, piece in ipairs(Shy.Top.Plan()) do
 			if piece.box ~= V.stand and not HUD.IsPlaced(piece.box) then foot = math.max(foot, piece.y + piece.height) end

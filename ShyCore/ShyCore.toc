@@ -3,7 +3,7 @@
 ## Notes: The look, layout and setup every ShyUI addon shares |cff888888/shy|r
 ## Author: Shyce Cream
 ## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffUI|r
-## Version: 5.2.14
+## Version: 5.2.16
 ## X-Date: 2026-11-26
 ## IconTexture: Interface\AddOns\ShyCore\Media\ShyCoreMarkColor
 ## SavedVariables: ShyCoreDB
@@ -42,6 +42,7 @@ LookAudit.lua
 Memory.lua
 Counters.lua
 HUD.lua
+Grid.lua
 Frames.lua
 Top.lua
 Notices.lua

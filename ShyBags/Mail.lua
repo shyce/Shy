@@ -107,14 +107,15 @@ local function Mine(name)
 	end
 end
 
--- Your other characters you can mail (this realm and side), for other addons: { name, full, class, level } each, by
--- name. name: what a letter is addressed to; full: as the character is called, with a surname where it has one.
+-- Every other character of yours you can mail (this server and side), for other addons: { name, full, class, level }
+-- each, the highest level first. full: as the character is called, with a surname where it has one.
 function T:Alts()
 	local me = Store.Me()
 	local out = {}
+	-- (Store.List is this server's already, by the server each GUID names: a realm's name may never have been kept.)
 	for _, entry in ipairs(Store.List()) do
 		local c = entry.char
-		if entry.guid ~= Store.Guid() and c.name and (not me or (c.realm == me.realm and c.faction == me.faction)) then
+		if entry.guid ~= Store.Guid() and c.name and (not me or not c.faction or c.faction == me.faction) then
 			out[#out + 1] = { name = c.name, full = Store.Name(c), class = c.class, level = c.level }
 		end
 	end

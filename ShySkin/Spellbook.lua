@@ -1603,7 +1603,7 @@ end
 local function PageSize(tab)
 	if tab == PlayerSpellsUtil.FrameTabs.SpellBook then
 		if Ours() then return fit.w, fit.h end
-	elseif tab == PlayerSpellsUtil.FrameTabs.ClassTalents then
+	elseif tab == PlayerSpellsUtil.FrameTabs.ClassTalents and Talents.Styled() then
 		-- The talents stand 4 over the window's foot and 23 under its top (the game's own anchors).
 		return Talents.Width() + 6, Talents.Height() + 27
 	end
@@ -1867,7 +1867,13 @@ local function Paint(m, kit)
 	if f.PortraitContainer and f.PortraitContainer.portrait then kit:Crop(f.PortraitContainer.portrait, unpack(ICON)) end
 	Shop.PutAway(f, f.MaximizeMinimizeButton)
 	if Ours() then PaintBook(kit, head) end
-	Talents.Paint(m, kit)
+	-- The talents: restyled for a window of ours, else the game's own with your build on it.
+	if Talents.Styled() then
+		Talents.Paint(m, kit)
+	elseif Talents.Painted() then
+		Talents.Clear(m)
+	end
+	if ns.TalentBuild then ns.TalentBuild.On(not Talents.Styled()) end
 	ns.AfterCombat("spells:sizers", function() Arm(M.on) end)
 	Size()
 end
@@ -1885,7 +1891,8 @@ local function Clear(m)
 	end
 	Shop.BringBack(Book())
 	Shop.BringBack(f)
-	Talents.Clear(m)
+	if Talents.Painted() then Talents.Clear(m) end
+	if ns.TalentBuild then ns.TalentBuild.On(false) end
 	ns.AfterCombat("spells:sizers", function() Arm(M.on) end)
 	GameSize()
 end
@@ -1893,17 +1900,22 @@ end
 M = ns.Module({
 	id = "spells",
 	title = "Spellbook and talents",
-	desc = "You get the Classic spellbook, two columns to a page, and a talent window with your three trees side by side.",
+	desc = "You get the Classic spellbook, two columns to a page, and your build marked on the talent window.",
 	group = "rebuilt",
 	words = "spells abilities",
 	Ready = function()
 		local f = PlayerSpellsFrame
 		return f ~= nil and f.SpellBookFrame ~= nil and f.TalentsFrame ~= nil
 	end,
-	-- Our own talent window takes the game's talent key and button from login, not when the game's window loads.
-	Switch = function(_, on)
-		if ns.TalentWindow then ns.TalentWindow.On(on) end
+	-- Our own talent window (unless you keep the game's) takes the game's talent key and button from login, not
+	-- when the game's window loads.
+	Switch = function(m, on)
+		if ns.TalentWindow then ns.TalentWindow.On(on and m.opt.gameTalents ~= true) end
 	end,
+	options = {
+		{ key = "gameTalents", label = "Game's talent window", default = false,
+			desc = "Your talents in the game's own window instead of ours, with your build's next talents numbered on it." },
+	},
 	Hook = Hook,
 	Paint = Paint,
 	Clear = Clear,

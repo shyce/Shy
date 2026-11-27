@@ -16,7 +16,8 @@ local Plan = ns.Plan
 -- row: a crate's; money: its column of gold; act: its button's.
 -- The columns, the same on every row: the crate, its name (name), its bundles from one place, the status (status: the
 -- headline over the detail), and Fill (act).
-local L = { row = 44, pad = 8, gap = 6, name = 176, status = 76, act = 58, actHeight = 22, between = 12 }
+local L = { row = 44, pad = 8, gap = 6, name = 176, status = 76, act = 58, actHeight = 22, between = 12,
+	pin = 20, pinIn = 2 }   -- (a crate's turn: the family's numbered pin on its picture's top left corner)
 local DOT = " \194\183 "
 
 local List = {}
@@ -46,13 +47,37 @@ local function Money(copper, at)
 end
 
 -- A secure button's attributes: kept while they say the same, so the button isn't set afresh each draw.
-local function Attrs(holder, kind, bag, slot, onBag, onSlot)
-	local key = ("%s %d %d %s %s"):format(kind, bag, slot, tostring(onBag), tostring(onSlot))
+-- crate and bundle: what the draw saw in those slots, checked again on the click.
+local function Attrs(holder, kind, crate, bag, slot, bundle, onBag, onSlot)
+	local key = ("%s %d %d %d %s %s %s"):format(kind, crate, bag, slot, tostring(bundle), tostring(onBag), tostring(onSlot))
 	if holder.attrsKey ~= key then
 		holder.attrsKey = key
-		holder.attrs = { type = "item", item = ("%d %d"):format(bag, slot), ["target-bag"] = onBag, ["target-slot"] = onSlot }
+		holder.attrs = { type = "item", item = ("%d %d"):format(bag, slot), ["target-bag"] = onBag, ["target-slot"] = onSlot,
+			crate = crate, bag = bag, slot = slot, bundle = bundle }
 	end
 	return holder.attrs
+end
+
+-- Whether a slot still holds that item. (One the game keeps secret passes: it can't be told.)
+local function Holds(bag, slot, item)
+	local id = C_Container.GetContainerItemID(bag, slot)
+	if issecretvalue(id) then return true end
+	return id == item
+end
+
+-- Bags can change between a draw and a click. A click on a slot that changed does nothing: the button
+-- is cleared and the bags are read again.
+function List.Guard(button)
+	button:HookScript("PreClick", function(self)
+		local attrs = self.attrs
+		if not attrs or InCombatLockdown() then return end
+		local onBag = attrs["target-bag"]
+		if Holds(attrs.bag, attrs.slot, attrs.crate)
+			and (not onBag or Holds(onBag, attrs["target-slot"], attrs.bundle)) then return end
+		self.attrs = nil
+		self:SetAttribute("type", nil)
+		Plan.Changed()
+	end)
 end
 
 -- An item's slot with a count on it and its tooltip under the mouse.
@@ -131,6 +156,7 @@ local function Row(list, fills)
 		act.text = Shop.Text(act, UI.NameFont(11), C.text)
 		act.text:SetPoint("CENTER")
 		UI.KeyPress(act, { tone = C.alert, words = act.text, sink = { act.text } })
+		List.Guard(act)
 		act:HookScript("PostClick", function(_, _, down)
 			if down then return ns.Cast.Pressed(row.crate) end
 			PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
@@ -216,7 +242,7 @@ local function FillUnread(row, at)
 	row.sub:SetText("Open it to see what it needs")
 	for _, b in ipairs(row.bundles) do b:Hide() end
 	Column(row, nil, nil, nil)
-	Act(row, "Open", Attrs(row, "read", at.bag, at.slot))
+	Act(row, "Open", Attrs(row, "read", at.item, at.bag, at.slot))
 end
 
 -- Under the name: the bundle used (lit in the strip), and where else you have some of it.
@@ -264,7 +290,7 @@ local function FillLabel(row, at)
 
 	if not pick.ready then return Act(row, nil) end
 	local bag, slot = Plan.Stack(pick.item)
-	Act(row, "Fill", bag and Attrs(row, "fill", at.bag, at.slot, bag, slot) or nil)
+	Act(row, "Fill", bag and Attrs(row, "fill", crate, at.bag, at.slot, pick.item, bag, slot) or nil)
 end
 
 function List.New(parent, fills)
@@ -300,6 +326,37 @@ function Meta:Draw(width, height)
 		row:Show()
 	end
 	for i = #entries + 1, #self.rows do self.rows[i]:Hide() end
+	-- Where you fill them, each crate's turn in the order Fill next takes them (the ones ready to fill, then the ones
+	-- to open): the family's numbered pin on its picture's corner, the next one lit in your color.
+	local turn = 0
+	for i = 1, #entries do
+		local row = self.rows[i]
+		row.turnAt = nil
+	end
+	if self.fills then
+		for pass = 1, 2 do
+			for i = 1, #entries do
+				local row = self.rows[i]
+				if row.next and (pass == 1) == (row.pick ~= nil) then
+					turn = turn + 1
+					row.turnAt = turn
+				end
+			end
+		end
+	end
+	for i = 1, #self.rows do
+		local row = self.rows[i]
+		local at = i <= #entries and row.turnAt or nil
+		if at and not row.turn then
+			row.turn = UI.NumberMark(row, L.pin)
+			row.turn:SetPoint("CENTER", row.icon, "TOPLEFT", L.pinIn, -L.pinIn)
+			row.turn:SetFrameLevel(row:GetFrameLevel() + 4)
+		end
+		if row.turn then
+			row.turn:SetShown(at ~= nil)
+			if at then row.turn:Set(at, at == 1) end
+		end
+	end
 	self.content:SetHeight(math.max(1, #entries * L.row))
 	self.scroll:Update()
 	self.empty:SetShown(#entries == 0)

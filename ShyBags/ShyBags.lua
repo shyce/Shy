@@ -18,8 +18,8 @@
 --                   { bag, slot, id, link, name, count, value = stack price in copper, junk }
 --   :MakeRoom(opts) opens the window with the cheapest lit and returns them. opts = { need = slots (1), why = text }.
 --                   Ends once `need` slots are free or the window closes; :MakeRoom(false) ends it.
---   :Alts()         your other characters you can mail (this realm and side): { name, full, class, level } each;
---                   name addresses a letter, full is name and surname
+--   :Alts()         every other character of yours you can mail (this server and side): { name, full, class, level }
+--                   each, the highest level first; full is name and surname, which a letter is addressed to
 --   :Sort(order, reversed)   shows the bags by "type" (what to keep, then what quests need, then what can go;
 --                   within each by kind, then name), "worth" (vendor price, cheapest first),
 --                   "age" (newest first) or "bags"; reversed: from the last slot back with the empty slots

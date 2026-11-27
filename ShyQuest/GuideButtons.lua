@@ -1,5 +1,5 @@
 -- Secure buttons for the live guide step, in a strip under the card's lead:
---   a tile per item, spell or macro (view.uses)
+--   a tile per item, spell or macro (view.uses), stacked down the rail under the lead's dial
 --   a chip per creature to fight or to find (view.targets). It targets and raid-marks the creature.
 --     A right click marks it and, if one is there, pings it for your group (Ping).
 -- Someone to talk to has no chip: the card names them and their nameplate is marked.
@@ -7,11 +7,16 @@
 --
 -- The strip holds secure children, so it can't be the card's child (the card shows, hides, moves and
 -- resizes in combat). It is its own frame over the room the card reserves (ns.SetCardDock), placed
--- by screen coordinates out of combat (ns.CardBox) and shown by a state driver.
+-- by screen coordinates out of combat (ns.CardBox) and shown by a state driver. The lead scrolls in
+-- the card's body, so the strip stands in a window over the stretch the body shows, which cuts off
+-- what has scrolled out of it, and follows the body as it scrolls (Follow). In a fight it can't, and
+-- the card holds the body still while the strip is up (Up).
 --
 -- A creature the leading step names for one task (view.targets' `of`: the kills attached to an
 -- objective) has its chip under that task's count on the card, not in the block under the head.
--- The count says what to get and the chips under it say who from, each said once. The card says
+-- The count says what to get and the chips under it say who from, each said once. Where one creature
+-- alone is the count's, its chip is the count's line itself: bare over it, its mark before the words,
+-- the line a click to target it (ns.CardSpans says where the line stands and the mark goes). The card says
 -- which counts it shows (ns.CardClaims) and where the room under each starts (ns.CardSlots). The
 -- strip says how much room each group takes (ns.SetCardDock's rooms). Chips are only ever moved out
 -- of combat. In a fight the card lays its lines round where they are (Stood, Extent).
@@ -39,13 +44,14 @@ BINDING_HEADER_SHYQUEST = "ShyQuest"
 _G["BINDING_NAME_CLICK ShyQuestTarget1:LeftButton"] = "Target guide step NPC or mob"
 _G["BINDING_NAME_CLICK ShyQuestUse1:LeftButton"] = "Use guide step item or spell"
 
-local box
+local box, window                           -- the strip, and the window over the card's body it stands in
 local tiles, lines = {}, {}
 local uses, targets = {}, {}                 -- what the strip shows now
 local markers = {}                           -- raid marker per target name
 local awaited = {}                           -- the live steps' targets, shown or not: whose sighting is told
 local applied                                -- signature the buttons were last set up for
 local tall = 0                               -- height taken on the card, under its head
+local gutter = 0                             -- how far under the head the tiles under the dial reach
 local groups = {}                            -- target name -> the task (G.TaskKey) whose count its chip stands under
 local rooms, roomsSaid                       -- key -> { tall, names }: what each group takes there; and as one text
 local stood, stoodSlots = {}, nil            -- key -> { at, tall }: where each group was last stood; the card's slots then
@@ -285,7 +291,7 @@ end
 local function CreateTile(i)
 	local tile = CreateFrame("Button", "ShyQuestUse" .. i, box, "SecureActionButtonTemplate")
 	tile:SetSize(TILE, TILE)
-	tile:SetPoint("TOPLEFT", LEFT + (i - 1) * (TILE + 4), 0)
+	-- (Down the rail under the dial, one under the other: Apply places it.)
 	tile:RegisterForClicks("AnyUp", "AnyDown")
 	tile:SetScript("PostClick", function(self, _, down)
 		if not down then Destroy(self) end
@@ -352,6 +358,20 @@ local function CreateLine(i)
 	return line
 end
 
+-- A chip bare over its count's line, or a chip again: no plate and no name of its own (the line says it), its
+-- mark before the line's words (Stand puts it there). Out of combat only.
+local function Bare(line, bare)
+	if line.bare == bare then return end
+	line.bare = bare
+	line.shyBg:SetShown(not bare)
+	for _, edge in ipairs(line.shyEdges) do edge:SetShown(not bare) end
+	line.name:SetShown(not bare)
+	if not bare then
+		line.mark:ClearAllPoints()
+		line.mark:SetPoint("LEFT", 4, 0)
+	end
+end
+
 -- Counts and glows only: safe in combat.
 local function Freshen()
 	local now = GetTime()
@@ -382,34 +402,59 @@ local function Shown()
 	return Setting("buttons") and (#uses + #targets) > 0 and (not ns.CardLeads or ns.CardLeads())
 end
 
--- Places the strip under the card's heading, out of combat only. Anchored to UIParent by
--- coordinates: anchoring a secure frame to the card would make the card protected.
+-- Puts the window over the stretch of the card its body shows, and the strip under the lead's head as the body is
+-- scrolled now; false where the card has no body showing. Out of combat only. Anchored to UIParent by coordinates:
+-- anchoring a secure frame to the card would make the card protected.
+local function Place(host)
+	local left, top = host:GetLeft(), host:GetTop()
+	local from, high = ns.CardView()
+	stoodLeft, stoodTop, stoodHead = left, top, ns.CARD_HEAD
+	if not (left and top and from) then return false end
+	window:SetScale(host:GetScale())
+	window:SetFrameLevel(host:GetFrameLevel() + 20)
+	window:ClearAllPoints()
+	window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top - from)
+	window:SetSize(ns.CardWidth(), math.max(1, high))
+	box:SetFrameLevel(window:GetFrameLevel() + 1)
+	box:ClearAllPoints()
+	box:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top - ns.CARD_HEAD)
+	return true
+end
+
+-- Places the strip under the card's heading, out of combat only.
 function Stand()
 	if not box or InCombatLockdown() then return end
 	local host, on = ns.CardBox()
 	local show = Shown() and host ~= nil and on
-	-- The card makes its room first: the block under its head, and under each count what that count's chips
-	-- take. (Where that is news to it, it lays itself out again and has the strip stood then: Card.lua's Fill.)
-	ns.SetCardDock(show and tall or 0, show and rooms or nil, show and roomsSaid or nil)
-	local left, top = host and host:GetLeft(), host and host:GetTop()
-	stoodLeft, stoodTop, stoodHead = left, top, ns.CARD_HEAD
-	if show and left and top then
-		box:SetScale(host:GetScale())
-		box:SetFrameLevel(host:GetFrameLevel() + 20)
-		box:ClearAllPoints()
-		box:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top - ns.CARD_HEAD)
+	-- The card makes its room first: the block under its head, under each count what that count's chips take, and
+	-- the tiles' stack under its dial. (Where that is news to it, it lays itself out again and has the strip stood
+	-- then: Card.lua's Fill.)
+	ns.SetCardDock(show and tall or 0, show and rooms or nil, show and roomsSaid or nil, show and gutter or 0)
+	if show and Place(host) then
 		box:SetAlpha(1)
 	else
+		stoodLeft, stoodTop, stoodHead = host and host:GetLeft(), host and host:GetTop(), ns.CARD_HEAD
 		show = false
 	end
 	-- Each group under its count, where the card says that count's room starts.
 	local slots = ns.CardSlots()
+	local spans = ns.CardSpans and ns.CardSpans()
 	stood, stoodSlots = {}, slots
 	for _, line in ipairs(lines) do
 		if line.target and line.group then
 			local at = show and slots and slots[line.group]
+			-- (Bare over its count: as tall as the count's line, its mark where the card left room for it.)
+			local span = line.over and at and spans and spans[line.group]
+			if line.over and not span then at = nil end
 			line:SetShown(at ~= nil and at ~= false)
-			if at then
+			if span then
+				stood[line.group] = { at = at, tall = span.tall }
+				line:ClearAllPoints()
+				line:SetPoint("TOPLEFT", LEFT, -at)
+				line:SetSize(ns.CardWidth() - LEFT - PAD, math.max(1, span.tall))
+				line.mark:ClearAllPoints()
+				line.mark:SetPoint("TOPLEFT", span.mark, 0)
+			elseif at then
 				stood[line.group] = { at = at, tall = rooms[line.group].tall }
 				line:ClearAllPoints()
 				line:SetPoint("TOPLEFT", LEFT + line.x, -(at + UNDER + line.y))
@@ -437,10 +482,16 @@ local function Apply()
 	if signature ~= applied then
 		applied = signature
 		local marking = Setting("marks") and not IsInGroup()
+		-- The tiles stand down the rail under the lead's dial, one under the other, in the gutter left of its lines:
+		-- what you use stays beside what it is for, and takes no line of its own.
+		local rail = ns.CARD_GUTTER or { x = LEFT / 2, y = 0 }
+		gutter = #uses > 0 and rail.y + #uses * (TILE + 4) - 4 or 0
 		for i, tile in ipairs(tiles) do
 			local use = uses[i]
 			tile.use = use
 			tile:SetShown(use ~= nil)
+			tile:ClearAllPoints()
+			tile:SetPoint("TOPLEFT", rail.x - TILE / 2, -(rail.y + (i - 1) * (TILE + 4)))
 			if use then
 				tile.icon:SetDesaturated(use.kind == "destroy")
 				tile.sure = nil
@@ -464,13 +515,21 @@ local function Apply()
 			end
 		end
 		-- Chips flow left to right and wrap: those of a count on the card in a flow of their own under it (Stand
-		-- puts them there), the rest in the block under the tiles.
+		-- puts them there), the rest in the block under the lead's head.
 		local inner = ns.CardWidth() - LEFT - PAD
-		local block = { x = 0, y = #uses > 0 and TILE + GAP or 0 }
+		local block = { x = 0, y = 0 }
 		local flows, said = {}, {}
 		rooms = {}
 		-- A flow whose chips don't fit on one line with their names whole says every name short (Label), so more
 		-- of them stand side by side: how wide each flow is whole.
+		-- A count got from one creature alone is that creature's chip itself: the chip lies bare over the count's
+		-- line, its mark before the words (the card leaves room for it), and a click on the line targets it. No
+		-- line of its own. A count shared by several keeps a chip each under it, each naming its creature.
+		local alone = {}
+		for i = 1, #lines do
+			local key = targets[i] and groups[targets[i].name]
+			if key then alone[key] = alone[key] == nil end
+		end
 		local whole = {}
 		for i, line in ipairs(lines) do
 			local target = targets[i]
@@ -508,16 +567,27 @@ local function Apply()
 					line.name:SetWidth(inner - CHIP_TEXT - CHIP_END)
 				end
 				local key = line.group
+				line.over = key ~= nil and alone[key] == true
+				Bare(line, line.over)
 				local flow = block
-				if key then
+				if line.over then
+					-- (Sized and placed over its count by Stand, as the card says it stands: ns.CardSpans.)
+					rooms[key] = { tall = 0, over = true, names = { [target.name:lower()] = true } }
+				elseif key then
 					flow = flows[key] or { x = 0, y = 0 }
 					flows[key] = flow
 				end
-				if flow.x > 0 and flow.x + wide > inner then flow.x, flow.y = 0, flow.y + LINE end
-				line:SetWidth(wide)
-				line.x, line.y = flow.x, flow.y
-				flow.x, flow.used = flow.x + wide + GAP, true
-				if key then
+				if line.over then
+					line.x, line.y = 0, 0
+				else
+					if flow.x > 0 and flow.x + wide > inner then flow.x, flow.y = 0, flow.y + LINE end
+					line:SetSize(wide, LINE - 2)
+					line.x, line.y = flow.x, flow.y
+					flow.x, flow.used = flow.x + wide + GAP, true
+				end
+				if line.over then
+					-- (Its room is the count's own line.)
+				elseif key then
 					local room = rooms[key] or { names = {} }
 					rooms[key] = room
 					room.names[target.name:lower()] = true
@@ -530,7 +600,7 @@ local function Apply()
 		end
 		local y = block.y + (block.used and LINE or 0)
 		tall = y > 0 and y + 2 or 0
-		for key, room in pairs(rooms) do said[#said + 1] = key .. "=" .. room.tall end
+		for key, room in pairs(rooms) do said[#said + 1] = key .. "=" .. room.tall .. (room.over and "o" or "") end
 		table.sort(said)
 		roomsSaid = signature .. "||" .. table.concat(said, "|")
 		box:SetSize(ns.CardWidth(), math.max(1, tall))
@@ -570,7 +640,12 @@ end
 
 -- No background and no mouse on the strip itself, so the card takes clicks between the buttons.
 local function Create()
-	box = CreateFrame("Frame", "ShyQuestStepButtons", UIParent)
+	-- (The window cuts off, out of sight and out of reach, what has scrolled out of the card's body.)
+	window = CreateFrame("Frame", nil, UIParent)
+	window:SetFrameStrata("MEDIUM")
+	window:SetClipsChildren(true)
+	window:SetSize(ns.CardWidth(), 1)
+	box = CreateFrame("Frame", "ShyQuestStepButtons", window)
 	box:SetSize(ns.CardWidth(), 1)
 	box:SetFrameStrata("MEDIUM")
 	box:Hide()
@@ -653,6 +728,14 @@ ns.GuideButtons = {
 	-- (After every fill of the card: which counts it shows may have changed, and where they are. The card is
 	-- told of a new route before this file is: what the step names is gathered here, not waited for.)
 	Stand = function() Update() end,
+	-- The card's body scrolled: the strip goes with it (out of a fight; in one, the card holds the body still).
+	Follow = function()
+		if not box or InCombatLockdown() or not Shown() then return end
+		local host, on = ns.CardBox()
+		if host and on then Place(host) end
+	end,
+	-- Whether the strip is up on the card.
+	Up = function() return box ~= nil and Shown() and box.rule ~= nil and box.rule ~= "hide" end,
 	-- For the card, laid in a fight: where each group of chips stands under the strip's top, by its task, and
 	-- how far down the lowest thing in the strip reaches.
 	Stood = function()

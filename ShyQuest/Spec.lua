@@ -14,7 +14,8 @@
 --     secure click on TalentMicroButton: opening it from addon code taints it and the spellbook
 --     sharing its frame, and spells clicked there are then blocked. In a fight the row can't.
 --   In that window (or ShySkin's own, while it stands in for it) the build's next talents wear the map's
---     numbered pins, the next one a white ring, and their tooltips say so. They are frames of ours standing
+--     numbered pins, the next one a white ring, and their tooltips say so. A talent you hold past the build wears a
+--     crimson ring (Shy.Build.OverRing), and its tooltip says so too. They are frames of ours standing
 --     on the talent buttons: the game's own glow and search mark are fields written on its buttons, which
 --     addon code must not do.
 
@@ -36,6 +37,7 @@ local STRAYED = Build and Build.STRAYED or 5   -- more points than this outside 
 local AHEAD = Build and Build.AHEAD or 3       -- talents listed after the next one
 local PIN = 20               -- a numbered pin on a talent, standing on the talent's top left corner
 local RING = 5               -- how far the next talent's ring stands out from it
+local OVER = 3               -- how far a crimson ring stands out from a talent past the build
 local PLACE = { "next", "2nd", "3rd", "4th" }    -- a marked talent's turn, in its tooltip (AHEAD + 1 of them)
 
 local ready = false          -- spell or trait data has loaded
@@ -126,6 +128,18 @@ local function ButtonOf(own, window, node)
 	return window and window:GetTalentButtonByNodeID(node) or nil
 end
 
+-- A crimson ring for the nth talent past the build.
+local overs = {}
+local function Over(n)
+	local ring = overs[n]
+	if ring then return ring end
+	ring = CreateFrame("Frame", nil, UIParent)
+	ring:Hide()
+	ring.edge = Build.OverRing(ring, OVER)
+	overs[n] = ring
+	return ring
+end
+
 -- A numbered pin on a talent; the first also has the ring round the talent, which breathes while
 -- there is a point to spend.
 local function Mark(index)
@@ -174,8 +188,12 @@ local function Lay()
 		if marks[index] then marks[index]:Hide() end
 	end
 	if flag then flag:Hide() end
-	local own = Skinned()
-	local window = not own and Window() or nil
+	for _, ring in pairs(overs) do ring:Hide() end
+	-- ShySkin marks your build itself: on its own window, and on the game's while it keeps that one the game's own.
+	local skin = Shy.addons.Skin
+	if Skinned() or (skin and skin.owns and skin.owns.talentMarks) then return end
+	local own = nil
+	local window = Window()
 	local now = (own or window) and T.db.spec.on and Spec.Now() or nil
 	if not now then return end
 	if own and own.Config() ~= now.config then return end
@@ -192,6 +210,19 @@ local function Lay()
 		end
 	end
 	if now.strayed then return end
+	local n = 0
+	for node in pairs(now.over or {}) do
+		local button = ButtonOf(own, window, node)
+		if button then
+			n = n + 1
+			local ring = Over(n)
+			ring:SetParent(button)
+			ring:SetFrameLevel(button:GetFrameLevel() + 4)
+			ring:ClearAllPoints()
+			ring:SetAllPoints(button)
+			ring:Show()
+		end
+	end
 	-- A talent the order comes back to wears the number of its first turn only.
 	local worn = {}
 	for index, talent in ipairs(now.plan) do
@@ -225,9 +256,19 @@ end
 
 -- A marked talent's tooltip says its turn.
 local function Tell(button, tip)
+	local skin = Shy.addons.Skin
+	if skin and skin.owns and skin.owns.talentMarks then return end
 	local window = Window()
 	local now = window and T.db.spec.on and Spec.Now() or nil
 	if not now or not Ours(window, now) then return end
+	local node = not now.strayed and button.GetNodeID and button:GetNodeID()
+	if node and now.over and now.over[node] then
+		for _, line in ipairs(Build.OverSays(now.name, now.want[node] or 0, (now.want[node] or 0) + now.over[node])) do
+			tip:AddLine(line.text, line.color[1], line.color[2], line.color[3], true)
+		end
+		tip:Show()
+		return
+	end
 	local index, talent = Marked(window, now, button)
 	if not index then return end
 	local line = "Leveling build: " .. PLACE[index]
@@ -251,6 +292,7 @@ EventRegistry:RegisterCallback("TalentFrameBase.ButtonsUpdated", Dress, Spec)
 EventRegistry:RegisterCallback("PlayerSpellsFrame.TalentTab.Show", Dress, Spec)
 EventRegistry:RegisterCallback("TalentDisplay.TooltipCreated", Guarded(Tell), Spec)
 Shy:On("SHY_TALENTS", Dress)
+Shy:On("SHY_SKIN_OWNS", function(piece) if piece == "talentMarks" then Dress() end end)
 
 -- What was found of the talent window, as text: for a look when a talent goes unmarked.
 function Spec.Report()

@@ -18,14 +18,21 @@ ns.Keys = K
 
 local SHOW = "#showtooltip"
 
--- Each build's own talent where Destruction's Shadowburn is.
+-- Each build's own talent where Destruction's Shadowburn is. Affliction's Wrack is the channel it presses every
+-- pull, after its dots: it takes R.
 local SHADOWBURN = { name = "Shadowburn", what = "Shadowburn", SHOW, "/cast {17877}" }
-local WRACK = { name = "Wrack", what = "Wrack", SHOW, "/cast {1316697}" }
+local WRACK = { name = "Wrack", key = "R", asdf = "R", what = "Wrack", SHOW, "/cast {1316697}" }
 local LINK = { name = "Soul Link", what = "Soul Link, kept on while your demon is out", SHOW, "/cast {19028}" }
--- Only Destruction learns Incinerate: the other builds have Shadow Bolt on R for good, and Destruction keeps it
--- beside, for the Shadow damage its Conflagrate raises.
+-- Demonology and the PvP build have Shadow Bolt on R for good. Affliction's stands on R until Wrack comes, then
+-- goes to Shift + R, for when Nightfall lights it.
 local SHADOW_BOLT = { name = "Bolt", role = "bolt", what = "Shadow Bolt", SHOW, "/cast {686}" }
-local SHADOW = { name = "Shadow Bolt", what = "Shadow Bolt, once Incinerate has R", SHOW, "/cast {686}" }
+local NIGHTFALL_BOLT = { name = "Bolt", role = "bolt", key = "SHIFT-R", asdf = "SHIFT-R", early = "R", asdfEarly = "R",
+	what = "Shadow Bolt. On Shift + R once Wrack has R", SHOW, "/cast {686}" }
+-- Only Destruction learns Incinerate. It takes R, and Shadow Bolt goes beside it on Q, for the Shadow damage
+-- Conflagrate raises. Corruption, seldom cast there, stands on Q until then and goes home behind Shift.
+local SHADOW_Q = { name = "Shadow Bolt", key = "Q", asdf = "Q", what = "Shadow Bolt, once Incinerate has R", SHOW, "/cast {686}" }
+local CORRUPTION_LATE = { name = "Corruption", key = "SHIFT-Q", asdf = "SHIFT-T", early = "Q", asdfEarly = "Q",
+	what = "Corruption. On Shift once Shadow Bolt has Q", SHOW, "/cast {172}" }
 -- E is each build's second spell: Destruction's Immolate, Affliction's Siphon Life, Demonology's Searing Pain (its
 -- Demonic Brand). Where E's own comes later, Immolate stands on E until then and goes home to Shift + Q.
 local SIPHON = { name = "Siphon Life", what = "Siphon Life", SHOW, "/cast {18265}" }
@@ -51,11 +58,11 @@ local SUCCUBUS = { name = "Succubus", what = "Summon Succubus, with Fel Dominati
 -- ASDF, are over the finger that holds forward.
 local JOBS = {
 	{ name = "Corruption", key = "Q", asdf = "Q", what = "Corruption",
-		SHOW, "/cast {172}" },
+		SHOW, "/cast {172}", by = { destro = CORRUPTION_LATE } },
 	{ name = "Immolate", key = "E", asdf = "E", what = "Immolate",
 		SHOW, "/cast {348}", by = { aff = SIPHON, demopvp = SIPHON, demo = SEARING } },
 	{ name = "Bolt", role = "bolt", key = "R", asdf = "R", what = "Shadow Bolt. Incinerate if you have it",
-		SHOW, "/cast [known:{412758}] {412758}; {686}", by = { aff = SHADOW_BOLT, demo = SHADOW_BOLT, demopvp = SHADOW_BOLT } },
+		SHOW, "/cast [known:{412758}] {412758}; {686}", by = { aff = NIGHTFALL_BOLT, demo = SHADOW_BOLT, demopvp = SHADOW_BOLT } },
 	{ name = "Rain", key = "T", asdf = "T", what = "Rain of Fire",
 		SHOW, "/cast {5740}" },
 	-- Until Death Coil, your Fear is what you press in a hurry: it stands beside the index finger (before the
@@ -104,9 +111,9 @@ local JOBS = {
 		"#showtooltip [known:{691}] {691}; {712}", "/cast {18708}", "/cast [known:{691}] {691}; {712}", by = { demopvp = SUCCUBUS } },
 	-- With Shift: each key's rarer kin. Immolate stands on E until E's own spell comes. With ASDF the little
 	-- finger holds Shift and Q is its own key, so Shift + Q keeps only what you seldom press, standing (Hellfire),
-	-- and this job takes Shift + T: Destruction's Shadow Bolt is pressed every fight.
+	-- and this job takes Shift + T. Destruction has its Shadow Bolt here instead, on Q.
 	{ name = "Searing Pain", key = "SHIFT-Q", asdf = "SHIFT-T", early = "E", asdfEarly = "E", what = "Searing Pain",
-		SHOW, "/cast {5676}", by = { aff = IMMOLATE, demo = IMMOLATE, demopvp = IMMOLATE, destro = SHADOW } },
+		SHOW, "/cast {5676}", by = { aff = IMMOLATE, demo = IMMOLATE, demopvp = IMMOLATE, destro = SHADOW_Q } },
 	{ name = "Burn", key = "SHIFT-E", asdf = "SHIFT-E", what = "Conflagrate if you have it, otherwise Soul Fire",
 		SHOW, "/cast [known:{1293817}] {1293817}; {6353}", by = { aff = false, demo = false, demopvp = false } },
 	{ name = "Talent", key = "SHIFT-R", asdf = "SHIFT-R", what = "Shadowburn, Soul Link or Wrack: the talent you have",

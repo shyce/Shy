@@ -11,8 +11,9 @@
 --   takes what it holds.
 --   a letter: its words on a page inked to read in every theme, or on its own stationery laid to cover the page; an
 --   auction's account of the sale; what it holds as slots to click.
---   a new letter: to whom (your other characters a click away, from ShyBags), the subject, the words on a page, what you
---   attach and the gold you send or ask for.
+--   a new letter: to whom, the subject, the words on a page, what you attach and the gold you send or ask for. The To
+--   field offers names as you type: the ones this character sends to most, then every character of yours on this
+--   server and side (from ShyBags), then your friends, guild and group as the game knows them.
 -- The foot is a hover's foot: one filled button, the page's answer (Take all, Pay, Reply, Send) at its right end, the
 -- others quiet words beside it, and what is under way at its left.
 --
@@ -39,7 +40,9 @@ local L = {
 	pill = 18, pillGap = 6, segW = 112, segH = 22,
 	row = 42, rowGap = 2, rowSlot = Slot.SIZES.compact, rowPin = 12,   -- (a row's pin: the quest's, on its picture's corner)
 	inset = 14, feather = 22, text = 13, page = 120,   -- a page's inset, its feather, its words' size and least height
-	field = 24, fieldGap = 8, chip = 20, chipRows = 2,
+	field = 24, fieldGap = 8,
+	most = 6, kept = 24,                   -- names you send to: offered first, kept for each character
+	offered = 6,                           -- the game's names (friends, guild, group) offered at most
 	slot = Slot.SIZES.medium, slotGap = 6, held = Slot.SIZES.bag, -- a slot you fill, one a letter holds
 	coinLeft = 4, coinRight = 16, caret = 3, -- a coin box's insets (its coin sits in the right one) and room for the cursor
 	pace = 0.15,                           -- between two takes (the game's own pace)
@@ -59,11 +62,15 @@ local WORDS = {
 	gold = "Send gold", ask = "C.O.D.", postage = "Postage %s", needs = "Needs a name and a subject", sending = "Sending",
 	sold = "Sold: %s", bought = "Bought: %s", by = "To %s", from = "From %s", price = "Sale price", deposit = "Deposit",
 	cut = "Auction house cut", got = "You got", paid = "You paid", pending = "Gold on its way", attached = "Attached",
+	often = "You send to", yours = "Your characters", known = "Friends and guild", times = "%d sent",
+	poor = "Not enough gold for this and the postage",
+	-- The game's names, by why it knows them (Enum.AutoCompletePriority's).
+	why = { Friend = "Friend", Guild = "Guild", InGroup = "Group", Interacted = "Whispered" },
 }
 local TONE = { good = C.good, bad = C.bad, alert = C.alert, hot = C.hot }
 
 local M              -- the module
-local own = { rows = {}, pills = {}, slots = {}, sends = {}, chips = {} }
+local own = { rows = {}, pills = {}, slots = {}, sends = {} }
 local page = "inbox" -- "inbox" or "send"
 local letter         -- the open letter's index, or nil
 local mail = {}      -- the inbox read: one record a letter
@@ -330,20 +337,144 @@ local function CanSend()
 end
 
 local function Fresh()
-	draft.to, draft.subject, draft.body, draft.cod, draft.reply, draft.busy, draft.named = "", "", "", false, nil, nil, nil
+	draft.to, draft.subject, draft.body, draft.cod, draft.reply, draft.busy, draft.named, draft.sent = "", "", "", false, nil, nil, nil, nil
 	for _, box in ipairs(own.coins) do box:SetText("") end
 	own.bodyBox:SetText("")
+end
+
+-- Whom a letter can go to
+
+local function Alts()
+	local bags = Shy.addons.Bags
+	return (bags and bags.Alts) and bags:Alts() or {}
+end
+
+-- One of yours by what was written: its name alone, as it is called, or its address.
+local function Alt(to)
+	to = strtrim(to):lower()
+	if to == "" then return nil end
+	for _, alt in ipairs(Alts()) do
+		if alt.name:lower() == to or alt.full:lower() == to then return alt end
+	end
 end
 
 -- Who a letter goes to: the game wants a name and its surname, so one of yours written by name alone gets its surname;
 -- anyone else as written.
 local function Address(to)
-	to = strtrim(to)
-	local bags = Shy.addons.Bags
-	for _, alt in ipairs((bags and bags.Alts) and bags:Alts() or {}) do
-		if alt.full and alt.name:lower() == to:lower() then return alt.full end
+	local alt = Alt(to)
+	return alt and alt.full or strtrim(to)
+end
+
+-- The names this character sends to: [lowered] = { to, n, at }. Kept for the account, under the character.
+local function Sent()
+	local guid = UnitGUID("player")
+	if not guid or issecretvalue(guid) then return nil end
+	local all = ns.T.db.sent
+	all[guid] = all[guid] or {}
+	return all[guid]
+end
+
+-- The ones sent to most, then the latest. Only the L.kept best are kept.
+local function Often()
+	local list = {}
+	for _, entry in pairs(Sent() or {}) do list[#list + 1] = entry end
+	table.sort(list, function(a, b)
+		if a.n ~= b.n then return a.n > b.n end
+		if a.at ~= b.at then return a.at > b.at end
+		return a.to < b.to
+	end)
+	return list
+end
+
+local function Remember(to)
+	local sent = Sent()
+	if not sent or to == "" then return end
+	local key = to:lower()
+	local entry = sent[key] or { to = to, n = 0 }
+	entry.to, entry.n, entry.at = to, entry.n + 1, time()
+	sent[key] = entry
+	local list = Often()
+	for i = L.kept + 1, #list do sent[list[i].to:lower()] = nil end
+end
+
+-- Whether a name answers what is typed: from its start, or from the start of its surname or realm.
+local function Answers(name, typed)
+	if typed == "" then return true end
+	name = name:lower()
+	if name:sub(1, #typed) == typed then return true end
+	return name:find("[%s%-]" .. typed:gsub("%p", "%%%0")) ~= nil
+end
+
+local function Colored(class)
+	local color = class and RAID_CLASS_COLORS[class]
+	return color and { color.r, color.g, color.b } or nil
+end
+
+-- The To field's list for what is typed: whom this character sends to most, every character of yours on this server,
+-- then the game's names (friends, guild, group, whom you whispered). Each name once.
+local function Offer(typed)
+	typed = strtrim(typed or ""):lower()
+	local items, seen = {}, {}
+	local function Add(value, row)
+		local key = value:lower()
+		if seen[key] then return false end
+		seen[key] = true
+		row.value, row.text = value, row.text or value
+		items[#items + 1] = row
+		return true
 	end
-	return to
+	local function Heading(words, at)
+		if #items > at then table.insert(items, at + 1, { heading = words }) end
+	end
+
+	local alts = Alts()
+	local start, shown = #items, 0
+	for _, entry in ipairs(Often()) do
+		if shown >= L.most then break end
+		if Answers(entry.to, typed) then
+			local alt = Alt(entry.to)
+			if Add(alt and alt.full or entry.to, {
+				color = alt and Colored(alt.class), detail = WORDS.times:format(entry.n) }) then
+				shown = shown + 1
+			end
+		end
+	end
+	Heading(WORDS.often, start)
+
+	start = #items
+	for _, alt in ipairs(alts) do
+		if Answers(alt.full, typed) then
+			Add(alt.full, { color = Colored(alt.class), detail = alt.level and tostring(alt.level) or nil })
+		end
+	end
+	Heading(WORDS.yours, start)
+
+	-- The game's, only for something typed (it offers nothing for an empty name).
+	local known = AUTOCOMPLETE_LIST and AUTOCOMPLETE_LIST.MAIL
+	if typed ~= "" and known and C_AutoComplete then
+		start = #items
+		local found = C_AutoComplete.GetAutoCompleteResults(typed, L.offered + #items, #typed, true, known.include, known.exclude)
+		local why = {}
+		for key, value in pairs(WORDS.why) do
+			local at = Enum.AutoCompletePriority[key]
+			if at then why[at] = value end
+		end
+		shown = 0
+		for _, result in ipairs(found or {}) do
+			local name = result.name
+			if shown < L.offered and type(name) == "string" and not issecretvalue(name) and name ~= ""
+				and not Alt(name) and Add(name, { detail = why[result.priority] }) then
+				shown = shown + 1
+			end
+		end
+		Heading(WORDS.known, start)
+	end
+	return items
+end
+
+-- What a letter costs you: the gold you send with it and the postage.
+local function Cost()
+	return (draft.cod and 0 or Copper()) + GetSendMailPrice()
 end
 
 local function Send()
@@ -360,7 +491,8 @@ local function Send()
 		end
 	end
 	draft.busy = true
-	SendMail(Address(draft.to), draft.subject, draft.body, draft.reply)
+	draft.sent = Address(draft.to)
+	SendMail(draft.sent, draft.subject, draft.body, draft.reply)
 	Stale()
 end
 
@@ -509,7 +641,14 @@ local function BuildSend(box)
 	own.sendArea = area
 	local sheet = area.content
 
-	own.to = Field(sheet, "to", WORDS.to, 77, function() own.subject.box:SetFocus() end)
+	-- To: the names you might mean, as you type.
+	local function Next() own.subject.box:SetFocus() end
+	own.to = UI.Typeahead(sheet, function() return draft.to end, function(text)
+		draft.to = text
+		Stale()
+	end, { placeholder = function() return WORDS.to end, maxLetters = 77, list = Offer, picked = Next, tab = Next })
+	own.to:SetHeight(L.field)
+	own.to.box:SetFontObject(UI.TextFont(12))
 	own.to:SetPoint("TOPLEFT", L.inset, -L.inset)
 	own.to:SetPoint("RIGHT", sheet, "RIGHT", -L.inset, 0)
 	own.subject = Field(sheet, "subject", WORDS.subject, 64, function() own.bodyBox:SetFocus() end)
@@ -785,7 +924,7 @@ local function Pills(list)
 		local wide = math.ceil(pill.text:GetStringWidth() + 16)
 		if x + wide > room then break end
 		shown = shown + 1
-		local tone = TONE[fact.tone]
+		local tone = TONE[fact.tone] or (fact.color and { fact.color[1], fact.color[2], fact.color[3], 1 })
 		UI.Paint(pill.fill, tone or C.text, tone and 0.16 or 0.07)
 		UI.Paint(pill.edge, tone or C.dim, 0.9)
 		UI.Ink(pill.text, tone or C.text)
@@ -806,8 +945,9 @@ local function DrawBand()
 	if page == "send" then
 		own.icon:SetTexture("Interface\\Icons\\INV_Letter_15")
 		own.title:SetText(draft.reply and WORDS.reply or WORDS.new)
-		local to = Address(draft.to)
-		if to ~= "" then facts[#facts + 1] = { text = WORDS.by:format(to) } end
+		local alt = Alt(draft.to)
+		local to = alt and alt.full or strtrim(draft.to)
+		if to ~= "" then facts[#facts + 1] = { text = WORDS.by:format(to), color = alt and Colored(alt.class) } end
 		facts[#facts + 1] = { text = WORDS.room:format(Room()) }
 	elseif m and own.split ~= true then
 		own.icon:SetTexture(m.package or m.stationery)
@@ -989,41 +1129,7 @@ local function DrawSend(width, height)
 	own.subject:Refresh()
 	if own.bodyBox:GetText() ~= draft.body then own.bodyBox:SetText(draft.body) end
 	own.bodyBox.hint:SetShown(draft.body == "")
-	local y = L.inset + L.field + 6
-
-	-- Your other characters, a click away.
-	local bags = Shy.addons.Bags
-	local alts = (bags and bags.Alts) and bags:Alts() or {}
-	-- Each by name and surname (the letter goes to the name), wrapping onto a second row.
-	local x, shown, line = L.inset, 0, 0
-	for _, alt in ipairs(alts) do
-		local chip = own.chips[shown + 1]
-		if not chip then
-			chip = Shop.Chip(sheet, "", function(self)
-				draft.to = self.full
-				own.to:Refresh()
-				own.subject.box:SetFocus()
-				Stale()
-			end)
-			own.chips[shown + 1] = chip
-		end
-		chip:Say(alt.full or alt.name)
-		if x > L.inset and x + chip:GetWidth() > width - L.inset then
-			if line + 1 >= L.chipRows then break end
-			line, x = line + 1, L.inset
-		end
-		shown = shown + 1
-		chip.full = alt.full or alt.name
-		local color = alt.class and RAID_CLASS_COLORS[alt.class]
-		UI.Ink(chip.text, color and { color.r, color.g, color.b, 1 } or C.text)
-		chip:ClearAllPoints()
-		chip:SetPoint("TOPLEFT", sheet, "TOPLEFT", x, -(y + line * (L.chip + 4)))
-		chip:Show()
-		x = x + chip:GetWidth() + 4
-	end
-	for i = shown + 1, #own.chips do own.chips[i]:Hide() end
-	if shown > 0 then y = y + (line + 1) * (L.chip + 4) end
-	y = y + 4
+	local y = L.inset + L.field + L.fieldGap
 	own.subject:ClearAllPoints()
 	own.subject:SetPoint("TOPLEFT", sheet, "TOPLEFT", L.inset, -y)
 	own.subject:SetPoint("RIGHT", sheet, "RIGHT", -L.inset, 0)
@@ -1032,6 +1138,7 @@ local function DrawSend(width, height)
 	-- The attachments and the gold under the page, measured first so the page takes the rest.
 	local per = math.max(1, math.floor((column + L.slotGap) / (L.slot + L.slotGap)))
 	local rows = math.ceil(ATTACHMENTS_MAX_SEND / per)
+	per = math.ceil(ATTACHMENTS_MAX_SEND / rows)   -- (the rows even: six and six, never eleven and one)
 	own.attachHint:SetWidth(column)
 	local below = L.fieldGap + rows * (L.slot + L.slotGap) + math.ceil(own.attachHint:GetStringHeight()) + 8 + L.field + L.inset
 	own.bodyBox.measure:SetWidth(column - 2 * L.inset)
@@ -1088,22 +1195,22 @@ local function DrawSend(width, height)
 	y = y + L.field + L.inset
 	sheet:SetHeight(y)
 	area:Update()
+	return y
 end
 
 -- The foot: the page's answer filled at the right end, the rest quiet words, what is under way at the left.
 local function DrawFoot()
-	for _, b in pairs(own.b) do b:Hide() end
 	local B = own.b
 	local list = {}   -- right to left: the answer first
 	local status = ""
 	local m = letter and mail[letter]
 	if page == "send" then
 		list[1] = B.send
-		B.send:SetUsable(CanSend(), WORDS.needs)
+		local poor = Cost() > GetMoney()
+		B.send:SetUsable(CanSend() and not poor, poor and WORDS.poor or WORDS.needs)
 		B.send:SetLabel(draft.busy and WORDS.sending or WORDS.send)
-		local price = GetSendMailPrice()
-		status = WORDS.postage:format(Coins(price))
-		if price > GetMoney() then status = UI.Wrap(C.bad, status) end
+		status = WORDS.postage:format(Coins(GetSendMailPrice()))
+		if poor then status = UI.Wrap(C.bad, status) end
 	elseif m then
 		local holds = m.money > 0 or m.items > 0
 		if m.cod > 0 then
@@ -1162,6 +1269,13 @@ local function DrawFoot()
 		b:Show()
 		right = right - b:GetWidth() - gap
 	end
+	-- Only what leaves is hidden: a button hidden and shown again under the mouse loses the press, and the window
+	-- is drawn again often (your bags, your gold, the mail), so a click could go nowhere.
+	local staying = {}
+	for _, b in ipairs(list) do staying[b] = true end
+	for _, b in pairs(B) do
+		if not staying[b] then b:Hide() end
+	end
 	own.status:SetPoint("RIGHT", own.foot, "RIGHT", right, 0)
 end
 
@@ -1174,7 +1288,8 @@ local function Draw()
 	if issecretvalue(wide) or not wide or wide <= 0 then wide = L.w end
 	if issecretvalue(tall) or not tall or tall <= 0 then tall = L.h end
 	own.split = page == "inbox" and wide >= L.split
-	local bodyH = tall - L.head0 - L.band - L.foot - 4
+	-- (The room between the band and the foot, less the 2 each side the areas stand clear of them.)
+	local bodyH = tall - L.head0 - L.band - (L.foot + 2) - 2 * 2
 	local send = page == "send"
 	local showList = not send and (own.split or not letter)
 	local showLetter = not send and letter ~= nil
@@ -1211,7 +1326,8 @@ local function Draw()
 		local letterW = own.split and (wide - 4 - listW - L.gap - 4) or (wide - 8)
 		DrawLetter(letterW - 14)
 	end
-	if send then DrawSend(wide - 8 - 14, bodyH) end
+	-- The new letter as wide as its room; narrower by its bar's room only when it is too tall to fit.
+	if send and DrawSend(wide - 8, bodyH) > bodyH + 0.5 then DrawSend(wide - 8 - 14, bodyH) end
 	DrawFoot()
 end
 
@@ -1281,6 +1397,7 @@ local function Hook()
 			Stop()
 		elseif event == "MAIL_SEND_SUCCESS" then
 			local replied = draft.reply ~= nil
+			if draft.sent then Remember(draft.sent) end
 			Fresh()
 			if replied then page = "inbox" end
 			PlaySound(SOUNDKIT.IG_ABILITY_PAGE_TURN)
@@ -1321,7 +1438,7 @@ end
 M = ns.Module({
 	id = "mail",
 	title = "Mailbox",
-	desc = "Your mailbox becomes a window you can resize, with take all and quick sending to your other characters.",
+	desc = "Your mailbox becomes a window you can resize, with take all and a To field that knows who you send to.",
 	group = "rebuilt",
 	words = "inbox letters send",
 	Ready = function() return MailFrame ~= nil and Shop ~= nil end,

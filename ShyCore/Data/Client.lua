@@ -3,7 +3,7 @@
 -- checked on it: { name, addon, build } (0: never). Read by Client.lua, which holds the build
 -- against the running game's.
 Shy.DataBuilds = {
-	build = 71091,
+	build = 71139,
 	late = {
 	},
 }

@@ -1,4 +1,5 @@
--- Our own talent window, in place of the game's while the "spells" module is on (Spellbook.lua switches it):
+-- Our own talent window, in place of the game's while the "spells" module is on (Spellbook.lua switches it; with
+-- "Game's talent window" on, the game's is its own instead: TalentBuild.lua):
 -- nothing in it is secure, so it opens at its own size and moves in a fight too. The game's window is left
 -- for another player's talents.
 --
@@ -9,9 +10,11 @@
 -- a talent you hold in full color, one you haven't dimmed; a mint mark while a point can go in, the accent once
 -- full; grey while out of reach. Arrows light once the talent before is full. The foot: the points left, Undo,
 -- Apply changes (gold while ranks wait), Reset. With dual spec, Primary and Secondary stand in the title strip;
--- the one you're not in shows its talents, with Activate where Apply stands. ShyQuest's leveling build
--- (Shy.addons.Quest:TalentPlan(), heard again on SHY_BUILD) names its tree under the tree's own and says each
--- talent's turn in its hover; ShyQuest stands its map pins on the talents themselves (.Button, SHY_TALENTS).
+-- the one you're not in shows its talents, with Activate where Apply stands. Your build (Shy.Build, ShyCore's: heard
+-- again on SHY_BUILD) is read against the tree as shown, staged ranks and all: its tree named under the tree's own,
+-- its next talents numbered on plates at their corners, the next one ringed (breathing while you have a point), the
+-- ranks it still puts in each talent as faint pips of your color, a talent it never takes a little dimmer, and each
+-- talent's turn in its hover.
 --
 -- Everything is the game's talent data, read as the window draws (C_Traits): where each talent stands, its
 -- ranks, picture and words, the rows' gates, the arrows, the points. Nothing about the trees is kept here.
@@ -35,16 +38,42 @@ function T:Talents() return TW end
 
 local HEAD = UI.HEAD.window
 local M = {
-	slot = 37, col = 50, row = 50,      -- a talent's slot, and the pitch of the grid
-	pad = 20, right = 20,               -- a card's edges to its first and last columns
-	crest = 54, first = 14, under = 23, -- a card's head; the head to the first row; the last row's foot to the card's
+	-- A talent as the game makes one (its square): a 40 button round a 36 icon, its points' text near its foot.
+	-- Its frame's opening starts 4 in (its gold, then its black band): the points stand inside it, clear of both.
+	node = 40, slot = 36, rankIn = 6,
+	col = 48, row = 48,                 -- the pitch of the grid: closer than the game's 60, 8 between two frames
+	glow = 61,                          -- the glow round a talent you can put a point in
+	arrow = 6, reach = 24,              -- an arrow's thickness; its head's middle, back from the talent it points at
+	pad = 16, right = 16,               -- a card's edges to its first and last columns
+	crest = 54, first = 12, under = 16, -- a card's head; the head to the first row; the last row's foot to the card's
 	gap = 8, margin = 10, below = 8,    -- between two cards; the window's sides to a card; under the header
-	foot = 40,                          -- the window's foot
-	pip = 5, pipH = 3, pipGap = 2, pipDown = 3,
+	foot = 40, undo = 64, footGap = 6,  -- the window's foot; Undo's width, and between it and Apply
 	icon = 34,                          -- a tree's icon
 	stepLeast = 100,                    -- talents closer than this (in the game's units) stand in one column or row
+	-- Your build: how many next talents are numbered, a turn's badge and its middle (in from the icon's corner)
+	steps = 6, turn = 20, turnIn = 2,
 }
 local ICON = { 0.08, 0.92, 0.08, 0.92 }
+-- The game's own talent art (its square set, Blizzard_TalentButtonArt), its arrows, and what its window plays.
+local ART = {
+	shadow = "talents-node-square-shadow", maxed = "talents-node-square-yellow", normal = "talents-node-square-yellow",
+	selectable = "talents-node-square-green", disabled = "talents-node-square-gray", locked = "talents-node-square-locked",
+	glow = "talents-node-square-greenglow", sheen = "talents-sheen-node", sheenMask = "talents-node-square-sheenmask",
+	line = { on = "talents-arrow-line-yellow", off = "talents-arrow-line-gray", shut = "talents-arrow-line-locked" },
+	head = { on = "talents-arrow-head-yellow", off = "talents-arrow-head-gray", shut = "talents-arrow-head-locked" },
+	clouds = "talents-animations-clouds", particles = "talents-animations-particles", full = "talents-animations-mask-full",
+	burst = "talents-animations-gridburst", filigree = "talents-animations-mask-filigree-activate",
+	class = "talents-animations-class-",
+}
+-- Your build's next talent wears your color, as its numbered pin does: its frame, its glow and its points.
+-- A state's sheen and hover strength, its points' color (the game's: ClassTalentUtil, TalentButtonUtil).
+local STATE = {
+	maxed = { sheen = 1, hover = 1 }, normal = { sheen = 1, hover = 1 }, selectable = { sheen = 0, hover = 1 },
+	disabled = { sheen = 1, hover = 0.4, dim = 0.25 }, locked = { sheen = 0, hover = 0.4, dim = 0.7 },
+}
+-- The game's effects as points are applied (166 while they go, 150 once they have, a moment after), and its sheen's
+-- round: a sweep every 22 seconds, every talent's in step.
+local FX = { working = 166, done = 150, after = 1.2, sheen = { delay = 5, sweep = 6.5, rest = 10.5, reach = 150 } }
 local BURNS = { { "TOP", 110, 0.94 }, { "BOTTOM", 90, 0.85 }, { "LEFT", 46, 0.5 }, { "RIGHT", 46, 0.5 } }
 
 local on, open = false, false
@@ -56,8 +85,9 @@ local data                  -- the tree as last read
 local committed = {}        -- config -> node -> ranks it had when nothing was staged
 local committing            -- Apply pressed: until the game says it is done
 local soon                  -- a lay is asked for the next frame
-local plan                  -- ShyQuest's leveling build, for this tree: byNode[node] = its turn, counts, group, name
-local PLACE = { "next", "2nd", "3rd", "4th", "5th" }
+local plan                  -- your build, read against this tree (Planned)
+local PLACE = { "next", "2nd", "3rd", "4th", "5th", "6th" }
+local TURN = { mask = Shy.MEDIA .. "TalentIconMask" }
 
 local function Num(v)
 	if type(v) ~= "number" or issecretvalue(v) then return 0 end
@@ -226,6 +256,50 @@ local function Read()
 	return d
 end
 
+-- Your build against the tree as this window read it, staged ranks and all, straight from ShyCore (Shy.Build): the
+-- one you picked, else the one your talents fit best. nil for a class with none, another tree, or the other spec
+-- shown. { build, name, group, want, over, turns, steps, off, strayed, ended }:
+--   want[node]   the ranks the build puts in a talent, all told
+--   over[node]   the ranks you hold there past it (crimson on the window, and said in its hover)
+--   steps        what is still to buy, in the build's order: { node, count, rank }, a talent's ranks in a row one step
+--   turns[node]  a talent's first step
+--   off          points you have outside the build; strayed past Shy.Build.STRAYED (nothing is numbered then)
+local function Planned(d)
+	local Build = Shy.Build
+	local spec = Build and Build.Class()
+	local build = spec and spec.tree == d.tree and d.active and Build.Followed()
+	if not (build and build.order) then return nil end
+	local p = { build = build, name = build.name, group = spec.tabs[build.tab], want = {}, over = {}, turns = {}, steps = {}, off = 0 }
+	for _, node in ipairs(build.order) do p.want[node] = (p.want[node] or 0) + 1 end
+	for _, node in ipairs(d.nodes) do
+		local extra = node.ranks - (p.want[node.id] or 0)
+		if extra > 0 then p.off, p.over[node.id] = p.off + extra, extra end
+	end
+	local seen = {}
+	for _, id in ipairs(build.order) do
+		seen[id] = (seen[id] or 0) + 1
+		local node = d.byNode[id]   -- (a talent this window doesn't lay is passed over)
+		if node and seen[id] > node.ranks then
+			local last = p.steps[#p.steps]
+			if last and last.node == id then
+				last.count = last.count + 1
+			else
+				p.steps[#p.steps + 1] = { node = id, count = 1, rank = node.ranks + 1 }
+				p.turns[id] = p.turns[id] or #p.steps
+			end
+		end
+	end
+	p.strayed = p.off > Build.STRAYED
+	p.ended = #p.steps == 0
+	return p
+end
+
+-- A talent's turn in your build while it is numbered (its first step, among the next few), else nil.
+local function Turn(node)
+	local turn = plan and not plan.strayed and plan.turns[node.id]
+	return turn and turn <= M.steps and turn or nil
+end
+
 local Tip                   -- a talent's hover (set below)
 local asked = {}            -- talent spell -> its words have been asked for, once
 
@@ -319,12 +393,24 @@ function Tip(button)
 		end
 	end
 	if #needs > 0 then body[#body + 1] = { rows = needs, title = "Needs" } end
-	local turn = plan and plan.byNode[node.id]
-	if turn then
-		local say = ("Leveling build: %s"):format(PLACE[turn] or turn)
-		local count = plan.counts[node.id] or 1
-		if count > 1 then say = ("%s, %d points"):format(say, count) end
+	-- Your build: its turn while numbered, and the ranks it puts here.
+	local want = plan and plan.want[node.id]
+	local over = plan and not plan.strayed and plan.over[node.id] or 0
+	if over > 0 then
+		for _, line in ipairs(Shy.Build.OverSays(plan.name, want or 0, node.ranks, data.canRefund)) do body[#body + 1] = line end
+	elseif want then
+		local turn = Turn(node)
+		local step = turn and plan.steps[turn]
+		local say = turn and ("%s: %s"):format(plan.name, PLACE[turn] or turn) or plan.name
+		if step and step.count > 1 then say = ("%s, %d points"):format(say, step.count) end
+		if node.ranks < want then
+			say = ("%s  \194\183  %d of %d ranks"):format(say, node.ranks, want)
+		else
+			say = ("%s  \194\183  done"):format(say)
+		end
 		body[#body + 1] = { text = say, color = C.hot }
+	elseif plan and not plan.strayed and node.ranks == 0 then
+		body[#body + 1] = { text = ("Not in %s"):format(plan.name), color = C.dim }
 	end
 	local hints = {}
 	if CanLearn(node) then hints[#hints + 1] = { "left", "Learn" } end
@@ -357,59 +443,103 @@ local function Click(button, mouse)
 	Soon()
 end
 
+-- The sheen's round started where every other talent's is, so they all sweep together.
+local function Sheen(b)
+	if b.sheenAnim:IsPlaying() then return end
+	local s = FX.sheen
+	b.sheenAnim:Play(false, GetTime() % (s.delay + s.sweep + s.rest))
+end
+
+-- A talent as the game makes one: its shadow, its picture, a dark wash while out of reach, the frame of its state
+-- (and the same lit while the mouse is on it), the sheen that sweeps the frame, the soft green glow while a point
+-- can go in, its points as the game writes them.
 local function Talent(card)
 	local b = CreateFrame("Button", nil, card)
-	b:SetSize(M.slot, M.slot + M.pipDown + M.pipH)
+	b:SetSize(M.node, M.node)
 	b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	b.shadow = b:CreateTexture(nil, "BACKGROUND")
+	b.shadow:SetAtlas(ART.shadow, true)
+	b.shadow:SetPoint("CENTER")
 	b.icon = b:CreateTexture(nil, "ARTWORK")
 	b.icon:SetSize(M.slot, M.slot)
-	b.icon:SetPoint("TOPLEFT")
+	b.icon:SetPoint("CENTER")
 	b.icon:SetTexCoord(unpack(ICON))
-	b.slot = Slot.New(b, { to = b.icon, icon = b.icon })
-	b.pips = {}
+	b.dim = b:CreateTexture(nil, "ARTWORK", nil, 1)
+	b.dim:SetAllPoints(b.icon)
+	b.dim:SetColorTexture(0, 0, 0, 1)
+	-- (The picture's corners cut as the frame cuts its own, so none shows past it.)
+	b.iconMask = b:CreateMaskTexture()
+	b.iconMask:SetTexture(TURN.mask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	b.iconMask:SetAllPoints(b.icon)
+	b.icon:AddMaskTexture(b.iconMask)
+	b.dim:AddMaskTexture(b.iconMask)
+	b.border = b:CreateTexture(nil, "ARTWORK", nil, 2)
+	b.border:SetPoint("CENTER")
+	b.lit = b:CreateTexture(nil, "ARTWORK", nil, 3)
+	b.lit:SetPoint("CENTER")
+	b.lit:SetBlendMode("ADD")
+	b.lit:Hide()
+	b.sheen = b:CreateTexture(nil, "ARTWORK", nil, 4)
+	b.sheen:SetAtlas(ART.sheen, true)
+	b.sheen:SetBlendMode("ADD")
+	b.sheen:SetPoint("RIGHT", b, "LEFT")
+	b.sheenMask = b:CreateMaskTexture()
+	b.sheenMask:SetAtlas(ART.sheenMask, true, nil, nil, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	b.sheenMask:SetPoint("CENTER")
+	b.sheen:AddMaskTexture(b.sheenMask)
+	b.sheenAnim = b.sheen:CreateAnimationGroup()
+	b.sheenAnim:SetLooping("REPEAT")
+	local sweep = b.sheenAnim:CreateAnimation("Translation")
+	sweep:SetOffset(FX.sheen.reach, 0)
+	sweep:SetStartDelay(FX.sheen.delay)
+	sweep:SetDuration(FX.sheen.sweep)
+	sweep:SetEndDelay(FX.sheen.rest)
+	b.glow = b:CreateTexture(nil, "OVERLAY")
+	b.glow:SetAtlas(ART.glow)
+	b.glow:SetSize(M.glow, M.glow)
+	b.glow:SetPoint("CENTER")
+	b.glow:SetBlendMode("ADD")
+	b.glow:SetAlpha(0)
+	b.glow:Hide()
+	b.glowAnim = b.glow:CreateAnimationGroup()
+	b.glowAnim:SetLooping("REPEAT")
+	b.glowAnim:SetToFinalAlpha(true)
+	local rise = b.glowAnim:CreateAnimation("Alpha")
+	rise:SetFromAlpha(0)
+	rise:SetToAlpha(0.15)
+	rise:SetDuration(1)
+	rise:SetOrder(1)
+	rise:SetSmoothing("OUT")
+	local fall = b.glowAnim:CreateAnimation("Alpha")
+	fall:SetFromAlpha(0.15)
+	fall:SetToAlpha(0)
+	fall:SetDuration(1)
+	fall:SetOrder(2)
+	fall:SetSmoothing("IN")
+	-- (Its points as every count on the family's icons is written: the rounded face, a thin outline, sized for it.)
+	b.rank = b:CreateFontString(nil, "OVERLAY")
+	b.rank:SetFont(Shy.FONT_ROUNDED, Slot.CountSize(M.slot), "OUTLINE")
+	b.rank:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -M.rankIn, M.rankIn)
+	b.rank:SetJustifyH("RIGHT")
+	-- Its turn in your build: the family's numbered pin (UI.NumberMark) on the slot's top left corner, the next one lit
+	-- in your color.
+	b.turn = UI.NumberMark(b, M.turn)
+	b.turn:SetPoint("CENTER", b.icon, "TOPLEFT", M.turnIn, -M.turnIn)
+	b.turn:SetFrameLevel(b:GetFrameLevel() + 3)
+	b.turn:Hide()
 	b:SetScript("OnClick", Click)
-	b:SetScript("OnEnter", Tip)
+	b:SetScript("OnEnter", function(self)
+		self.lit:Show()
+		Tip(self)
+	end)
 	-- Gone at once, not after the grace a row's hover gets: nothing of it is ever between you and the next talent.
-	b:SetScript("OnLeave", function(self) Shy.Hover.Hide(self, true) end)
+	b:SetScript("OnLeave", function(self)
+		self.lit:Hide()
+		Shy.Hover.Hide(self, true)
+	end)
+	b:SetScript("OnShow", Sheen)
+	b:SetScript("OnHide", function(self) self.sheenAnim:Stop() end)
 	return b
-end
-
--- A rank's pip: a face in whole screen pixels on a dark backing a pixel larger all round (UI.BoxFit).
-local function Pip(b, i)
-	local pip = b.pips[i]
-	if pip then return pip end
-	pip = { back = Fill(b, "BACKGROUND", 2), face = Fill(b, "ARTWORK", 2) }
-	pip.back:SetVertexColor(0, 0, 0, 0.65)
-	pip.back:SetSnapToPixelGrid(true)
-	pip.back:SetTexelSnappingBias(0)
-	b.pips[i] = pip
-	return pip
-end
-
--- The pips under a talent, one a rank, centred under its slot: whole pixels apart, the first on the pixel grid.
-local function Pips(b, ranks)
-	local px = PixelUtil.GetPixelToUIUnitFactor() / b:GetEffectiveScale()
-	local w, g = UI.BoxPixels(b, M.pip), UI.BoxPixels(b, M.pipGap)
-	local total = ranks * w + (ranks - 1) * g
-	for i = 1, ranks do
-		local pip = Pip(b, i)
-		UI.BoxFit(pip.face, M.pip, M.pipH)
-		pip.back:SetSize(w + 2 * px, UI.BoxPixels(b, M.pipH) + 2 * px)
-		pip.back:ClearAllPoints()
-		if i == 1 then
-			pip.back:SetPoint("TOPLEFT", b, "TOPLEFT", (M.slot - total) / 2 - px, -(M.slot + M.pipDown) + px)
-		else
-			pip.back:SetPoint("LEFT", b.pips[i - 1].back, "RIGHT", g - 2 * px, 0)
-		end
-		pip.face:ClearAllPoints()
-		pip.face:SetPoint("TOPLEFT", pip.back, "TOPLEFT", px, -px)
-		pip.back:Show()
-		pip.face:Show()
-	end
-	for i = ranks + 1, #b.pips do
-		b.pips[i].back:Hide()
-		b.pips[i].face:Hide()
-	end
 end
 
 local function Card(i)
@@ -472,20 +602,211 @@ local function Card(i)
 	return card
 end
 
--- An arrow: a stroke, and a caret for its head (pointing down as drawn).
+-- An arrow as the game draws one: a line in its art from the middle of one talent, and its head (pointing down as
+-- drawn) just off the next. A bend for one that turns a corner.
 local function Arrow(card, i)
 	local a = card.arrows[i]
 	if a then return a end
-	a = { line = Fill(card, "ARTWORK", 4), head = card:CreateTexture(nil, "ARTWORK", nil, 5) }
-	a.head:SetTexture(Skin.GLYPH.caret)
-	UI.GlyphFit(a.head, 10)
-	a.bend = Fill(card, "ARTWORK", 4)
-	for _, t in ipairs({ a.line, a.bend }) do
-		t:SetSnapToPixelGrid(true)
-		t:SetTexelSnappingBias(0)
-	end
+	a = { line = card:CreateLine(nil, "ARTWORK", nil, 4), bend = card:CreateLine(nil, "ARTWORK", nil, 4),
+		head = card:CreateTexture(nil, "ARTWORK", nil, 5) }
+	a.line:SetThickness(M.arrow)
+	a.bend:SetThickness(M.arrow)
 	card.arrows[i] = a
 	return a
+end
+
+---------------------------------------------------------------------------
+-- The game's air over the trees, and what it plays as points are applied
+---------------------------------------------------------------------------
+
+-- An additive layer of the game's art over the trees, under the talents: two banks of cloud drifting across, two of
+-- motes that rise and fade turning slowly, masked soft at the edges as the game masks them; and the burst the game's
+-- window plays as points are applied (its grid flying out, your class's sigil flaring), held still till then.
+local AIR = {
+	clouds = 0.05, drift = 80, span = 1612,                -- the clouds' strength; a crossing's seconds; how far
+	near = { alpha = 0.15, fade = 5, hold = 22, travel = 600, turn = 20 },
+	far = { alpha = 0.14, fade = 5, hold = 31, travel = 200, turn = -20, w = 800, h = 473 },
+	burst = { size = 320, grow = 20, from = 0.65, last = 1.4 },
+}
+
+local function Texture(f, atlas, level, sub, size)
+	local t = f:CreateTexture(nil, level or "BACKGROUND", nil, sub)
+	t:SetAtlas(atlas, size ~= false)
+	t:SetBlendMode("ADD")
+	t:SetSnapToPixelGrid(false)
+	t:SetTexelSnappingBias(0)
+	return t
+end
+
+local function Masked(f, atlas, ...)
+	local mask = f:CreateMaskTexture()
+	mask:SetAtlas(atlas, false, nil, nil, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+	mask:SetAllPoints(f)
+	for i = 1, select("#", ...) do select(i, ...):AddMaskTexture(mask) end
+	return mask
+end
+
+-- A crossing that starts over when done: from `from` across by `by`, in `seconds`.
+local function Drift(t, from, by, seconds)
+	local g = t:CreateAnimationGroup()
+	g:SetLooping("REPEAT")
+	local start = g:CreateAnimation("Translation")
+	start:SetOffset(from, 0)
+	start:SetDuration(0)
+	start:SetOrder(1)
+	local cross = g:CreateAnimation("Translation")
+	cross:SetOffset(by, 0)
+	cross:SetDuration(seconds)
+	cross:SetOrder(2)
+	return g
+end
+
+-- Motes: in over `fade`, held, out over `fade`, drifting and turning the while.
+local function Motes(t, s)
+	local g = Drift(t, s.travel / 2, -s.travel, s.hold + s.fade)
+	local rise = g:CreateAnimation("Alpha")
+	rise:SetFromAlpha(0)
+	rise:SetToAlpha(s.alpha)
+	rise:SetDuration(s.fade)
+	rise:SetOrder(2)
+	local fall = g:CreateAnimation("Alpha")
+	fall:SetFromAlpha(s.alpha)
+	fall:SetToAlpha(0)
+	fall:SetStartDelay(s.hold)
+	fall:SetDuration(s.fade)
+	fall:SetOrder(2)
+	local turn = g:CreateAnimation("Rotation")
+	turn:SetDegrees(s.turn)
+	turn:SetDuration(s.hold + s.fade)
+	turn:SetOrder(2)
+	return g
+end
+
+local function Air()
+	local air = CreateFrame("Frame", nil, box)
+	air:SetClipsChildren(true)
+	air:EnableMouse(false)
+	box.air = air
+	air.clouds1 = Texture(air, ART.clouds, "BACKGROUND", 2)
+	air.clouds1:SetPoint("TOPLEFT")
+	air.clouds2 = Texture(air, ART.clouds, "BACKGROUND", 2)
+	air.clouds2:SetPoint("TOPLEFT")
+	for _, t in ipairs({ air.clouds1, air.clouds2 }) do t:SetAlpha(AIR.clouds) end
+	air.near = Texture(air, ART.particles, "BACKGROUND", 2)
+	air.near:SetPoint("CENTER")
+	air.far = Texture(air, ART.particles, "BACKGROUND", 2, false)
+	air.far:SetSize(AIR.far.w, AIR.far.h)
+	air.far:SetTexCoord(1, 0, 1, 0)
+	air.far:SetPoint("CENTER")
+	for _, t in ipairs({ air.near, air.far }) do t:SetAlpha(0) end
+	Masked(air, ART.full, air.clouds1, air.clouds2, air.near, air.far)
+	air.loops = {
+		Drift(air.clouds1, 0, -AIR.span, AIR.drift), Drift(air.clouds2, AIR.span, -AIR.span, AIR.drift),
+		Motes(air.near, AIR.near), Motes(air.far, AIR.far),
+	}
+
+	-- The burst, as the game's: its grid grows out and fades, the class's sigil flares, two more of it swell and go.
+	local b = AIR.burst
+	air.grid = Texture(air, ART.burst, "BACKGROUND", 3, false)
+	air.grid:SetSize(b.size, b.size)
+	air.grid:SetPoint("CENTER")
+	air.grid:SetAlpha(0)
+	Masked(air, ART.filigree, air.grid)
+	air.flash = {}
+	local g = air.grid:CreateAnimationGroup()
+	g:SetToFinalAlpha(true)
+	local grow = g:CreateAnimation("Scale")
+	grow:SetScaleFrom(1, 1)
+	grow:SetScaleTo(b.grow, b.grow)
+	grow:SetDuration(b.last)
+	grow:SetSmoothing("IN")
+	local fade = g:CreateAnimation("Alpha")
+	fade:SetFromAlpha(b.from)
+	fade:SetToAlpha(0)
+	fade:SetDuration(b.last)
+	fade:SetSmoothing("IN")
+	air.flash[1] = g
+	-- (from, seconds, swell) for each of the sigil's four, as the game times them.
+	air.sigils = {}
+	for i, s in ipairs({ { 1, 1.2 }, { 1, 1.2 }, { 0.3, 0.3, 1.5 }, { 0.2, 0.5, 1.5 } }) do
+		local t = Texture(air, ART.class .. "warrior", "BACKGROUND", 3)
+		t:SetPoint("CENTER")
+		t:SetAlpha(0)
+		air.sigils[i] = t
+		local sg = t:CreateAnimationGroup()
+		sg:SetToFinalAlpha(true)
+		local out = sg:CreateAnimation("Alpha")
+		out:SetFromAlpha(s[1])
+		out:SetToAlpha(0)
+		out:SetDuration(s[2])
+		out:SetSmoothing("OUT")
+		if s[3] then
+			local swell = sg:CreateAnimation("Scale")
+			swell:SetScaleFrom(1, 1)
+			swell:SetScaleTo(s[3], s[3])
+			swell:SetDuration(s[2])
+		end
+		air.flash[#air.flash + 1] = sg
+	end
+	Masked(air, ART.full, air.sigils[3], air.sigils[4])
+
+	-- The game's effects on the talents as they're applied, in a scene of its own over the trees.
+	local fx = CreateFrame("ModelScene", nil, box, "ScriptAnimatedModelSceneTemplate")
+	fx:EnableMouse(false)
+	box.fx = fx
+end
+
+-- The air laid over the trees, your class's sigil in it, its drift going while the window is open.
+local function LayAir(first, last)
+	local air, fx = box.air, box.fx
+	air:ClearAllPoints()
+	air:SetPoint("TOPLEFT", first, "TOPLEFT")
+	air:SetPoint("BOTTOMRIGHT", last, "BOTTOMRIGHT")
+	air:SetFrameLevel(first:GetFrameLevel() + 1)
+	fx:ClearAllPoints()
+	fx:SetAllPoints(air)
+	fx:SetFrameLevel(first:GetFrameLevel() + 20)
+	local _, class = UnitClass("player")
+	local sigil = class and ART.class .. class:lower()
+	if sigil and C_Texture.GetAtlasInfo(sigil) then
+		for _, t in ipairs(air.sigils) do t:SetAtlas(sigil, true) end
+	end
+	for _, g in ipairs(air.loops) do
+		if not g:IsPlaying() then g:Play() end
+	end
+end
+
+-- Points applied: each talent they went into plays the game's effect while they go; once they have, a moment later,
+-- the game's second effect on each, its sound, and the burst over the trees.
+local applying                  -- the talents whose points are being applied
+local function Working(nodes)
+	applying = nodes
+	box.fx:ClearEffects()
+	for _, id in ipairs(nodes) do
+		local b = buttons[id]
+		if b and b:IsVisible() then box.fx:AddEffect(FX.working, b, b, nil, nil, b:GetEffectiveScale() / box.fx:GetEffectiveScale()) end
+	end
+end
+
+local function Applied()
+	local nodes = applying
+	applying = nil
+	if not nodes then return end
+	C_Timer.After(FX.after, function()
+		if not (box and box:IsVisible()) then return end
+		box.fx:ClearEffects()
+		for _, id in ipairs(nodes) do
+			local b = buttons[id]
+			if b and b:IsVisible() then box.fx:AddEffect(FX.done, b, b, nil, nil, b:GetEffectiveScale() / box.fx:GetEffectiveScale()) end
+		end
+		for _, g in ipairs(box.air.flash) do g:Stop(); g:Play() end
+		PlaySound(SOUNDKIT.UI_CLASS_TALENT_APPLY_COMPLETE)
+	end)
+end
+
+local function Failed()
+	applying = nil
+	if box and box.fx then box.fx:ClearEffects() end
 end
 
 local function Build()
@@ -495,28 +816,18 @@ local function Build()
 		point = { "CENTER", "CENTER", 0, 30 },
 		shown = function() return open end,
 		onClose = function() open = false end,
-		head = { size = "window", title = TALENTS },
+		-- Dual spec: Primary and Secondary as the window's own tabs on its strip, after the title (UI.Head lays
+		-- them, in its title's type and on the look's own middle).
+		head = { size = "window", title = TALENTS, tabs = { { DUAL_SPEC_PRIMARY or "Primary", DUAL_SPEC_SECONDARY or "Secondary" },
+			function(i)
+				local active = C_SpecializationInfo.GetActiveSpecGroup()
+				local want = i ~= active and i or nil
+				if want == view then return end
+				view = want
+				if open then Lay() end
+			end } },
 	})
-	local head = box.head
-	-- The class's icon before the title.
-	head.class = head:CreateTexture(nil, "ARTWORK")
-	head.class:SetSize(HEAD.icon, HEAD.icon)
-	head.class:SetPoint("LEFT", head, "TOPLEFT", HEAD.pad, -head.mid)
-	head.class:SetTexCoord(unpack(ICON))
-	if head.title then
-		head.title:ClearAllPoints()
-		head.title:SetPoint("LEFT", head.class, "RIGHT", 6, 0)
-	end
-	-- Dual spec: Primary and Secondary on the strip's accent line, after the title.
-	box.specs = UI.Tabs(head, { DUAL_SPEC_PRIMARY or "Primary", DUAL_SPEC_SECONDARY or "Secondary" }, function(i)
-		local active = C_SpecializationInfo.GetActiveSpecGroup()
-		local want = i ~= active and i or nil
-		if want == view then return end
-		view = want
-		if open then Lay() end
-	end, nil, 13, box, { tall = HEAD.line - 2, mid = head.mid - 2 })
-	local after = HEAD.pad + HEAD.icon + 6 + (head.title and math.ceil(head.title:GetStringWidth()) or 0) + 20
-	box.specs:SetPoint("BOTTOMLEFT", head, "TOPLEFT", after, -HEAD.line)
+	box.specs = box.head.tabs
 
 	-- The foot, on the body: clear of the look's work round the edge (UI.Body), as the cards are.
 	local body = UI.Body(box)
@@ -540,8 +851,18 @@ local function Build()
 			C_SpecializationInfo.SetActiveSpecGroup(data.group)
 			return
 		end
-		if C_ClassTalents.CommitConfig() then
-			committing = GetTime()
+		-- (The talents whose points wait, before they are applied and say so no more.)
+		local waiting = {}
+		for _, node in ipairs(data.nodes) do
+			if node.staged > 0 then waiting[#waiting + 1] = node.id end
+		end
+		-- (Under way before the game is asked: it may say it's done before it answers.)
+		committing = GetTime()
+		Working(waiting)
+		if not C_ClassTalents.CommitConfig() then
+			committing = nil
+			Failed()
+		else
 			PlaySound(SOUNDKIT.UI_CLASS_TALENT_APPLY_CHANGES)
 			C_Timer.After(6, function()
 				if committing and GetTime() - committing >= 5.9 then committing = nil; Soon() end
@@ -550,13 +871,14 @@ local function Build()
 		Soon()
 	end)
 	foot.apply:SetHeight(22)
-	foot.apply:SetPoint("CENTER", foot, "CENTER", 0, 0)
-	foot.undo = UI.Button(foot, "Undo", 64, function()
+	-- (Undo and Apply as one pair, its middle the foot's.)
+	foot.apply:SetPoint("CENTER", foot, "CENTER", (M.undo + M.footGap) / 2, 0)
+	foot.undo = UI.Button(foot, "Undo", M.undo, function()
 		if data and data.staged then C_Traits.RollbackConfig(data.config) end
 		Soon()
 	end)
 	foot.undo:SetHeight(22)
-	foot.undo:SetPoint("RIGHT", foot.apply, "LEFT", -6, 0)
+	foot.undo:SetPoint("RIGHT", foot.apply, "LEFT", -M.footGap, 0)
 	foot.reset = UI.Button(foot, RESET or "Reset", 70, function() end)
 	foot.reset:SetHeight(22)
 	foot.reset:SetPoint("RIGHT", foot, "RIGHT", -4, 0)
@@ -564,7 +886,12 @@ local function Build()
 		if data and data.currency then C_Traits.ResetTreeByCurrency(data.config, data.tree, data.currency) end
 		Soon()
 	end)
-	UI.Help(foot.reset, RESET or "Reset", "Takes back every point in every tree. Nothing changes until you apply it.")
+	UI.Help(foot.reset, RESET or "Reset", function()
+		local off = plan and not plan.strayed and plan.off or 0
+		if off == 0 then return "Takes back every point in every tree. Nothing changes until you apply it." end
+		return ("Takes back every point in every tree. %s in %s: they're the crimson ones. Nothing changes until you apply it.")
+			:format(off == 1 and "One of yours isn't" or (off .. " of yours aren't"), plan.name)
+	end)
 
 	local events = CreateFrame("Frame")
 	for _, event in ipairs({ "TRAIT_CONFIG_UPDATED", "TRAIT_NODE_CHANGED", "TRAIT_TREE_CURRENCY_INFO_UPDATED", "TRAIT_TREE_CHANGED",
@@ -573,12 +900,15 @@ local function Build()
 		events:RegisterEvent(event)
 	end
 	events:SetScript("OnEvent", function(_, event)
+		if committing and event == "TRAIT_CONFIG_UPDATED" then Applied() end
+		if event == "CONFIG_COMMIT_FAILED" then Failed() end
 		if event == "TRAIT_CONFIG_UPDATED" or event == "CONFIG_COMMIT_FAILED" or event == "ACTIVE_COMBAT_CONFIG_CHANGED" then committing = nil end
 		if open then Soon() end
 	end)
 	Shy:On("SHY_THEME", function() if open then Soon() end end)
-	-- ShyQuest's leveling build picked again.
+	-- Another build picked, or the one your talents fit changed.
 	Shy:On("SHY_BUILD", function() if open then Soon() end end)
+	Air()
 end
 
 ---------------------------------------------------------------------------
@@ -624,7 +954,8 @@ local function ColX(col) return M.pad + col * M.col end
 -- build's tree, its name. The rows still shut lie under a veil from a hairline.
 local function Rows(card, tab)
 	local shut = tab.gate ~= nil
-	local build = plan and plan.group == tab.group and plan.name or nil
+	-- (A build named as its tree is "Your build": the tree's name stands just over it.)
+	local build = plan and plan.group == tab.group and (plan.name == tab.name and "Your build" or plan.name) or nil
 	local sub = shut or build ~= nil
 	card.name:ClearAllPoints()
 	if sub then
@@ -665,57 +996,45 @@ local function Rows(card, tab)
 end
 
 -- The arrows of one tree: from each talent to the ones that need it.
+-- The arrows of one tree: from each talent to the ones that need it, gold once the first is full, locked while the
+-- next one's row is shut, grey otherwise (the game's own rule). Each runs from the first's middle; its head stands
+-- M.reach back from the next one's middle, along the arrow, just clear of its frame.
 local function Arrows(card, tab)
 	local used = 0
-	local thick = UI.BoxPixels(card, 2)   -- a stroke in whole screen pixels
+	local half = M.node / 2
 	for _, node in ipairs(tab.nodes) do
 		for _, edge in ipairs(node.info.visibleEdges or {}) do
 			local to = data.byNode[edge.targetNode]
 			if to and to.tab == tab then
 				used = used + 1
 				local a = Arrow(card, used)
-				local lit = edge.isActive == true or node.ranks >= node.max
-				local x0, y0 = ColX(node.col) + M.slot / 2, RowY(node.row)
-				local x1, y1 = ColX(to.col) + M.slot / 2, RowY(to.row)
-				a.line:ClearAllPoints()
-				a.bend:Hide()
-				if to.col == node.col then
-					-- Down the column, from under the talent's pips to its head over the next.
-					local from, till = y0 + M.slot + M.pipDown + M.pipH + 2, y1 - 9
-					a.line:SetSize(thick, math.max(1, till - from))
-					a.line:SetPoint("TOP", card, "TOPLEFT", x0, -from)
-					a.head:SetRotation(0)
-					a.head:ClearAllPoints()
-					a.head:SetPoint("TOP", card, "TOPLEFT", x0, -(till - 2))
-				elseif to.row == node.row then
-					-- Across the row.
-					local right = x1 > x0
-					local from = right and ColX(node.col) + M.slot + 2 or ColX(node.col) - 2
-					local till = right and ColX(to.col) - 9 or ColX(to.col) + M.slot + 9
-					a.line:SetSize(math.max(1, math.abs(till - from)), thick)
-					a.line:SetPoint("LEFT", card, "TOPLEFT", math.min(from, till), -(y0 + M.slot / 2))
-					a.head:SetRotation(right and math.pi / 2 or -math.pi / 2)
-					a.head:ClearAllPoints()
-					a.head:SetPoint("CENTER", card, "TOPLEFT", right and till + 3 or till - 3, -(y0 + M.slot / 2))
-				else
-					-- Across, then down to it.
-					local right = x1 > x0
-					local from = right and ColX(node.col) + M.slot + 2 or ColX(node.col) - 2
-					a.line:SetSize(math.max(1, math.abs(x1 - from)), thick)
-					a.line:SetPoint("LEFT", card, "TOPLEFT", math.min(from, x1), -(y0 + M.slot / 2))
-					local till = y1 - 9
-					a.bend:ClearAllPoints()
-					a.bend:SetSize(thick, math.max(1, till - (y0 + M.slot / 2)))
-					a.bend:SetPoint("TOP", card, "TOPLEFT", x1, -(y0 + M.slot / 2))
+				local shut = to.tab.gate ~= nil and to.row >= to.tab.gate.row
+				local kind = (edge.isActive == true or node.ranks >= node.max) and "on" or (shut and "shut") or "off"
+				local x0, y0 = ColX(node.col) + half, RowY(node.row) + half
+				local x1, y1 = ColX(to.col) + half, RowY(to.row) + half
+				local turn = to.col ~= node.col and to.row ~= node.row
+				-- (Straight, or across then down: the last stretch is what the head follows.)
+				local fx, fy = turn and x1 or x0, turn and y0 or y0
+				local dx, dy = x1 - fx, y1 - fy
+				local length = math.max(1, math.sqrt(dx * dx + dy * dy))
+				local hx, hy = x1 - dx / length * M.reach, y1 - dy / length * M.reach
+				a.line:SetAtlas(ART.line[kind])
+				a.bend:SetAtlas(ART.line[kind])
+				a.line:SetStartPoint("TOPLEFT", card, x0, -y0)
+				if turn then
+					a.line:SetEndPoint("TOPLEFT", card, fx, -fy)
+					a.bend:SetStartPoint("TOPLEFT", card, fx, -fy)
+					a.bend:SetEndPoint("TOPLEFT", card, hx, -hy)
 					a.bend:Show()
-					a.head:SetRotation(0)
-					a.head:ClearAllPoints()
-					a.head:SetPoint("TOP", card, "TOPLEFT", x1, -(till - 2))
+				else
+					a.line:SetEndPoint("TOPLEFT", card, hx, -hy)
+					a.bend:Hide()
 				end
-				for _, t in ipairs({ a.line, a.bend }) do
-					if lit then Theme.Paint(t, Theme.Accent) else Theme.Paint(t, C.dim, 0.75) end
-				end
-				if lit then Theme.Tint(a.head, Theme.Accent) else Theme.Tint(a.head, C.dim) end
+				a.head:SetAtlas(ART.head[kind], true)
+				a.head:ClearAllPoints()
+				a.head:SetPoint("CENTER", card, "TOPLEFT", hx, -hy)
+				-- (Down is the art's own way: screen y runs up, the card's rows down.)
+				a.head:SetRotation(math.atan2(-dy, dx) + math.pi / 2)
 				a.line:Show()
 				a.head:Show()
 			end
@@ -729,38 +1048,65 @@ local function Arrows(card, tab)
 	end
 end
 
+-- A turn's pin: the next one lit in your color, the ones after slate.
+local function Badge(turn, n)
+	turn:Set(n, n == 1)
+	turn:Show()
+end
+
 -- One talent as it stands.
 local function Dress(b, node)
 	local _, icon = About(node)
 	b.icon:SetTexture(icon or 134400)
-	local full = node.ranks >= node.max
-	local learn = CanLearn(node)
-	local reach = node.ranks > 0 or (node.info.isAvailable == true and node.info.meetsEdgeRequirements ~= false
-		and not (node.tab.gate and node.row >= node.tab.gate.row))
-	b.icon:SetDesaturated(not reach)
-	b.icon:SetVertexColor(reach and 1 or 0.55, reach and 1 or 0.55, reach and 1 or 0.55)
-	if full then
-		b.slot:Mark(Theme.Accent())
-	elseif learn then
-		b.slot:Mark(C.good[1], C.good[2], C.good[3])
+	-- Its state as the game has it: full, some points in, a point can go in, its row still shut, or out of reach.
+	local gated = node.tab.gate ~= nil and node.row >= node.tab.gate.row
+	local state = (node.ranks >= node.max and "maxed") or (CanLearn(node) and "selectable")
+		or (node.ranks > 0 and "normal") or (gated and "locked") or "disabled"
+	local look = STATE[state]
+	b.state = state
+	-- Your build's next talent wears the game's frame in your color, whatever its state, and glows so while a point
+	-- waits. One you hold past your build wears it crimson, and nothing about it says "put a point here".
+	local turn = Turn(node)
+	local next = turn == 1
+	local over = plan and not plan.strayed and plan.over[node.id] or 0
+	local frame = (next or over > 0) and ART.disabled or ART[state]
+	local r, g, bl = 1, 1, 1
+	if next then r, g, bl = Theme.Accent() elseif over > 0 then r, g, bl = C.bad[1], C.bad[2], C.bad[3] end
+	b.border:SetAtlas(frame, true)
+	b.border:SetVertexColor(r, g, bl)
+	b.lit:SetAtlas(frame, true)
+	b.lit:SetVertexColor(r, g, bl)
+	b.lit:SetAlpha(next and 1 or look.hover)
+	b.icon:SetDesaturated(look.dim ~= nil)
+	b.dim:SetShown(look.dim ~= nil)
+	b.dim:SetAlpha(look.dim or 0)
+	-- (Hidden, not stopped: it keeps its place in the round the others sweep in.)
+	local sheen = (next or over > 0) and 0 or look.sheen
+	b.sheen:SetShown(sheen > 0)
+	b.sheen:SetAlpha(sheen)
+	if b:IsVisible() then Sheen(b) end
+	local glow = (state == "selectable" and over == 0) or (next and data.left > 0)
+	b.glow:SetShown(glow)
+	b.glow:SetDesaturated(next)
+	b.glow:SetVertexColor(r, g, bl)
+	if glow then
+		if not b.glowAnim:IsPlaying() then b.glowAnim:Play() end
 	else
-		b.slot:Mark()
+		b.glowAnim:Stop()
 	end
-	-- A talent you hold shows in full color; one you could only take, or can't, is dimmed.
-	b.slot:Empty(node.ranks == 0)
-	Pips(b, node.max)
-	for i = 1, node.max do
-		local pip = b.pips[i]
-		if i <= node.ranks - node.staged then
-			Theme.Paint(pip.face, Theme.Accent)
-		elseif i <= node.ranks then
-			Theme.Paint(pip.face, C.alert)
-		elseif learn then
-			Theme.Paint(pip.face, C.good, 0.55)
-		else
-			Theme.Paint(pip.face, C.dim, reach and 0.45 or 0.3)
-		end
+	b.rank:SetText(("%d/%d"):format(node.ranks, node.max))
+	if next or over > 0 then
+		b.rank:SetTextColor(r, g, bl)
+	else
+		local ink = (state == "selectable" and GREEN_FONT_COLOR) or (look.dim and DISABLED_FONT_COLOR) or YELLOW_FONT_COLOR
+		b.rank:SetTextColor(ink:GetRGB())
 	end
+	-- Your build's turns. A talent it never takes stands back a little, so the build reads at a glance.
+	local want = plan and not plan.strayed and plan.want[node.id] or 0
+	local aside = plan and not plan.strayed and want == 0 and node.ranks == 0 and state ~= "selectable"
+	local light = aside and 0.72 or 1
+	b.icon:SetVertexColor(light, light, light)
+	if turn then Badge(b.turn, turn) else b.turn:Hide() end
 end
 
 -- The foot: points, Undo, Apply (or Activate), Reset.
@@ -795,6 +1141,7 @@ local function Foot()
 	for _, tab in ipairs(data.tabs) do any = any or tab.spent > 0 end
 	foot.reset:SetShown(data.canRefund)
 	foot.reset:SetUsable(any and not committing)
+	foot.reset:SetTone(plan and not plan.strayed and plan.off > 0 and C.bad or nil)
 end
 
 Lay = function()
@@ -803,19 +1150,10 @@ Lay = function()
 	data = d
 	if not d then return end
 	for _, node in ipairs(d.nodes) do node.config = d.config end
-	-- ShyQuest's leveling build, when it reads this same tree.
-	plan = nil
-	local quest = Shy.addons.Quest
-	local given = quest and quest.TalentPlan and quest:TalentPlan()
-	if given and d.active and given.config == d.config and given.tree == d.tree then
-		plan = { byNode = {}, counts = {}, group = given.group, name = given.name, unspent = given.unspent }
-		for turn, step in ipairs(given.nodes or {}) do
-			plan.byNode[step.node], plan.counts[step.node] = turn, step.count
-		end
-	end
+	plan = Planned(d)
 	local n = #d.tabs
-	local cardW = M.pad + (d.cols - 1) * M.col + M.slot + M.right
-	local cardH = RowY(d.rows) + M.slot + M.under
+	local cardW = M.pad + (d.cols - 1) * M.col + M.node + M.right
+	local cardH = RowY(d.rows) + M.node + M.under
 	local top = HEAD.line + UI.LINE + M.below
 	local width = 2 * M.margin + n * cardW + (n - 1) * M.gap
 	local height = top + cardH + M.below + M.foot
@@ -823,8 +1161,6 @@ Lay = function()
 	local fit = box.shyBodyFit
 	if not fit or math.abs(fit[1] - width) > 0.5 or math.abs(fit[2] - height) > 0.5 then UI.BodyFit(box, width, height) end
 
-	local _, class = UnitClass("player")
-	box.head.class:SetTexture(class and ("Interface\\Icons\\ClassIcon_" .. class:sub(1, 1) .. class:sub(2):lower()) or nil)
 	-- The tabs, only with a second spec to switch to.
 	local dual = (GetNumSpecGroups and GetNumSpecGroups() or 1) > 1
 	box.specs:SetShown(dual)
@@ -872,6 +1208,7 @@ Lay = function()
 		end
 	end
 	for k = n + 1, #cards do cards[k]:Hide() end
+	if n > 0 then LayAir(cards[1], cards[n]) end
 	for id, b in pairs(buttons) do
 		if not seen[id] then
 			b:Hide()

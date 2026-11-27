@@ -34,6 +34,10 @@ T:Settings({
 	{ key = "spacePosts", label = "Space posts", sub = true, words = "spacebar key sell stack",
 		enabled = function() return T.db.window end, apply = Keys,
 		desc = "On the Sell tab, each press of Space posts your next stack." },
+	{ key = "floor", label = "Lowest undercut", sub = true, min = 50, max = 90, step = 5, words = "floor minimum undercut price sell market",
+		enabled = function() return T.db.window end, apply = function() ns.Window.Stale() end,
+		format = function(v) return ("%d%% of market"):format(v) end,
+		desc = "Sell won't undercut below this. When the cheapest is lower, you post at market." },
 	{ note = "The auction window hit an error. You have the default one until you reload.", alert = true,
 		shown = function() return ns.Window.failed end },
 

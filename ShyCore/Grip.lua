@@ -5,7 +5,8 @@
 -- is pressed to drag it), a right click opens its menu.
 --
 -- Every box of ours whose panel wears brackets has one without asking: the panel on the box itself
--- or on a frame given to HUD.Manage. Its drag sets the box's scale. A box that keeps sizes of its
+-- or on a frame given to HUD.Manage. Its drag sets the box's scale: a sheet over the box says the size
+-- against its own, and the drag holds at 100% when it comes near. A box that keeps sizes of its
 -- own (ownSize) has none, and one built into another piece (still) doesn't answer.
 --
 -- Such a box is held all the way round as well: every corner and every side scales it, what lies
@@ -260,6 +261,159 @@ local function ShowArrow(point)
 	arrow:Show()
 end
 
+-- While a handle sizes a box, a sheet lies over the box: a see-through dark, and in its middle what the box is
+-- now, large, so you watch the box and not the mouse. Scaled, that is its size against its own (100%), with a
+-- needle on a track under it: half at the left end, twice at the right, its own size on the notch. Near its own
+-- size the drag holds there and the number lights. Flowing, it is its width and height. Shift held, nothing holds.
+-- The sheet hangs from the box's corners, so the engine keeps it on the box: only a new number costs anything.
+local SHEET = {
+	SNAP = 0.03,           -- this close to its own size, it is its own size
+	REACH = 8,             -- this near a line of the grid, a flowing box's dragged edge lands on it
+	DARK = 0.45,           -- the dark over the box
+	TRACK = 120,           -- the track's length
+	GLEAM = 0.35,          -- seconds: the light as it holds at its own size
+	LEVEL = HELD - 10,     -- over all the box holds, under the dragged handle
+	TYPES = { 44, 32, 22, 15 },   -- the number's sizes: the largest that fits the box
+	LOG2 = math.log(2),
+	TIMES = " \195\151 ",
+}
+
+-- Built the first time a box is sized.
+local function Sheet()
+	local s = SHEET.frame
+	if s then return s end
+	s = CreateFrame("Frame", nil, UIParent)
+	SHEET.frame = s
+	s:SetFrameStrata("TOOLTIP")
+	s:SetFrameLevel(SHEET.LEVEL)
+	s:Hide()
+	s.dark = s:CreateTexture(nil, "BACKGROUND")
+	s.dark:SetAllPoints()
+	Theme.Paint(s.dark, 0, 0, 0, SHEET.DARK)
+	-- Deeper where the number stands, so it reads over a busy window.
+	s.pool = s:CreateTexture(nil, "BORDER")
+	s.pool:SetTexture(B.GLOW)
+	s.pool:SetPoint("CENTER")
+	Theme.Tint(s.pool, 0, 0, 0, 0.6)
+	s.gleam = s:CreateTexture(nil, "ARTWORK")
+	s.gleam:SetTexture(B.GLOW)
+	s.gleam:SetBlendMode("ADD")
+	s.gleam:SetPoint("CENTER")
+	Theme.Tint(s.gleam, Theme.AccentSolid, 0.45)
+	s.gleam:SetAlpha(0)
+	s.size = UI.Words(s, UI.TitleFont(SHEET.TYPES[1]), UI.colors.text, { justify = "CENTER", wrap = false })
+	s.track = s:CreateTexture(nil, "ARTWORK")
+	s.track:SetSize(SHEET.TRACK, 1)
+	Theme.Paint(s.track, UI.colors.dim, 0.8)
+	s.notch = s:CreateTexture(nil, "ARTWORK", nil, 1)
+	s.notch:SetSize(1, 7)
+	s.notch:SetPoint("CENTER", s.track, "CENTER")
+	s.needle = s:CreateTexture(nil, "OVERLAY")
+	s.needle:SetSize(3, 13)
+	s.hint = UI.Words(s, UI.TitleFont(12), UI.colors.dim, { justify = "CENTER", wrap = false })
+	s.lit = 0
+	s.fade = Shy.Clocked("grip: the size sheet gleaming", function(self, elapsed)
+		self.lit = max(0, self.lit - elapsed / SHEET.GLEAM)
+		self.gleam:SetAlpha(self.lit)
+		if self.lit == 0 then self:SetScript("OnUpdate", nil) end
+	end)
+	return s
+end
+
+-- What Shift does, said under the number where there is room.
+local function SayFree(free)
+	local s = SHEET.frame
+	if not s or s.free == free then return end
+	s.free = free
+	s.hint:SetText(free and "Any size" or "Hold Shift for any size")
+	Theme.Ink(s.hint, free and Theme.AccentSolid or UI.colors.dim)
+end
+
+-- The sheet at `ratio` of the box's own size. Asked only when the size changed.
+local function SayScale(ratio)
+	local s = Sheet()
+	local percent = floor(ratio * 100 + 0.5)
+	if s.said ~= percent then
+		s.said = percent
+		s.size:SetText(percent .. "%")
+	end
+	local way = math.log(ratio) / SHEET.LOG2
+	s.needle:SetPoint("CENTER", s.track, "CENTER", max(-1, math.min(1, way)) * SHEET.TRACK / 2, 0)
+	local at = abs(ratio - 1) < 0.0005
+	if s.at == at then return end
+	s.at = at
+	local ink = at and Theme.AccentSolid or UI.colors.text
+	Theme.Ink(s.size, ink)
+	Theme.Paint(s.needle, ink)
+	Theme.Paint(s.notch, at and Theme.AccentSolid or UI.colors.dim)
+	if at and s:IsShown() then
+		s.lit = 1
+		s.gleam:SetAlpha(1)
+		s:SetScript("OnUpdate", s.fade)
+	end
+end
+
+-- A flowing box: its width and height, in its own units.
+local function SaySize(width, height)
+	local s = Sheet()
+	local said = floor(width + 0.5) .. SHEET.TIMES .. floor(height + 0.5)
+	if s.said == said then return end
+	s.said = said
+	s.size:SetText(said)
+end
+
+-- Over the frame the handle stands on, its number as large as the box allows. `scaled`: with the track.
+local function ShowSheet(h, scaled)
+	local s = Sheet()
+	local region = h.region or h.on or h.box
+	s:ClearAllPoints()
+	s:SetPoint("TOPLEFT", region, "TOPLEFT")
+	s:SetPoint("BOTTOMRIGHT", region, "BOTTOMRIGHT")
+	local _, _, width, height = Act.Rect(h.box)
+	width, height = width or 200, height or 100
+	local letters = scaled and 4 or 11
+	local size = SHEET.TYPES[#SHEET.TYPES]
+	for _, each in ipairs(SHEET.TYPES) do
+		if each <= height * 0.36 and each * letters * 0.58 <= width * 0.85 then
+			size = each
+			break
+		end
+	end
+	if s.type ~= size then
+		s.type = size
+		s.size:SetFontObject(UI.TitleFont(size))
+	end
+	local track = scaled and height >= size * 2.4 and width >= SHEET.TRACK + 24
+	local hint = height >= size * 3.2 and width >= 150
+	s.track:SetShown(track)
+	s.notch:SetShown(track)
+	s.needle:SetShown(track)
+	s.hint:SetShown(hint)
+	-- The number, its track and its words stand as one group in the box's middle.
+	s.size:ClearAllPoints()
+	s.size:SetPoint("CENTER", s, "CENTER", 0, (track and 10 or 0) + (hint and 9 or 0))
+	s.track:ClearAllPoints()
+	s.track:SetPoint("TOP", s.size, "BOTTOM", 0, -size * 0.3)
+	s.hint:ClearAllPoints()
+	s.hint:SetPoint("TOP", track and s.track or s.size, "BOTTOM", 0, track and -12 or -6)
+	s.pool:SetSize(size * 5, size * 3)
+	s.gleam:SetSize(size * 4, size * 2.2)
+	s.said, s.at, s.free = nil, nil, nil
+	Theme.Ink(s.size, UI.colors.text)
+	SayFree(IsShiftKeyDown())
+	s:Show()
+	return s
+end
+
+local function HideSheet()
+	local s = SHEET.frame
+	if not s then return end
+	s:Hide()
+	s:SetScript("OnUpdate", nil)
+	s.lit = 0
+	s.gleam:SetAlpha(0)
+end
+
 -- While a handle is dragged the mouse can outrun it. This lies under the mouse everywhere else, taking
 -- no clicks, so neither the world nor another frame puts a cursor of its own back.
 local catcher = CreateFrame("Frame", nil, UIParent)
@@ -464,7 +618,7 @@ local function BeginScale(h, x, y)
 	local reach = (x / ui - ax) * ux + (y / ui - ay) * uy
 	if reach < 1 then reach = span end
 	drag = { grip = h, box = box, mode = "scale", ui = ui, ax = ax, ay = ay, ux = ux, uy = uy,
-		reach = reach, from = box:GetScale() }
+		reach = reach, from = box:GetScale(), base = Act.Base(box) }
 	if box.loose then
 		-- Its owner puts it back whenever it is anchored: told to let it be, and its anchors kept to go back to.
 		drag.points = {}
@@ -474,17 +628,24 @@ local function BeginScale(h, x, y)
 	pin:ClearAllPoints()
 	pin:SetPoint("CENTER", UIParent, "BOTTOMLEFT", ax, ay)
 	HUD.Attach(box, pin, to, "CENTER", 0, 0)
+	ShowSheet(h, true)
+	SayScale(drag.from / drag.base)
 	if not box.loose then Shy:Fire("SHY_HUD_MOVING", box) end
 end
 
--- In thousandths: a window follows the mouse by less than a pixel.
+-- In thousandths: a window follows the mouse by less than a pixel. Near its own size it holds there.
 local function StepScale()
 	local x, y = GetCursorPosition()
 	local along = (x / drag.ui - drag.ax) * drag.ux + (y / drag.ui - drag.ay) * drag.uy
-	local scale = floor(drag.from * max(along, 0) / drag.reach * 1000 + 0.5) / 1000
+	local scale, base = drag.from * max(along, 0) / drag.reach, drag.base
+	local free = IsShiftKeyDown()
+	SayFree(free)
+	if not free and abs(scale / base - 1) < SHEET.SNAP then scale = base end
+	scale = floor(scale * 1000 + 0.5) / 1000
 	if scale ~= drag.asked then
 		drag.asked = scale
 		drag.now = Act.Rescale(drag.box, scale)
+		SayScale(drag.now / base)
 	end
 end
 
@@ -646,14 +807,61 @@ local function BeginFlow(h, x, y)
 	local box = h.box
 	drag = { grip = h, box = box, mode = "flow", x = x, y = y, point = h.point,
 		w = box:GetWidth(), h = box:GetHeight(), hold = HUD.Hold(box, h.point) }
+	local left, bottom, width, height = Act.Rect(box)
+	if left and box:GetWidth() > 0 then
+		drag.rect = { l = left, b = bottom, w = width, h = height, s = width / box:GetWidth() }
+	end
+	local cw, ch = Clear(box)
+	ShowSheet(h, false)
+	SaySize(drag.w - cw, drag.h - ch)
 	Shy:Fire("SHY_HUD_MOVING", box)
 end
 
+-- The edges a handle moves land on the grid's lines when they come near (Grid.lua), each lit as a move's is.
+-- Not while docked: a docked window's edges are its host's to place.
+local function FlowSnap(wider, taller)
+	local grid, r = Shy.Grid, drag.rect
+	if not (grid and r and grid.Snaps()) or Act.Docked(drag.box) then
+		HUD.ShowGuides(nil, nil)
+		return wider, taller
+	end
+	local step, gx, gy = grid.Lines()
+	local point, s = drag.point, r.s
+	local lineX, lineY
+	if wider then
+		local right = point:find("RIGHT", 1, true) ~= nil
+		local edge = right and r.l + (drag.w + wider) * s or r.l + r.w - (drag.w + wider) * s
+		local x = gx + floor((edge - gx) / step + 0.5) * step
+		if abs(x - edge) < SHEET.REACH then
+			lineX = x
+			wider = (right and x - r.l or r.l + r.w - x) / s - drag.w
+		end
+	end
+	if taller then
+		local top = point:find("TOP", 1, true) ~= nil
+		local edge = top and r.b + (drag.h + taller) * s or r.b + r.h - (drag.h + taller) * s
+		local y = gy + floor((edge - gy) / step + 0.5) * step
+		if abs(y - edge) < SHEET.REACH then
+			lineY = y
+			taller = (top and y - r.b or r.b + r.h - y) / s - drag.h
+		end
+	end
+	HUD.ShowGuides(lineX, lineY)
+	return wider, taller
+end
+
 local function StepFlow()
+	SayFree(IsShiftKeyDown())
 	local wider, taller = Travel()
 	if wider == drag.wider and taller == drag.taller then return end
 	drag.wider, drag.taller = wider, taller
-	if Flow(byBox[drag.box], drag.w + (wider or 0), drag.h + (taller or 0)) then drag.hold() end
+	wider, taller = FlowSnap(wider, taller)
+	local box = drag.box
+	if Flow(byBox[box], drag.w + (wider or 0), drag.h + (taller or 0)) then
+		drag.hold()
+		local cw, ch = Clear(box)
+		SaySize(box:GetWidth() - cw, box:GetHeight() - ch)
+	end
 end
 
 local function EndFlow()
@@ -700,6 +908,12 @@ local function Release()
 		end
 		drag = nil
 		catcher:Hide()
+		HideSheet()
+		if Shy.Grid then
+			Shy.Grid.Hide("drag")
+			Shy.Grid.See(was.box.foreign or was.box, false)
+			if was.mode == "flow" then HUD.ShowGuides(nil, nil) end
+		end
 		Layer(was.grip)
 		Refresh(was.grip)
 		return
@@ -756,6 +970,10 @@ local function Watch()
 	catcher:Show()
 	Refresh(h)
 	Point(h, true)
+	if Shy.Grid then
+		Shy.Grid.Show("drag")
+		Shy.Grid.See(h.box.foreign or h.box, true)
+	end
 end
 
 driver:SetScript("OnEvent", function(_, event)

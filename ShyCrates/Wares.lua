@@ -90,6 +90,7 @@ local function SecureButton(foot, band, L)
 	b.text = Shop.Text(b, UI.NameFont(12), C.text)
 	b.text:SetPoint("CENTER")
 	UI.KeyPress(b, { tone = C.alert, words = b.text, sink = { b.text } })
+	ns.List.Guard(b)
 	b:HookScript("PostClick", function(_, _, down)
 		if down then return ns.Cast.Pressed(foot.upcoming and foot.upcoming.crate) end
 		PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)

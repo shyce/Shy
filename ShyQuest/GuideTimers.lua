@@ -1,7 +1,7 @@
 -- Card countdowns: waits a guide step starts (".timer 14,RP"), and the flight or the ride being taken.
 -- A live step's timed task is armed from view.timers on each route rebuild; it runs once the task is done.
 -- Flights and rides are ShyWay's (Shy.Way.Flight, Shy.Way.Riding): when one begins or ends the route is
--- worked out again, and while it lasts the card counts it down on its plate.
+-- worked out again. The card has no plate for them: the minimap draws the way with the time left.
 
 local ADDON, ns = ...
 local T = ns.T

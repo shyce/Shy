@@ -769,7 +769,7 @@ Phase = function(guide)
 end
 
 local function Create(card)
-	-- (No housing of its own: it stands on the card's header, the dungeon's picture behind both, Dress.)
+	-- (No housing of its own: it heads the card's body, the dungeon's picture behind it and the card's header, Dress.)
 	local b = CreateFrame("Button", nil, card)
 	b:SetHeight(BANNER.tall)
 	-- Dark on the left where the words are, clearing toward the right.
@@ -887,9 +887,11 @@ local function Flourish(b, guide, width)
 	end
 end
 
--- Lays the banner on the card at `y` (Card.lua asks while it lays its top out), `width` wide. Returns the height it
--- takes, 0 when there is no run.
-function Run.Banner(card, y, width)
+-- Lays the banner at `y` on `host` (the card's body, where it scrolls with the lead; the card itself if none),
+-- `width` wide; `offset` is how far under the card's top the host's top stands. Card.lua asks as it lays its body
+-- out. Returns the height it takes, 0 when there is no run.
+function Run.Banner(card, y, width, host, offset)
+	host, offset = host or card, offset or 0
 	local guide = G.current
 	local b = card.runBanner
 	if not (guide and guide.run and ns.Following()) then
@@ -904,11 +906,12 @@ function Run.Banner(card, y, width)
 		local one = Picture(guide.map)
 		guide.picture = one and one.file > 0 and one.cut and one or false
 	end
-	Dress(card, guide, width, y + BANNER.tall)
+	Dress(card, guide, width, offset + y + BANNER.tall)
 	if not b then
 		b = Create(card)
 		card.runBanner = b
 	end
+	if b:GetParent() ~= host then b:SetParent(host) end
 	b:ClearAllPoints()
 	b:SetPoint("TOPLEFT", 0, -y)
 	b:SetPoint("TOPRIGHT", 0, -y)
@@ -923,6 +926,8 @@ function Run.Banner(card, y, width)
 	end
 	b.count:SetText(carried > 0 and ("%d of %d done  \194\183  %d in log"):format(done, #quests, carried)
 		or ("%d of %d quests done"):format(done, #quests))
+	-- Where it is and its levels in the room the count leaves, cut short rather than run under it.
+	b.sub:SetWidth(math.max(40, width - BANNER.pad * 2 - b.count:GetStringWidth() - 10))
 	local now = Phase(guide) or 1
 	-- (Laid across again only for a new width, painted again only for a new phase: the theme keeps what was worn.)
 	if b.laidWidth ~= width then

@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.2.14" src="https://img.shields.io/badge/version-5.2.14-29b3ff"></a>
+  <a href="CHANGELOG.md"><img alt="version 5.2.16" src="https://img.shields.io/badge/version-5.2.16-29b3ff"></a>
   <img alt="released 26 Nov 2026" src="https://img.shields.io/badge/released-26_Nov_2026-4a5568">
-  <img alt="tests 38,477 passed" src="https://img.shields.io/badge/tests-38%2C477_passed-4ade80">
+  <img alt="tests 38,777 passed" src="https://img.shields.io/badge/tests-38%2C777_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,19 +93,21 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.2.14
+## What's new in 5.2.16
+
+### Added
+- **ShyCore:** Numbered pins show the order of things. Setup pages, talents, crates and key steps use them
+- **ShyCore:** A grid shows while you move or size things. Pieces snap to its lines, and you can turn that off
+- **ShySkin:** Talents you hold that your build doesn't take get a crimson ring. Hover says why and how to move the point
 
 ### Changed
-- **ShyChat:** Esc closes the whisper window you're in. The game's own whisper windows stay shut. Commands you type there run
-- **ShyChat:** Esc closes the whisper window you're in. The typing row no longer says who it goes to
-- **ShySkin:** The vendor's sell page lists everything a vendor buys and shows where each item fetches more
-- **ShySkin:** The flight map shows the whole map again. It no longer zooms in on the flights you have
+- **ShyAuction:** Sell picks your price for you. It won't undercut below a floor you set, and it says why. Space posts the next item in the queue
+- **ShyKeys:** Mage, druid and the other classes' keys moved. Wand on Z, armor on Shift + 5, talent picks match the new build
+- **ShyQuest:** A creature you must kill shows as one line with its raid mark. The run banner scrolls with the card, and flights get no timer plate
+- **ShyQuest:** Quests, items and the leveling guides match the new game build
 
 ### Fixed
-- **ShySkin:** Right-click menus cut off a name like "Invite to gro..." on first open. They fit the words now
-- **ShySkin:** Right-click menus on players failed in instances. They open and light up as they should now
-- **ShySkin:** The ├ù on the social window did nothing in a fight. It closes the window now
-- **ShyWay:** The flight line jumped to the wrong leg when a flight came back past where it started. It follows your real position now
+- **ShyKeys:** The game moved your turn and strafe keys at log-in. They stay as you set them now
 
 [Every release](CHANGELOG.md)
 

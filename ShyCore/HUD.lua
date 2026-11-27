@@ -624,54 +624,16 @@ function HUD.Update(box)
 	end
 end
 
--- Layout mode: dimmed grid, snap guides, toolbar
+-- Layout mode: the screen dimmed, the grid over it (Grid.lua), snap guides, toolbar
 
 local overlay = CreateFrame("Frame", nil, UIParent)
 overlay:SetAllPoints()
 overlay:SetFrameStrata("BACKGROUND")
+overlay:SetFrameLevel(1)   -- under the grid
 overlay:Hide()
 local dim = overlay:CreateTexture(nil, "BACKGROUND")
 dim:SetAllPoints()
 dim:SetColorTexture(0.02, 0.02, 0.03, 0.55)
-
-local gridLines = {}
-local function Line(parent, r, g, b, a)
-	local t = parent:CreateTexture(nil, "ARTWORK")
-	t:SetColorTexture(r, g, b, a)
-	return t
-end
-
-local centerV, centerH = overlay:CreateTexture(nil, "ARTWORK"), overlay:CreateTexture(nil, "ARTWORK")
-centerV:SetPoint("TOP")
-centerH:SetPoint("LEFT")
-Theme.Paint(centerV, UI.colors.hot, 0.3)
-Theme.Paint(centerH, UI.colors.hot, 0.3)
-
-local function DrawGrid()
-	for _, t in ipairs(gridLines) do t:Hide() end
-	local w, h = UIParent:GetWidth(), UIParent:GetHeight()
-	local n = 0
-	local function Get()
-		n = n + 1
-		gridLines[n] = gridLines[n] or Line(overlay, 1, 1, 1, 0.05)
-		gridLines[n]:Show()
-		return gridLines[n]
-	end
-	for x = 0, w, GRID * 4 do
-		local t = Get()
-		t:SetColorTexture(1, 1, 1, 0.05)
-		t:SetSize(1, h)
-		t:SetPoint("TOPLEFT", overlay, "TOPLEFT", x, 0)
-	end
-	for y = 0, h, GRID * 4 do
-		local t = Get()
-		t:SetColorTexture(1, 1, 1, 0.05)
-		t:SetSize(w, 1)
-		t:SetPoint("BOTTOMLEFT", overlay, "BOTTOMLEFT", 0, y)
-	end
-	centerV:SetSize(1, h)
-	centerH:SetSize(w, 1)
-end
 
 -- Guides shown while a box is snapped to something. Children of UIParent so they also show over Edit Mode.
 local guides = CreateFrame("Frame", nil, UIParent)
@@ -854,13 +816,13 @@ local function Snap(box, left, bottom, width, height)
 	-- The nearest line within reach, each way: { how far, where the face's left or bottom goes, the guide }.
 	local l, b = left + dx, bottom + dy
 	local bestX, bestY
-	local function X(to, guide)
+	local function X(to, guide, reach)
 		local d = math.abs(l - to)
-		if d < SNAP and not (bestX and bestX[1] <= d) then bestX = { d, to, guide } end
+		if d < (reach or SNAP) and not (bestX and bestX[1] <= d) then bestX = { d, to, guide } end
 	end
-	local function Y(to, guide)
+	local function Y(to, guide, reach)
 		local d = math.abs(b - to)
-		if d < SNAP and not (bestY and bestY[1] <= d) then bestY = { d, to, guide } end
+		if d < (reach or SNAP) and not (bestY and bestY[1] <= d) then bestY = { d, to, guide } end
 	end
 
 	-- The screen's middle, and a seam in from its edges.
@@ -894,9 +856,40 @@ local function Snap(box, left, bottom, width, height)
 		end
 	end
 
-	-- Otherwise the grid.
-	l = bestX and bestX[2] or Round(l, GRID / 2)
-	b = bestY and bestY[2] or Round(b, GRID / 2)
+	-- The grid's lines (Grid.lua): the face's left, right or middle on the nearest one. Only where nothing above
+	-- is in reach that way: lining up with what is there matters more.
+	local grid = Shy.Grid
+	local snaps = not grid or grid.Snaps()
+	if grid and snaps then
+		local step, gx, gy = grid.Lines()
+		local reach = grid.Reach()
+		local free, open = not bestX, not bestY
+		for edge = 0, 2 do
+			local across, up = fw * edge / 2, fh * edge / 2
+			if free then
+				local x = gx + Round(l + across - gx, step)
+				X(x - across, x, reach)
+			end
+			if open then
+				local y = gy + Round(b + up - gy, step)
+				Y(y - up, y, reach)
+			end
+		end
+	end
+
+	-- Otherwise a fine step, unless snapping to the grid is off.
+	local rawL, rawB = l, b
+	l = bestX and bestX[2] or (snaps and Round(l, GRID / 2) or l)
+	b = bestY and bestY[2] or (snaps and Round(b, GRID / 2) or b)
+
+	-- Where it lands, outlined while it is dragged: a box of ours snaps there as it is let go of. (A game
+	-- frame is placed where it snaps as it moves: it needs none.)
+	if not box.foreign and (bestX or bestY) and (math.abs(l - rawL) > 0.5 or math.abs(b - rawB) > 0.5) then
+		seat:ClearAllPoints()
+		seat:SetPoint("BOTTOMLEFT", guides, "BOTTOMLEFT", l, b)
+		seat:SetSize(fw, fh)
+		seat:Show()
+	end
 
 	if bestX then
 		guideV:SetHeight(sh)
@@ -1168,6 +1161,10 @@ local function StopDrag()
 	guideV:Hide()
 	guideH:Hide()
 	seat:Hide()
+	if Shy.Grid then
+		Shy.Grid.Hide("drag")
+		Shy.Grid.See(box.foreign or box, false)
+	end
 end
 
 -- Our own boxes are moved by the engine (StartMoving) and snap on release: re-anchoring a frame on
@@ -1184,6 +1181,10 @@ local function StartDrag(box, cx, cy)
 		local left, bottom = Rect(box)
 		if not left then
 			dragging = nil
+			if Shy.Grid then
+				Shy.Grid.Hide("drag")
+				Shy.Grid.See(box.foreign, false)
+			end
 			return
 		end
 		box.dragOffset = { cx / ui - left, cy / ui - bottom }
@@ -1209,6 +1210,13 @@ local function StartDrag(box, cx, cy)
 	end
 	-- This client sometimes never delivers the mouse-up to a dragged frame.
 	driver:RegisterEvent("GLOBAL_MOUSE_UP")
+	-- (Last: the box is already moving.)
+	if Shy.Grid then
+		Shy.Grid.Show("drag")
+		Shy.Grid.See(box.foreign or box, true)
+		local face = Face(box)
+		Shy.Grid.Tell(face.foreign or face)
+	end
 end
 driver:SetScript("OnEvent", StopDrag)
 
@@ -1227,6 +1235,13 @@ function HUD.Guide(frame)
 		strays[frame] = box
 	end
 	local left, bottom = Snap(box, Rect(box))
+	if Shy.Grid and strays.held ~= frame then
+		if strays.held then Shy.Grid.See(strays.held, false) end
+		strays.held = frame
+		Shy.Grid.Show("drag")
+		Shy.Grid.See(frame, true)
+		Shy.Grid.Tell(HUD.HousingOf(frame) or frame)
+	end
 	if not left then return nil end
 	local s = Scaled(box)
 	return left / s, bottom / s
@@ -1236,6 +1251,28 @@ function HUD.Unguide()
 	guideV:Hide()
 	guideH:Hide()
 	seat:Hide()
+	if Shy.Grid and strays.held then
+		Shy.Grid.See(strays.held, false)
+		strays.held = nil
+		if not dragging then Shy.Grid.Hide("drag") end
+	end
+end
+
+-- A handle sizing an edge to a line (Grip.lua): the guide lit there, as for a move. nil puts one away.
+function HUD.ShowGuides(x, y)
+	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+	if x then
+		guideV:SetHeight(sh)
+		guideV:ClearAllPoints()
+		guideV:SetPoint("BOTTOM", guides, "BOTTOMLEFT", x, 0)
+	end
+	if y then
+		guideH:SetWidth(sw)
+		guideH:ClearAllPoints()
+		guideH:SetPoint("LEFT", guides, "BOTTOMLEFT", 0, y)
+	end
+	guideV:SetShown(x ~= nil)
+	guideH:SetShown(y ~= nil)
 end
 
 -- Keeps the box's center in place.
@@ -2175,10 +2212,9 @@ local function Unlock(on, along)
 	overlay:SetShown(on)
 	toolbar:SetShown(on and not along)
 	watch:SetShown(on)
-	if on and not along then DrawGrid() end
-	for _, t in ipairs(gridLines) do t:SetShown(on and not along and t:IsShown()) end
-	centerV:SetShown(not along)
-	centerH:SetShown(not along)
+	if Shy.Grid then
+		if on and not along then Shy.Grid.Show("layout") else Shy.Grid.Hide("layout") end
+	end
 	ShowMovers()
 	for _, box in ipairs(boxes) do
 		StepDown(box, on)
@@ -2543,8 +2579,6 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
-events:RegisterEvent("DISPLAY_SIZE_CHANGED")
-events:RegisterEvent("UI_SCALE_CHANGED")
 events:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_REGEN_DISABLED" then
 		if unlocked then Unlock(false) end
@@ -2555,7 +2589,5 @@ events:SetScript("OnEvent", function(_, event)
 			HUD.Apply(box)
 			HUD.Update(box)
 		end
-	elseif unlocked and not alongside then
-		DrawGrid()
 	end
 end)

@@ -50,6 +50,19 @@ local BLOODTHIRST = { name = "Strike", role = "strike", what = "Bloodthirst, or 
 local SHIELD_SLAM = { name = "Strike", role = "strike", what = "Shield Slam, or Rend until you have it",
 	SHOW, ATTACK, "/cast [known:{23922}] {23922}; {772}" }
 
+local REND = { name = "Rend", what = "Rend", SHOW, ATTACK, "/cast [stance:3] {2457}; {772}" }
+local HAMSTRING = { name = "Slow", role = "slow", what = "Hamstring", SHOW, ATTACK, "/cast [stance:1/3] {1715}; {2457}" }
+-- A shield's taunt: Taunt first, from Defensive Stance.
+local SHIELD_TAUNT = { name = "Taunt", role = "taunt", what = "Taunt what's under your mouse, or your target. Mocking Blow in Battle Stance",
+	SHOW, "/cast [stance:2,@mouseover,harm,nodead][stance:2] {355}; [stance:1] {694}; {71}" }
+-- No shield to go back to: Charge from Battle Stance, Intercept from Berserker, and stay.
+local DAMAGE_CHARGE = { name = "Charge", role = "charge", what = "Charge, with Bloodrage. Intercept in a fight from 30",
+	SHOW, "/cast [nocombat,stance:1] {100}; [nocombat] {2457}; [stance:3] {20252}; [known:{20252}] {2458}", "/cast [combat] {2687}" }
+-- A shield never leaves Defensive Stance in a fight: no Intercept, so a second press can't take your block away.
+local SHIELD_CHARGE = { name = "Charge", role = "charge", what = "Charge, then back to Defensive Stance with Bloodrage",
+	SHOW, "/cast [nocombat,stance:1][nocombat,stance:2,known:{1310317}] {100}; [nocombat] {2457}",
+	"/cast [combat,nostance:2] {71}", "/cast [combat] {2687}" }
+
 local JOBS = {
 	-- The fight, under the fingers that are free while you move. The strike comes first: until Slam it is Rend,
 	-- and an ability stands on the first key that casts it, so a two-hander's Rend is on R too, not on Q.
@@ -58,7 +71,8 @@ local JOBS = {
 		by = { protsolo = SHIELD_SLAM, prot = SHIELD_SLAM, arms = MORTAL_STRIKE, armspvp = MORTAL_STRIKE, fury = BLOODTHIRST } },
 	{ name = "Sunder", key = "Q", asdf = "Q", what = "Sunder Armor",
 		SHOW, ATTACK, "/cast {7386}",
-		by = Damage({ name = "Rend", what = "Rend", SHOW, ATTACK, "/cast [stance:3] {2457}; {772}" }) },
+		-- (In PvP every runner wants Hamstring: it takes Q, and Rend steps over to Shift + Q.)
+		by = { arms = REND, fury = REND, armspvp = HAMSTRING } },
 	{ name = "Counter", role = "counter", key = "E", asdf = "E", what = "Revenge. Overpower in Battle Stance, Whirlwind in Berserker",
 		SHOW, ATTACK, "/cast [stance:1] {7384}; [stance:3] {1680}; {6572}",
 		-- Fury lives in Berserker Stance: its key shows Whirlwind first. A stance's own ability counts only once it
@@ -75,16 +89,14 @@ local JOBS = {
 		SHOW, "/cast [stance:3] {2457}; {6343}" },
 	{ name = "Taunt", role = "taunt", key = "Z", asdf = "Z", what = "Taunt what's under your mouse, or your target. Mocking Blow in Battle Stance",
 		SHOW, "/cast [stance:1] {694}; [stance:2,@mouseover,harm,nodead][stance:2] {355}; {71}",
-		by = Shield({ name = "Taunt", role = "taunt", what = "Taunt what's under your mouse, or your target. Mocking Blow in Battle Stance",
-			SHOW, "/cast [stance:2,@mouseover,harm,nodead][stance:2] {355}; [stance:1] {694}; {71}" }) },
+		-- (A two-hander or two weapons never taunt: no key.)
+		by = { protsolo = SHIELD_TAUNT, prot = SHIELD_TAUNT, arms = false, armspvp = false, fury = false } },
 	{ name = "Charge", role = "charge", key = "C", asdf = "C", what = "Charge, then back to Defensive Stance with Bloodrage. Intercept in a fight from 30",
 		SHOW,
 		"/cast [nocombat,stance:1][nocombat,stance:2,known:{1310317}] {100}; [nocombat] {2457}; [stance:3] {20252}; [stance:2,known:{20252}] {2458}",
 		"/cast [combat,nostance:2] {71}",
 		"/cast [combat] {2687}",
-		-- No shield to go back to: Charge from Battle Stance, Intercept from Berserker, and stay.
-		by = Damage({ name = "Charge", role = "charge", what = "Charge, with Bloodrage. Intercept in a fight from 30",
-			SHOW, "/cast [nocombat,stance:1] {100}; [nocombat] {2457}; [stance:3] {20252}; [known:{20252}] {2458}", "/cast [combat] {2687}" }) },
+		by = { arms = DAMAGE_CHARGE, armspvp = DAMAGE_CHARGE, fury = DAMAGE_CHARGE, protsolo = SHIELD_CHARGE, prot = SHIELD_CHARGE } },
 	{ name = "Victory", key = "V", asdf = "V", what = "Victory Rush",
 		SHOW, ATTACK, "/cast {402927}" },
 	{ name = "Bloodrage", key = "X", asdf = "X", what = "Bloodrage",
@@ -94,22 +106,26 @@ local JOBS = {
 	-- Every fleeing mob wants Hamstring, so it has a plain key.
 	{ name = "Slow", role = "slow", key = "B", asdf = "B", what = "Hamstring. Piercing Howl in Defensive Stance once you have it",
 		SHOW, ATTACK, "/cast [stance:1/3] {1715}; [known:{12323}] {12323}; {2457}",
-		by = Damage({ name = "Slow", role = "slow", what = "Hamstring", SHOW, ATTACK, "/cast [stance:1/3] {1715}; {2457}" }) },
+		by = { arms = HAMSTRING, fury = HAMSTRING, armspvp = false } },
 	-- The thumb: what you answer with. The stop is on F (G with ASDF), beside the index finger: Mouse 5 is
 	-- too far to reach in a hurry, so it keeps only what is never hurried.
 	{ name = "Block", key = "BUTTON4", asdf = "BUTTON4", what = "Shield Block",
 		SHOW, "/cast [stance:2] {2565}; {71}",
 		by = { arms = { name = "Sweeping Strikes", what = "Sweeping Strikes", SHOW, "/cast {12292}" },
 			armspvp = { name = "Sweeping Strikes", what = "Sweeping Strikes", SHOW, "/cast {12292}" },
-			fury = { name = "Death Wish", what = "Death Wish", SHOW, "/cast {12328}" } } },
+			-- (Fury presses Berserker Rage every half minute for rage: the thumb's. Death Wish, rarer, is Shift's.)
+			fury = { name = "Berserker Rage", what = "Berserker Rage", SHOW, "/cast [stance:3] {18499}; {2458}" } } },
 	{ name = "Stop", role = "stop", key = "F", asdf = "G", what = "Shield Bash. Pummel in Berserker Stance",
 		SHOW, "/cast [nostance:3] {72}; [known:{6552}] {6552}; {2457}",
 		-- No shield to bash with: Pummel, from Berserker Stance, once you have it.
 		by = Damage({ name = "Stop", role = "stop", what = "Pummel", SHOW, "/cast [stance:3] {6552}; [known:{6552}] {2458}" }) },
-	-- (No shield, no Last Stand: Berserker Rage, the answer to a fear, is the thumb's instead.)
+	-- (No shield, no Last Stand: a two-hander's is Berserker Rage, the answer to a fear, and Fury's Death Wish. It
+	-- never stands in: a long cooldown has no place on the stop's key.)
 	{ name = "Stand", key = "SHIFT-BUTTON4", asdf = "SHIFT-BUTTON4", what = "Last Stand",
 		SHOW, "/cast {12975}",
-		by = Damage({ name = "Berserker Rage", what = "Berserker Rage", SHOW, "/cast [stance:3] {18499}; {2458}" }) },
+		by = { arms = { name = "Berserker Rage", what = "Berserker Rage", SHOW, "/cast [stance:3] {18499}; {2458}" },
+			armspvp = { name = "Berserker Rage", what = "Berserker Rage", SHOW, "/cast [stance:3] {18499}; {2458}" },
+			fury = { name = "Death Wish", what = "Death Wish", stay = true, SHOW, "/cast {12328}" } } },
 	{ name = "Concussion", key = "SHIFT-F", asdf = "SHIFT-G", what = "Concussion Blow",
 		SHOW, ATTACK, "/cast {12809}",
 		by = Damage({ name = "Piercing Howl", what = "Piercing Howl", SHOW, "/cast {12323}" }) },
@@ -129,11 +145,12 @@ local JOBS = {
 	{ name = "Pull", key = "5", asdf = "5", spare = "MULTIACTIONBAR4BUTTON5", stay = true, what = "Shoot or Throw, whichever you carry",
 		SHOW, "/cast [worn:Crossbows] {7919}; [worn:Bows] {2480}; [worn:Guns] {7918}; {2764}" },
 	-- With Shift: each key's rarer kin.
-	-- (Sunder Armor is a tank's: a two-hander or two weapons have Rend on Q and no Sunder key. A shield has no Rend
-	-- key once Shield Slam takes R: its rage goes to Sunder Armor and Heroic Strike.)
+	-- (Sunder Armor is a tank's: a two-hander or two weapons have Rend on Q and no Sunder key, and in PvP Rend is
+	-- here, under Hamstring. A shield has no Rend key once Shield Slam takes R: its rage goes to Sunder Armor and
+	-- Heroic Strike.)
 	{ name = "Rend", key = "SHIFT-Q", asdf = "SHIFT-Q", what = "Rend",
 		SHOW, ATTACK, "/cast [stance:3] {2457}; {772}",
-		by = { arms = false, armspvp = false, fury = false, prot = false, protsolo = false } },
+		by = { arms = false, fury = false, prot = false, protsolo = false } },
 	-- (A shield lives in Defensive Stance: the 10 rage a stance change keeps is short of Execute's cost, so a shield
 	-- has no Execute key.)
 	-- (Pressed at the end of every fight: it keeps one key, never standing in for a few levels elsewhere.)
@@ -150,9 +167,11 @@ local JOBS = {
 		SHOW, "/cast {1160}" },
 	{ name = "Cleave", key = "SHIFT-G", asdf = "SHIFT-W", what = "Cleave",
 		SHOW, ATTACK, "/cast !{845}" },
-	-- (A slip with this one turns every mob in reach on you: it never stands in on an easy key.)
+	-- (A slip with this one turns every mob in reach on you: it never stands in on an easy key. A group's tank alone
+	-- wants it: alone, or without a shield, Mouse 5 stays free.)
 	{ name = "Challenging", key = "BUTTON5", asdf = "BUTTON5", stay = true, what = "Challenging Shout",
-		SHOW, "/cast {1161}" },
+		SHOW, "/cast {1161}",
+		by = { protsolo = false, arms = false, armspvp = false, fury = false } },
 	-- Berserker Rage is a shield's last resort, for a fear: on the number row, as Shift + C is the bandage's on every
 	-- class.
 	{ name = "Berserker Rage", key = "SHIFT-5", asdf = "SHIFT-5", stay = true, what = "Berserker Rage",

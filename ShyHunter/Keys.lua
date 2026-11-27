@@ -18,11 +18,12 @@ local Either = Shy.Keys.Either
 
 -- What a build has on a key in place of the plain job. Survival fights in reach: its two strikes stand where the
 -- others' Aimed and Arcane Shots do, Arcane Shot behind Shift, Deterrence on the wall's key and Disengage alone on the
--- escape. Beast Mastery's hawks (which share Arcane Shot's cooldown) and Marksmanship's Sniper Shot stand beside
--- Arcane Shot; the shooting builds strike and bite in reach with one key. Bestial Wrath is a cooldown on 5 beside
--- Rapid Fire; Trueshot Aura is the long buff on Shift + 4.
+-- escape. Beast Mastery's hawks share Arcane Shot's cooldown and are pressed more (two out at once), so they take E
+-- and Arcane Shot goes behind Shift. Marksmanship's Sniper Shot stands beside Arcane Shot; the shooting builds strike
+-- and bite in reach with one key. Bestial Wrath is a cooldown on 5; Trueshot Aura is the long buff on Shift + 4.
 local RAPTOR = { name = "Raptor", what = "Raptor Strike", SHOW, ATTACK, "/cast {2973}" }
 local BITE = { name = "Mongoose", what = "Mongoose Bite", SHOW, ATTACK, "/cast {1495}" }
+local HAWK = { name = "Summon Hawk", what = "Summon Hawk", SHOW, "/cast {1293241}" }
 -- Survival in reach: the Beast's melee power to fight in (the Monkey until it comes), Freezing Trap its one stop,
 -- Strider Kick a strike between Raptor Strikes, Lacerate its bleed beside the sting, Rapid Fire its cooldown (it
 -- hastens blows too), and Concussive Shot behind Shift once the kick takes its key.
@@ -35,6 +36,8 @@ local LACERATE = { name = "Lacerate", what = "Lacerate", SHOW, ATTACK, "/cast {2
 local RAPID = { name = "Rapid Fire", what = "Rapid Fire", SHOW, "/cast {3045}" }
 local ARCANE = { name = "Arcane", what = "Arcane Shot", SHOW, "/cast {3044}" }
 local DETER = { name = "Deterrence", what = "Deterrence", SHOW, "/cast {19263}" }
+-- (Survival's wall is Deterrence: Feign Death keeps the easy key there, where the others have Rapid Fire)
+local FEIGN = { name = "Feign", what = "Feign Death", SHOW, "/cast {5384}" }
 local DISENGAGE = { name = "Disengage", what = "Disengage", SHOW, "/cast {781}" }
 local SNIPER = { name = "Sniper Shot", what = "Sniper Shot", SHOW, "/cast {1310687}" }
 local FLARE = { name = "Flare", what = "Flare", SHOW, "/cast {1543}" }
@@ -50,14 +53,14 @@ local JOBS = {
 	{ name = "Sting", key = "Q", asdf = "Q", what = "Serpent Sting",
 		SHOW, "/cast {1978}" },
 	{ name = "Arcane", key = "E", asdf = "E", what = "Arcane Shot",
-		SHOW, "/cast {3044}", by = { survival = BITE } },
+		SHOW, "/cast {3044}", by = { survival = BITE, bm = HAWK } },
 	-- The main shot: Aimed Shot, which shares its cooldown with Multi-Shot on Shift + R (one or the other, every
 	-- 6 sec: Aimed on one enemy, Multi on a pack). Survival's main strike is Raptor Strike.
 	{ name = "Aimed", key = "R", asdf = "R", what = "Aimed Shot",
 		SHOW, "/cast {19434}", by = { survival = RAPTOR } },
-	-- (With ASDF, F backs you off under the index finger: Multi-Shot, shot on the move, goes on Shift + W, the ring
-	-- finger's, and the strikes in reach take Shift + R.)
-	{ name = "Multi-Shot", key = "SHIFT-R", asdf = "SHIFT-W", what = "Multi-Shot",
+	-- (Shift + R with ASDF too: the pinky on Shift, the index on R, while the ring finger holds S to run. A slip
+	-- there would break a trap, so it is never on Shift + W.)
+	{ name = "Multi-Shot", key = "SHIFT-R", asdf = "SHIFT-R", what = "Multi-Shot",
 		SHOW, "/cast {2643}" },
 	-- The fire trap is the area key from 16 on; Volley comes at 40 as its rarer kin, so nothing moves then.
 	{ name = "Fire Trap", key = "T", asdf = "T", what = "Explosive Trap. Immolation Trap until 34",
@@ -70,9 +73,9 @@ local JOBS = {
 		SHOW, "/cast {5116}", by = { survival = KICK } },
 	{ name = "Pet", key = "V", asdf = "V", what = "Mend Pet. Call Pet with none out, Revive Pet over its body",
 		SHOW, "/cast [pet,@pet,nodead] {136}; [@pet,dead] {982}; {883}" },
-	-- With ASDF, C is under the middle finger, free while you run on S: you feign as you run from a fight gone bad.
-	{ name = "Feign", key = "X", asdf = "C", what = "Feign Death",
-		SHOW, "/cast {5384}" },
+	-- Pressed in every tough fight: an easy key (with ASDF, C under the middle finger, free while you run on S).
+	{ name = "Rapid Fire", key = "X", asdf = "C", what = "Rapid Fire",
+		SHOW, "/cast {3045}", by = { survival = FEIGN } },
 	{ name = "Travel", role = "travel", key = "3", asdf = "3", stay = true, what = "Aspect of the Cheetah. Aspect of the Pack in a group",
 		SHOW, "/cast [group,known:{13159}] {13159}; {5118}" },
 	-- Pressed before every pull: an easy key (with ASDF, X under the ring finger, pressed before you set off).
@@ -91,19 +94,20 @@ local JOBS = {
 		SHOW, "/cast [known:{19263}] {19263}; {781}", by = { survival = DISENGAGE } },
 	{ name = "Freezing Trap", key = "SHIFT-F", asdf = "SHIFT-G", what = "Freezing Trap",
 		SHOW, "/cast {1499}", by = { survival = false } },
-	-- The number row: the big cooldowns.
-	{ name = "Rapid Fire", key = "4", asdf = "4", spare = "MULTIACTIONBAR4BUTTON4", what = "Rapid Fire",
-		SHOW, "/cast {3045}", by = { survival = DETER } },
+	-- The number row: the wall, on its key in every class (never pressed by a slip mid-fight), and the big cooldown.
+	{ name = "Wall", role = "wall", key = "4", asdf = "4", stay = true, spare = "MULTIACTIONBAR4BUTTON4", what = "Feign Death",
+		SHOW, "/cast {5384}", by = { survival = DETER } },
 	{ name = "Bestial Wrath", key = "5", asdf = "5", spare = "MULTIACTIONBAR4BUTTON5", what = "Bestial Wrath",
 		SHOW, "/cast {19574}", by = { mm = FLARE, lonewolf = DISMISS, survival = RAPID } },
 	-- With Shift: each key's rarer kin.
 	{ name = "Scorpid", key = "SHIFT-Q", asdf = "SHIFT-Q", what = "Scorpid Sting",
 		SHOW, "/cast {3043}", by = { survival = LACERATE } },
 	{ name = "Summon Hawk", key = "SHIFT-E", asdf = "SHIFT-E", what = "Summon Hawk",
-		SHOW, "/cast {1293241}", by = { survival = ARCANE, mm = SNIPER, lonewolf = SNIPER, bmpvp = VIPER } },
+		SHOW, "/cast {1293241}", by = { survival = ARCANE, mm = SNIPER, lonewolf = SNIPER, bmpvp = VIPER, bm = ARCANE } },
 	-- In reach, for the builds that shoot: one press bites when Mongoose Bite is lit and strikes with Raptor Strike
-	-- (which waits for no other), on R until Aimed Shot comes at 20.
-	{ name = "Melee", role = "melee", key = "SHIFT-G", asdf = "SHIFT-R", early = "R", asdfEarly = "R",
+	-- (which waits for no other), on R until Aimed Shot comes at 20. With ASDF, Shift + W: you stand to strike, so
+	-- the ring finger is free, and a slip out of reach does nothing.
+	{ name = "Melee", role = "melee", key = "SHIFT-G", asdf = "SHIFT-W", early = "R", asdfEarly = "R",
 		what = "Mongoose Bite when it's lit, and Raptor Strike",
 		"#showtooltip {2973}", ATTACK, "/cast [known:{1495}] {1495}", "/cast {2973}", by = { survival = CONCUSSIVE } },
 	{ name = "Volley", key = "SHIFT-T", asdf = "SHIFT-T", what = "Volley",
@@ -150,7 +154,7 @@ local BEAST = {   -- Beast Mastery, questing and in PvP alike
 			{ "Escape", "if it turns on you" }, { "Stop", "when it reaches you" },
 			{ "Wing Clip", "when it reaches you" }, { "Melee", "when it reaches you" }, PET },
 		cleave = { { "Freezing Trap", "on the extra enemy" }, { "Fire Trap", "in their path" }, { "Stop", "on one hitting you" },
-			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Summon Hawk" }, PET, { "Monkey", "when they reach you" }, { "Feign", "if it goes bad" } } },
+			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Summon Hawk" }, PET, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 	{ from = 40, tip = "Bestial Wrath makes your pet a killer for a short while. Save it for tough enemies and pulls of two.",
 		single = { { "Hunter's Mark", "to open" }, { "Attack" }, { "Bestial Wrath", "on a tough enemy" }, { "Rapid Fire", "on a tough enemy" },
 			{ "Sting", "keep it up" }, { "Summon Hawk" }, { "Aimed" }, { "Arcane" }, { "Multi-Shot", "on the move" },
@@ -165,7 +169,7 @@ local BEAST = {   -- Beast Mastery, questing and in PvP alike
 			{ "Melee", "when it reaches you" }, PET },
 		cleave = { { "Freezing Trap", "on the extra enemy" }, { "Bestial Wrath", "on 2+ enemies" }, { "Fire Trap", "under the pack" },
 			{ "Volley", "on 3+ enemies" }, { "Multi-Shot" }, { "Sting", "on each enemy" }, { "Summon Hawk" }, PET,
-			{ "Monkey", "when they reach you" }, { "Feign", "if it goes bad" } } },
+			{ "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 }
 
 local MARKS = {   -- Marksmanship, with the pet out or put away
@@ -174,21 +178,21 @@ local MARKS = {   -- Marksmanship, with the pet out or put away
 			{ "Rapid Fire", "on a tough enemy" }, { "Aimed" }, { "Arcane" }, { "Multi-Shot", "on the move" }, { "Concussive", "if it runs" },
 			{ "Escape", "if it turns on you" }, { "Wing Clip", "when it reaches you" }, { "Melee", "when it reaches you" }, PET },
 		cleave = { { "Stop", "on the extra enemy" }, { "Fire Trap", "in their path" }, { "Multi-Shot" },
-			{ "Sting", "on each enemy" }, { "Arcane" }, { "Frost Trap", "to slow them all" }, { "Monkey", "when they reach you" }, { "Feign", "if it goes bad" } } },
+			{ "Sting", "on each enemy" }, { "Arcane" }, { "Frost Trap", "to slow them all" }, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 	{ from = 40, tip = "Open with Sniper Shot from the edge of your range. A pull should be half done before it reaches you.",
 		single = { { "Trueshot", "keep it up" }, { "Hunter's Mark", "to open" }, { "Sniper Shot", "to open, then when ready" },
 			{ "Attack" }, { "Sting", "keep it up" }, { "Rapid Fire", "on a tough enemy" }, { "Aimed" }, { "Arcane" },
 			{ "Multi-Shot", "on the move" }, { "Concussive", "if it runs" }, { "Escape", "if it turns on you" },
 			{ "Wing Clip", "when it reaches you" }, { "Melee", "when it reaches you" }, PET },
 		cleave = { { "Stop", "on the extra enemy" }, { "Fire Trap", "under the pack" }, { "Volley", "on 3+ enemies" },
-			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Sniper Shot" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Feign", "if it goes bad" } } },
+			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Sniper Shot" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 	{ from = 50, tip = "Most things die before they reach you now. Feign Death if a pull grows, and they go home.",
 		single = { { "Trueshot", "keep it up" }, { "Hunter's Mark", "to open" }, { "Sniper Shot", "to open, then when ready" },
 			{ "Attack" }, { "Sting", "keep it up" }, { "Rapid Fire", "on a tough enemy" }, { "Aimed" }, { "Arcane" },
 			{ "Multi-Shot", "on the move" }, { "Concussive", "if it runs" }, { "Escape", "if it turns on you" },
 			{ "Wing Clip", "when it reaches you" }, { "Melee", "when it reaches you" }, PET },
 		cleave = { { "Stop", "on the extra enemy" }, { "Fire Trap", "under the pack" }, { "Volley", "on 3+ enemies" },
-			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Sniper Shot" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Feign", "if it goes bad" } } },
+			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Sniper Shot" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 }
 
 local PLAY = {
@@ -211,19 +215,19 @@ local PLAY = {
 			{ "Aimed" }, { "Arcane" }, { "Multi-Shot", "on the move" }, { "Concussive", "if it runs" }, { "Wing Clip", "when it reaches you" },
 			{ "Melee", "when it reaches you" }, PET },
 		cleave = { { "Stop", "on the extra enemy" }, { "Freezing Trap", "on the extra enemy" }, { "Fire Trap", "in their path" }, { "Multi-Shot" },
-			{ "Sting", "on each enemy" }, { "Arcane" }, { "Frost Trap", "to slow them all" }, { "Monkey", "when they reach you" }, { "Feign", "if it goes bad" } } },
+			{ "Sting", "on each enemy" }, { "Arcane" }, { "Frost Trap", "to slow them all" }, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 	{ from = 40, tip = "Volley and Explosive Trap clear packs but pull them onto you. Let your pet hold them first.",
 		single = { { "Hunter's Mark", "to open" }, { "Attack" }, { "Sting", "keep it up" }, { "Rapid Fire", "on a tough enemy" },
 			{ "Aimed" }, { "Arcane" }, { "Multi-Shot", "on the move" }, { "Concussive", "if it runs" }, { "Wing Clip", "when it reaches you" },
 			{ "Melee", "when it reaches you" }, PET },
 		cleave = { { "Stop", "on the extra enemy" }, { "Freezing Trap", "on the extra enemy" }, { "Fire Trap", "under the pack" }, { "Volley", "on 3+ enemies" },
-			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Feign", "if it goes bad" } } },
+			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 	{ from = 50, tip = "Your gear carries you now. Keep the sting and the pet up, and pull two at a time when it feels safe.",
 		single = { { "Hunter's Mark", "to open" }, { "Attack" }, { "Sting", "keep it up" }, { "Rapid Fire", "on a tough enemy" },
 			{ "Aimed" }, { "Arcane" }, { "Multi-Shot", "on the move" }, { "Concussive", "if it runs" }, { "Wing Clip", "when it reaches you" },
 			{ "Melee", "when it reaches you" }, PET },
 		cleave = { { "Stop", "on the extra enemy" }, { "Freezing Trap", "on the extra enemy" }, { "Fire Trap", "under the pack" }, { "Volley", "on 3+ enemies" },
-			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Feign", "if it goes bad" } } },
+			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 	-- Survival fights in reach from the start: Raptor Strike on R, the Monkey (the Beast from 30) on 1.
 	{ from = 1, build = "survival", tip = "You fight in melee. Shoot as it comes, then hit it with Raptor Strike once it reaches you.",
 		single = { { "Hunter's Mark", "to open" }, { "Attack" }, { "Sting", "as it comes in" }, { "Arcane", "as it comes in" },

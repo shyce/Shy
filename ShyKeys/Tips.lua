@@ -267,7 +267,13 @@ end
 do
 	local login = CreateFrame("Frame")
 	login:RegisterEvent("PLAYER_LOGIN")
-	login:SetScript("OnEvent", function()
+	login:RegisterEvent("NOTIFY_TURN_STRAFE_CHANGE")   -- (the game moving turning and strafing, out of the hooks' sight)
+	login:SetScript("OnEvent", function(_, event)
+		if event == "NOTIFY_TURN_STRAFE_CHANGE" then
+			Noted(("the game moved turning and strafing: Q = %s, E = %s, A = %s, D = %s"):format(GetBindingAction("Q"),
+				GetBindingAction("E"), GetBindingAction("A"), GetBindingAction("D")))
+			return
+		end
 		Noted(("logged in: Q = %s, E = %s, 1 = %s, C = %s, Mouse 4 = %s"):format(GetBindingAction("Q"), GetBindingAction("E"),
 			GetBindingAction("1"), GetBindingAction("C"), GetBindingAction("BUTTON4")))
 	end)

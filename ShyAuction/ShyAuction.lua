@@ -46,6 +46,7 @@ local T = Shy:NewAddon(ADDON, {
 		page = "buy",         -- the page it opens on (the last one open)
 		autoScan = false,     -- scan the whole auction house as it opens, whenever the server allows (else only when you press Scan)
 		spacePosts = true,    -- Space posts while the Sell page is up
+		floor = 70,           -- Sell undercuts no lower than this share of the market, in percent (under it: the market)
 		tooltip = true,       -- an item's price on its tooltip
 		markets = {},         -- [market key] = { at (last whole scan), asked, items = { [item] = { u, q, n, at, p, d = "day:price:seen,..." } } }
 		share = {},           -- [market key] = your own prices, packed for the companion app to send in

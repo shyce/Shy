@@ -29,20 +29,22 @@ local BOLT = { name = "Bolt", role = "bolt", what = "Lightning Bolt", SHOW, "/ca
 local CHAIN_HEAL = { name = "Chain Heal", what = "Chain Heal", SHOW, "/cast " .. FRIEND .. " {1064}" }
 local LESSER = { name = "Lesser", what = "Lesser Healing Wave", SHOW, "/cast " .. FRIEND .. " {8004}" }
 local WAVE = { name = "Wave", what = "Healing Wave", SHOW, "/cast " .. FRIEND .. " {331}" }
-local RIPTIDE = { name = "Riptide", what = "Riptide", SHOW, "/cast " .. FRIEND .. " {408521}" }
+-- (With ASDF, Riptide goes on Shift + E, the quick heal's kin. A heal aimed at a friend never goes on the thumb.)
+local RIPTIDE = { name = "Riptide", what = "Riptide", asdf = "SHIFT-E", SHOW, "/cast " .. FRIEND .. " {408521}" }
+-- (a healer's Frost Shock, with ASDF: on the thumb, so Riptide can have Shift + E)
+local FROST_THUMB = { name = "Frost", what = "Frost Shock", asdf = "SHIFT-BUTTON4", SHOW, "/cast {8056}" }
 -- (Restoration's: on E, the quick heal's key, until that heal is learned at 20; then on V)
 local FLAME = { name = "Flame", what = "Flame Shock", early = "E", asdfEarly = "E", SHOW, "/cast {8050}" }
-local NOVA = { name = "Fire Nova", what = "Fire Nova: it bursts round your fire totem", SHOW, "/cast {408341}" }
+-- (With ASDF a healer's Fire Nova is on W, pressed on purpose, and Mana Tide on Shift + W: it can't hurt by accident.)
+local NOVA = { name = "Fire Nova", what = "Fire Nova: it bursts round your fire totem", asdf = "W", SHOW, "/cast {408341}" }
 local SEARING = { name = "Searing", what = "Searing Totem", SHOW, "/cast {3599}" }
 local STREAM = { name = "Stream", what = "Healing Stream Totem", SHOW, "/cast {5394}" }
 local STONECLAW = { name = "Stoneclaw", what = "Stoneclaw Totem", SHOW, "/cast {5730}" }
-local TIDE = { name = "Mana Tide", what = "Mana Tide Totem", SHOW, "/cast {16190}" }
+local TIDE = { name = "Mana Tide", what = "Mana Tide Totem", asdf = "SHIFT-W", SHOW, "/cast {16190}" }
 local GUARD = { name = "Guard Totem", what = "Grounding Totem. Tremor Totem until 30", SHOW, "/cast [known:{8177}] {8177}; {8143}" }
 -- Elemental and Restoration imbue with Flametongue; a tank keeps Rockbiter for the threat it adds.
 local TONGUE = { name = "Weapon", what = "Flametongue Weapon. Rockbiter Weapon until you have it", SHOW, "/cast [known:{8024}] {8024}; {8017}" }
 local ROCK = { name = "Weapon", what = "Rockbiter Weapon", SHOW, "/cast {8017}" }
--- Windfury Totem takes the place of your own Windfury Weapon: a melee shaman drops Grace of Air once it has it.
-local AIR = { name = "Wind Totem", what = "Grace of Air Totem. Windfury Totem until 42", SHOW, "/cast [known:{8835}] {8835}; {8512}" }
 
 local JOBS = {
 	-- The fight, under the fingers that are free while you move.
@@ -85,13 +87,13 @@ local JOBS = {
 	{ name = "Purge", key = "SHIFT-F", asdf = "SHIFT-G", stay = true, what = "Purge",
 		SHOW, "/cast {370}" },
 	{ name = "Frost", key = "SHIFT-E", asdf = "SHIFT-E", what = "Frost Shock",
-		SHOW, "/cast {8056}" },
+		SHOW, "/cast {8056}", by = { resto = FROST_THUMB } },
 	{ name = "Magma", key = "SHIFT-T", asdf = "SHIFT-T", what = "Magma Totem",
 		SHOW, "/cast {8190}", by = { resto = GUARD } },
 	{ name = "Chain", key = "SHIFT-R", asdf = "SHIFT-R", what = "Chain Lightning",
 		SHOW, "/cast {421}", by = { enh = BOLT, tank = BOLT, pvp = BOLT, resto = BOLT } },
 	-- (With ASDF the pinky leaves A for Shift and only the running finger can reach Q: Shift + Q stops you. So the
-	-- totem dropped in a hurry, and a healer's Riptide, take Shift + Mouse 4 there, and Healing Stream Shift + Q.)
+	-- totem dropped in a hurry takes Shift + Mouse 4 there, a healer's Frost Shock too, and Healing Stream Shift + Q.)
 	{ name = "Guard Totem", key = "SHIFT-Q", asdf = "SHIFT-BUTTON4", what = "Grounding Totem. Tremor Totem until 30",
 		SHOW, "/cast [known:{8177}] {8177}; {8143}", by = { resto = RIPTIDE } },
 	{ name = "Wave", key = "B", asdf = "W", what = "Healing Wave",
@@ -104,11 +106,12 @@ local JOBS = {
 		SHOW, "/cast " .. FRIEND .. " {2870}" },
 	{ name = "Recall", key = "3", asdf = "3", stay = true, what = "Totemic Recall",
 		SHOW, "/cast {36936}" },
-	-- Mouse 5, never hurried: your totems brought along between fights, and the air totem for a group.
+	-- Mouse 5, never hurried: your totems brought along between fights, and Windfury Totem. It works beside your
+	-- weapon's own Windfury.
 	{ name = "Totemic Call", key = "BUTTON5", asdf = "BUTTON5", what = "Totemic Call: your totems come to you",
 		SHOW, "/cast {437009}" },
 	{ name = "Wind Totem", key = "SHIFT-BUTTON5", asdf = "SHIFT-BUTTON5", what = "Windfury Totem. Grace of Air Totem if that is the one you have",
-		SHOW, "/cast [known:{8512}] {8512}; {8835}", by = { enh = AIR, tank = AIR, pvp = AIR } },
+		SHOW, "/cast [known:{8512}] {8512}; {8835}" },
 	-- The number row: your big cooldown, and a friend's care.
 	{ name = "Burst", role = "burst", key = "4", asdf = "4", spare = "MULTIACTIONBAR4BUTTON4",
 		what = "Your talent's cooldown: Lightning Mastery, Rage of the Farseer or Nature's Swiftness",
@@ -243,10 +246,10 @@ local PLAY = {
 
 	-- Enhancement tank: Rockbiter and Earth Shock (its threat is high) hold them, Fire Nova and Magma Totem a pack.
 	{ from = 20, build = "tank", tip = "Rockbiter and Earth Shock hold their attention. Wear a shield and keep Lightning Shield up.",
-		single = { { "Weapon", "keep it up" }, { "Totems", "before the pull" }, { "Stop", "to hold its attention" },
-			{ "Stormstrike" }, { "Flame", "on one that lives" }, { "Shield", "keep it up" } },
+		single = { { "Weapon", "keep it up" }, { "Totems", "before the pull" }, { "Bolt", "to pull" }, { "Stop", "to hold its attention" },
+			{ "Flame", "on one that lives" }, { "Shield", "keep it up" } },
 		cleave = { { "Totems", "before the pull" }, { "Stoneclaw", "to pull them to you" }, { "Fire Nova", "near your totem" },
-			{ "Stop", "on the one that strays" }, { "Stormstrike" } } },
+			{ "Stop", "on the one that strays" } } },
 	{ from = 30, build = "tank", tip = "Magma Totem under the pack and Fire Nova hold a group. Earth Shock the one that runs.",
 		single = { { "Weapon", "keep it up" }, { "Totems", "before the pull" }, { "Stop", "to hold its attention" },
 			{ "Stormstrike" }, { "Flame", "on one that lives" }, { "Shield", "keep it up" } },

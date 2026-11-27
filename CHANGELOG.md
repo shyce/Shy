@@ -1,5 +1,27 @@
 # Changelog
 
+## 5.2.16 (26 Nov 2026)
+
+### Added
+- **ShyCore:** Numbered pins show the order of things. Setup pages, talents, crates and key steps use them
+- **ShyCore:** A grid shows while you move or size things. Pieces snap to its lines, and you can turn that off
+- **ShySkin:** Talents you hold that your build doesn't take get a crimson ring. Hover says why and how to move the point
+
+### Changed
+- **ShyAuction:** Sell picks your price for you. It won't undercut below a floor you set, and it says why. Space posts the next item in the queue
+- **ShyKeys:** Mage, druid and the other classes' keys moved. Wand on Z, armor on Shift + 5, talent picks match the new build
+- **ShyQuest:** A creature you must kill shows as one line with its raid mark. The run banner scrolls with the card, and flights get no timer plate
+- **ShyQuest:** Quests, items and the leveling guides match the new game build
+
+### Fixed
+- **ShyKeys:** The game moved your turn and strafe keys at log-in. They stay as you set them now
+
+## 5.2.15 (26 Nov 2026)
+
+### Changed
+- **ShySkin:** The talent window shows your build's next talents with a turn badge. It follows the order even where the game's tree differs
+- **ShySkin:** The new letter fills its room and drops the scroll bar when it fits. Send no longer loses a click, and the To list has a caret and a clear button
+
 ## 5.2.14 (26 Nov 2026)
 
 ### Changed

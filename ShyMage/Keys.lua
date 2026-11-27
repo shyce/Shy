@@ -23,11 +23,12 @@ local FRIEND, Either = Shy.Keys.FRIEND, Shy.Keys.Either
 -- then), T its area attack (Cone of Cold for Frost, which presses it every fight; Arcane Explosion for the rest),
 -- Shift + R its rarer bolt (Scorch, or Arcane's free Missiles), 4 and Shift + Mouse 4 its cooldowns. Nothing of
 -- another school stands on a key a build never presses: a Frost mage has no Fireball, a Fire mage no Cone of Cold.
--- Both ways of moving keep the same keys, but for the keys you move with: the wand, Polymorph and Remove Lesser
--- Curse step over them. With ASDF the ring finger holds S to run, so what you press on the run
--- (Fire Blast, Ice Lance, Frost Nova, Blink, Cone of Cold) sits under the middle and index fingers, the thumb and
--- the little finger, and W over the running finger holds Polymorph, which you cast standing. Counterspell, the
--- stop, is on F (G with ASDF), beside the index finger: Mouse 5 is too far to reach in a hurry.
+-- The wand is on Z and your armor on Shift + 5, where every caster has them. Polymorph is the stop's rarer kin, on
+-- Shift + F. Both ways of moving keep the same keys, but for the keys you move with. With ASDF the ring finger
+-- holds S to run, so what you press on the run (Fire Blast, Ice Lance, Frost Nova, Blink, Cone of Cold) sits under
+-- the middle and index fingers, the thumb and the little finger, and W over the running finger holds the wand,
+-- which you shoot standing. Counterspell, the stop, is on F (G with ASDF), beside the index finger: Mouse 5 is too
+-- far to reach in a hurry.
 
 -- The three Frost builds have nothing for a key (by = Frost{ ... }: the rest as given).
 local function Frost(by)
@@ -50,15 +51,16 @@ local JOBS = {
 		by = { fire = { name = "Filler", role = "filler", what = "Pyroblast. Arcane Missiles until you have it", SHOW, "/cast [known:{11366}] {11366}; {5143}" },
 			arcane = { name = "Filler", role = "filler", what = "Arcane Wrath. Arcane Missiles until you have it", SHOW, "/cast [known:{1326079}] {1326079}; {5143}" },
 			frostaoe = { name = "Filler", role = "filler", what = "Cone of Cold. Arcane Missiles until you have it", SHOW, "/cast [known:{120}] {120}; {5143}" } } },
-	-- (Frost's Arcane Explosion steps down to Z when Cone of Cold takes T)
+	-- (Frost's Arcane Explosion steps down to G, Z with ASDF, when Cone of Cold takes T)
 	{ name = "Area", role = "area", key = "T", asdf = "T", what = "Cone of Cold. Arcane Explosion until you have it",
 		SHOW, "/cast [known:{120}] {120}; {1449}",
 		by = { arcane = { name = "Area", role = "area", what = "Arcane Explosion", SHOW, "/cast {1449}" },
 			fire = { name = "Area", role = "area", what = "Arcane Explosion", SHOW, "/cast {1449}" },
 			frostaoe = { name = "Area", role = "area", what = "Arcane Explosion", SHOW, "/cast {1449}" } } },
-	{ name = "Wand", role = "wand", key = "SHIFT-F", asdf = "SHIFT-G", early = "F", asdfEarly = "G", stay = true, what = "Shoot your wand",
+	-- The wand on Z (W with ASDF), as every caster has it. It stands on F (G with ASDF) until you learn the stop.
+	{ name = "Wand", role = "wand", key = "Z", asdf = "W", early = "F", asdfEarly = "G", stay = true, what = "Shoot your wand",
 		SHOW, "/cast !{5019}" },
-	{ name = "Polymorph", key = "G", asdf = "W", what = "Polymorph",
+	{ name = "Polymorph", key = "SHIFT-F", asdf = "SHIFT-G", stay = true, what = "Polymorph",
 		SHOW, "/cast {118}" },
 	{ name = "Shield", role = "shield", key = "V", asdf = "V", what = "Ice Barrier if you have it, otherwise Mana Shield",
 		SHOW, "/cast [known:{11426}] {11426}; {1463}" },
@@ -68,19 +70,22 @@ local JOBS = {
 		SHOW, "/cast {1953}" },
 	{ name = "Intellect", key = "SHIFT-4", asdf = "SHIFT-4", stay = true, what = "Arcane Intellect",
 		SHOW, "/cast " .. FRIEND .. " {1459}" },
-	-- What you stay in, on 1 and 2: your armor, and the one for mana.
-	{ name = "Armor", role = "armor", key = "1", asdf = "1", stay = true, what = "Ice Armor. Frost Armor until 30",
-		SHOW, "/cast [known:{7302}] {7302}; {168}" },
+	-- Your armor, kept up on Shift + 5 like every caster's: Ice Armor, or Mage Armor for Arcane, which lives on mana.
+	{ name = "Armor", role = "armor", key = "SHIFT-5", asdf = "SHIFT-5", stay = true, what = "Ice Armor. Frost Armor until 30",
+		SHOW, "/cast [known:{7302}] {7302}; {168}",
+		by = { arcane = { name = "Armor", role = "armor", what = "Mage Armor. Ice or Frost Armor until 34",
+			SHOW, "/cast [known:{6117}] {6117}; [known:{7302}] {7302}; {168}" } } },
 	-- What you answer with when they reach you, pressed on the run: Frost Nova on the thumb.
 	{ name = "Frost Nova", key = "BUTTON4", asdf = "BUTTON4", what = "Frost Nova",
 		SHOW, "/cast {122}" },
-	-- Z: what is left over of the area attacks (Frost's Arcane Explosion, once Cone of Cold has T; Arcane's Cone
-	-- of Cold), and a Frost AoE mage's Ice Lance, for the last one standing.
-	{ name = "Explosion", key = "Z", asdf = "Z", what = "Arcane Explosion",
+	-- G (Z with ASDF, where G is the stop): what is left over of the area attacks (Frost's Arcane Explosion, once Cone
+	-- of Cold has T; Arcane's Cone of Cold), a Frost AoE mage's Ice Lance, for the last one standing, and Fire's
+	-- Frostfire Bolt from 40, the one spell that slows for Fire.
+	{ name = "Explosion", key = "G", asdf = "Z", what = "Arcane Explosion",
 		SHOW, "/cast {1449}",
 		by = { arcane = { name = "Cone", what = "Cone of Cold", SHOW, "/cast {120}" },
 			frostaoe = { name = "Ice Lance", what = "Ice Lance", SHOW, "/cast {1312002}" },
-			fire = false } },
+			fire = { name = "Frostfire", what = "Frostfire Bolt, the bolt that slows", SHOW, "/cast {401502}" } } },
 	-- With Shift: each key's rarer kin. Shift + R: the build's rarer bolt, Fire's Scorch and Arcane's free Missiles
 	-- (Frost PvP's too, once Missile Barrage frees them).
 	-- (The rarer bolt, Evocation and Blizzard stay on their own keys: a spell shouldn't stand on an easy key for a
@@ -97,10 +102,8 @@ local JOBS = {
 		SHOW, "/cast {2120}", by = { frost = false, frostpvp = false } },
 	{ name = "Uncurse", role = "uncurse", key = "SHIFT-G", asdf = "SHIFT-W", stay = true, what = "Remove Lesser Curse",
 		SHOW, "/cast " .. FRIEND .. " {475}" },
-	{ name = "Mage Armor", key = "2", asdf = "2", stay = true, what = "Mage Armor",
-		SHOW, "/cast {6117}" },
 	-- Shift + the thumb: what goes with Frost Nova (Cold Snap brings it back, Blast Wave throws them off you). Then
-	-- Counterspell, the stop, on F (the wand stands there until you learn it, then steps to Shift + F).
+	-- Counterspell, the stop, on F (the wand stands there until you learn it, then goes home to Z).
 	{ name = "Cold Snap", key = "SHIFT-BUTTON4", asdf = "SHIFT-BUTTON4", stay = true, what = "Cold Snap",
 		SHOW, "/cast {12472}",
 		by = { arcane = { name = "Presence of Mind", what = "Presence of Mind", SHOW, "/cast {12043}" },
@@ -166,7 +169,7 @@ K.JOBS = JOBS
 -- How to play, by level and build: each step a job (the key it is on and what it casts then), in the order you
 -- press them when they're ready; single is one enemy, cleave two to four close together. Up to 20 every mage
 -- fights alike; from 20 the plain brackets are Frost's, and Arcane, Fire and Frost AoE have their own (Frost PvP
--- from 50).
+-- from 50). Blizzard breaks Frost Nova, so it waits for the freeze to end.
 local PLAY = {
 	{ from = 1, tip = "Open with your bolt from as far off as you can, finish with Fire Blast, and shoot your wand to save mana.",
 		single = { { "Bolt", "to open" }, { "Fire Blast", "to finish it" }, { "Filler", "mana to spare" },
@@ -185,21 +188,21 @@ local PLAY = {
 		single = { { "Bolt", "to open" }, { "Frost Nova", "when it reaches you" }, { "Filler", "while it's frozen" },
 			{ "Fire Blast", "if it isn't frozen" }, { "Stop", "when it casts" }, { "Blink", "to get away" },
 			{ "Shield", "if it's hitting you" }, { "Evocation", "out of mana" }, { "Wand", "to save mana" } },
-		cleave = { { "Polymorph", "on the extra one" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "while they're frozen" },
+		cleave = { { "Polymorph", "on the extra one" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "as the freeze ends" },
 			{ "Area", "if they're on you" }, { "Blink", "to get away" } } },
 	{ from = 26, tip = "Cone of Cold is your second answer. Frost Nova, step back, and Cone them as they break free.",
 		single = { { "Bolt", "to open" }, { "Frost Nova", "when it reaches you" }, { "Filler", "while it's frozen" },
 			{ "Area", "as it breaks free" }, { "Fire Blast", "if it isn't frozen" }, { "Stop", "when it casts" },
 			{ "Blink", "to get away" }, { "Shield", "if it's hitting you" }, { "Mana Gem", "low on mana" },
 			{ "Evocation", "gem spent, still low" }, { "Wand", "to save mana" } },
-		cleave = { { "Polymorph", "on the extra one" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "while they're frozen" },
+		cleave = { { "Polymorph", "on the extra one" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "as the freeze ends" },
 			{ "Area", "as they break free" }, { "Explosion", "if they're on you" }, { "Blink", "to get away" } } },
 	{ from = 30, tip = "Frost Nova, step back, Cone of Cold as they break free. Once you have Ice Block and Cold Snap, two at a time is safe.",
 		single = { { "Bolt", "to open" }, { "Frost Nova", "when it reaches you" }, { "Filler", "while it's frozen" },
 			{ "Area", "as it breaks free" }, { "Fire Blast", "if it isn't frozen" }, { "Cold Snap", "for a second Nova" },
 			{ "Wall", "if it goes badly" }, { "Stop", "when it casts" }, { "Blink", "to get away" },
 			{ "Mana Gem", "low on mana" }, { "Evocation", "gem spent, still low" }, { "Wand", "to save mana" } },
-		cleave = { { "Polymorph", "on the extra one" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "while they're frozen" },
+		cleave = { { "Polymorph", "on the extra one" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "as the freeze ends" },
 			{ "Area", "as they break free" }, { "Cold Snap", "for a second Nova" }, { "Explosion", "if they're on you" },
 			{ "Blink", "to get away" }, { "Wall", "if it goes badly" } } },
 	{ from = 40, tip = "Put Ice Barrier up before each pull and you can take two or three at once. Freeze them, lance them, bolt.",
@@ -208,7 +211,7 @@ local PLAY = {
 			{ "Cold Snap", "for a second Nova" }, { "Wall", "if it goes badly" }, { "Stop", "when it casts" },
 			{ "Blink", "to get away" }, { "Mana Gem", "low on mana" }, { "Evocation", "gem spent, still low" } },
 		cleave = { { "Shield", "before the pull" }, { "Polymorph", "on the extra one" }, { "Frost Nova", "when they reach you" },
-			{ "Blizzard", "while they're frozen" }, { "Area", "as they break free" }, { "Cold Snap", "for a second Nova" },
+			{ "Blizzard", "as the freeze ends" }, { "Area", "as they break free" }, { "Cold Snap", "for a second Nova" },
 			{ "Explosion", "if they're on you" }, { "Blink", "to get away" }, { "Wall", "if it goes badly" } } },
 	{ from = 50, tip = "Pull bigger groups now. Ice Barrier, Frost Nova and Blizzard, then Evocation once your mana gem is spent.",
 		single = { { "Shield", "before the pull" }, { "Bolt", "to open" }, { "Frost Nova", "when it reaches you" },
@@ -216,7 +219,7 @@ local PLAY = {
 			{ "Cold Snap", "for a second Nova" }, { "Wall", "if it goes badly" }, { "Stop", "when it casts" },
 			{ "Blink", "to get away" }, { "Mana Gem", "low on mana" }, { "Evocation", "gem spent, still low" } },
 		cleave = { { "Shield", "before the pull" }, { "Polymorph", "on the extra one" }, { "Frost Nova", "when they reach you" },
-			{ "Blizzard", "while they're frozen" }, { "Area", "as they break free" }, { "Cold Snap", "for a second Nova" },
+			{ "Blizzard", "as the freeze ends" }, { "Area", "as they break free" }, { "Cold Snap", "for a second Nova" },
 			{ "Explosion", "if they're on you" }, { "Blink", "to get away" }, { "Wall", "if it goes badly" } } },
 
 	-- Arcane: Arcane Blast builds up, Arcane Wrath and free Missiles spend it; mana is the whole game.
@@ -256,7 +259,7 @@ local PLAY = {
 			{ "Cone", "as they break free" }, { "Arcane Power", "for a big pull" }, { "Flamestrike", "as they come in" },
 			{ "Blink", "to get away" } } },
 
-	-- Fire: Pyroblast from range, Fire Blast to speed up the next one, nothing that slows.
+	-- Fire: Pyroblast from range, Fire Blast to speed up the next one, and from 40 Frostfire Bolt, its one slow.
 	{ from = 20, build = "fire", tip = "Open with Pyroblast from far off, then Fireball. Each Fire Blast that hits makes your next Pyroblast quicker.",
 		single = { { "Filler", "to open" }, { "Fire Blast", "when it's ready" }, { "Bolt" },
 			{ "Scorch", "to finish it" }, { "Frost Nova", "when it reaches you" }, { "Shield", "if it's hitting you" },
@@ -270,8 +273,9 @@ local PLAY = {
 			{ "Mana Gem", "low on mana" }, { "Evocation", "gem spent, still low" } },
 		cleave = { { "Polymorph", "on the extra one" }, { "Flamestrike", "as they come in" }, { "Blast Wave", "when they reach you" },
 			{ "Frost Nova", "to hold them" }, { "Area", "while they're held" }, { "Blink", "to get away" } } },
-	{ from = 40, build = "fire", tip = "Combustion makes your next fire spells hit hard. Save it for a tough fight, and keep Nova and Blink ready.",
-		single = { { "Combustion", "for a hard fight" }, { "Filler", "to open" }, { "Fire Blast", "when it's ready" }, { "Bolt" },
+	{ from = 40, build = "fire", tip = "Frostfire Bolt slows what comes at you. Save Combustion for a tough fight, and keep Nova and Blink ready.",
+		single = { { "Combustion", "for a hard fight" }, { "Filler", "to open" }, { "Frostfire", "to slow it as it comes" },
+			{ "Fire Blast", "when it's ready" }, { "Bolt" },
 			{ "Scorch", "to finish it" }, { "Frost Nova", "when it reaches you" }, { "Blast Wave", "if it's on you" },
 			{ "Blink", "to get away" }, { "Stop", "when it casts" }, { "Mana Gem", "low on mana" },
 			{ "Evocation", "gem spent, still low" } },
@@ -279,7 +283,8 @@ local PLAY = {
 			{ "Frost Nova", "to hold them" }, { "Area", "while they're held" }, { "Combustion", "for a big pull" },
 			{ "Blink", "to get away" } } },
 	{ from = 50, build = "fire", tip = "Pull two or three. Flamestrike as they come, Blast Wave and Nova when they arrive, then Arcane Explosion.",
-		single = { { "Combustion", "for a hard fight" }, { "Filler", "to open" }, { "Fire Blast", "when it's ready" }, { "Bolt" },
+		single = { { "Combustion", "for a hard fight" }, { "Filler", "to open" }, { "Frostfire", "to slow it as it comes" },
+			{ "Fire Blast", "when it's ready" }, { "Bolt" },
 			{ "Scorch", "to finish it" }, { "Frost Nova", "when it reaches you" }, { "Blast Wave", "if it's on you" },
 			{ "Blink", "to get away" }, { "Stop", "when it casts" }, { "Mana Gem", "low on mana" },
 			{ "Evocation", "gem spent, still low" } },
@@ -287,26 +292,26 @@ local PLAY = {
 			{ "Area", "while they're held" }, { "Combustion", "for a big pull" }, { "Polymorph", "on the extra one" },
 			{ "Blink", "to get away" } } },
 
-	-- Frost AoE: gather a pack, freeze it and bring Blizzard down on it.
-	{ from = 20, build = "frostaoe", tip = "Gather a few, Frost Nova them, step back and bring Blizzard down. Keep pulls small until your Blizzard slows.",
+	-- Frost AoE: gather a pack, freeze it and bring Blizzard down on it as the freeze ends.
+	{ from = 20, build = "frostaoe", tip = "Gather a few and Frost Nova them. Step back and start Blizzard as the freeze ends, or it breaks them out.",
 		single = { { "Bolt", "to open" }, { "Frost Nova", "when it reaches you" }, { "Fire Blast", "to finish it" },
 			{ "Filler", "mana to spare" }, { "Shield", "if it's hitting you" }, { "Blink", "to get away" },
 			{ "Stop", "when it casts" }, { "Evocation", "out of mana" }, { "Wand", "to save mana" } },
-		cleave = { { "Bolt", "to pull them" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "while they're frozen" },
+		cleave = { { "Bolt", "to pull them" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "as the freeze ends" },
 			{ "Area", "if they're on you" }, { "Blink", "to get away" }, { "Polymorph", "on one that stays back" } } },
 	-- (Cone of Cold is on Q from here: the build's second sweep, every pull)
 	{ from = 26, build = "frostaoe", tip = "Cone of Cold is your second sweep. Nova them, Blizzard, then Cone as they break free.",
 		single = { { "Bolt", "to open" }, { "Frost Nova", "when it reaches you" }, { "Filler", "as it breaks free" },
 			{ "Fire Blast", "to finish it" }, { "Shield", "if it's hitting you" }, { "Blink", "to get away" },
 			{ "Stop", "when it casts" }, { "Mana Gem", "low on mana" }, { "Evocation", "gem spent, still low" }, { "Wand", "to save mana" } },
-		cleave = { { "Bolt", "to pull them" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "while they're frozen" },
+		cleave = { { "Bolt", "to pull them" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "as the freeze ends" },
 			{ "Filler", "as they break free" }, { "Area", "if they're on you" }, { "Blink", "to get away" },
 			{ "Polymorph", "on one that stays back" } } },
 	{ from = 30, build = "frostaoe", tip = "Pull three or four now. Nova them, Blizzard, Cone of Cold as they break free, and Ice Block if it goes wrong.",
 		single = { { "Bolt", "to open" }, { "Frost Nova", "when it reaches you" }, { "Ice Lance", "while it's frozen" },
 			{ "Filler", "as it breaks free" }, { "Fire Blast", "if it isn't frozen" }, { "Shield", "if it's hitting you" },
 			{ "Blink", "to get away" }, { "Stop", "when it casts" }, { "Mana Gem", "low on mana" }, { "Evocation", "gem spent, still low" } },
-		cleave = { { "Bolt", "to pull them" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "while they're frozen" },
+		cleave = { { "Bolt", "to pull them" }, { "Frost Nova", "when they reach you" }, { "Blizzard", "as the freeze ends" },
 			{ "Filler", "as they break free" }, { "Area", "if they're on you" }, { "Flamestrike", "as they bunch up" },
 			{ "Cold Snap", "for a second Nova" }, { "Blink", "to get away" }, { "Wall", "if it goes badly" },
 			{ "Polymorph", "on one that stays back" } } },
@@ -315,7 +320,7 @@ local PLAY = {
 			{ "Ice Lance", "while it's frozen" }, { "Filler", "as it breaks free" }, { "Fire Blast", "if it isn't frozen" },
 			{ "Blink", "to get away" }, { "Stop", "when it casts" }, { "Mana Gem", "low on mana" }, { "Evocation", "gem spent, still low" } },
 		cleave = { { "Shield", "before the pull" }, { "Bolt", "to pull them" }, { "Frost Nova", "when they reach you" },
-			{ "Blizzard", "while they're frozen" }, { "Filler", "as they break free" }, { "Area", "if they're on you" },
+			{ "Blizzard", "as the freeze ends" }, { "Filler", "as they break free" }, { "Area", "if they're on you" },
 			{ "Flamestrike", "as they bunch up" }, { "Cold Snap", "for a second Nova" }, { "Blink", "to get away" },
 			{ "Wall", "if it goes badly" }, { "Polymorph", "on one that stays back" } } },
 	{ from = 50, build = "frostaoe", tip = "Big pulls are your way now. Barrier, gather, Nova, Blizzard, and Flamestrike as they bunch up.",
@@ -323,7 +328,7 @@ local PLAY = {
 			{ "Ice Lance", "while it's frozen" }, { "Filler", "as it breaks free" }, { "Fire Blast", "if it isn't frozen" },
 			{ "Blink", "to get away" }, { "Stop", "when it casts" }, { "Mana Gem", "low on mana" }, { "Evocation", "gem spent, still low" } },
 		cleave = { { "Shield", "before the pull" }, { "Bolt", "to pull them" }, { "Frost Nova", "when they reach you" },
-			{ "Blizzard", "while they're frozen" }, { "Flamestrike", "as they bunch up" }, { "Filler", "as they break free" },
+			{ "Blizzard", "as the freeze ends" }, { "Flamestrike", "as they bunch up" }, { "Filler", "as they break free" },
 			{ "Area", "if they're on you" }, { "Cold Snap", "for a second Nova" }, { "Blink", "to get away" },
 			{ "Wall", "if it goes badly" }, { "Polymorph", "on one that stays back" } } },
 
@@ -335,7 +340,7 @@ local PLAY = {
 			{ "Stop", "when it casts" }, { "Blink", "to get away" }, { "Mana Gem", "low on mana" },
 			{ "Evocation", "gem spent, still low" } },
 		cleave = { { "Shield", "before the pull" }, { "Polymorph", "on the extra one" }, { "Frost Nova", "when they reach you" },
-			{ "Blizzard", "while they're frozen" }, { "Area", "as they break free" }, { "Cold Snap", "for a second Nova" },
+			{ "Blizzard", "as the freeze ends" }, { "Area", "as they break free" }, { "Cold Snap", "for a second Nova" },
 			{ "Explosion", "if they're on you" }, { "Blink", "to get away" }, { "Wall", "if it goes badly" } } },
 }
 K.PLAY = PLAY

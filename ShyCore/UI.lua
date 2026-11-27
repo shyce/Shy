@@ -5790,7 +5790,13 @@ end
 --   icon     icon slot size (16); `art`: drawn icon size (the same)
 --   foot     a last line under a rule; a function returns left text, right text
 --   keepOn   "RightButton": presses of that button elsewhere don't close it
+--   refill   true: opened again by its owner, it fills again where it stands instead of closing (a list
+--            that follows what you type)
 --   onShow, onHide   function(owner)
+-- From the keyboard (a field that keeps the focus while its list is open):
+--   UI.MenuStep(step)   lights the next row down (1) or up (-1), past headings, dividers and greyed rows,
+--                       round at the ends; returns its item
+--   UI.MenuTake()       clicks the lit row; false when none is lit
 
 -- The glyphs a menu row wears on its rail (MenuGlyphs.tga: 32px cells, eight across, drawn for a row's
 -- 16 units at two texels a unit; this list is the sheet's cells, in their order).
@@ -5853,7 +5859,7 @@ end
 local function MenuRowLook(row)
 	local item = row.item
 	local live = not item.disabled
-	local over, down = row.over and live, row.down and live
+	local over, down = (row.over or row.lit) and live, row.down and live
 	row.fill:SetShown(over)
 	if down then row.fill:SetColorTexture(0.03, 0.03, 0.03, 1) else Theme.Paint(row.fill, C.bgHot, 1) end
 	local wash = (down and 0) or (over and row.on and 0.30) or (over and 0.20) or (row.on and 0.12) or 0
@@ -5912,6 +5918,12 @@ local function MenuRow(index)
 
 	row:SetScript("OnEnter", function(self)
 		self.over = true
+		-- The mouse takes over from the keyboard's row (UI.MenuStep).
+		local lit = menu.lit and menu.rows[menu.lit]
+		if lit and lit ~= self then
+			menu.lit, lit.lit = nil, false
+			MenuRowLook(lit)
+		end
 		MenuRowLook(self)
 		local item = self.item
 		if item.tip then UI.Tip(self, item.text or "", item.tip, { side = "RIGHT" }) end
@@ -6041,6 +6053,7 @@ local function MenuRows(items, opts)
 		local row = MenuRow(index)
 		local plain = not (item.divider or item.heading)
 		row.item, row.over, row.down, row.led = item, false, false, led
+		row.lit, row.y = index == menu.lit, y
 		row.on = plain and IsOn(item)
 		local height = (item.divider and MENU.rule) or (item.heading and MENU.head)
 			or max(item.sub and MENU.tall or MENU.row, led and (size + 6) or 0)
@@ -6485,12 +6498,24 @@ end
 function UI.Menu(owner, items, opts)
 	opts = opts or {}
 	if UI.MenuOwner() == owner and opts.side ~= "cursor" then
-		UI.CloseMenu()
-		return
+		if not opts.refill then
+			UI.CloseMenu()
+			return
+		end
+		-- A list that follows what you type: filled again where it stands, nothing lit.
+		menu.opts, menu.source, menu.trail, menu.lit = opts, items, {}, nil
+		if menu:Fill() == 0 then
+			UI.CloseMenu()
+			return
+		end
+		MenuPlace(opts)
+		menu.area:SetVerticalScroll(0)
+		menu.area:Update()
+		return menu
 	end
 	UI.CloseMenu()
 	menu = menu or MenuBuild()
-	menu.owner, menu.opts, menu.source, menu.trail = owner, opts, items, {}
+	menu.owner, menu.opts, menu.source, menu.trail, menu.lit = owner, opts, items, {}, nil
 	local count, view, height, onY = menu:Fill()
 	if count == 0 then return end
 	MenuPlace(opts)
@@ -6508,6 +6533,43 @@ function UI.Menu(owner, items, opts)
 	menuKeys:SetShown(not InCombatLockdown())
 	if opts.onShow then opts.onShow(owner) end
 	return menu
+end
+
+function UI.MenuStep(step)
+	if not (menu and menu:IsShown()) then return nil end
+	local rows, count = menu.rows, 0
+	while rows[count + 1] and rows[count + 1]:IsShown() do count = count + 1 end
+	local at = menu.lit or (step > 0 and 0 or count + 1)
+	local found
+	for _ = 1, count do
+		at = at + step
+		if at < 1 then at = count elseif at > count then at = 1 end
+		local item = rows[at].item
+		if not (item.divider or item.heading or item.disabled) then
+			found = at
+			break
+		end
+	end
+	if not found then return nil end
+	menu.lit = found
+	for index = 1, count do
+		local row = rows[index]
+		local lit = index == found
+		if row.lit ~= lit then
+			row.lit = lit
+			MenuRowLook(row)
+		end
+	end
+	local row = rows[found]
+	menu.area:Reveal(row.y, row.y + row:GetHeight())
+	return row.item
+end
+
+function UI.MenuTake()
+	local row = menu and menu:IsShown() and menu.lit and menu.rows[menu.lit]
+	if not (row and row:IsShown()) then return false end
+	row:GetScript("OnClick")(row, "LeftButton")
+	return true
 end
 
 -- Menus built entry by entry, with the method names of Blizzard's MenuUtil descriptions.
@@ -7445,10 +7507,21 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 	end
 	Line()
 
+	-- A strip's marks stand on the panel's line, not on the tabs: they show for the open tab alone, and only while the
+	-- tabs are shown (tabs put away leave no lines behind).
+	local function TabMarks()
+		local shown = f:IsShown()
+		for j, t in ipairs(f.tabs) do
+			if strip then t.bar:SetShown(shown and t:IsShown() and j == f.selected) end
+		end
+	end
+	f:HookScript("OnShow", TabMarks)
+	f:HookScript("OnHide", TabMarks)
+	TabMarks()
 	function f:Select(i)
 		self.selected = i
 		for j, t in ipairs(self.tabs) do
-			t.bar:SetShown(j == i)
+			t.bar:SetShown(j == i and (not strip or self:IsShown()))
 			if t.glow then t.glow:SetShown(j == i) end
 			Theme.Ink(t.text, j == i and t.inkOpen or t.inkRest)
 		end
@@ -7515,6 +7588,7 @@ function UI.Tabs(parent, labels, onSelect, width, size, strip, opts)
 		end
 		if self.selected and self.selected > #list then self.selected = nil end
 		Line()
+		TabMarks()
 		return self.tabs
 	end
 	-- Each tab as wide as its words: measured again in another font, the ones after it moved along.
@@ -7594,7 +7668,9 @@ end
 --   local rail = UI.Rail(parent, onSelect, opts)   -- opts.width (220), opts.height;
 --                                                  -- opts.again: a click on the open row tells onSelect again
 --   rail:SetItems({ { key = "theme", label = "Theme", sub = "Forged", glyph = "star" }, { caption = "Your screen" }, ... })
---                              -- top down, made as needed; an item with a caption alone heads a group
+--                              -- top down, made as needed; an item with a caption alone heads a group. An item's
+--                              -- step (a number) stands in its glyph's place as the family's numbered pin
+--                              -- (UI.NumberMark), lit in your color while the row is open: a walk's pages in order
 --   rail:SetSubs({ theme = "Forged", ... })   -- the words under each again, by key (a pick changed)
 --   rail:Select(key, quiet)    -- open it, and onSelect(key) unless quiet
 --   rail:SetDone(key, done)    -- checked off, or not
@@ -7609,7 +7685,7 @@ end
 --                              -- the caller). Returns the size it gave, or nil for a file
 -- A row, a caption, the glyph's middle and where the words begin from a row's left; a glyph's size by its sheet.
 -- KID: a held line's height; TICK: its branch's length; FOLD: seconds to unfold or fold; CARET: the caret's size.
-local RAIL = { ROW = 40, CAPTION = 26, MID = 24, WORDS = 46, HOVER = 14, MENU = 16, KID = 26, TICK = 12, FOLD = 0.22,
+local RAIL = { ROW = 40, CAPTION = 26, MID = 24, WORDS = 46, HOVER = 14, MENU = 16, KID = 26, TICK = 12, FOLD = 0.22, PIN = 22,
 	CARET = 10, lists = setmetatable({}, { __mode = "k" }) }
 
 function UI.GlyphArt(texture, name)
@@ -7829,6 +7905,7 @@ function UI.Rail(parent, onSelect, opts)
 				Theme.Tint(row.glow, Theme.Accent, 0.4)
 				row.glow:SetShown(on)
 				Theme.Tint(row.glyph, on and Theme.light or row.hover and C.text or C.dim)
+				if row.step then row.number:Set(row.step, on) end
 				Theme.Ink(row.label, on and C.head or (done or row.hover) and C.text or C.dim)
 				Theme.Ink(row.sub, on and C.text or C.dim)
 				Theme.Tint(row.check, C.good)
@@ -7928,6 +8005,15 @@ function UI.Rail(parent, onSelect, opts)
 				row.label:SetText(item.label or "")
 				local sized = UI.GlyphArt(row.glyph, item.glyph or "note")
 				if not sized then row.glyph:SetSize(RAIL.MENU, RAIL.MENU) end
+				-- A numbered row: the pin in the glyph's place (made the first time a row is one).
+				row.step = item.step
+				if row.step and not row.number then
+					row.number = UI.NumberMark(row, RAIL.PIN)
+					row.number:SetPoint("CENTER", row, "LEFT", RAIL.MID, 0)
+				end
+				row.glyph:SetShown(not row.step)
+				if row.number then row.number:SetShown(row.step ~= nil) end
+				if row.painted then row.painted.state = nil end
 				Words(row, item.sub)
 				row:Show()
 				self.order[#self.order + 1] = { row = row }
@@ -8085,6 +8171,165 @@ function UI.Input(parent, label, get, set, opts)
 		box:EnableMouse(not self.dimmed)
 	end
 	AttachHelp(box, label or "", opts)
+	return f
+end
+
+-- A field that offers what you might mean as you type: UI.Input's, with a list under it (UI.Menu) as wide as the
+-- field. A click anywhere on it opens the whole list; its caret closes it again. The top row is lit as the list opens
+-- or narrows, so Enter or Tab takes it; Up and Down light another, a click takes any. Esc closes the list, then the field.
+-- Once something is written, a cross beside the caret clears it and offers everything again.
+--   UI.Typeahead(parent, get, set, opts) -> f (f.box: its edit box; f:Refresh(); f:Close())
+--   opts.list(text) -> UI.Menu items for what is typed ("" for all of them). A row's `value` is what it writes.
+--   opts.picked(value)   after a row is taken (the next field takes the focus)
+--   opts.tab()           Tab with no row lit
+--   opts.placeholder, opts.maxLetters, opts.width as UI.Input's; opts.rows before the list scrolls (8)
+-- caret, cross: each glyph's square to click, from the field's right end; art: the glyphs' size (drawn for it, whole
+-- pixels on screen: UI.GlyphFit)
+local TYPEAHEAD = { caret = 24, cross = 20, art = 16, inset = 8 }
+function UI.Typeahead(parent, get, set, opts)
+	opts = opts or {}
+	local f = UI.Input(parent, nil, get, set, {
+		live = true, maxLetters = opts.maxLetters, placeholder = opts.placeholder, width = opts.width,
+	})
+	local box = f.box
+	box:ClearAllPoints()
+	box:SetAllPoints()
+	local shape = { fit = true, rows = opts.rows or 8, refill = true }
+	-- Typed since the last pick: only then does what is written narrow the list. A name taken offers everyone.
+	local typing = false
+
+	local caret = CreateFrame("Button", nil, f)
+	caret:SetPoint("TOPRIGHT")
+	caret:SetPoint("BOTTOMRIGHT")
+	caret:SetWidth(TYPEAHEAD.caret)
+	caret:SetFrameLevel(box:GetFrameLevel() + 2)
+	caret.glyph = caret:CreateTexture(nil, "ARTWORK")
+	caret.glyph:SetTexture(Shy.MEDIA .. "FieldCaret")
+	caret.glyph:SetPoint("CENTER")
+	UI.GlyphFit(caret.glyph, TYPEAHEAD.art)
+	f.caret = caret
+	local cross = CreateFrame("Button", nil, f)
+	cross:SetPoint("TOPRIGHT", caret, "TOPLEFT")
+	cross:SetPoint("BOTTOMRIGHT", caret, "BOTTOMLEFT")
+	cross:SetWidth(TYPEAHEAD.cross)
+	cross:SetFrameLevel(box:GetFrameLevel() + 2)
+	cross.glyph = cross:CreateTexture(nil, "ARTWORK")
+	cross.glyph:SetTexture(Shy.MEDIA .. "FieldClear")
+	cross.glyph:SetPoint("CENTER")
+	UI.GlyphFit(cross.glyph, TYPEAHEAD.art)
+	Theme.Tint(cross.glyph, C.dim)
+	cross:SetScript("OnEnter", function(self) Theme.Tint(self.glyph, C.head) end)
+	cross:SetScript("OnLeave", function(self) Theme.Tint(self.glyph, C.dim) end)
+	f.cross = cross
+	-- The cross only while something is written; the words stop short of it.
+	local function Crossed()
+		local any = box:GetText() ~= ""
+		cross:SetShown(any)
+		box:SetTextInsets(TYPEAHEAD.inset, TYPEAHEAD.caret + (any and TYPEAHEAD.cross or 0) + 2, 0, 0)
+	end
+	local refresh = f.Refresh
+	function f:Refresh()
+		refresh(self)
+		-- (Written from outside, as a reply's name is: picked, not typed.)
+		if not box:HasFocus() then typing = false end
+		Crossed()
+	end
+	local function Look()
+		local open = UI.MenuOwner() == f
+		Theme.Tint(caret.glyph, (open or caret:IsMouseOver()) and C.text or C.dim)
+		-- Open: the caret flips, as a dropdown's does.
+		if open then caret.glyph:SetTexCoord(0, 1, 1, 0) else caret.glyph:SetTexCoord(0, 1, 0, 1) end
+	end
+	shape.onShow, shape.onHide = Look, Look
+
+	local function Take(item)
+		local value = item.value
+		box:SetText(value)
+		box:SetCursorPosition(#value)
+		typing = false
+		set(value)
+		f:Refresh()
+		if opts.picked then opts.picked(value) end
+	end
+	-- text: what to match; nil for what is typed. The name already written is checked and lit, else the top row.
+	local function Offer(text)
+		local items = opts.list(text or (typing and box:GetText()) or "")
+		local now, at = (box:GetText() or ""):lower(), nil
+		for index, item in ipairs(items) do
+			if item.value ~= nil and not item.click then item.click = Take end
+			if not at and item.value ~= nil and now ~= "" and item.value:lower() == now then
+				at = index
+				item.on = true
+			end
+		end
+		if #items == 0 then return f:Close() end
+		UI.Menu(f, items, shape)
+		local lit = UI.MenuStep(1)
+		if at then
+			for _ = 1, #items do
+				if lit == items[at] then break end
+				lit = UI.MenuStep(1)
+			end
+		end
+	end
+	function f:Close()
+		if UI.MenuOwner() == self then UI.CloseMenu() end
+	end
+
+	caret:SetScript("OnClick", function()
+		if UI.MenuOwner() == f then return f:Close() end
+		box:SetFocus()
+		Offer("")
+	end)
+	caret:SetScript("OnEnter", Look)
+	caret:SetScript("OnLeave", Look)
+	cross:SetScript("OnClick", function()
+		box:SetText("")
+		typing = false
+		set("")
+		f:Refresh()
+		box:SetFocus()
+		Offer("")
+	end)
+	-- The whole field is the dropdown's button: a click on it offers everything, whatever is written.
+	box:HookScript("OnMouseDown", function()
+		if UI.MenuOwner() ~= f then Offer("") end
+	end)
+	box:HookScript("OnTextChanged", function(_, typed)
+		Crossed()
+		if typed then
+			typing = true
+			Offer()
+		end
+	end)
+	-- An empty field opens its list as you come to it. In one already filled the name is chosen, so typing
+	-- writes over it.
+	box:HookScript("OnEditFocusGained", function(self)
+		if self:GetText() == "" then return Offer("") end
+		if not typing then self:HighlightText() end
+	end)
+	box:SetScript("OnArrowPressed", function(_, key)
+		if key ~= "UP" and key ~= "DOWN" then return end
+		if UI.MenuOwner() ~= f then return Offer() end
+		UI.MenuStep(key == "DOWN" and 1 or -1)
+	end)
+	local enter, escape = box:GetScript("OnEnterPressed"), box:GetScript("OnEscapePressed")
+	box:SetScript("OnEnterPressed", function(self)
+		if UI.MenuOwner() == f and UI.MenuTake() then return end
+		f:Close()
+		enter(self)
+	end)
+	box:SetScript("OnTabPressed", function()
+		if UI.MenuOwner() == f and UI.MenuTake() then return end
+		f:Close()
+		if opts.tab then opts.tab() end
+	end)
+	box:SetScript("OnEscapePressed", function(self)
+		if UI.MenuOwner() == f then return f:Close() end
+		escape(self)
+	end)
+	Look()
+	Crossed()
 	return f
 end
 
@@ -8410,6 +8655,9 @@ end
 --   onScroll = f     f(area, offset) after every change of where it is, and of its range
 --   range = f        f() -> how far it scrolls, for an area that knows (a list that places its own rows). The
 --                    game tells its own count a frame after the content changes
+--   held = f         while f() is true the area stays where it is: the wheel, the bar and Reveal do nothing, and
+--                    content that grew shorter is not scrolled back (keep it tall enough: what it holds may be
+--                    buttons that can't move in a fight)
 -- area:Reveal(top, bottom)  brings that stretch of the content into view (gliding with smooth)
 -- area:Overflows()          whether the content is taller than the area
 -- area:Rest(on)             stands still: no bar, no wheel, at its top, whatever it holds (what it holds
@@ -8475,7 +8723,9 @@ function UI.ScrollArea(parent, width, height, opts)
 		scroll:SetScript("OnUpdate", nil)
 	end
 
+	local function Held() return opts.held ~= nil and opts.held() end
 	local bar = UI.ThumbGrip(scroll, thumb, { track = track, drag = function(share)
+		if Held() then return end
 		Still()
 		at = share * scroll:Range()
 		scroll:SetVerticalScroll(at)
@@ -8526,7 +8776,7 @@ function UI.ScrollArea(parent, width, height, opts)
 
 	function scroll:Update()
 		local far, now = self.rested and 0 or self:Range(), self:At()
-		if now > far then
+		if now > far and not Held() then
 			self:SetVerticalScroll(far)
 			now, at = far, far
 		end
@@ -8563,6 +8813,7 @@ function UI.ScrollArea(parent, width, height, opts)
 		self:Update()
 	end
 	local function Go(to)
+		if Held() then return Still() end
 		to = max(0, min(scroll:Range(), to))
 		if opts.smooth and scroll:IsVisible() then
 			goal = to

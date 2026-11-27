@@ -56,6 +56,9 @@ local CONSECRATE = { name = "Consecration", asdf = "W", what = "Consecration", S
 -- Holy's Oath lasts an hour: sworn on your tank once, beside your other upkeep.
 local OATH = { name = "Oath", what = "Oath of Light, on the friend under your mouse or your target",
 	"#showtooltip {1328548}", "/cast [@mouseover,help,nodead][help,nodead] {1328548}" }
+-- Protection from 40: Hammer of the Righteous on X, where the others judge Seal of the Crusader. It hits four
+-- and shares Holy Strike's cooldown: the strike for a pack.
+local HAMMER = { name = "Righteous Hammer", what = "Hammer of the Righteous", SHOW, ATTACK, "/cast {407632}" }
 
 -- A key is named for the one ability it casts; one that casts several as you level has a word true of them all
 -- (Blessing, Heal, Cure), and what every class has is called the same on each (Stop, Wall, Raise, Strike).
@@ -78,9 +81,9 @@ local JOBS = {
 	{ name = "Justice", key = "V", asdf = "V", what = "Seal of Justice: judge it so a runner can't get away",
 		SHOW, "/cast {20164}", by = { prot = HOLY_LIGHT, holy = HOLY_LIGHT } },
 	-- Seal of the Crusader judged first on a long fight: the enemy takes more Holy damage while your strikes land.
-	-- A tank stays in Seal of Fury; a healer has Light's Vigil here.
+	-- A tank stays in Seal of Fury and has Hammer of the Righteous here, a healer Light's Vigil.
 	{ name = "Crusader", key = "X", asdf = "X", what = "Seal of the Crusader",
-		SHOW, "/cast {21082}", by = { prot = false, holy = VIGIL } },
+		SHOW, "/cast {21082}", by = { prot = HAMMER, holy = VIGIL } },
 	{ name = "Cure", role = "cure", key = "C", asdf = "C", what = "Cleanse. Purify until 42",
 		SHOW, Grows(4987, 1152) },
 	{ name = "Blessing", key = "SHIFT-4", asdf = "SHIFT-4", stay = true, what = "Blessing of Kings. Blessing of Might until 20",
@@ -127,9 +130,9 @@ local JOBS = {
 	-- A tank's is a second Judgement on a cooldown of its own: in Seal of Fury, the taunt for the enemy the mouse is on.
 	{ name = "Holy Light", key = "SHIFT-E", asdf = "SHIFT-E", stay = true, what = "Holy Light",
 		SHOW, "/cast " .. FRIEND .. " {635}", by = { prot = SWIFT, holy = false } },
-	-- For when your mana runs low; a tank stays in Seal of Fury.
+	-- For when your mana runs low, a tank's too: judging it doesn't taunt. With Unsealed Wrath, the seal to swap to.
 	{ name = "Wisdom Seal", key = "SHIFT-Q", asdf = "SHIFT-Q", stay = true, what = "Seal of Wisdom",
-		SHOW, "/cast {20166}", by = { prot = false } },
+		SHOW, "/cast {20166}" },
 	{ name = "Hammer of Wrath", key = "SHIFT-R", asdf = "SHIFT-R", stay = true, what = "Hammer of Wrath",
 		SHOW, ATTACK, "/cast {24275}" },
 	{ name = "Holy Wrath", key = "B", asdf = "B", what = "Holy Wrath",
@@ -179,21 +182,21 @@ local PLAY = {
 			{ "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Justice", "on a runner" }, { "Heal", "under half health" }, { "Hands", "about to die" } },
 		cleave = { { "Repentance", "on the second one" }, { "Seal", "keep it up" }, { "Consecration", "on 3+ enemies" },
 			{ "Strike" }, { "Judgement" }, { "Stop", "on the hardest hitter" }, { "Heal", "under half health" }, { "Hands", "about to die" } } },
-	{ from = 40, tip = "Swap to Seal of Wisdom when your mana runs low, and when a pull goes wrong Divine Shield gets you out.",
+	{ from = 40, tip = "With Unsealed Wrath, swing three times in Command, then once in Wisdom. It pays you mana too.",
 		single = { { "Crusader", "on an elite: judge it first" }, { "Exorcism", "on undead or demons" }, { "Seal", "keep it up" },
 			{ "Hammer of Wrath", "under 20% health" }, { "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Justice", "on a runner" },
-			{ "Heal", "under half health" }, { "Wisdom Seal", "when your mana runs low" } },
+			{ "Heal", "under half health" }, { "Wisdom Seal", "one swing in four" } },
 		cleave = { { "Repentance", "on the second one" }, { "Seal", "keep it up" }, { "Consecration", "on 3+ enemies" },
 			{ "Strike" }, { "Judgement" }, { "Hammer of Wrath", "under 20% health" }, { "Wall", "when it goes wrong" }, { "Hands", "about to die" } } },
 	{ from = 50, tip = "Undead and demons fall in packs to Holy Wrath. Everything else goes down one at a time.",
 		single = { { "Crusader", "on an elite: judge it first" }, { "Exorcism", "on undead or demons" }, { "Seal", "keep it up" },
 			{ "Hammer of Wrath", "under 20% health" }, { "Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Justice", "on a runner" },
-			{ "Heal", "under half health" }, { "Wisdom Seal", "when your mana runs low" } },
+			{ "Heal", "under half health" }, { "Wisdom Seal", "one swing in four" } },
 		cleave = { { "Holy Wrath", "on undead or demons" }, { "Seal", "keep it up" }, { "Consecration", "on 3+ enemies" },
 			{ "Strike" }, { "Judgement" }, { "Hammer of Wrath", "under 20% health" }, { "Wall", "when it goes wrong" }, { "Hands", "about to die" } } },
 
 	-- Protection: Righteous Fury on and Seal of Fury up (judging it, Judgement and Swift Judgement, taunts),
-	-- Consecration from 20 to pull packs, Holy Shield from 30.
+	-- Consecration from 20 to pull packs, Holy Shield from 30, Hammer of the Righteous for a pack from 40.
 	{ from = 10, build = "prot", tip = "Keep Righteous Fury on. Judging Seal of Fury taunts, so judge whatever turns away from you.",
 		single = { { "Righteous Fury", "keep it up" }, { "Seal", "keep it up" }, { "Judgement" }, { "Strike" },
 			{ "Stop", "to stop a cast" }, { "Heal", "under half health" }, { "Hands", "about to die" } },
@@ -211,15 +214,18 @@ local PLAY = {
 			{ "Judgement" }, { "Swift Judgement", "on one that leaves you" }, { "Strike" }, { "Bulwark", "when you're hit hard" } } },
 	{ from = 40, build = "prot", tip = "Pull two packs if your mana holds. Divine Shield gets you out when a pull goes wrong.",
 		single = { { "Holy Shield", "keep it up" }, { "Seal", "keep it up" }, { "Exorcism", "on undead or demons" }, { "Judgement" },
-			{ "Swift Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Bulwark", "when you're hit hard" }, { "Heal", "under half health" } },
-		cleave = { { "Righteous Fury", "keep it up" }, { "Consecration", "first, under the pack" }, { "Holy Shield", "keep it up" }, { "Seal", "keep it up" },
+			{ "Swift Judgement" }, { "Strike" }, { "Stop", "to stop a cast" }, { "Bulwark", "when you're hit hard" }, { "Heal", "under half health" },
+			{ "Wisdom Seal", "when your mana runs low" } },
+		cleave = { { "Righteous Fury", "keep it up" }, { "Consecration", "first, under the pack" }, { "Righteous Hammer", "on 3+, for Holy Strike" },
+			{ "Holy Shield", "keep it up" }, { "Seal", "keep it up" },
 			{ "Judgement" }, { "Swift Judgement", "on one that leaves you" }, { "Strike" }, { "Bulwark", "when you're hit hard" },
 			{ "Wall", "when it goes wrong" } } },
 	{ from = 50, build = "prot", tip = "Packs of undead and demons are yours. Consecration, Holy Wrath, and Holy Shield up.",
 		single = { { "Holy Shield", "keep it up" }, { "Seal", "keep it up" }, { "Exorcism", "on undead or demons" },
 			{ "Hammer of Wrath", "under 20% health" }, { "Judgement" }, { "Swift Judgement" }, { "Strike" }, { "Stop", "to stop a cast" },
-			{ "Bulwark", "when you're hit hard" }, { "Heal", "under half health" } },
-		cleave = { { "Righteous Fury", "keep it up" }, { "Consecration", "first, under the pack" }, { "Holy Wrath", "on undead or demons" },
+			{ "Bulwark", "when you're hit hard" }, { "Heal", "under half health" }, { "Wisdom Seal", "when your mana runs low" } },
+		cleave = { { "Righteous Fury", "keep it up" }, { "Consecration", "first, under the pack" }, { "Righteous Hammer", "on 3+, for Holy Strike" },
+			{ "Holy Wrath", "on undead or demons" },
 			{ "Holy Shield", "keep it up" }, { "Seal", "keep it up" }, { "Judgement" }, { "Swift Judgement", "on one that leaves you" },
 			{ "Strike" }, { "Bulwark", "when you're hit hard" }, { "Wall", "when it goes wrong" } } },
 

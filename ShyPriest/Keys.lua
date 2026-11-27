@@ -5,6 +5,7 @@
 --   ns.Keys.List()    every key and what it does, as text
 --
 -- A heal, a shield or a blessing goes to the friend the mouse is on, else the friend you have targeted, else you.
+-- The thumb's shield is the one exception: your friendly target, else you.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -23,7 +24,7 @@ local FRIEND, Grows = Shy.Keys.FRIEND, Shy.Keys.Grows
 
 -- Discipline and Holy heal first: their three heals stand where the others' three attacks do, and the
 -- attacks where the heals were. Discipline and Holy each have a spell of their own where Shadow Word: Death is, and
--- Shadow has Vampiric Embrace and Silence where the others have Renew and Shackle Undead.
+-- Shadow has Vampiric Embrace where the others have Renew.
 local function Healer(job) return { disc = job, holy = job } end
 local function Shadow(job) return { shadow = job, shadowpvp = job } end
 local PAIN = { name = "Pain", what = "Shadow Word: Pain", SHOW, "/cast {589}" }
@@ -38,10 +39,12 @@ local HEAL = { name = "Heal", role = "heal", what = "Greater Heal, with Inner Fo
 local RENEW = { name = "Renew", role = "renew", what = "Renew", SHOW, "/cast " .. FRIEND .. " {139}" }
 local QUICK = { name = "Quick Heal", what = "Flash Heal. Lesser Heal until 20", SHOW, Grows(2061, 2050) }
 local CONTROL = { name = "Control", what = "Mind Control", SHOW, "/cast {605}" }
-local SILENCE = { name = "Silence", what = "Silence", SHOW, "/cast {15487}" }
+-- Shadow's interrupt, beside the stop under the index finger (V with ASDF, where the stop has G).
+local SILENCE = { name = "Silence", key = "G", asdf = "V", what = "Silence", SHOW, "/cast {15487}" }
 -- (with ASDF on Z: X is under the ring finger that holds S, and you keep Embrace up on the run)
 local EMBRACE = { name = "Embrace", asdf = "Z", what = "Vampiric Embrace", SHOW, "/cast {15286}" }
-local PENANCE = { name = "Penance", what = "Penance, on the friend under your mouse, or your target",
+-- The shield and wand build's Penance: its best spell once taken, beside the stop (V with ASDF).
+local PENANCE = { name = "Penance", key = "G", asdf = "V", what = "Penance, on the friend under your mouse, or your target",
 	SHOW, "/cast [@mouseover,help,nodead][] {402174}" }
 local NOVA = { name = "Holy Nova", what = "Holy Nova", SHOW, "/cast {15237}" }
 local INFUSION = { name = "Infusion", what = "Power Infusion, on the friend under your mouse, or your target, or you",
@@ -76,18 +79,22 @@ local JOBS = {
 		SHOW, "/cast {589}", by = Healer(RENEW) },
 	{ name = "Mind Blast", key = "E", asdf = "E", what = "Mind Blast",
 		SHOW, "/cast {8092}", by = { disc = QUICK, holy = QUICK, wand = WAND } },
-	-- With ASDF the wand goes over the running finger: you shoot it standing still.
-	{ name = "Wand", role = "wand", key = "Z", asdf = "W", early = "F", what = "Shoot your wand",
+	-- With ASDF the wand goes over the running finger: you shoot it standing still. Until the stop comes it is under
+	-- the index finger, on F (G with ASDF).
+	{ name = "Wand", role = "wand", key = "Z", asdf = "W", early = "F", asdfEarly = "G", what = "Shoot your wand",
 		SHOW, "/cast !{5019}", by = { wand = SMITE } },
 	-- A healer's Smite stands on R until the big heal is learned (16), then goes to T.
 	{ name = "Heal", role = "heal", key = "T", asdf = "T", early = "R", asdfEarly = "R", what = "Greater Heal, with Inner Focus when it is ready. Heal until 40",
 		"#showtooltip [known:{2060}] {2060}; {2054}", "/cast {14751}", Grows(2060, 2054),
 		by = { disc = PENANCE_BOLT, holy = SMITE, shadow = PLAGUE, shadowpvp = PLAGUE } },
-	-- The shield, every build's, on the friend under your mouse or you: beside the stop. With ASDF the stop has G,
-	-- so it is on V, the index finger's other key.
-	{ name = "Shield", role = "shield", key = "G", asdf = "V", what = "Power Word: Shield",
-		SHOW, "/cast " .. FRIEND .. " {17}" },
-	-- With ASDF the shield has V, so this is on Z.
+	-- The shield, your block: on the thumb, as every class's block is. Your friendly target, else you: never the
+	-- friend under the mouse, nor an enemy you have targeted. A healer shields the friend under the mouse, so theirs is
+	-- beside the stop (V with ASDF, where the stop has G), and Fade has the thumb.
+	{ name = "Shield", role = "shield", key = "BUTTON4", asdf = "BUTTON4", what = "Power Word: Shield, on your friendly target, or you",
+		SHOW, "/cast [help,nodead][@player] {17}",
+		by = Healer({ name = "Shield", role = "shield", key = "G", asdf = "V", what = "Power Word: Shield",
+			SHOW, "/cast " .. FRIEND .. " {17}" }) },
+	-- With ASDF, V is the index finger's (a healer's shield, Shadow's Silence), so this is on Z.
 	{ name = "Quick Heal", key = "V", asdf = "Z", what = "Flash Heal. Lesser Heal until 20",
 		SHOW, Grows(2061, 2050), by = { disc = PAIN, holy = PAIN, shadow = FORMQUICK, shadowpvp = FORMQUICK } },
 	-- Renew; a healer's Mind Blast, which has Q's Renew; Shadow's Vampiric Embrace, which keeps you healed in Shadowform.
@@ -104,11 +111,13 @@ local JOBS = {
 	{ name = "Inner Fire", key = "SHIFT-5", asdf = "SHIFT-5", stay = true, what = "Inner Fire",
 		SHOW, "/cast {588}" },
 	-- The thumb: what you answer with, cast on yourself. The stop is on F (G with ASDF), beside the index finger:
-	-- Mouse 5 is too far to reach in a hurry.
-	{ name = "Fade", key = "BUTTON4", asdf = "BUTTON4", what = "Fade",
-		SHOW, "/cast {586}" },
+	-- Mouse 5 is too far to reach in a hurry. Fade is the shield's rarer kin, and a healer's thumb.
+	-- (it never stands in on an easy key: alone it does nothing)
+	{ name = "Fade", key = "SHIFT-BUTTON4", asdf = "SHIFT-BUTTON4", stay = true, what = "Fade",
+		SHOW, "/cast {586}", by = Healer({ name = "Fade", key = "BUTTON4", asdf = "BUTTON4", what = "Fade", SHOW, "/cast {586}" }) },
 	{ name = "Stop", role = "stop", key = "F", asdf = "G", what = "Psychic Scream",
 		SHOW, "/cast {8122}" },
+	-- (Shadow's Silence has a key of its own, G: its Shackle Undead is among what you press now and then)
 	{ name = "Shackle", key = "SHIFT-F", asdf = "SHIFT-G", what = "Shackle Undead",
 		SHOW, "/cast {9484}", by = Shadow(SILENCE) },
 	-- The number row: what your people's priests alone are taught, each people its own two (the one that guards you
@@ -129,8 +138,8 @@ local JOBS = {
 	-- (a fight with another player's mana: PvP's alone)
 	{ name = "Mana Burn", key = "SHIFT-E", asdf = "SHIFT-Q", what = "Mana Burn",
 		SHOW, "/cast {8129}", by = { shadow = false, wand = false, disc = false, holy = false } },
-	-- The nuke's rarer kin: Shadow Word: Death finishes; the wand build's Penance, Holy's Holy Nova. (Discipline's
-	-- Penance is its nuke, on T.)
+	-- The nuke's rarer kin: Shadow Word: Death finishes; Holy's Holy Nova. (Discipline's Penance is its nuke, on T;
+	-- the wand build's has G.)
 	{ name = "Death", key = "SHIFT-R", asdf = "SHIFT-R", what = "Shadow Word: Death",
 		SHOW, "/cast {1309595}", by = { disc = false, wand = PENANCE, holy = NOVA } },
 	-- (a group heal: the healers'; Shadow PvP has Mind Control here)
@@ -212,7 +221,7 @@ local PLAY = {
 			{ "Renew", "under half health" }, { "Quick Heal", "in trouble" } },
 		cleave = { { "Shield", "to open" }, { "Pain", "on each enemy" }, { "Stop", "on 3+ enemies" }, { "Wand" },
 			{ "Shackle", "on an undead add" }, { "Renew", "keep it on you" } } },
-	{ from = 30, build = "wand", tip = "Shield and Pain, Penance when it's ready, and your wand for everything else. You rarely need to drink.",
+	{ from = 30, build = "wand", tip = "Shield and Pain, then your wand for everything else. Penance joins in once you take it. You rarely need to drink.",
 		single = { { "Shield", "to open" }, { "Pain", "keep it up" }, { "Penance", "when it's ready" }, { "Wand" },
 			{ "Mind Blast", "mana to spare" }, { "Renew", "under half health" } },
 		cleave = { { "Shield", "to open" }, { "Pain", "on each enemy" }, { "Stop", "on 3+ enemies" }, { "Penance" },
@@ -278,7 +287,7 @@ local PLAY = {
 		cleave = { { "Renew", "on your tank" }, { "Heal", "when your tank drops" }, { "Holy Nova", "when they're close" },
 			{ "Prayer", "when all are hurt" }, { "Shield", "on whoever is hit" }, { "Quick Heal", "in a hurry" },
 			{ "Dispel", "on a spell on a friend" }, { "Fade", "when they turn on you" } } },
-	{ from = 40, build = "holy", tip = "Prayer of Mending on your tank before a pull, Holy Nova when they close in, Greater Heal if it goes wrong.",
+	{ from = 40, build = "holy", tip = "Renew your tank, Holy Nova when they close in, Greater Heal if it goes wrong. Prayer of Mending joins once you take it.",
 		single = { { "Holy Fire", "to open" }, { "Pain", "keep it up" }, { "Mind Blast", "when it's ready" }, { "Bolt" },
 			{ "Wand", "mana running low" }, { "Heal", "under half health" }, { "Stop", "to break off and heal" } },
 		cleave = { { "Mending", "on your tank" }, { "Renew", "on your tank" }, { "Heal", "when your tank drops" }, { "Shield", "on whoever is hit" },
@@ -319,6 +328,7 @@ end
 
 function K.List()
 	return Shy.Keys.List(JOBS, OPTS, T) .. "\n\nA heal, a shield or a blessing goes to the friend under your mouse, or your target, or you."
+		.. " The shield on your thumb goes to your friendly target, or you."
 end
 
 -- From login on, the bags' keys follow the bags.

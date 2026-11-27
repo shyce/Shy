@@ -1725,6 +1725,8 @@ Shy.core = Shy:NewAddon(CORE, {
 	defaults = { splash = true, minimap = true, minimapAngle = 200, hud = {}, theme = { mode = "class", hue = 212 }, slot = "now",
 		strength = 55, sheet = 88, rest = 1, immersion = { immersive = false, fade = false },
 		-- threat: how it is read for you and whether aggro changing hands sounds (Shy.ThreatRole, Shy.ThreatSound).
-		threat = { role = "auto", sound = true } },
+		threat = { role = "auto", sound = true },
+		-- grid: the grid under what you move or size (Grid.lua).
+		grid = { shown = true, step = 32, snap = true, see = true } },
 	keep = { profiles = true, uses = true, live = true, seen = true, held = true },
 })

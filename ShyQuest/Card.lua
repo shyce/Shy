@@ -46,7 +46,8 @@ local RIGHT = { size = 11, worth = 9 }   -- what stands at a line's right: a cou
 -- steps: how far the step count's plate (the whole guide's switch) reaches past its digits. switch: Zone | Guide | Dungeon. runLines: the lines of any stop in Dungeon mode, the whole of it, nothing cut to
 -- "and more" (kept here, not a local of its own: the card's maker is at the game's 60 upvalues).
 local MINE = { from = 0.20, to = 0.03 }   -- the wash on a stop you put on your route: its color's share at the rail, and at the right
-local ZONE = { steps = 3, row = 22, height = 32, sub = 19, gap = 4, controls = 28, switch = 150, runLines = 24 }
+-- mark: the room a count's line leaves before its words for the raid mark of the creature whose chip lies over it.
+local ZONE = { steps = 3, row = 22, height = 32, sub = 19, gap = 4, controls = 28, switch = 150, runLines = 24, mark = 18 }
 local PLATE, PLATE_AIR = 34, 5      -- the countdown's plate, and the room kept above and below it
 local PLATE_IN = 7                   -- the plate's words from its right edge
 local CLOCK_ROOM = 34                -- what the plate keeps for its clock at the least
@@ -297,10 +298,13 @@ end
 -- Blackrock Outrunner for Battleworn Axe"): who it is got from, in words ("Kill Blackrock Grunt or Outrunner"),
 -- unless each of them has a chip standing there (`room`: GuideButtons.lua's, for this task) or the stop's own
 -- name says it (`title`, in small letters); then what the note said aside ("Trade good: can be bought").
-function ZONE.Under(fold, title, room)
+-- A chip lying over the count's line (room.over) shows its mark alone: its name is said only where the count's
+-- own words (`text`) don't say it ("Kill Shade of the Archmage" under "Arcane Mote").
+function ZONE.Under(fold, title, room, text)
 	if not fold then return nil end
 	local who
 	if not fold.same and fold.names:lower() ~= title then
+		if room and room.over and not (text or ""):lower():find(next(room.names) or "\0", 1, true) then room = nil end
 		local names, seen, chips = {}, {}, room ~= nil
 		for name in (fold.names .. " / "):gmatch("(.-) / ") do
 			if name ~= "" and not seen[name] then
@@ -563,7 +567,7 @@ local function Lines(stop, whole, here, rooms)
 		local title = (stop.said or Describe(stop)):lower()
 		local function Under(line)
 			if not whole then return nil end
-			return ZONE.Under(folds[line], title, rooms and rooms[G.TaskKey(stop.view, line.number)])
+			return ZONE.Under(folds[line], title, rooms and rooms[G.TaskKey(stop.view, line.number)], line.text)
 		end
 		for _, line in ipairs(stop.view.lines) do
 			-- (What a hand-in is worth stands at the line's right, in the column the counts and the distances
@@ -850,7 +854,7 @@ local function Print(entry, i, y, width, wrap)
 		tostring(entry.have), tostring(entry.need), entry.done and 1 or 0, entry.cap and 1 or 0, entry.unit and 1 or 0,
 		letter and (letter.letter .. tostring(letter.shade)) or "", tostring(entry.sign), tostring(where), tostring(entry.right),
 		tostring(entry.rightColor), tostring(entry.rightSize), tostring(entry.sub), entry.note and 1 or 0, entry.tip and 1 or 0, tostring(entry.where),
-		color and ("%.3f,%.3f,%.3f"):format(color[1], color[2], color[3]) or "", entry.first and 1 or 0 }, "\31")
+		color and ("%.3f,%.3f,%.3f"):format(color[1], color[2], color[3]) or "", entry.first and 1 or 0, entry.marked and 1 or 0 }, "\31")
 end
 function written.Over() written.epoch = written.epoch + 1 end
 Shy:On("SHY_FONT", written.Over)
@@ -918,6 +922,12 @@ function Writing(row, line, i, entry, y, width, wrap)
 		line.tile:SetPoint("CENTER", row, "TOPLEFT", GUTTER + PLATE / 2, -y - LINE_MID)
 		line.tile:Show()
 		x = x + SIGN_ROOM
+	end
+	if entry.marked then
+		-- The raid mark of the one creature it is got from stands here: that creature's chip lies over the line
+		-- (GuideButtons.lua), so a click on the count targets it.
+		line.markX = x - GUTTER
+		x = x + ZONE.mark
 	end
 	local taken = 0          -- what stands at the line's right
 	local drop = 0           -- ... and how far under a count's top: smaller words hang lower, on the same baseline
@@ -1426,6 +1436,9 @@ function ns.CreateCard(parent, onResize)
 	UI.Concentric(first.here)
 	UI.Showing(first.here, false)
 	first.pin:Hide()
+	-- Its caption and the guide's name over it scroll with it.
+	card.caption:SetParent(first)
+	pick:SetParent(first)
 	-- A click on the dial keeps the waypoint arrow on screen (Arrow.lua), following the steps as
 	-- they are done; another puts it away. While it is up the dial's ring is lit.
 	local way = CreateFrame("Frame", nil, first)
@@ -1446,10 +1459,11 @@ function ns.CreateCard(parent, onResize)
 	first.way = way
 	-- The countdown (GuideTimers.lua and Escort.lua, if loaded): a plate of its own under the first
 	-- step's lines and over its notes, whatever the step is, or alone when there is no step. It wears
-	-- the color of what is counted, as its mark does: a flight's wing, an escort's face; a guide's wait
-	-- and a quest's own clock the gold of attention, with no mark. Who or where on the left, on a
-	-- second line rather than cut (the plate grows for it); the time on the right, its "about" or "so
-	-- far" small at the end of the bar of the share left.
+	-- the color of what is counted, as its mark does: an escort's face; a guide's wait and a quest's own
+	-- clock the gold of attention, with no mark. A flight or a crossing has none: the minimap draws its
+	-- line, with the time left under where it lands. Who or where on the left, on a second line rather
+	-- than cut (the plate grows for it); the time on the right, its "about" or "so far" small at the end
+	-- of the bar of the share left.
 	local timer = CreateFrame("Frame", nil, card)
 	timer:SetSize(WIDTH - GUTTER - PAD, PLATE)
 	timer.wash = timer:CreateTexture(nil, "BACKGROUND")
@@ -1470,10 +1484,6 @@ function ns.CreateCard(parent, onResize)
 	timer.fill:SetHeight(3)
 	-- What is counted: its color and its mark (the mark's kind and objective, as for a stop).
 	local LOOKS = {
-		flight = { color = ns.SignColor("flight"), mark = "flight" },
-		sail = { color = ns.SignColor("sail"), mark = "sail" },   -- a boat (an airboat: the flight's)
-		zeppelin = { color = ns.SignColor("zeppelin"), mark = "zeppelin" },
-		tram = { color = ns.SignColor("tram"), mark = "tram" },
 		escort = { color = ns.ToneColor("escort"), mark = "goal", tone = "escort" },
 		wait = { color = C.alert },
 	}
@@ -1552,17 +1562,8 @@ function ns.CreateCard(parent, onResize)
 		local stop = first:IsShown() and first.stop or nil
 		local label, left, share, said, face
 		local kind = "wait"
-		if ns.GuideTimers then
-			label, left, share, said = ns.GuideTimers.Running(stop ~= nil and stop.kind == "guide", not (stop and stop.sample))
-			if label and not (stop and stop.sample) then
-				-- A flight, or a crossing (its own sign: a boat's sail, a zeppelin).
-				if ns.GuideTimers.Flying() then
-					kind = "flight"
-				elseif ns.GuideTimers.Sailing then
-					kind = ns.GuideTimers.Sailing() or kind
-				end
-			end
-		end
+		-- A guide's wait. (Never a flight or a crossing: the minimap counts those down.)
+		if ns.GuideTimers then label, left, share, said = ns.GuideTimers.Running(stop ~= nil and stop.kind == "guide", false) end
 		-- Or an escort being walked (Escort.lua, if loaded).
 		if not label and ns.Escort and not (stop and stop.sample) then
 			label, left, share, said, face = ns.Escort.Running()
@@ -1662,12 +1663,18 @@ function ns.CreateCard(parent, onResize)
 
 	-- Headings between kinds of rows ("YOUR GUIDE", "ERRANDS", "OTHER QUESTS", "WHERE NEXT"), one line
 	-- each, with a hairline running on to the card's edge.
-	-- Under the lead, everything scrolls: the steps after it, the places ahead, the errands, the zones and their
-	-- quests, as one body in the room the card's place leaves it. The lead (and the guide's buttons docked
-	-- under it) and ShyXP's strip at the foot stand still. (Its shades fade into the card's own surface; its
-	-- thumb wears the accent; the wheel is the card's only while there is something to scroll.)
+	-- Under the controls everything scrolls, as one body in the room the card's place leaves it: a dungeon run's
+	-- banner, the lead, the steps after it, the places ahead, the errands, the zones and their quests. ShyXP's
+	-- strip at the foot stands still. (Its shades fade into the card's own surface; its thumb wears the accent; the
+	-- wheel is the card's only while there is something to scroll.) The guide's buttons (GuideButtons.lua) are
+	-- secure, so no child of the card: they follow the body as it scrolls (card.scrolled). In a fight they can't,
+	-- so while they are up then the body holds still (card.held).
 	card.body = UI.ScrollArea(card, WIDTH, 1, { smooth = true, shades = C.hud, quiet = true,
-		onScroll = function(_, now) card:Pin(now) end })
+		held = function() return card.held ~= nil and card.held() end,
+		onScroll = function(_, now)
+			card:Pin(now)
+			if card.scrolled then card.scrolled() end
+		end })
 	card.body:Hide()
 	local body = card.body.content
 
@@ -1825,6 +1832,16 @@ function ns.CreateCard(parent, onResize)
 		card:SetWidth(width)
 		timer:SetWidth(width - GUTTER - PAD)
 		timer.said = nil
+	end
+
+	-- How far under the card's top the guide's buttons stand, with the body scrolled as it is now; and the stretch
+	-- of the card the body shows (its top under the card's, its height), which they are cut to (GuideButtons.lua).
+	function card:DockHead()
+		return (self.bodyTop or 0) + (self.dockAt or LEAD_HEAD) - self.body:At()
+	end
+	function card:View()
+		if not self.body:IsShown() then return nil end
+		return self.bodyTop or 0, self.body:GetHeight()
 	end
 
 	function card:Fit(w)
@@ -2159,9 +2176,11 @@ function ns.CreateCard(parent, onResize)
 		row:Hide()
 	end
 
-	-- The countdown's plate `y` under the top of `to`, anchored again only when that changes.
+	-- The countdown's plate `y` under the top of `to` (the lead, or the body with no lead), anchored again only
+	-- when that changes.
 	local function Hang(plate, to, y)
 		if plate.hungTo ~= to or plate.hungY ~= y then
+			if plate.hungTo ~= to then plate:SetParent(to) end
 			plate.hungTo, plate.hungY = to, y
 			plate:ClearAllPoints()
 			plate:SetPoint("TOPLEFT", to, "TOPLEFT", GUTTER, -y)
@@ -2348,13 +2367,16 @@ function ns.CreateCard(parent, onResize)
 		local room = self.room and self.room()
 		local view = tall
 		if room then view = math.max(math.min(tall, BODY_LEAST), math.min(tall, room - top - below)) end
-		local said = ("%s|%s|%s|%s"):format(top, view, tall, width)
+		-- Held still (a fight, the guide's buttons in it): what grew shorter keeps the room to stay where it is.
+		local reach = tall
+		if self.held and self.held() then reach = math.max(tall, area:At() + view) end
+		local said = ("%s|%s|%s|%s"):format(top, view, reach, width)
 		if area.said ~= said then
 			area.said = said
 			area:ClearAllPoints()
 			area:SetPoint("TOPLEFT", 0, -top)
 			area:SetSize(width, view)
-			area.content:SetSize(width, tall)
+			area.content:SetSize(width, reach)
 		end
 		area:Show()
 		area:Update()   -- (which sets the pinned line, Pin)
@@ -2367,7 +2389,7 @@ function ns.CreateCard(parent, onResize)
 		-- and nothing below. (Docked, the deck's header is the bar and the box is put away: Shown.)
 		local folded = self.list ~= nil and ns.char.questsShut == true and not self.docked
 		-- (What the lead says to GuideButtons.lua of its counts: none until it has laid them.)
-		self.claims, self.slots = nil, nil
+		self.claims, self.slots, self.spans = nil, nil, nil
 		self.titlebar:SetShown(not self.docked)
 		self.fold:SetFoldable(self.list ~= nil)
 		self.fold:Set(not folded)
@@ -2443,10 +2465,13 @@ function ns.CreateCard(parent, onResize)
 		elseif self.list then
 			ns.GuideList.Hide(self)
 		end
-		local y = top + progress
+		-- The body: all from here is laid in the scroll area under the controls, from its own top (Body).
+		local bodyTop = top + progress
+		local inner = self.body.content
+		local y = 0
 		-- A dungeon run's banner (Run.lua; a file new to the TOC needs a restart), on the on-screen card only.
-		if ns.Run and ns.Run.Banner and self.list ~= nil then y = y + ns.Run.Banner(self, y, width) end
-		-- For GuideButtons.lua: where its strip stands under the box's top.
+		if ns.Run and ns.Run.Banner and self.list ~= nil then y = y + ns.Run.Banner(self, y, width, inner, bodyTop) end
+		-- For GuideButtons.lua: where its strip stands under the body's top (card:DockHead).
 		self.dockAt = y + LEAD_HEAD
 
 		-- The guide's main step, wherever it is on the card (a side step or a nearby stop may lead):
@@ -2533,7 +2558,7 @@ function ns.CreateCard(parent, onResize)
 				local at = LEAD_HEAD + dock
 				-- The countdown's plate: after the stop's own lines, before its notes.
 				local plate = ticking
-				local claims, slots, clash = {}, {}, false
+				local claims, slots, spans, clash = {}, {}, {}, false
 				for i = 1, math.max(#first.lines, #lines) do
 					local entry = lines[i]
 					local link = first.links[i]
@@ -2543,8 +2568,23 @@ function ns.CreateCard(parent, onResize)
 						at = at + timer:GetHeight() + PLATE_AIR * 2
 					end
 					if entry then
+						local key = entry.number and G.TaskKey(stop.view, entry.number)
+						local room = key and rooms and rooms[key]
+						local was = stood and stood[key]
+						-- A count got from one creature alone: its chip lies over the line itself, its mark before
+						-- the words (GuideButtons.lua). In a fight the line stays where the chip is.
+						local over = room ~= nil and room.over and not entry.done and (was or not stood)
+						entry.marked = over or nil
+						if over and was then
+							if at - LEAD_HEAD > was + 0.5 then clash = true end
+							at = math.max(at, LEAD_HEAD + was)
+						end
 						local from = at
 						at = at + Write(first, i, entry, at, width, true)
+						if over then
+							slots[key] = from - LEAD_HEAD
+							spans[key] = { tall = at - from, mark = first.lines[i].markX or 0 }
+						end
 						if entry.url or entry.task or entry.failed or entry.objective or entry.tip then
 							link = Link(i)
 							link.url, link.task, link.asked, link.failed = entry.url, entry.task, entry.asked, entry.failed
@@ -2560,11 +2600,8 @@ function ns.CreateCard(parent, onResize)
 						elseif link then
 							link:Hide()
 						end
-						local key = entry.number and G.TaskKey(stop.view, entry.number)
 						if key then claims[key] = true end
-						local room = key and rooms and rooms[key]
-						local was = stood and stood[key]
-						if room and (was or not stood) then
+						if room and not room.over and (was or not stood) then
 							if was then
 								if at - LEAD_HEAD > was + 0.5 then clash = true end
 								at = math.max(at, LEAD_HEAD + was)
@@ -2584,35 +2621,33 @@ function ns.CreateCard(parent, onResize)
 					Hang(timer, first, at + PLATE_AIR)
 					at = at + timer:GetHeight() + PLATE_AIR
 				end
-				return at, claims, slots, clash
+				return at, claims, slots, clash, spans
 			end
-			local at, claims, slots, clash = Rows(dock, strip and self.rooms, fight and strip.Stood() or nil)
+			local at, claims, slots, clash, spans = Rows(dock, strip and self.rooms, fight and strip.Stood() or nil)
 			if clash then
 				at, claims = Rows(math.max(dock, strip.Extent()))
-				slots = {}
+				slots, spans = {}, {}
 			end
-			self.claims, self.slots, self.fought = claims, slots, fight or self.fought
+			self.claims, self.slots, self.spans, self.fought = claims, slots, spans, fight or self.fought
 			Say(first.title, shown .. (level ~= "" and ("  " .. level) or ""))
-			local height = math.max(DIAL + 8, at + 2)
-			-- (The lead stands on the card itself, never in the body under it.)
-			Into(first, self)
+			-- As tall as its lines, and as the step's items stacked down the rail under the dial (the strip's
+			-- gutter, GuideButtons.lua).
+			local gutter = not stop.sample and self.leads and self.gutter or 0
+			local height = math.max(DIAL + 8, at + 2, gutter > 0 and LEAD_HEAD + gutter + 4 or 0)
+			Into(first, inner)
 			Place(first, y, height)
 			Rail(first, 0, railEnds == 1 or (last <= 1 and #ahead == 0), height)
 			y = y + height
 			Point()
 		else
 			Unplace(first)
-			-- No step, but a flight to count down.
+			-- No step, but an escort or a quest's clock to count down.
 			if timer:Tick() then
-				Hang(timer, self, y + PLATE_AIR)
+				Hang(timer, inner, y + PLATE_AIR)
 				y = y + timer:GetHeight() + PLATE_AIR * 2
 			end
 		end
 		Head(self, guided, total, stop)
-
-		-- The body: all from here is laid in the scroll area under the lead, from its own top (Body).
-		local bodyTop = y
-		y = 0
 
 		-- Quests waiting for a click, right under the lead.
 		local waiting = self.manage and ns.QuestPopups and ns.QuestPopups() or {}
@@ -2782,7 +2817,7 @@ function ns.CreateCard(parent, onResize)
 	end
 
 	-- Fill the card from a list of stops (the route, or the sample). Everything is laid out whole, once: what the
-	-- room the card's place leaves it (card.room) can't hold scrolls in the body under the lead (Body).
+	-- room the card's place leaves it (card.room) can't hold scrolls in the body under the controls (Body).
 	function card:Fill(all)
 		self.all = all
 		local height = Lay(self, all)
@@ -2847,13 +2882,11 @@ function ns.RoomText()
 	return text
 end
 
--- Shown with stops, the XP strip, the whole guide open, or a flight or a crossing to count down.
+-- Shown with stops, the XP strip or the whole guide open.
 local function Shown()
 	local db = T.db.card
-	local timers = ns.GuideTimers
 	-- (Folded, in ShyDock's deck the box goes and the deck's header stays; alone it stays as its title bar.)
-	return db.shown and not (ns.char.questsShut == true and card ~= nil and card.docked) and (#R.stops > 0 or ns.XP.StripWanted() or ns.char.guideFull == true
-			or (timers ~= nil and (timers.Flying() or (timers.Sailing ~= nil and timers.Sailing() ~= nil))))
+	return db.shown and not (ns.char.questsShut == true and card ~= nil and card.docked) and (#R.stops > 0 or ns.XP.StripWanted() or ns.char.guideFull == true)
 		and not (db.hideInCombat and InCombatLockdown())
 end
 
@@ -3240,9 +3273,17 @@ end
 
 -- For GuideButtons.lua: its secure buttons can't be the card's children, so it needs the card's box,
 -- whether it is shown, and room under the lead's head (card.dock). CARD_HEAD is how far under the
--- box's top that room starts, kept current by every fill; CARD_DOCK_LEFT is where it starts across.
+-- box's top that room starts, kept current by every fill and every scroll; CARD_DOCK_LEFT is where it
+-- starts across. CARD_GUTTER is where the step's items stack, down the rail under the dial: across, the
+-- rail's middle; down, under the dial's foot from the room's top.
 ns.CARD_WIDTH, ns.CARD_PAD, ns.CARD_HEAD, ns.CARD_DOCK_LEFT = WIDTH, PAD, STRIP + 6 + LEAD_HEAD, GUTTER
+ns.CARD_GUTTER = { x = RAIL, y = DIAL + 8 - LEAD_HEAD }
 function ns.CardBox() return box, box ~= nil and Shown() end
+-- The stretch of the box the card's body shows: its top under the box's, and its height (nil: none shows).
+function ns.CardView()
+	if not card then return nil end
+	return card:View()
+end
 -- Whether the on-screen card leads with the route's first stop (not another a filter put there).
 function ns.CardLeads() return card ~= nil and card.leads ~= false end
 
@@ -3251,7 +3292,7 @@ function ns.CardWidth() return card and card:GetWidth() or WIDTH end
 -- (laid: the card has just laid itself out, at a new width: only what follows a fill.)
 local function Fill(laid)
 	if not laid then card:Fill(R.stops) end
-	ns.CARD_HEAD = card.dockAt
+	ns.CARD_HEAD = card:DockHead()
 	-- Folded away it is its header alone: nothing to size, so no handles to size it by.
 	if box then Shy.HUD.Folded(box, ns.char.questsShut == true and not card.docked) end
 	-- GuideButtons.lua's strip is placed by hand: it goes where the card now has room for it.
@@ -3260,11 +3301,13 @@ local function Fill(laid)
 end
 
 -- height: the strip's block under the lead's head. rooms: what each group of chips takes under its count on the
--- lead, by its task ({ tall, names }; `said` is all of them as one text, to tell a change by). A card that was
--- laid in a fight, round chips that could not be moved (card.fought), is laid again whatever these say.
-function ns.SetCardDock(height, rooms, said)
-	if not card or (card.dock == height and card.roomsSaid == said and not card.fought) then return end
-	card.dock, card.rooms, card.roomsSaid, card.fought = height, rooms, said, nil
+-- lead, by its task ({ tall, names }; `said` is all of them as one text, to tell a change by). gutter: how far
+-- under the block's top the items stacked under the dial reach (0: none). A card that was laid in a fight, round
+-- chips that could not be moved (card.fought), is laid again whatever these say.
+function ns.SetCardDock(height, rooms, said, gutter)
+	gutter = gutter or 0
+	if not card or (card.dock == height and card.roomsSaid == said and card.gutter == gutter and not card.fought) then return end
+	card.dock, card.rooms, card.roomsSaid, card.gutter, card.fought = height, rooms, said, gutter, nil
 	Fill()
 end
 
@@ -3272,6 +3315,9 @@ end
 -- starts, under the strip's top.
 function ns.CardClaims() return card and card.claims or nil end
 function ns.CardSlots() return card and card.slots or nil end
+-- For a count whose one creature's chip lies over its line: the line's height, and where the mark goes across,
+-- from where the room starts (its slot is the line's top).
+function ns.CardSpans() return card and card.spans or nil end
 
 -- The card folded away (ns.char.questsShut), or open again.
 function ns.CollapseQuests(shut)
@@ -3287,11 +3333,12 @@ end
 
 function ns.SetupCard()
 	-- The card's size is yours: a side sets how wide it is, the foot (or the top) how tall it may get, and what
-	-- it can't hold then scrolls under the lead (card.room, Body). It flows; its scale is left to its menu. Both
+	-- it can't hold then scrolls (card.room, Body). It flows; its scale is left to its menu. Both
 	-- are kept with its place (the box's entry, as w and h, so "Reset size" gives them up): w its width standing
-	-- alone, h the most it reaches (none: as tall as its quests need, down to what its place leaves it).
+	-- alone, h the most it reaches (none: as tall as its quests need, down to what its place leaves it, and
+	-- standing alone no more than `share` of the screen's height, so a long step can't run it down the screen).
 	-- In ShyDock's deck the column says how wide it is, and it is held by its foot alone.
-	local SIZE = { least = 230, most = 520, short = 120, slack = 6, past = 5, foot = { "BOTTOM", "BOTTOMLEFT", "BOTTOMRIGHT" } }
+	local SIZE = { least = 230, most = 520, short = 120, slack = 6, past = 5, share = 0.5, room = 240, foot = { "BOTTOM", "BOTTOMLEFT", "BOTTOMRIGHT" } }
 	local given          -- the width its place gives it (ShyDock's column), while it gives one
 	local shaping        -- a handle is dragged: the size it had as it was pressed (w, h), the one asked (wide, tall)
 	local worn = false   -- the height it may reach, as it was last laid out for
@@ -3313,6 +3360,12 @@ function ns.SetupCard()
 		if shaping and shaping.tall ~= nil then return shaping.tall or nil end
 		local kept = Kept()
 		return kept and kept.h or nil
+	end
+	-- The most it reaches left to itself: its share of the screen, in the box's own units.
+	local function Share()
+		local scale = box:GetEffectiveScale()
+		local screen = UIParent:GetHeight() * UIParent:GetEffectiveScale() / (scale > 0 and scale or 1)
+		return math.max(SIZE.room, math.floor(screen * SIZE.share + 0.5))
 	end
 	-- The size it should have, put on: laid out again only when it changed.
 	local function Wear()
@@ -3340,14 +3393,16 @@ function ns.SetupCard()
 		if phase == "stop" then
 			local kept = Kept()
 			local wide = s.wide or kept and kept.w or WIDTH
-			-- A height is kept only where it cuts the card short. Let go past what its quests need, or its place has
-			-- room for (a corner dragged to make it wider goes a little up or down too), it is as tall as they need
-			-- again: laid out once with none, to see how tall that is.
+			-- A corner dragged to make it wider goes a little up or down too: that is no height. Let go past what its
+			-- quests need, or its place has room for, it is as tall as they need again: laid out once with no height
+			-- at all, to see how tall that is. Where that is past what it reaches left to itself (Share), the height
+			-- you gave it is kept, or it would fall back short of it.
 			local tall = kept and kept.h or nil
-			if s.tall then
+			if s.tall and math.abs(s.tall - s.h) >= SIZE.slack then
 				tall, s.tall = s.tall, false
 				Wear()
-				if tall >= card:GetHeight() - SIZE.slack then tall = nil end
+				local need = card:GetHeight()
+				if tall >= need - SIZE.slack and (card.docked or need <= Share() + SIZE.slack) then tall = nil end
 			end
 			if tall or math.abs(wide - WIDTH) >= 0.5 then
 				kept = Shy.HUD.Act.Keep(box)
@@ -3405,7 +3460,7 @@ function ns.SetupCard()
 				card:Dock(on)
 			end
 			Wear()
-			ns.CARD_HEAD = card.dockAt or ns.CARD_HEAD
+			ns.CARD_HEAD = card:DockHead()
 			-- Its handles: all round standing alone, its foot's in a deck.
 			local grip = Shy.HUD.Grip and Shy.HUD.Grip(box)
 			if grip then grip:Follow() end
@@ -3436,18 +3491,33 @@ function ns.SetupCard()
 	card.manage(card.titlebar)
 	if ns.GuideList then ns.GuideList.Create(card) end
 	-- The height its place leaves the card: ShyDock's column says how much; standing alone, down
-	-- to a little above the screen's foot.
+	-- to a little above the screen's foot, and left to itself no more than its share of the screen.
 	-- No taller than you made it (Most).
 	card.room = function()
 		local dock = Shy.addons.Dock
 		local room = card.docked and dock and dock.DeckRoom and dock:DeckRoom(box)
-		if not room then
+		local alone = not room
+		if alone then
 			local top = box:GetTop()
-			room = top and math.max(240, top - 60) or nil
+			room = top and math.max(SIZE.room, top - 60) or nil
 		end
 		local most = Most()
+		-- (While a drag asks how tall it is by itself, nothing but the screen.)
+		local asking = shaping ~= nil and shaping.tall == false
+		if not most and alone and not asking then most = Share() end
 		if most then room = room and math.min(room, most) or most end
 		return room
+	end
+	-- In a fight the guide's buttons can't follow the body as it scrolls: while they are up then, it holds still.
+	card.held = function()
+		local buttons = ns.GuideButtons
+		return InCombatLockdown() and buttons ~= nil and buttons.Up ~= nil and buttons.Up()
+	end
+	-- Scrolled: they follow it (out of a fight).
+	card.scrolled = function()
+		ns.CARD_HEAD = card:DockHead()
+		local buttons = ns.GuideButtons
+		if buttons and buttons.Follow then buttons.Follow() end
 	end
 	Wear()
 	-- Held by its foot's corners and every side (the top's corners stay small: the header's tools stand there),

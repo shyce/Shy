@@ -2554,12 +2554,15 @@ function Branches()
 	end
 end
 
+-- (Each page numbered in the order Next walks them: the family's numbered pin, the open one lit.)
 function RailRows()
 	local items = { { key = OVERVIEW, label = "Overview", glyph = "home" } }
 	win.order = { OVERVIEW }
+	local n = 0
 	for _, group in ipairs(Groups()) do
 		for _, step in ipairs(group.steps) do
-			items[#items + 1] = { key = step.id, label = step.title, glyph = step.glyph or CARD.GLYPH }
+			n = n + 1
+			items[#items + 1] = { key = step.id, label = step.title, glyph = step.glyph or CARD.GLYPH, step = n }
 			win.order[#win.order + 1] = step.id
 			for _, page in ipairs(Walked(step)) do win.order[#win.order + 1] = page.id end
 		end

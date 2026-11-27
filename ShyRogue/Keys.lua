@@ -5,7 +5,7 @@
 --   ns.Keys.List()    every key and what it does, as text
 --
 -- In stealth the three attack keys open instead: Cheap Shot, Garrote and Ambush (Subtlety: Ambush on the
--- main key, Cheap Shot and Garrote beside it).
+-- main key, Cheap Shot and Garrote beside it; Combat, on swords: only the strike opens).
 
 local ADDON, ns = ...
 local T = ns.T
@@ -51,9 +51,15 @@ local JOBS = {
 			-- Your strike for when you can't get behind, beside the Backstab on R.
 			subtlety = { name = "Strike", role = "strike", what = "Sinister Strike, Hemorrhage once you have it. Cheap Shot from stealth",
 				SHOW, OPENER, "/cast [stealth,known:{1833}] {1833}; [known:{16511}] {16511}; {1752}" },
+			-- Swords have no Backstab, and the strike opens. What you keep up goes here, as on every class's Q.
+			combat = { name = "Slice", what = "Slice and Dice", SHOW, "/cast {5171}" },
 		} },
+	-- Combat's area is Blade Flurry, on T as on every class. Its Slice and Dice is on Q.
 	{ name = "Slice", key = "T", asdf = "T", what = "Slice and Dice",
-		SHOW, "/cast {5171}" },
+		SHOW, "/cast {5171}",
+		by = {
+			combat = { name = "Flurry", what = "Blade Flurry", SHOW, "/cast {13877}" },
+		} },
 	-- Shank, on cooldown in every build: an easy key for what comes round every ten seconds, under F.
 	{ name = "Shank", key = "V", asdf = "V", what = "Shank",
 		SHOW, ATTACK, "/cast {1329283}" },
@@ -75,12 +81,10 @@ local JOBS = {
 	{ name = "Stealth", key = "Z", asdf = "Z", what = "Stealth",
 		SHOW, "/cast {1784}" },
 	-- Slice and Dice's kin, the other finisher you keep up: Rupture, for the builds that bleed. Combat never
-	-- Ruptures while leveling: its Blade Flurry stands here.
+	-- Ruptures while leveling.
 	{ name = "Rupture", key = "SHIFT-T", asdf = "SHIFT-T", stay = true, what = "Rupture",
 		SHOW, ATTACK, "/cast {1943}",
-		by = {
-			combat = { name = "Flurry", what = "Blade Flurry", SHOW, "/cast {13877}" },
-		} },
+		by = { combat = false } },
 	-- The thumb: what you answer with. The stop is on F (G with ASDF), beside the index finger: Mouse 5 is
 	-- too far to reach in a hurry, so it keeps only what is never hurried.
 	{ name = "Evasion", key = "BUTTON4", asdf = "BUTTON4", what = "Evasion",
@@ -94,7 +98,6 @@ local JOBS = {
 	{ name = "Burst", role = "burst", key = "SHIFT-BUTTON4", asdf = "SHIFT-BUTTON4", what = "Adrenaline Rush or Cold Blood, whichever you have",
 		SHOW, Either({ 13750, 14177 }),
 		by = {
-			-- (Combat's Cold Blood, its last talent, is on Mouse 5.)
 			combat = { name = "Burst", role = "burst", what = "Adrenaline Rush", SHOW, "/cast {13750}" },
 			assassination = { name = "Cold Blood", what = "Cold Blood", SHOW, "/cast {14177}" },
 			subpvp = { name = "Cold Blood", what = "Cold Blood", SHOW, "/cast {14177}" },   -- (its last talent)
@@ -117,13 +120,10 @@ local JOBS = {
 	{ name = "Premeditation", key = "SHIFT-Q", asdf = "SHIFT-W", what = "Premeditation",
 		SHOW, "/cast {14183}",
 		by = { combat = false, assassination = false } },
-	-- Never hurried: Preparation, or Cold Blood for combat (its last talent) before an Eviscerate you plan.
+	-- Never hurried: Preparation, for the subtlety builds.
 	{ name = "Preparation", key = "BUTTON5", asdf = "BUTTON5", what = "Preparation",
 		SHOW, "/cast {14185}",
-		by = {
-			combat = { name = "Cold Blood", what = "Cold Blood", SHOW, "/cast {14177}" },
-			assassination = false,
-		} },
+		by = { combat = false, assassination = false } },
 	{ name = "Distract", key = "SHIFT-G", asdf = "SHIFT-Q", spell = 1725, stay = true, what = "Distract",
 		SHOW, "/cast {1725}" },
 	-- The group's key: Expose Armor is what a rogue does for everyone's hits. Never pressed alone, so it
@@ -193,9 +193,14 @@ local PLAY = {
 			{ "Blind", "on the one that joins" }, { "Slice", "keep it up" }, { "Finish", "at 3 or more combo points" }, { "Shank", "on cooldown" },
 			{ "Kidney", "on a caster" }, { "Evasion", "when two hit you" }, { "Vanish", "if it goes wrong" } } },
 
-	-- Combat: Riposte after a parry, Blade Flurry on two, Adrenaline Rush on the hard ones.
+	-- Combat: swords, so the strike opens. Riposte after a parry, Blade Flurry on two, Adrenaline Rush on the hard ones.
+	{ from = 10, build = "combat", tip = "Come in from Stealth, put Slice and Dice up and spend the rest on Eviscerate. Sap a second enemy first.",
+		single = { { "Stealth", "before you pull" }, { "Strike", "opens, then builds points", as = "stealth" }, { "Slice", "keep it up" },
+			{ "Finish", "at 4 or 5 combo points" }, { "Stop", "when it casts" } },
+		cleave = { { "Stealth", "before you pull" }, { "Sap", "on one, before you pull" }, { "Gouge", "on one that joins" },
+			{ "Slice", "keep it up" }, { "Strike" }, { "Finish", "at 3 or more combo points" }, { "Evasion", "when two hit you" } } },
 	{ from = 20, build = "combat", tip = "Sinister Strike is cheap now and Riposte lights up after you parry. Press it every time it does.",
-		single = { { "Stealth", "before you pull" }, { "Stab", "to open from behind", as = "stealth" }, { "Slice", "keep it up" }, { "Strike" },
+		single = { { "Stealth", "before you pull" }, { "Strike", "opens, then builds points", as = "stealth" }, { "Slice", "keep it up" },
 			{ "Finish", "at 5 combo points" }, { "Shank", "on cooldown" }, { "Riposte", "when it's lit" }, { "Stop", "when it casts" } },
 		cleave = { { "Stealth", "before you pull" }, { "Sap", "on one, before you pull" }, { "Slice", "keep it up" }, { "Strike" },
 			{ "Finish", "at 3 or more combo points" }, { "Shank", "on cooldown" }, { "Riposte", "when it's lit" }, { "Gouge", "on one that joins" },
@@ -211,7 +216,7 @@ local PLAY = {
 			{ "Kidney", "to stun it again" }, { "Stop", "when it casts" } },
 		cleave = { { "Flurry", "on 2 or more enemies" }, { "Burst", "with Blade Flurry" }, { "Slice", "keep it up" }, { "Shank", "on cooldown" },
 			{ "Riposte", "when it's lit" }, { "Strike" }, { "Finish", "at 3 or more combo points" }, { "Evasion", "when two hit you" },
-			{ "Vanish", "if it goes wrong" } } },
+			{ "Vanish", "if it goes wrong" }, { "Blind", "on a third that joins" } } },
 	{ from = 50, build = "combat", tip = "You kill fast enough to pull two at a time. Keep a potion ready and Evasion for the third.",
 		single = { { "Stealth", "before you pull" }, { "Strike", "opens, then builds points", as = "stealth" }, { "Slice", "keep it up" },
 			{ "Finish", "at 5 combo points" }, { "Shank", "on cooldown" }, { "Riposte", "when it's lit" }, { "Burst", "on a tough enemy" },
@@ -219,13 +224,6 @@ local PLAY = {
 		cleave = { { "Flurry", "on 2 or more enemies" }, { "Burst", "with Blade Flurry" }, { "Slice", "keep it up" }, { "Shank", "on cooldown" },
 			{ "Riposte", "when it's lit" }, { "Strike" }, { "Finish", "at 3 or more combo points" }, { "Evasion", "when a third joins" },
 			{ "Vanish", "if it goes wrong" } } },
-		{ from = 60, build = "combat", tip = "Cold Blood, your last talent, makes the next Eviscerate a sure crit. Save it for a tough enemy.",
-		single = { { "Stealth", "before you pull" }, { "Strike", "opens, then builds points", as = "stealth" }, { "Slice", "keep it up" },
-			{ "Finish", "at 5 combo points" }, { "Shank", "on cooldown" }, { "Riposte", "when it's lit" }, { "Burst", "on a tough enemy" },
-			{ "Cold Blood", "right before Eviscerate" }, { "Kidney", "to stun it again" }, { "Stop", "when it casts" } },
-		cleave = { { "Flurry", "on 2 or more enemies" }, { "Burst", "with Blade Flurry" }, { "Slice", "keep it up" }, { "Shank", "on cooldown" },
-			{ "Riposte", "when it's lit" }, { "Strike" }, { "Finish", "at 3 or more combo points" }, { "Cold Blood", "to finish one quickly" },
-			{ "Evasion", "when a third joins" }, { "Vanish", "if it goes wrong" } } },
 
 	-- Assassination: crits and cheap finishers, Cold Blood, then Mutilate on daggers.
 	{ from = 20, build = "assassination", tip = "Your finishers cost less and crit more. Build to five points, and keep poison on both blades.",

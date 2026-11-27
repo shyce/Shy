@@ -1,28 +1,28 @@
 -- Generated file. Do not edit by hand.
 -- Leveling talent builds per class: what each is for, a one-line reason, a caution where it is a hard
 -- way to level, and a node for every talent point it plans; with each node's tab, row and rank count
--- from the client's trait tables for 1.60.1.71091. A class's first build is the one for questing alone.
+-- from the client's trait tables for 1.60.1.71139. A class's first build is the one for questing alone.
 -- An order is numbered by point: the first comes at level 10, or as early as level 5 with the account's
 -- legacy talent Talented. Read by Build.lua.
 Shy.TalentBuilds = {
-build = "1.60.1.71091",
+build = "1.60.1.71139",
 DRUID = {
 	tree = 1089, tabs = { 11328, 11347, 11340 },   -- Druid: Balance, Feral Combat, Restoration
 	nodes = {   -- [node] = { tab, row, ranks }
-		[104923] = { 1, 1, 5 },   -- Improved Wrath
+		[104923] = { 1, 1, 5 },   -- Starlight Wrath
 		[104924] = { 1, 1, 5 },   -- Genesis
 		[104925] = { 1, 2, 3 },   -- Moonglow
-		[104931] = { 1, 2, 2 },   -- Improved Moonfire
+		[104931] = { 1, 2, 2 },   -- Moon and Stars
 		[104927] = { 1, 2, 2 },   -- Nature's Majesty
 		[104929] = { 1, 2, 2 },   -- Nature's Reach
 		[104926] = { 1, 3, 3 },   -- Improved Entangling Roots
 		[104928] = { 1, 3, 1 },   -- Nature's Splendor
 		[104930] = { 1, 4, 1 },   -- Insect Swarm
 		[104932] = { 1, 4, 5 },   -- Vengeance
-		[104933] = { 1, 4, 5 },   -- Improved Starfire
+		[104933] = { 1, 4, 2 },   -- Improved Starfire
+		[110844] = { 1, 5, 2 },   -- Overgrowth
 		[104934] = { 1, 5, 1 },   -- Nature's Grace
 		[104935] = { 1, 5, 3 },   -- Eclipse
-		[104936] = { 1, 6, 5 },   -- Moonfury
 		[104937] = { 1, 7, 1 },   -- Moonkin Form
 		[104938] = { 2, 1, 5 },   -- Ferocity
 		[104939] = { 2, 1, 5 },   -- Furor
@@ -51,7 +51,6 @@ DRUID = {
 		[104919] = { 3, 2, 3 },   -- Natural Shapeshifter
 		[104916] = { 3, 3, 5 },   -- Gift of Nature
 		[104918] = { 3, 3, 1 },   -- Bloom
-		[104915] = { 3, 4, 5 },   -- Tranquil Spirit
 		[104914] = { 3, 4, 3 },   -- Improved Rejuvenation
 		[104912] = { 3, 4, 1 },   -- Swiftmend
 		[104921] = { 3, 5, 1 },   -- Nature's Swiftness
@@ -61,7 +60,7 @@ DRUID = {
 		[104910] = { 3, 7, 1 },   -- Wild Growth
 	},
 	builds = {
-		{ id = "cat", name = "Feral cat", goal = "quest", role = "damage", tab = 2,   -- Balance 7, Feral Combat 34, Restoration 10 in 51 points
+		{ id = "cat", name = "Feral cat", goal = "quest", role = "damage", tab = 2,   -- Balance 9, Feral Combat 32, Restoration 10 in 51 points
 			why = "Bear until 20, then a cat: quick kills from stealth, no mana to fight.",
 			order = {
 				104938, 104938, 104938, 104938, 104938,   -- 1-5: Ferocity x5
@@ -77,13 +76,12 @@ DRUID = {
 				104950, 104950,   -- 24-25: Natural Instinct x2
 				104953, 104953, 104953, 104953, 104953,   -- 26-30: Rend and Tear x5
 				113563,   -- 31: Shifting Power
-				104956,   -- 32: Primal Bite
-				104944,   -- 33: Feral Charge
-				104958, 104958, 104958, 104958, 104958,   -- 34-38: Heart of the Wild x5
-				104922, 104922, 104922, 104922, 104922,   -- 39-43: Naturalist x5
-				104924, 104924, 104924, 104924, 104924,   -- 44-48: Genesis x5
-				104927, 104927,   -- 49-50: Nature's Majesty x2
-				104940,   -- 51: Feral Instinct
+				104944,   -- 32: Feral Charge
+				104958, 104958, 104958, 104958, 104958,   -- 33-37: Heart of the Wild x5
+				104922, 104922, 104922, 104922, 104922,   -- 38-42: Naturalist x5
+				104924, 104924, 104924, 104924, 104924,   -- 43-47: Genesis x5
+				104927, 104927,   -- 48-49: Nature's Majesty x2
+				104929, 104929,   -- 50-51: Nature's Reach x2
 			} },
 		{ id = "bear", name = "Feral bear", goal = "dungeon", role = "tank", tab = 2,   -- Balance 0, Feral Combat 41, Restoration 10 in 51 points
 			why = "Bear tank: Swipe holds the pack, Feral Charge stops a caster.",
@@ -109,27 +107,29 @@ DRUID = {
 				104945, 104945, 104945,   -- 44-46: Shredding Attacks x3
 				104922, 104922, 104922, 104922, 104922,   -- 47-51: Naturalist x5
 			} },
-		{ id = "balance", name = "Balance", goal = "quest", role = "damage", tab = 1,   -- Balance 41, Feral Combat 0, Restoration 10 in 51 points
+		{ id = "balance", name = "Balance", goal = "quest", role = "damage", tab = 1,   -- Balance 38, Feral Combat 0, Restoration 13 in 51 points
 			why = "Wrath and Moonfire from range, with roots to keep enemies off you.",
 			note = "Slower than a cat and you drink often. Root, step back and cast. Feral levels faster.",
 			order = {
-				104923, 104923, 104923, 104923, 104923,   -- 1-5: Improved Wrath x5
+				104923, 104923, 104923, 104923, 104923,   -- 1-5: Starlight Wrath x5
 				104925, 104925, 104925,   -- 6-8: Moonglow x3
 				104929, 104929,   -- 9-10: Nature's Reach x2
 				104926, 104926, 104926,   -- 11-13: Improved Entangling Roots x3
-				104931, 104931,   -- 14-15: Improved Moonfire x2
+				104931, 104931,   -- 14-15: Moon and Stars x2
 				104930,   -- 16: Insect Swarm
 				104927, 104927,   -- 17-18: Nature's Majesty x2
 				104928,   -- 19: Nature's Splendor
 				104932, 104932, 104932, 104932, 104932,   -- 20-24: Vengeance x5
 				104934,   -- 25: Nature's Grace
-				104936, 104936, 104936, 104936, 104936,   -- 26-30: Moonfury x5
+				104935, 104935, 104935,   -- 26-28: Eclipse x3
+				104924, 104924,   -- 29-30: Genesis x2
 				104937,   -- 31: Moonkin Form
-				104933, 104933, 104933, 104933, 104933,   -- 32-36: Improved Starfire x5
+				104933, 104933,   -- 32-33: Improved Starfire x2
+				104924, 104924, 104924,   -- 34-36: Genesis x3
 				104957, 104957, 104957, 104957, 104957,   -- 37-41: Nature's Focus x5
 				104922, 104922, 104922, 104922, 104922,   -- 42-46: Naturalist x5
-				104935, 104935, 104935,   -- 47-49: Eclipse x3
-				104924, 104924,   -- 50-51: Genesis x2
+				104920, 104920, 104920,   -- 47-49: Reflection x3
+				110844, 110844,   -- 50-51: Overgrowth x2
 			} },
 		{ id = "resto", name = "Restoration", goal = "dungeon", role = "healer", tab = 3,   -- Balance 11, Feral Combat 0, Restoration 40 in 51 points
 			why = "Rejuvenation and Regrowth on the tank, Swiftmend when it gets bad.",
@@ -149,11 +149,11 @@ DRUID = {
 				104913, 104913, 104913,   -- 28-30: Improved Regrowth x3
 				104910,   -- 31: Wild Growth
 				104913, 104913,   -- 32-33: Improved Regrowth x2
-				104924, 104924, 104924, 104924, 104924,   -- 34-38: Genesis x5
-				104927, 104927,   -- 39-40: Nature's Majesty x2
-				104925, 104925, 104925,   -- 41-43: Moonglow x3
-				104928,   -- 44: Nature's Splendor
-				104915, 104915, 104915, 104915, 104915,   -- 45-49: Tranquil Spirit x5
+				104957, 104957, 104957, 104957, 104957,   -- 34-38: Nature's Focus x5
+				104924, 104924, 104924, 104924, 104924,   -- 39-43: Genesis x5
+				104927, 104927,   -- 44-45: Nature's Majesty x2
+				104925, 104925, 104925,   -- 46-48: Moonglow x3
+				104928,   -- 49: Nature's Splendor
 				104909, 104909,   -- 50-51: Improved Tranquility x2
 			} },
 		{ id = "feralpvp", name = "Feral PvP", goal = "pvp", role = "damage", tab = 2,   -- Balance 0, Feral Combat 38, Restoration 13 in 51 points
@@ -188,6 +188,7 @@ HUNTER = {
 		[104976] = { 1, 1, 5 },   -- Endurance Training
 		[104975] = { 1, 2, 2 },   -- Focused Fire
 		[104974] = { 1, 2, 3 },   -- Improved Aspect of the Monkey
+		[104972] = { 1, 2, 2 },   -- Improved Revive Pet
 		[104973] = { 1, 3, 2 },   -- Pathfinding
 		[104970] = { 1, 3, 1 },   -- Bestial Swiftness
 		[104969] = { 1, 3, 5 },   -- Unleashed Fury
@@ -234,7 +235,8 @@ HUNTER = {
 			order = {
 				104960, 104960, 104960, 104960, 104960,   -- 1-5: Deadly Aspects x5
 				104975, 104975,   -- 6-7: Focused Fire x2
-				104976, 104976, 104976,   -- 8-10: Endurance Training x3
+				104972, 104972,   -- 8-9: Improved Revive Pet x2
+				104976,   -- 10: Endurance Training
 				104969, 104969, 104969, 104969, 104969,   -- 11-15: Unleashed Fury x5
 				104966,   -- 16: Summon Hawk
 				104973, 104973,   -- 17-18: Pathfinding x2
@@ -332,9 +334,10 @@ HUNTER = {
 				104967, 104967,   -- 19-20: Ferocity x2
 				104964,   -- 21: Intimidation
 				104967, 104967, 104967,   -- 22-24: Ferocity x3
-				104965, 104965,   -- 25-26: Spirit Bond x2
-				104962, 104962, 104962, 104962, 104962,   -- 27-31: Frenzy x5
-				104961,   -- 32: Bestial Wrath
+				104965,   -- 25: Spirit Bond
+				104962, 104962, 104962, 104962, 104962,   -- 26-30: Frenzy x5
+				104961,   -- 31: Bestial Wrath
+				104965,   -- 32: Spirit Bond
 				105013, 105013, 105013,   -- 33-35: Hawk Eye x3
 				105012, 105012,   -- 36-37: Improved Concussive Shot x2
 				105008, 105008, 105008, 105008, 105008,   -- 38-42: Careful Aim x5
@@ -451,8 +454,8 @@ MAGE = {
 				105808, 105808,   -- 50-51: Arcane Geometry x2
 			} },
 		{ id = "fire", name = "Fire", goal = "quest", role = "damage", tab = 2,   -- Arcane 10, Fire 38, Frost 3 in 51 points
-			why = "Fire Blast feeds Heating Up for a quick Pyroblast: big hits, no slows.",
-			note = "Nothing slows the enemy and crits are rare this early: open from far off and save Frost Nova.",
+			why = "Fire Blast feeds Heating Up for a quick Pyroblast. Big hits from range.",
+			note = "Nothing slows the enemy until Frostfire Bolt at 40. Open from far off and save Frost Nova.",
 			order = {
 				105795, 105795, 105795, 105795, 105795,   -- 1-5: Accelerant x5
 				105794, 105794, 105794, 105794, 105794,   -- 6-10: Ignite x5
@@ -476,8 +479,8 @@ MAGE = {
 				105810, 105810, 105810, 105810, 105810,   -- 47-51: Arcane Concentration x5
 			} },
 		{ id = "frostaoe", name = "Frost AoE", goal = "quest", role = "damage", tab = 3,   -- Arcane 0, Fire 13, Frost 38 in 51 points
-			why = "Gather a pack, freeze it in place and bring Blizzard down on it.",
-			note = "Waits for a slowing Blizzard 16 points in, and pack slows are weaker here: keep pulls small, or stay Frost.",
+			why = "Gather a pack, freeze it, then Blizzard it as the freeze ends.",
+			note = "Blizzard breaks Frost Nova, so start it as the freeze ends. Pack slows are weak here. Keep pulls small.",
 			order = {
 				105779, 105779, 105779, 105779, 105779,   -- 1-5: Improved Frostbolt x5
 				105775, 105775,   -- 6-7: Improved Frost Nova x2
@@ -546,6 +549,7 @@ PALADIN = {
 		[105324] = { 1, 4, 2 },   -- Divine Precision
 		[110873] = { 1, 4, 2 },   -- Infusion of Light
 		[105330] = { 1, 4, 1 },   -- Oath of Light
+		[110872] = { 1, 5, 2 },   -- Consecrated Ground
 		[105323] = { 1, 5, 1 },   -- Holy Shock
 		[113631] = { 1, 5, 2 },   -- Boundless Light
 		[105321] = { 1, 6, 5 },   -- Holy Power
@@ -553,7 +557,7 @@ PALADIN = {
 		[105332] = { 2, 1, 5 },   -- Divine Intellect
 		[105626] = { 2, 1, 5 },   -- Redoubt
 		[105638] = { 2, 2, 3 },   -- Precision
-		[105637] = { 2, 2, 2 },   -- Guardian's Favor
+		[105632] = { 2, 2, 2 },   -- Sacred Duty
 		[105625] = { 2, 3, 1 },   -- Templar's Bulwark
 		[110874] = { 2, 3, 2 },   -- Shield Specialization
 		[105630] = { 2, 3, 5 },   -- Toughness
@@ -564,7 +568,6 @@ PALADIN = {
 		[105627] = { 2, 5, 5 },   -- Reckoning
 		[110879] = { 2, 6, 3 },   -- Iron Creed
 		[110875] = { 2, 7, 1 },   -- Shieldsworn
-		[105707] = { 3, 1, 5 },   -- Deflection
 		[105706] = { 3, 1, 5 },   -- Benediction
 		[105705] = { 3, 2, 2 },   -- Improved Judgement
 		[105703] = { 3, 2, 3 },   -- Conviction
@@ -604,7 +607,7 @@ PALADIN = {
 				105638, 105638, 105638,   -- 47-49: Precision x3
 				105704, 105704,   -- 50-51: Holy Conduit x2
 			} },
-		{ id = "holy", name = "Holy", goal = "dungeon", role = "healer", tab = 1,   -- Holy 33, Protection 7, Retribution 11 in 51 points
+		{ id = "holy", name = "Holy", goal = "dungeon", role = "healer", tab = 1,   -- Holy 34, Protection 5, Retribution 12 in 51 points
 			why = "Heals that hold when you're hit, an Oath on your tank, then Holy Shock.",
 			note = "Kills slowly alone. Retribution heals the early dungeons too: level as that if questing drags.",
 			order = {
@@ -616,43 +619,45 @@ PALADIN = {
 				105330,   -- 16: Oath of Light
 				105329,   -- 17: Illumination
 				110873, 110873,   -- 18-19: Infusion of Light x2
-				105334,   -- 20: Improved Seals
+				105327,   -- 20: Purifying Power
 				105323,   -- 21: Holy Shock
 				113631, 113631,   -- 22-23: Boundless Light x2
-				105334, 105334,   -- 24-25: Improved Seals x2
+				110872, 110872,   -- 24-25: Consecrated Ground x2
 				105321, 105321, 105321, 105321, 105321,   -- 26-30: Holy Power x5
 				105320,   -- 31: Light's Vigil
 				105332, 105332, 105332, 105332, 105332,   -- 32-36: Divine Intellect x5
 				105706, 105706, 105706, 105706, 105706,   -- 37-41: Benediction x5
 				105703, 105703, 105703,   -- 42-44: Conviction x3
-				105327, 105327,   -- 45-46: Purifying Power x2
-				105637, 105637,   -- 47-48: Guardian's Favor x2
-				105701, 105701, 105701,   -- 49-51: Sanctified Judgement x3
+				105327,   -- 45: Purifying Power
+				105704, 105704,   -- 46-47: Holy Conduit x2
+				105701, 105701, 105701,   -- 48-50: Sanctified Judgement x3
+				105705,   -- 51: Improved Judgement
 			} },
-		{ id = "prot", name = "Protection", goal = "dungeon", role = "tank", tab = 2,   -- Holy 0, Protection 39, Retribution 12 in 51 points
+		{ id = "prot", name = "Protection", goal = "dungeon", role = "tank", tab = 2,   -- Holy 0, Protection 35, Retribution 16 in 51 points
 			why = "Shield up, enemies kept on you, and mana back as you block.",
 			note = "Slow alone until Consecration at 20, then you can pull packs. Before that, quest with a friend.",
 			order = {
 				105626, 105626, 105626, 105626, 105626,   -- 1-5: Redoubt x5
 				105638, 105638, 105638,   -- 6-8: Precision x3
-				105332, 105332,   -- 9-10: Divine Intellect x2
+				105632, 105632,   -- 9-10: Sacred Duty x2
 				105625,   -- 11: Templar's Bulwark
 				110874, 110874,   -- 12-13: Shield Specialization x2
-				105332, 105332,   -- 14-15: Divine Intellect x2
+				105630, 105630,   -- 14-15: Toughness x2
 				110878,   -- 16: Swift Judgement
 				105634, 105634, 105634,   -- 17-19: Improved Righteous Fury x3
-				105332,   -- 20: Divine Intellect
+				105636,   -- 20: Anticipation
 				105628,   -- 21: Holy Shield
-				105627, 105627, 105627, 105627,   -- 22-25: Reckoning x4
-				110879, 110879, 110879,   -- 26-28: Iron Creed x3
-				105627,   -- 29: Reckoning
-				105636,   -- 30: Anticipation
+				105627, 105627, 105627, 105627, 105627,   -- 22-26: Reckoning x5
+				110879, 110879, 110879,   -- 27-29: Iron Creed x3
+				105630,   -- 30: Toughness
 				110875,   -- 31: Shieldsworn
 				105636, 105636, 105636, 105636,   -- 32-35: Anticipation x4
-				105707, 105707, 105707, 105707, 105707,   -- 36-40: Deflection x5
-				105630, 105630, 105630, 105630,   -- 41-44: Toughness x4
-				105706, 105706, 105706, 105706, 105706,   -- 45-49: Benediction x5
-				105705, 105705,   -- 50-51: Improved Judgement x2
+				105706, 105706, 105706, 105706, 105706,   -- 36-40: Benediction x5
+				105705, 105705,   -- 41-42: Improved Judgement x2
+				105703, 105703, 105703,   -- 43-45: Conviction x3
+				105701, 105701, 105701,   -- 46-48: Sanctified Judgement x3
+				105699, 105699,   -- 49-50: Pursuit of Justice x2
+				105700,   -- 51: Sacred Arbiter
 			} },
 		{ id = "retpvp", name = "Retribution PvP", goal = "pvp", role = "damage", tab = 3,   -- Holy 20, Protection 0, Retribution 31 in 51 points
 			why = "Seal of Command bursts, Repentance locks one out, and fears end sooner.",
@@ -876,13 +881,13 @@ ROGUE = {
 		[105716] = { 1, 3, 2 },   -- Lethality
 		[105714] = { 1, 4, 5 },   -- Vile Poisons
 		[105715] = { 1, 4, 1 },   -- Cold Blood
+		[105713] = { 1, 4, 5 },   -- Improved Poisons
 		[113633] = { 1, 5, 5 },   -- Relentless Strikes
 		[105712] = { 1, 5, 1 },   -- Venom
 		[105710] = { 1, 6, 3 },   -- Seal Fate
 		[105709] = { 1, 7, 1 },   -- Mutilate
 		[105708] = { 2, 1, 3 },   -- Coup de Grace
 		[105741] = { 2, 1, 2 },   -- Efficient Strikes
-		[113398] = { 2, 1, 5 },   -- Lightning Reflexes
 		[105719] = { 2, 2, 3 },   -- Puncturing Wounds
 		[105738] = { 2, 2, 3 },   -- Deflection
 		[105737] = { 2, 2, 3 },   -- Precision
@@ -915,7 +920,7 @@ ROGUE = {
 		[110866] = { 3, 7, 1 },   -- Death Mark
 	},
 	builds = {
-		{ id = "combat", name = "Combat", goal = "quest", role = "damage", tab = 2,   -- Assassination 16, Combat 35, Subtlety 0 in 51 points
+		{ id = "combat", name = "Combat", goal = "quest", role = "damage", tab = 2,   -- Assassination 15, Combat 36, Subtlety 0 in 51 points
 			why = "Cheap Sinister Strikes with any weapon, Riposte, Blade Flurry, Shank.",
 			order = {
 				105741, 105741,   -- 1-2: Efficient Strikes x2
@@ -933,19 +938,18 @@ ROGUE = {
 				105727, 105727, 105727, 105727,   -- 22-25: Hack and Slash x4
 				105740, 105740, 105740, 105740, 105740,   -- 26-30: Flash of Steel x5
 				105724,   -- 31: Adrenaline Rush
-				105727,   -- 32: Hack and Slash
-				105730,   -- 33: Aggression
-				113635, 113635,   -- 34-35: Dual Wield Specialization x2
-				105723, 105723,   -- 36-37: Remorseless Attacks x2
-				105722, 105722, 105722,   -- 38-40: Malice x3
-				105721, 105721, 105721,   -- 41-43: Ruthlessness x3
-				105722, 105722,   -- 44-45: Malice x2
-				105716, 105716,   -- 46-47: Lethality x2
-				105739, 105739,   -- 48-49: Improved Slice and Dice x2
-				105720,   -- 50: Vigor
-				105715,   -- 51: Cold Blood
+				105736,   -- 32: Endurance
+				105727,   -- 33: Hack and Slash
+				105730,   -- 34: Aggression
+				113635, 113635,   -- 35-36: Dual Wield Specialization x2
+				105723, 105723,   -- 37-38: Remorseless Attacks x2
+				105722, 105722, 105722,   -- 39-41: Malice x3
+				105721, 105721, 105721,   -- 42-44: Ruthlessness x3
+				105722, 105722,   -- 45-46: Malice x2
+				105716, 105716,   -- 47-48: Lethality x2
+				105739, 105739, 105739,   -- 49-51: Improved Slice and Dice x3
 			} },
-		{ id = "assassination", name = "Assassination", goal = "quest", role = "damage", tab = 1,   -- Assassination 31, Combat 15, Subtlety 5 in 51 points
+		{ id = "assassination", name = "Assassination", goal = "quest", role = "damage", tab = 1,   -- Assassination 36, Combat 10, Subtlety 5 in 51 points
 			why = "Crits and cheap finishers, then poisons, Venom and Mutilate on daggers.",
 			note = "Mutilate comes late and needs daggers; do the poison quest at 20. Combat kills faster until then.",
 			order = {
@@ -954,8 +958,7 @@ ROGUE = {
 				105721, 105721, 105721,   -- 6-8: Ruthlessness x3
 				105722, 105722,   -- 9-10: Malice x2
 				105716, 105716,   -- 11-12: Lethality x2
-				105739, 105739,   -- 13-14: Improved Slice and Dice x2
-				105720,   -- 15: Vigor
+				105739, 105739, 105739,   -- 13-15: Improved Slice and Dice x3
 				105715,   -- 16: Cold Blood
 				105714, 105714, 105714, 105714,   -- 17-20: Vile Poisons x4
 				105712,   -- 21: Venom
@@ -964,13 +967,12 @@ ROGUE = {
 				113633,   -- 29: Relentless Strikes
 				105714,   -- 30: Vile Poisons
 				105709,   -- 31: Mutilate
-				105760, 105760, 105760, 105760, 105760,   -- 32-36: Opportunity x5
-				105708, 105708, 105708,   -- 37-39: Coup de Grace x3
-				113398, 113398,   -- 40-41: Lightning Reflexes x2
-				105737, 105737, 105737,   -- 42-44: Precision x3
-				105719, 105719, 105719,   -- 45-47: Puncturing Wounds x3
-				105759, 105759,   -- 48-49: Composure x2
-				105736, 105736,   -- 50-51: Endurance x2
+				105713, 105713, 105713, 105713, 105713,   -- 32-36: Improved Poisons x5
+				105760, 105760, 105760, 105760, 105760,   -- 37-41: Opportunity x5
+				105741, 105741,   -- 42-43: Efficient Strikes x2
+				105708, 105708, 105708,   -- 44-46: Coup de Grace x3
+				105719, 105719, 105719,   -- 47-49: Puncturing Wounds x3
+				105737, 105737,   -- 50-51: Precision x2
 			} },
 		{ id = "subtlety", name = "Subtlety", goal = "quest", role = "damage", tab = 3,   -- Assassination 15, Combat 5, Subtlety 31 in 51 points
 			why = "Dagger Ambush from Stealth, again after Ghostly Strike; then Hemorrhage.",
@@ -1081,7 +1083,7 @@ SHAMAN = {
 		[104724] = { 3, 7, 1 },   -- Riptide
 	},
 	builds = {
-		{ id = "enh", name = "Enhancement", goal = "quest", role = "damage", tab = 2,   -- Elemental Combat 7, Enhancement 44, Restoration 0 in 51 points
+		{ id = "enh", name = "Enhancement", goal = "quest", role = "damage", tab = 2,   -- Elemental Combat 8, Enhancement 43, Restoration 0 in 51 points
 			why = "Two-handed swings with cheap shocks in between; little time drinking.",
 			order = {
 				104753, 104753, 104753, 104753, 104753,   -- 1-5: Thundering Strikes x5
@@ -1099,11 +1101,11 @@ SHAMAN = {
 				104740,   -- 31: Rage of the Farseer
 				104741, 104741,   -- 32-33: Maelstrom Weapon x2
 				104745,   -- 34: Spirit Weapons
-				104746, 104746, 104746, 104746, 104746,   -- 35-39: Toughness x5
-				104756, 104756, 104756,   -- 40-42: Ancestral Knowledge x3
-				104748, 104748,   -- 43-44: Anticipation x2
-				104772, 104772, 104772, 104772, 104772,   -- 45-49: Concussion x5
-				104769, 104769,   -- 50-51: Elemental Devastation x2
+				104772, 104772, 104772, 104772, 104772,   -- 35-39: Concussion x5
+				104769, 104769, 104769,   -- 40-42: Elemental Devastation x3
+				104746, 104746, 104746, 104746, 104746,   -- 43-47: Toughness x5
+				104756, 104756, 104756,   -- 48-50: Ancestral Knowledge x3
+				104748,   -- 51: Anticipation
 			} },
 		{ id = "ele", name = "Elemental", goal = "quest", role = "damage", tab = 1,   -- Elemental Combat 31, Enhancement 9, Restoration 11 in 51 points
 			why = "Lightning Bolt from range; Earthbind roots foes so you keep casting.",
@@ -1259,22 +1261,22 @@ WARLOCK = {
 			order = {
 				105924, 105924, 105924, 105924, 105924,   -- 1-5: Improved Corruption x5
 				105925, 105925, 105925, 105925,   -- 6-9: Suppression x4
-				105923, 105923,   -- 10-11: Grim Reach x2
-				105918, 105918, 105918,   -- 12-14: Fel Concentration x3
-				105919, 105919,   -- 15-16: Improved Bane of Agony x2
-				105914, 105914,   -- 17-18: Nightfall x2
-				105920, 105920,   -- 19-20: Improved Drains x2
+				105920, 105920, 105920,   -- 10-12: Improved Drains x3
+				105918, 105918, 105918,   -- 13-15: Fel Concentration x3
+				105919, 105919,   -- 16-17: Improved Bane of Agony x2
+				105914, 105914,   -- 18-19: Nightfall x2
+				105921,   -- 20: Improved Life Tap
 				105912,   -- 21: Siphon Life
-				105920,   -- 22: Improved Drains
-				105911, 105911, 105911,   -- 23-25: Soul Siphon x3
+				105911, 105911, 105911,   -- 22-24: Soul Siphon x3
+				105921,   -- 25: Improved Life Tap
 				105910, 105910, 105910, 105910, 105910,   -- 26-30: Shadow Mastery x5
 				105909,   -- 31: Wrack
-				105921, 105921,   -- 32-33: Improved Life Tap x2
-				105917, 105917, 105917,   -- 34-36: Pandemic x3
-				110876, 110876, 110876, 110876, 110876,   -- 37-41: Malevolence x5
-				105906, 105906, 105906, 105906, 105906,   -- 42-46: Unholy Power x5
-				105903, 105903, 105903,   -- 47-49: Fel Vitality x3
-				105899, 105899,   -- 50-51: Demonic Energies x2
+				105917, 105917, 105917,   -- 32-34: Pandemic x3
+				110876, 110876, 110876, 110876, 110876,   -- 35-39: Malevolence x5
+				105906, 105906, 105906, 105906, 105906,   -- 40-44: Unholy Power x5
+				105903, 105903, 105903,   -- 45-47: Fel Vitality x3
+				105899, 105899,   -- 48-49: Demonic Energies x2
+				105923, 105923,   -- 50-51: Grim Reach x2
 			} },
 		{ id = "demo", name = "Demonology", goal = "quest", role = "damage", tab = 2,   -- Affliction 20, Demonology 31, Destruction 0 in 51 points
 			why = "A tougher demon fights beside you while you add curses and Searing Pain.",
@@ -1405,9 +1407,9 @@ WARRIOR = {
 			why = "One-hander and shield: Revenge after every block, and you rarely rest.",
 			order = {
 				105976, 105976, 105976, 105976, 105976,   -- 1-5: Shield Specialization x5
-				105974, 105974,   -- 6-7: Improved Bloodrage x2
-				105972, 105972, 105972,   -- 8-10: Improved Thunder Clap x3
-				105969, 105969, 105969,   -- 11-13: Improved Revenge x3
+				105969, 105969, 105969,   -- 6-8: Improved Revenge x3
+				105972, 105972, 105972,   -- 9-11: Improved Thunder Clap x3
+				105974, 105974,   -- 12-13: Improved Bloodrage x2
 				105971, 105971,   -- 14-15: Master of Defense x2
 				105966,   -- 16: Vanguard
 				105970,   -- 17: Last Stand
@@ -1480,10 +1482,10 @@ WARRIOR = {
 			why = "Shield tank for dungeons: Thunder Clap and Revenge keep the pack on you.",
 			order = {
 				105976, 105976, 105976, 105976, 105976,   -- 1-5: Shield Specialization x5
-				105972, 105972, 105972,   -- 6-8: Improved Thunder Clap x3
-				105974, 105974,   -- 9-10: Improved Bloodrage x2
-				110856, 110856, 110856,   -- 11-13: Defiance x3
-				105969, 105969, 105969,   -- 14-16: Improved Revenge x3
+				105969, 105969, 105969,   -- 6-8: Improved Revenge x3
+				105972, 105972, 105972,   -- 9-11: Improved Thunder Clap x3
+				105974, 105974,   -- 12-13: Improved Bloodrage x2
+				110856, 110856, 110856,   -- 14-16: Defiance x3
 				105971, 105971,   -- 17-18: Master of Defense x2
 				105966,   -- 19: Vanguard
 				105970,   -- 20: Last Stand

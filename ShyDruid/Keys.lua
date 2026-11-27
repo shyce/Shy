@@ -101,9 +101,10 @@ local JOBS = {
 		SHOW, "/cast {17116}" },
 	{ name = "Tranquility", key = "SHIFT-BUTTON5", asdf = "SHIFT-BUTTON5", stay = true, what = "Tranquility",
 		SHOW, "/cast {740}", by = { cat = false, bear = false, feralpvp = false, balance = false } },
+	-- (A slip with this one turns every mob in reach on you: it never stands in on an easy key.)
+	{ name = "Roar", key = "BUTTON5", asdf = "BUTTON5", stay = true, what = "Challenging Roar",
+		SHOW, "/cast {5209}", by = { balance = false, resto = false, cat = false, feralpvp = false } },   -- (a tank's)
 	-- The number row.
-	{ name = "Uncurse", role = "uncurse", key = "4", asdf = "4", stay = true, spare = "MULTIACTIONBAR4BUTTON4", what = "Remove Curse",
-		SHOW, "/cast " .. FRIEND .. " {2782}" },
 	{ name = "Raise", role = "raise", key = "5", asdf = "5", stay = true, spare = "MULTIACTIONBAR4BUTTON5", what = "Revive, or Rebirth in a fight, on the dead friend under your mouse or your target, or the one you click next",
 		"#showtooltip {20484}", "/cast [combat,@mouseover,help,dead][combat,help,dead][combat,@none] {20484}; " .. Shy.Keys.DEAD .. " {437138}" },
 	-- With Shift: each key's rarer kin. A heal you cast between fights never stands in on an easy key: pressed in a
@@ -119,12 +120,14 @@ local JOBS = {
 		SHOW, "/cast " .. FRIEND .. " {774}", by = { resto = false } },   -- (Restoration's is on Q)
 	{ name = "Touch", key = "SHIFT-F", asdf = "SHIFT-G", stay = true, what = "Healing Touch",
 		SHOW, "/cast " .. FRIEND .. " {5185}", by = { resto = false } },   -- (Restoration's is on R)
-	{ name = "Roar", key = "SHIFT-G", asdf = "SHIFT-W", what = "Challenging Roar",
-		SHOW, "/cast {5209}", by = { balance = false, resto = false, cat = false, feralpvp = false } },   -- (a tank's; Balance's Moonkin Form is on 3)
+	-- (Remove Curse on the key a mage's is on.)
+	{ name = "Uncurse", role = "uncurse", key = "SHIFT-G", asdf = "SHIFT-W", stay = true, what = "Remove Curse",
+		SHOW, "/cast " .. FRIEND .. " {2782}" },
 	{ name = "Escape", role = "escape", key = "B", asdf = "B", what = "Cower as a cat. Nature's Grasp once Barkskin has Mouse 4 (44)",
 		SHOW, "/cast [stance:{768},known:{8998}] {8998}; [known:{22812}] {16689}", by = { bear = GRASP, balance = GRASP, resto = GRASP } },
-	{ name = "Poison", key = "SHIFT-D", asdf = "SHIFT-D", stay = true, what = "Abolish Poison. Cure Poison until 26",
-		SHOW, Grows(2893, 8946) },
+	-- (Shift + D is a strafe key with Shift held, and a cure drops your form: in a form it does nothing.)
+	{ name = "Poison", key = "SHIFT-D", asdf = "SHIFT-D", stay = true, what = "Abolish Poison, out of a form. Cure Poison until 26",
+		SHOW, (Grows(2893, 8946):gsub("%[", "[noform,")) },
 }
 -- With Shift on the bottom row: what your bags hold, the best of it you can use.
 Shy.Keys.People(JOBS)   -- (Shift + 1 and 2: what your people alone can do)
@@ -160,7 +163,7 @@ local REGEN, PRIMAL = { "Guard", "under half health", as = "{22842}" }, { "Gore"
 local GROWL = { "Hold", "on one that wanders off", as = "{6795}" }
 local BEAR_PACK = { ENRAGE, DEMO, SWIPE, MAUL, { "Stop", "if one casts", as = "{5211}" }, AFTER }
 local BEAR_PACK_LATE = { ENRAGE, DEMO, SWIPE, MAUL, { "Stop", "if one casts", as = "{5211}" }, REGEN, GROWL }
-local BEAR_PACK_CHARGE = { CHARGE, ENRAGE, DEMO, SWIPE, PRIMAL, MAUL, { "Stop", "if one casts", as = "{5211}" }, REGEN, GROWL }
+local BEAR_PACK_CHARGE = { CHARGE, ENRAGE, DEMO, SWIPE, MAUL, { "Stop", "if one casts", as = "{5211}" }, REGEN, GROWL }
 local BASH_PACK = { CHARGE, ENRAGE, { "Stop", "to stop a caster", as = "{5211}" }, DEMO, SWIPE, MAUL }
 local BASH_PACK_LATE = { CHARGE, ENRAGE, { "Stop", "to stop a caster", as = "{5211}" }, DEMO, SWIPE, MAUL, REGEN }
 -- A cat's steps (from Prowl R Pounces and E Ravages; a cat's F makes it a bear, and F again Bashes).
@@ -257,7 +260,7 @@ local PLAY = {
 		single = CAT_BLEED, cleave = BASH_PACK },
 	{ from = 32, build = "feralpvp", tip = "Ravage is your opener now. Prowl up behind it, Ravage, then Rake and Claw to five points.",
 		single = CAT_RAVAGE, cleave = BASH_PACK },
-	{ from = 40, build = "feralpvp", tip = "From Prowl your Claw key Pounces to stun them and your Shred key Ravages. In bear, Bash holds a caster still.",
+	{ from = 42, build = "feralpvp", tip = "From Prowl your Claw key Pounces to stun them and your Shred key Ravages. In bear, Bash holds a caster still.",
 		single = CAT_LATE, cleave = BASH_PACK_LATE },
 	{ from = 50, build = "feralpvp", tip = "Fights are short now. Regrowth between them saves you from eating, and Innervate gives you mana back.",
 		single = CAT_LATE, cleave = BASH_PACK_LATE },

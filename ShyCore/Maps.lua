@@ -1400,17 +1400,19 @@ end
 -- Marks
 -- What ShyCore itself stands on the maps wears the family's mark (ShyQuest's look): a dark glass plate
 -- with one bezel and a sign, both in the sign's color; lit, the face in the color, the bezel a lighter
--- tint of it, a soft bloom round it and the sign dark. Two sheets, Mark.tga (64px cells) and
--- MarkSmall.tga (32px); a mark uses the one nearer its size on screen.
+-- tint of it, a soft bloom round it and the sign dark. One sheet, Mark.blp: 64px cells, and every smaller size
+-- drawn at its own (never shrunk from the largest), so the game takes the one nearest a mark on screen by itself.
 --   Shy.Maps.Mark(parent, size) -> mark;   mark:Set(sign, color, lit)   sign: Maps.SIGNS, one of Shy.Hover.GLYPHS,
 --                                           nil for a plate its owner writes on (a number),
 --                                           or another addon's own: { sheets = { small, large }, cell, cols, rows },
---                                           a cell of its sheets drawn as these are (the same two sizes)
-local SHEETS = { Shy.MEDIA .. "MarkSmall", Shy.MEDIA .. "Mark" }
+--                                           a cell of its two sheets (32 and 64 pixel cells: the nearer one is used)
+local SHEET = Shy.MEDIA .. "Mark"
 local GLYPH_SHARE = 0.56     -- a hover glyph as the sign: this share of the mark's width
-local LARGE_FROM = 40        -- on-screen pixels from which the large sheet is used
-local COLS, ROWS = 4, 4
-local CELL = { badge = 0, lit = 1, ring = 2, bloom = 3, flight = 4, sail = 5, tram = 6, zeppelin = 7, shut = 8, open = 9 }
+local LARGE_FROM = 40        -- on-screen pixels from which another addon's large sheet is used
+local COLS, ROWS = 8, 4
+local CELL = { badge = 0, lit = 1, ring = 2, bloom = 3, flight = 4, sail = 5, tram = 6, zeppelin = 7, shut = 8, open = 9,
+	pin = 10 }
+local DIGIT = 11             -- the cell of "0"; 1 to 9 follow
 -- flight: the wing (a flight, an airboat); sail: a boat; tram: the tram's car; zeppelin: a zeppelin. Each in
 -- its way's color (Shy.Theme.TRAVEL).
 Maps.SIGNS = { flight = true, sail = true, tram = true, zeppelin = true }
@@ -1428,11 +1430,20 @@ local function Paler(color, by)
 	end
 end
 
-local function Cell(texture, name)
-	local cell = CELL[name]
+local function CellAt(texture, cell)
 	local col, row = cell % COLS, math.floor(cell / COLS)
 	texture:SetTexCoord(col / COLS, (col + 1) / COLS, row / ROWS, (row + 1) / ROWS)
 	texture:Show()
+end
+
+local function Cell(texture, name)
+	CellAt(texture, CELL[name])
+end
+
+-- Of another addon's two sheets (a sign of its own), the one nearer a mark's size on screen.
+local function Theirs(mark, sheets)
+	local _, height = GetPhysicalScreenSize()
+	return sheets[mark:GetWidth() * mark:GetEffectiveScale() * height / 768 > LARGE_FROM and 2 or 1]
 end
 
 function Maps.Mark(parent, size)
@@ -1455,18 +1466,9 @@ function Maps.Mark(parent, size)
 	bezel:SetAllPoints()
 	sign = mark:CreateTexture(nil, "ARTWORK")
 	sign:SetAllPoints()
-	local regions, sheet = { bloom, plate, face, bezel, sign }, nil
-	local function Sheet()
-		local _, height = GetPhysicalScreenSize()
-		local want = SHEETS[mark:GetWidth() * mark:GetEffectiveScale() * height / 768 > LARGE_FROM and 2 or 1]
-		if want ~= sheet then
-			sheet = want
-			for _, region in ipairs(regions) do region:SetTexture(sheet) end
-		end
-	end
+	for _, region in ipairs({ bloom, plate, face, bezel }) do region:SetTexture(SHEET) end
 	-- ink: the sign's own color, where it isn't the bezel's (unlit) or graphite (lit).
 	function mark:Set(name, color, lit, ink)
-		Sheet()
 		UI.Tint(plate, WHITE, 1)
 		Cell(plate, "badge")
 		if lit then
@@ -1491,14 +1493,14 @@ function Maps.Mark(parent, size)
 		elseif type(name) == "table" then
 			-- Another addon's sign: its sheet of the size this mark took.
 			glyphed = false
-			sign:SetTexture(name.sheets[sheet == SHEETS[2] and 2 or 1])
+			sign:SetTexture(Theirs(mark, name.sheets))
 			sign:SetAllPoints()
 			local col, row = name.cell % name.cols, math.floor(name.cell / name.cols)
 			sign:SetTexCoord(col / name.cols, (col + 1) / name.cols, row / name.rows, (row + 1) / name.rows)
 			sign:Show()
 		elseif CELL[name] then
 			glyphed = false
-			sign:SetTexture(sheet)
+			sign:SetTexture(SHEET)
 			sign:SetAllPoints()
 			Cell(sign, name)
 		else
@@ -1510,7 +1512,7 @@ function Maps.Mark(parent, size)
 			sign:Show()
 		end
 	end
-	-- (Its size on screen decides which sheet is nearer: Set again after a change of scale or size.)
+	-- (Another addon's sign: its size on screen decides which of that addon's sheets. Set again after a change of scale.)
 	return mark
 end
 
@@ -1537,5 +1539,117 @@ function UI.FoldMark(parent, size)
 		Draw()
 	end
 	Draw()
+	return mark
+end
+
+-- A numbered mark: the family's map pin (or its round plate) with a number on it, for any order to follow: the
+-- route's places on the maps (ShyQuest's), a talent's turn, the next of anything. Unlit, slate with a white number;
+-- lit, in your color with the number in the ink that reads on it, or in the owner's own colors (ShyQuest's live
+-- place: the route's white, a graphite number). One digit stands in the middle; two share it by their ink widths.
+--   local mark = UI.NumberMark(parent, size, opts)
+--       opts.round    the round plate (glass, a steel bezel; lit, a face, a lighter bezel and a bloom) for the pin
+--       opts.tipped   a pin on a map: its point on the mark's middle, its head above, the hit rect moved onto it
+--   mark:Set(n, lit, color, ink)   n: 0 to 99. color, ink: the lit plate's and its number's, your color and the ink
+--       on it unless told (a function follows the theme). Set again as it is, it does nothing at all.
+--   mark.number, mark.lit          what it shows
+-- It costs nothing at rest: its sheet is set once (the game takes the size of it nearest the mark on screen), a
+-- texture's place in it and its color are set only when what it shows changes, and nothing is made as it draws.
+UI.NUMBER = {
+	slate = { 0.26, 0.31, 0.42 },      -- an unlit pin: a cool deep slate that wears no meaning's color
+	white = { 0.96, 0.96, 0.98 },      -- its number, and an unlit round plate's
+	steel = { 0.74, 0.74, 0.78 },      -- an unlit round plate's bezel
+}
+-- The pin's geometry and the numbers' (as shares of a cell; the media builder draws the same): its point and its
+-- head's middle above the cell's middle, a number's scale on its head, the head's empty margin each side; two digits'
+-- gap, the width they share and their largest scale; each digit's ink width.
+local NUMBER = { tip = 0.46, head = 0.14, scale = 0.78, side = 0.12, gap = 0.045, fit = 0.58, most = 0.92,
+	ink = { [0] = 0.404, 0.359, 0.393, 0.395, 0.420, 0.393, 0.400, 0.389, 0.412, 0.400 } }
+
+function UI.NumberMark(parent, size, opts)
+	opts = opts or {}
+	local round = opts.round == true
+	local mark = CreateFrame("Frame", nil, parent)
+	mark:SetSize(size, size)
+	local lift = (not round and opts.tipped) and NUMBER.tip or 0   -- the picture's middle above the mark's, in sizes
+	local head = round and 0 or NUMBER.head                         -- the number's middle above the picture's
+	local bloom = mark:CreateTexture(nil, "BACKGROUND")
+	local plate = mark:CreateTexture(nil, "BORDER")
+	local face = mark:CreateTexture(nil, "BORDER", nil, 1)
+	local bezel = mark:CreateTexture(nil, "BORDER", nil, 2)
+	local digits = { mark:CreateTexture(nil, "ARTWORK"), mark:CreateTexture(nil, "ARTWORK") }
+	for _, t in ipairs({ plate, face, bezel }) do
+		t:SetPoint("CENTER", mark, "CENTER", 0, lift * size)
+		t:SetSize(size, size)
+	end
+	bloom:SetPoint("CENTER", plate, "CENTER")
+	bloom:SetSize(size * BLOOM_SCALE, size * BLOOM_SCALE)
+	face:Hide()
+	bezel:Hide()
+	bloom:Hide()
+	if opts.tipped and not round then
+		local up = lift * size
+		mark:SetHitRectInsets(NUMBER.side * size, NUMBER.side * size, -up, up)
+	end
+	for _, region in ipairs({ bloom, plate, face, bezel, digits[1], digits[2] }) do region:SetTexture(SHEET) end
+	local cellOf = {}            -- region -> the cell it shows (its place in the sheet set only when that changes)
+	local function Show(texture, cell)
+		if cellOf[texture] ~= cell then
+			cellOf[texture] = cell
+			CellAt(texture, cell)
+		else
+			texture:Show()
+		end
+	end
+	-- One digit: its cell, its share of the mark, `offset` sizes to the side of the head's middle.
+	local function Digit(i, d, ink, share, offset)
+		local t = digits[i]
+		t:ClearAllPoints()
+		t:SetPoint("CENTER", mark, "CENTER", offset * size, (lift + head) * size)
+		t:SetSize(size * share, size * share)
+		UI.Tint(t, ink, 1)
+		Show(t, DIGIT + d)
+	end
+
+	local was = {}               -- what it was last set to
+	function mark:Set(n, lit, color, ink)
+		n = math.max(0, math.min(99, math.floor(tonumber(n) or 0)))
+		lit = lit and true or false
+		color = lit and (color or Theme.Accent) or nil
+		ink = lit and (ink or UI.colors.onAccent) or UI.NUMBER.white
+		if was.n == n and was.lit == lit and was.color == color and was.ink == ink then return end
+		was.n, was.lit, was.color, was.ink = n, lit, color, ink
+		self.number, self.lit = n, lit
+		if round then
+			UI.Tint(plate, WHITE, 1)
+			Show(plate, CELL.badge)
+			if lit then
+				UI.Tint(face, color, 1)
+				Show(face, CELL.lit)
+				UI.Tint(bezel, Paler(color, LIT_BEZEL), 1)
+				UI.Tint(bloom, Paler(color, LIT_BLOOM), 1)
+				Show(bloom, CELL.bloom)
+			else
+				face:Hide()
+				bloom:Hide()
+				UI.Tint(bezel, UI.NUMBER.steel, 1)
+			end
+			Show(bezel, CELL.ring)
+		else
+			UI.Tint(plate, lit and color or UI.NUMBER.slate, 1)
+			Show(plate, CELL.pin)
+		end
+		local scale = round and 1 or NUMBER.scale
+		if n < 10 then
+			Digit(1, n, ink, scale, 0)
+			digits[2]:Hide()
+			return
+		end
+		local tens, ones = math.floor(n / 10), n % 10
+		local inkT, inkO = NUMBER.ink[tens], NUMBER.ink[ones]
+		local width = inkT + NUMBER.gap + inkO
+		local share = math.min(NUMBER.most, NUMBER.fit / width) * scale
+		Digit(1, tens, ink, share, (-width / 2 + inkT / 2) * share)
+		Digit(2, ones, ink, share, (width / 2 - inkO / 2) * share)
+	end
 	return mark
 end

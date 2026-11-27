@@ -1,8 +1,8 @@
 -- The flight or the ride on screen, beside the maps' (Flight.lua, Ride.lua): on the flight master's map a
 -- flight point's hover says how long the flight there is in the air, and while flying, or aboard a boat,
 -- a zeppelin, an airboat or the tram, a plate in the column at the top's middle (Shy.Top) counts it down,
--- and says for a moment when it is over ("Landed", "Off the boat"). ShyQuest's card and arrow count these
--- down themselves, so the plate stands aside wherever ShyQuest is loaded.
+-- and says for a moment when it is over ("Landed", "Off the boat"). Wherever ShyQuest is loaded the plate
+-- stands aside: its arrow counts these down, and the minimap's mark says the time left.
 --
 -- The hover is a line added to the game's own tooltip, by post-hooks on its taxi map's buttons and on its
 -- flight map's points (whichever the flight master opens). The plate has the look of the card's
@@ -178,7 +178,7 @@ local function Build()
 		width = PLATE.w, height = PLATE.h,
 		point = { "TOP", "TOP", 0, -4 },
 		shown = function() return Up() and Shy.addons.Quest == nil end,
-		-- ShyQuest's card and arrow count it down.
+		-- ShyQuest's arrow and the minimap's mark count it down.
 		away = function() return Shy.addons.Quest ~= nil end,
 		top = { order = 25, sample = Sample, passing = true,
 			empty = function() return not Up() and not HUD.IsUnlocked() end },

@@ -14,7 +14,7 @@ local Put, Theme = ns.Put, ns.Theme
 ---------------------------------------------------------------------------
 
 -- PLAY: a step's row and its key's plate; the columns' gap; the most steps a column shows.
-local PLAY = { row = 32, plate = 22, slot = 22, apart = 24, most = 10, number = 16 }
+local PLAY = { row = 32, plate = 22, slot = 22, apart = 24, most = 10, number = 24, pin = 20 }
 
 -- A key as its plate says it: "Q", "Shift Q", "Mouse 4", "Shift Mouse 4".
 local function Plate(key)
@@ -27,9 +27,9 @@ local function Step(parent, width)
 	local row = CreateFrame("Frame", nil, parent)
 	row:SetSize(width, PLAY.row)
 	row:EnableMouse(true)
-	row.number = UI.Text(row, "", 11, true, C.dim)
-	row.number:SetPoint("LEFT")
-	row.number:SetWidth(PLAY.number)
+	-- Its place in the order: the family's numbered pin (UI.NumberMark), the first lit in your color.
+	row.number = UI.NumberMark(row, PLAY.pin)
+	row.number:SetPoint("CENTER", row, "LEFT", PLAY.number / 2, 0)
 	row.plate = CreateFrame("Button", nil, row)
 	row.plate:SetHeight(PLAY.plate)
 	row.plate:SetPoint("LEFT", PLAY.number, 0)
@@ -60,7 +60,7 @@ local function Step(parent, width)
 	end)
 	row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	function row:Set(i, step)
-		self.number:SetText(i)
+		self.number:Set(i, i == 1)
 		self.key:SetText(step.key and Plate(step.key) or "-")   -- (no key yet: still to train)
 		self:SetAlpha(step.untrained and 0.6 or 1)
 		self.plate:SetWidth(math.max(PLAY.plate, math.ceil(self.key:GetStringWidth()) + 12))

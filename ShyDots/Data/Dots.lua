@@ -328,6 +328,7 @@ ns.mods = {
 	[24453] = { 1, 50 },   -- Prowl
 	[24646] = { 1, 500 },   -- Avatar
 	[24692] = { 1, 20 },   -- Hakkar Power
+	[24905] = { 72, 10 },   -- Moonkin Form (Passive)
 	[25176] = { 1, 300 },   -- Strength of Ossirian
 	[25773] = { 127, 500 },   -- Will of Weavil
 	[26662] = { 127, 500 },   -- Berserk
@@ -474,4 +475,7 @@ ns.mods = {
 	[1328911] = { 127, 300 },   -- Enrage
 	[1328913] = { 127, 300 },   -- Enrage
 	[1331089] = { 127, 500 },   -- Berserk
+	[1334174] = { 127, 15 },   -- Might of the Alliance
+	[1334175] = { 127, 15 },   -- Might of the Horde
+	[1334297] = { 1, 20 },   -- Avatar
 }

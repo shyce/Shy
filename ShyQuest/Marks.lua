@@ -14,7 +14,8 @@
 --   dark glass, steel bezel, white     a guide step with no number, a flight, an errand with no sign
 --   sign
 --   numbered map pin                   a route place (slate, a white number; the live one white, a graphite
---                                      number, as the trail's light) or a zone with its quest count
+--                                      number, as the trail's light) or a zone with its quest count: ShyCore's
+--                                      numbered mark (UI.NumberMark), the one every addon numbers an order with
 --   lit: the face in the color, the    the one being worked on, under the mouse, or clicked: it keeps
 --   bezel a lighter tint of it, a      the color its ground has on the map; a white mark lit wears your
 --   soft bloom round it, dark emblem   color, its sign in the ink that reads on it (Theme.OnColor)
@@ -308,7 +309,6 @@ local function AccentLighter(by)
 	end
 end
 local ACCENT_BEZEL, ACCENT_BLOOM = AccentLighter(LIT_BEZEL), AccentLighter(LIT_BLOOM)
-local DIGIT = 10             -- cell of "0"; 1 to 9 follow
 -- Signs: an errand's `mark` or a goal stop's `mark` (Route.lua). The key is both the kind and the cell name.
 --   sell a vendor for full bags, train a class trainer, buy a vendor's goods, weapon a weapon master,
 --   aid first aid's trainer, flight a flight master, home the inn or the hearthstone, potion potions
@@ -345,13 +345,10 @@ end
 -- What stands for a stop that is on the route but has no sign of its own: a flight's wing, the glass of
 -- what a search found (Find.lua, a "found" stop), else the banner.
 local PLAIN = { guide = "go", errand = "go", fly = "flight", found = "find", way = "go", shut = "shut", open = "open" }
--- The pin's geometry, as shares of its cell (must match the media builder's PIN_*): its point and its
--- head's middle above the cell's middle, the number's scale on its head.
-local PIN_TIP, PIN_HEAD, PIN_NUMBER = 0.46, 0.14, 0.78
-local PIN_SIDE = 0.12        -- empty margin each side of the pin's head
--- Each digit's ink width as a share of its cell (printed by the media builder).
-local INK = { [0] = 0.404, 0.359, 0.393, 0.395, 0.420, 0.393, 0.400, 0.389, 0.412, 0.400 }
-local GAP, FIT, MOST = 0.045, 0.58, 0.92  -- two digits: gap, total width they share, maximum scale
+-- The pin's geometry, as shares of its cell (must match the media builder's PIN_*): its point and its head's middle
+-- above the cell's middle, and the empty margin each side of its head. (Its number is ShyCore's: UI.NumberMark.)
+local PIN_TIP, PIN_HEAD = 0.46, 0.14
+local PIN_SIDE = 0.12
 local WHITE = { 1, 1, 1 }
 
 -- What a mark of `kind` wears: its color and its picture's cell. nil for a hand-in (its look is all its
@@ -586,6 +583,7 @@ function ns.CreateMark(parent, size, fixed, tipped)
 	end
 	local regions = { bloom, plate, face, bezel, glyphs[1], glyphs[2] }
 	local sheet, hovered, chosen, picked = nil, false, false, false
+	local numbered               -- ShyCore's numbered mark, while the mark is a pin with a number (step, zone)
 
 	-- Use the sheet nearer the mark's current on-screen size.
 	local function Sheet()
@@ -616,21 +614,6 @@ function ns.CreateMark(parent, size, fixed, tipped)
 		glyph:SetSize(size * (share or 1), size * (share or 1))
 		UI.Tint(glyph, color, fade or 1)
 		Show(glyph, cell)
-	end
-
-	-- One digit centered, or two spaced by their ink widths. scale: smaller on a pin's head.
-	local function Number(count, color, scale)
-		scale = scale or 1
-		count = math.max(0, math.min(99, math.floor(tonumber(count) or 0)))
-		if count < 10 then
-			Glyph(1, DIGIT + count, color, scale)
-			return
-		end
-		local tens, ones = math.floor(count / 10), count % 10
-		local width = INK[tens] + GAP + INK[ones]
-		local share = math.min(MOST, FIT / width) * scale
-		Glyph(1, DIGIT + tens, color, share, (-width / 2 + INK[tens] / 2) * share)
-		Glyph(2, DIGIT + ones, color, share, (width / 2 - INK[ones] / 2) * share)
 	end
 
 	-- What the mark is of: kind, color, glyph, count (Set); drawn by Apply in the mark's state.
@@ -665,14 +648,20 @@ function ns.CreateMark(parent, size, fixed, tipped)
 		glyphs[1]:Hide()
 		glyphs[2]:Hide()
 		if kind == "step" or kind == "zone" then
-			-- A map pin: slate with a white number; lit, the route's white with a graphite one.
+			-- A map pin with a number: ShyCore's numbered mark (UI.NumberMark), slate with a white number; lit, the
+			-- route's white with a graphite one. Made the first time a mark is one, laid over this mark's own place.
+			plate:Hide()
 			face:Hide()
 			bezel:Hide()
 			bloom:Hide()
-			UI.Tint(plate, lit and MARK.route or MARK.slate, 1)
-			Show(plate, CELL.pin)
-			Number(look.count, lit and MARK.graphite or MARK.route, PIN_NUMBER)
+			if not numbered then
+				numbered = UI.NumberMark(mark, size, { tipped = tipped })
+				numbered:SetPoint("CENTER")
+			end
+			numbered:Show()
+			numbered:Set(look.count, lit, MARK.route, MARK.graphite)
 		else
+			if numbered then numbered:Hide() end
 			local faceColor, bezelColor, bloomColor, ink = Layers(kind, color, lit)
 			-- (A quest in a mood of its own: MOOD.)
 			local mood = (kind == "pickup" or kind == "turnin") and MOOD[look.mood] or nil

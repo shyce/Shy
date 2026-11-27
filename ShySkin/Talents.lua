@@ -1,5 +1,7 @@
 -- The talent window (PlayerSpellsFrame.TalentsFrame, in load-on-demand Blizzard_PlayerSpells), painted by the
--- "spells" module in Spellbook.lua. The game's three trees stay, all three at once, closed up: the talents
+-- "spells" module in Spellbook.lua while the talent window is ours (the game's is left for another player's talents).
+-- With "Game's talent window" on, the game's window is its own and this paints nothing. The game's three trees
+-- stay, all three at once, closed up: the talents
 -- stand on a tighter grid than the game's (its rows and columns 60 apart, the trees 400), the heads just over
 -- the first row, the window as small as that makes it. Talents are slots: your color with the icon in full once
 -- you hold a rank, green with the icon dimmed while one can still go in, dim while out of reach, with the rank on
@@ -50,6 +52,12 @@ local ICON = { 0.08, 0.92, 0.08, 0.92 }
 local STATE                        -- TalentButtonUtil.BaseVisualState, once loaded
 
 local M
+-- The game's window is restyled only while the talent window is ours: with "Game's talent window" on it is the
+-- game's own, its art and its animations as made, and your build's next talents are numbered on it (TalentBuild.lua).
+local function Styled() return M ~= nil and M.on and M.opt.gameTalents ~= true end
+Talents.Styled = Styled
+local painted = false              -- Paint has laid the window out, and Clear has not put it back
+function Talents.Painted() return painted end
 local weak = { __mode = "k" }
 local dressed = setmetatable({}, weak)   -- talent button -> its slot and rank plate
 local was = {}                           -- the game's sizes: window
@@ -83,7 +91,7 @@ end
 -- After the game places a button: the same point, our place. Anchored to the buttons' parent, which is the
 -- window's own rect.
 local function Place(button, posX, posY)
-	if not (M and M.on) then return end
+	if not Styled() then return end
 	local window = Window()
 	if not window or button:GetTalentFrame() ~= window then return end
 	local x, y = Closed(posX, posY)
@@ -250,7 +258,7 @@ end
 
 -- An arrow's art says its state; it is tinted so: reached in your color, red when a refund breaks it.
 local function InkEdge(edge)
-	if not (M and M.on) then return end
+	if not Styled() then return end
 	local line, head = edge.Line, edge.ArrowHead
 	if not line then return end
 	local atlas = line:GetAtlas() or ""
@@ -581,37 +589,37 @@ function Talents.Hook(m)
 	STATE = TalentButtonUtil.BaseVisualState
 	hooksecurefunc(TalentButtonUtil, "ApplyPositionAtOffset", Place)
 	hooksecurefunc(TalentButtonArtMixin, "UpdateStateBorder", function(button, state)
-		if M.on and dressed[button] then Ink(button, state) end
+		if Styled() and dressed[button] then Ink(button, state) end
 	end)
 	hooksecurefunc(TalentButtonUtil, "SetSpendText", function(button)
-		if M.on then Rank(button) end
+		if Styled() then Rank(button) end
 	end)
 	hooksecurefunc(TalentEdgeArrowMixin, "UpdateState", InkEdge)
 	hooksecurefunc(window, "RefreshTreeHeaders", function(self)
-		if not M.on then return end
+		if not Styled() then return end
 		for _, head in ipairs(self.treeHeaders or {}) do DressHead(M.kit, head) end
 		StandHeads(self, true)
 	end)
 	hooksecurefunc(window, "UpdateSpecBackground", function(self)
-		if M.on then Panes(M.kit, self) end
+		if Styled() then Panes(M.kit, self) end
 	end)
 	for _, tab in ipairs(window.TabSystem and window.TabSystem.tabs or {}) do
 		hooksecurefunc(tab, "SetTabSelected", function()
-			if M.on then DressTabs(M.kit, window) end
+			if Styled() then DressTabs(M.kit, window) end
 		end)
 	end
 	if window.ClassCurrencyDisplay then
 		hooksecurefunc(window.ClassCurrencyDisplay, "SetAmount", function(_, amount)
-			if M.on then ShowPoints(amount) end
+			if Styled() then ShowPoints(amount) end
 		end)
 	end
 	-- The issue reporter's button is made as the tab is set.
 	EventRegistry:RegisterCallback("PlayerSpellsFrame.TabSet", function()
-		C_Timer.After(0, function() if M.on then PutAwayBug() end end)
+		C_Timer.After(0, function() if Styled() then PutAwayBug() end end)
 	end, Talents)
 	-- New buttons, arrows and gates come from pools as the tree loads.
 	EventRegistry:RegisterCallback("TalentFrameBase.ButtonsUpdated", function()
-		if M.on and Window():IsShown() then DressAll(M.kit) end
+		if Styled() and Window():IsShown() then DressAll(M.kit) end
 	end, Talents)
 end
 
@@ -628,6 +636,7 @@ end
 
 function Talents.Paint(m, kit)
 	local window = Window()
+	painted = true
 	if not was.window then was.window = { window:GetSize() } end
 	Resize(window, WIDTH, HEIGHT)
 	-- The game's background is 20 taller than the window, from its foot; the painting, its border, the tabs and
@@ -647,6 +656,7 @@ end
 
 function Talents.Clear(m)
 	local window = Window()
+	painted = false
 	if not window then return end
 	if was.window then
 		Resize(window, was.window[1], was.window[2])

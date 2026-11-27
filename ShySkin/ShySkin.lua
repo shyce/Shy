@@ -40,7 +40,8 @@ local T = Shy:NewAddon(ADDON, {
 	icon = MEDIA .. "ShySkin",
 	smallIcon = MEDIA .. "ShySkinSmall",
 	savedVariables = "ShySkinDB",
-	defaults = { modules = {}, options = {} },
+	defaults = { modules = {}, options = {}, sent = {} },
+	keep = { sent = true },   -- whom each character sends letters to (Mail.lua): kept for the account, never a profile's
 })
 ns.T = T
 

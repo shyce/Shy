@@ -7,8 +7,9 @@
 --   Shy.Build.Followed()   the build the talent suggestions follow: your pick, else the one your talents fit best
 --   Shy.Build.Now()        the reading, or nil before the game has its talents: { unspent, spent, earned, off, offs,
 --                          build (followed), played, fits, chosen, name, why, note, tree, treeIcon, config, treeID,
---                          group, next, plan, ended, strayed }. next and each of plan: { node, name, icon, tab, row,
---                          rank, ranks, count }.
+--                          group, next, plan, ended, strayed, want, over }. next and each of plan: { node, name, icon,
+--                          tab, row, rank, ranks, count }. want[node]: the ranks the followed build puts in a talent;
+--                          over[node]: the ranks you hold there past it.
 --   Shy.Build.Class()      this class's tree and builds: { tree, tabs, nodes, builds }, or nil
 --   Shy.Build.Tabs()       the tree's three tabs as the talent window names them: { { name, icon }, ... }, or nil
 --   Shy.Build.Find(id)     one of the class's builds by id
@@ -18,6 +19,10 @@
 --   Shy.Build.Builds()     the class's builds for a picker: { { build, tag, on, reset } }
 --   Shy.Build.Pick(id)     picks one from a menu or the settings: followed, and the cooldown manager laid out for it
 --   Shy.Build.Lineup(id)   the cooldown manager laid out for a build: true once written (it shows after a reload)
+--   Shy.Build.Over(want, have)   the ranks you hold in a talent past what your build puts there (0: none)
+--   Shy.Build.OverSays(name, want, have, reset)   what that talent's hover says: { { text, color }, ... }. reset:
+--                          the window has a Reset of its own
+--   Shy.Build.OverRing(parent, out)   the crimson frame such a talent wears on the game's window, out past its edge
 -- SHY_BUILD is said when the build you play changes, and when you pick one ("picked").
 -- Picking one is here too: the setup window's Talents step, and Leveling build in the core's settings.
 --
@@ -74,17 +79,20 @@ local function Counts(build)
 	return most
 end
 
+-- A talent's name and picture. The game gives an empty override as "" and 0, not nil: the spell's own then. nil
+-- while its data hasn't come (asked again next time; only a name found is kept).
 local function Named(config, node)
 	local known = names[node]
 	if known then return known[1], known[2] end
 	local at = C_Traits.GetNodeInfo(config, node)
-	local entry = at and at.entryIDs and at.entryIDs[1]
+	local entry = at and ((at.activeEntry and at.activeEntry.entryID) or (at.entryIDs and at.entryIDs[1]))
 	local info = entry and C_Traits.GetEntryInfo(config, entry)
 	local talent = info and info.definitionID and C_Traits.GetDefinitionInfo(info.definitionID)
 	if not talent then return nil end
-	local name = talent.overrideName or (talent.spellID and C_Spell.GetSpellName(talent.spellID))
-	local icon = talent.overrideIcon or (talent.spellID and C_Spell.GetSpellTexture(talent.spellID))
-	if not name then return nil end
+	local spell = talent.spellID
+	local name = (talent.overrideName ~= "" and talent.overrideName) or (spell and C_Spell.GetSpellName(spell))
+	local icon = (talent.overrideIcon ~= 0 and talent.overrideIcon) or (spell and C_Spell.GetSpellTexture(spell))
+	if not name or name == "" then return nil end
 	names[node] = { name, icon }
 	return name, icon
 end
@@ -104,13 +112,14 @@ function B.Tabs()
 	return out
 end
 
--- One talent of the order: name, tab and row, and the rank the next point buys.
-local function Entry(spec, config, node, have, count)
+-- One talent of the order: name, tab and row, and the rank the next point buys. ranks: the game's count where it
+-- gives one. A name not come yet stands in as its tab's.
+local function Entry(spec, config, node, have, count, ranks)
 	local name, icon = Named(config, node)
 	local about = spec.nodes[node]
 	local tab = B.Tabs()[about[1]]
-	return { node = node, name = name, icon = icon, tab = tab.name, row = about[2],
-		rank = have + 1, ranks = about[3], count = count }
+	return { node = node, name = name or tab.name, icon = icon or tab.icon, tab = tab.name, row = about[2],
+		rank = have + 1, ranks = ranks or about[3], count = count }
 end
 
 -- Reads the tree: ranks bought, points unspent, the builds, and the followed one's next talents.
@@ -130,21 +139,21 @@ local function Work()
 	if not purse or issecretvalue(purse.quantity) then return end
 	local unspent = purse.quantity
 
-	local have, can, spent = {}, {}, 0
+	-- One talent the game has otherwise than the data (hidden, or another count of ranks) leaves the rest read: it
+	-- counts as the game has it. Only another tree says nothing.
+	local have, can, most, spent = {}, {}, {}, 0
 	local telling = false        -- canPurchaseRank is true for at least one node
 	for _, node in ipairs(C_Traits.GetTreeNodes(spec.tree) or {}) do
 		local at = C_Traits.GetNodeInfo(config, node)
 		local ranks = at and at.ranksPurchased or 0
 		if issecretvalue(ranks) then return end
-		local about = spec.nodes[node]
-		-- A talent whose rank count differs from the data: the tree has changed, say nothing.
-		if about and (not at or at.maxRanks ~= about[3]) then return end
 		have[node], can[node] = ranks, at ~= nil and at.canPurchaseRank == true
+		if at and at.ID ~= 0 and type(at.maxRanks) == "number" and at.maxRanks > 0 then most[node] = at.maxRanks end
 		telling = telling or can[node]
 		spent = spent + ranks
 	end
 	for node in pairs(spec.nodes) do
-		if not have[node] then return end
+		have[node] = have[node] or 0
 	end
 
 	-- The followed build: your pick, else the one the talents bought fit best (the first of equals, so the one for
@@ -166,11 +175,23 @@ local function Work()
 	-- The build you play: the followed one while your talents fit it, else the one they fit.
 	local played = (spent == 0 or off <= B.STRAYED) and build or fits
 
-	-- The first talent of the order still to buy, and the next few. Its prerequisites are the order's earlier
-	-- talents, so it should be purchasable; canPurchaseRank is only a check that the tree still matches. If other
-	-- nodes are purchasable but this one isn't, skip to the first that is. If no node reports purchasable, the
-	-- flag isn't trusted.
-	local plan, count, left = {}, {}, 0
+	-- The talents of the order still to buy, the next few. Their prerequisites are the order's earlier talents, so
+	-- the first should be purchasable. Where the game says it isn't while it says another of the order is (the tree
+	-- isn't quite what the data says), the first it allows leads and the rest keep the order's turns after it. If no
+	-- node reports purchasable, the flag isn't trusted. A name not come yet stands in as its tab's for now, and the
+	-- tree is read again on the next ask: the reading is never held back for one.
+	local lead
+	if unspent > 0 and telling then
+		local seen = {}
+		for _, node in ipairs(build.order) do
+			seen[node] = (seen[node] or 0) + 1
+			if seen[node] > have[node] and can[node] then
+				lead = node
+				break
+			end
+		end
+	end
+	local plan, count, left, waiting = {}, {}, 0, false
 	for _, node in ipairs(build.order) do
 		count[node] = (count[node] or 0) + 1
 		if count[node] > have[node] then
@@ -180,20 +201,29 @@ local function Work()
 				last.count = last.count + 1
 			elseif plan.full then
 				-- Past the ones listed: only counted.
-			elseif #plan == 0 and unspent > 0 and telling and not can[node] then
-				-- Skipped.
 			elseif #plan <= B.AHEAD then
-				if not Named(config, node) then
-					stale = true     -- name not loaded yet: retry next time
-					return
-				end
-				plan[#plan + 1] = Entry(spec, config, node, have[node], 1)
+				if not Named(config, node) then waiting = true end
+				plan[#plan + 1] = Entry(spec, config, node, have[node], 1, most[node])
 			else
 				plan.full = true
 			end
 		end
 	end
 	plan.full = nil
+	if lead and plan[1] and plan[1].node ~= lead then
+		for i = 2, #plan do
+			if plan[i].node == lead then
+				table.insert(plan, 1, table.remove(plan, i))
+				break
+			end
+		end
+	end
+
+	-- The talents you hold past the followed build.
+	local want, over = Counts(build), {}
+	for node, ranks in pairs(have) do
+		if ranks > (want[node] or 0) then over[node] = ranks - (want[node] or 0) end
+	end
 
 	local tree = B.Tabs()[build.tab]
 	state = {
@@ -204,8 +234,10 @@ local function Work()
 		next = plan[1], plan = plan,
 		-- The order has no talent left to name: every one is bought.
 		ended = left == 0,
-		strayed = off > B.STRAYED or (unspent > 0 and plan[1] == nil),
+		strayed = off > B.STRAYED,
+		want = want, over = over,
 	}
+	if waiting then stale = true end
 end
 
 function B.Now()
@@ -216,6 +248,36 @@ end
 
 function B.Stale()
 	stale = true
+end
+
+-- A talent you hold past your build: bought before the build changed, or by hand. Every talent window marks it
+-- the same way, crimson, and its hover says the same words.
+function B.Over(want, have)
+	return math.max(0, (have or 0) - (want or 0))
+end
+
+function B.OverSays(name, want, have, reset)
+	local C = Shy.UI.colors
+	local over = B.Over(want, have)
+	if over == 0 then return {} end
+	local first = (want or 0) == 0 and ("%s doesn't take this."):format(name)
+		or ("%s takes %d of your %d ranks."):format(name, want, have)
+	local point = over == 1 and "the point" or ("the %d points"):format(over)
+	local second = reset and ("Reset frees %s. Then follow the numbers."):format(point)
+		or ("Reset your talents to move %s."):format(point)
+	return { { text = first, color = C.bad }, { text = second, color = C.dim } }
+end
+
+function B.OverRing(parent, out)
+	local Skin = Shy.Skin
+	local slice = Skin.FRAME_SLICE
+	local ring = parent:CreateTexture(nil, "OVERLAY")
+	ring:SetTexture(Skin.FRAME)
+	ring:SetTextureSliceMargins(slice, slice, slice, slice)
+	ring:SetPoint("TOPLEFT", -out, out)
+	ring:SetPoint("BOTTOMRIGHT", out, -out)
+	Shy.UI.Tint(ring, Shy.UI.colors.bad)
+	return ring
 end
 
 function B.Followed()

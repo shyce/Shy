@@ -238,6 +238,8 @@ end
 -- hotkeys are no longer set there, and what was kept of them goes: nothing is bound back over what you have.)
 local function Lapsed(state)
 	if not (state and state.on and next(state.set)) then return false end
+	-- (at log-in the game's own keys stand in until yours are loaded: that's no reset of yours)
+	if GetCurrentBindingSet() == Enum.BindingSet.Default then return false end
 	for key, ours in pairs(state.set) do
 		if GetBindingAction(key) == ours then return false end
 	end
@@ -261,6 +263,65 @@ end
 function Hot.On()
 	local state = HotState()
 	return state ~= nil and state.on == true
+end
+
+-- At log-in the game moves turning and strafing to its newer keys (A and D strafe, Q and E turn), over whatever
+-- those keys did. It does it out of sight, once for each character. That isn't you. So what your keys did when
+-- last saved is kept (hotkeys.held, by the bindings in use), and with the hotkeys set every key that move touched
+-- goes back, said once. A key it didn't touch stays as it is.
+local function Held()
+	local held = {}
+	for _, key in ipairs(HOT.order) do held[key] = GetBindingAction(key) end
+	for command in pairs(HOT.sides) do
+		for _, key in ipairs({ GetBindingKey(command) }) do held[key] = command end
+	end
+	return held
+end
+function Hot.Hold()
+	if GetCurrentBindingSet() == Enum.BindingSet.Default then return end   -- (yours aren't loaded yet)
+	local book = HotBook()
+	local _, id = HotState()
+	book.held = book.held or {}
+	book.held[id] = Held()
+end
+-- -> how many keys went back, or nil, "combat" (done once the fight is over)
+function Hot.Unturn()
+	if InCombatLockdown() then
+		HOT.unturn = true
+		return nil, "combat"
+	end
+	HOT.unturn = nil
+	local state, id = HotState()
+	local held = HotBook().held
+	held = held and held[id]
+	if not (state and state.on and held) then return 0 end
+	local put = 0
+	for key, was in pairs(held) do
+		local now = GetBindingAction(key)
+		if now ~= was and (HOT.sides[now] or HOT.sides[was]) and SetBinding(key, was ~= "" and was or nil) then put = put + 1 end
+	end
+	if put > 0 then
+		SaveBindings(GetCurrentBindingSet())
+		Keys.gen = Keys.gen + 1
+		Shy.core:Print("the game moved your turn and strafe keys. They're back as you had them.")
+	end
+	return put
+end
+hooksecurefunc("SaveBindings", function() Hot.Hold() end)
+do
+	local game = CreateFrame("Frame")
+	game:RegisterEvent("NOTIFY_TURN_STRAFE_CHANGE")
+	game:RegisterEvent("PLAYER_LOGOUT")
+	game:RegisterEvent("PLAYER_REGEN_ENABLED")
+	game:SetScript("OnEvent", function(_, event)
+		if event == "NOTIFY_TURN_STRAFE_CHANGE" then
+			C_Timer.After(0, Hot.Unturn)   -- (after the game is done moving them)
+		elseif event == "PLAYER_LOGOUT" then
+			Hot.Hold()
+		elseif HOT.unturn then
+			Hot.Unturn()
+		end
+	end)
 end
 
 function Hot.State()

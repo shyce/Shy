@@ -32,7 +32,7 @@ local list = {
 		T:ResetDB()
 		T:Apply()
 	end,
-	{ note = "Switch a part off and the game's own look is back at once. In a fight a few wait until it ends." },
+	{ note = "Turn a part off and the game's look comes back right away. In a fight, a few wait until it ends." },
 }
 for _, group in ipairs(GROUPS) do
 	local captioned = false

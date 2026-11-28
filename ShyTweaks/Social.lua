@@ -108,7 +108,7 @@ ns.Feature({
 	id = "strangers",
 	category = "Social",
 	title = "Turn strangers away",
-	desc = "Anyone who isn't a friend or guildmate is declined for you. Pick what for below.",
+	desc = "You turn down anyone who isn't a friend or guildmate. Pick what to turn down below.",
 	keywords = "stranger block decline request join group party invite quest share shared battle.net bnet friend request spam",
 	default = false,
 	options = {
@@ -155,7 +155,7 @@ ns.Feature({
 	id = "declineDuels",
 	category = "Social",
 	title = "Decline duels",
-	desc = "Duel requests are declined before the box pops up.",
+	desc = "You turn down duels before the box even pops up.",
 	keywords = "duel challenge request auto decline block death friends",
 	default = false,
 	options = {

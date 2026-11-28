@@ -258,7 +258,7 @@ local function Build()
 	})
 	box:SetFrameStrata("DIALOG")
 	box:EnableMouse(false)
-	box:SetScript("OnUpdate", function() Safe(Tick) end)
+	box:SetScript("OnUpdate", Shy.Clocked("timers: the bars, a frame", function() Safe(Tick) end))
 	-- The column lays the bars again as its width, who hangs in the drawer or the look changes.
 	tray = Shy.Top.Tray(box, { least = WIDTH, lay = function()
 		if Tm.on then Safe(Lay) end
@@ -267,7 +267,7 @@ local function Build()
 	for _, event in ipairs({ "MIRROR_TIMER_START", "MIRROR_TIMER_STOP", "MIRROR_TIMER_PAUSE", "PLAYER_ENTERING_WORLD" }) do
 		events:RegisterEvent(event)
 	end
-	events:SetScript("OnEvent", function(...) Safe(Event, ...) end)
+	events:SetScript("OnEvent", Shy.Clocked("timers: a timer started or stopped", function(...) Safe(Event, ...) end))
 	-- (A sign's light and a tab's wash are the theme's to color.)
 	Shy:On("SHY_THEME", function()
 		if Tm.on and #live > 0 then Safe(Arrange) end

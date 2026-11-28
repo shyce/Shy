@@ -914,7 +914,7 @@ local function Head(item)
 			row.defaults:SetHeight(22)
 			row.defaults:SetPoint("RIGHT", row, "TOPRIGHT", -S.PAD, -24)
 			UI.Twice(row.defaults, function() Settings.Defaults(group) end)
-			UI.Help(row.defaults, "Defaults", "Puts every " .. group.title .. " setting back as it shipped.")
+			UI.Help(row.defaults, "Defaults", "Puts every " .. group.title .. " setting back to its default.")
 			last = row.defaults
 			if group.addon.OpenWindow then
 				row.open = UI.Button(row, "Open", 64, function()

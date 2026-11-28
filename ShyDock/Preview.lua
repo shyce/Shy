@@ -53,7 +53,7 @@ local MEDIA = "Interface\\AddOns\\ShyDock\\Media\\"
 
 P.NAMES = { compact = "Compact", roomy = "Roomy", grand = "Grand" }
 local WORDS = {
-	compact = "Chat and meter level with your unit frames. Small text.",
+	compact = "Chat and the meter line up with your unit frames. Small text.",
 	roomy = "Wider and a little taller. Medium text.",
 	grand = "Widest and tallest. Large text, for a big screen.",
 }
@@ -65,13 +65,13 @@ P.STYLE_NAMED = { console = "the console", flanks = "the flanks", open = "the op
 -- The two rows they are offered in, and each row's name.
 P.STYLE_ROWS = { { "Classic", ns.Console.CLASSIC_ORDER }, { "By role", ns.Console.ROLE_ORDER } }
 local STYLE_WORDS = {
-	console = "Chat, bars and meter joined along the bottom.",
-	flanks = "Bars in the middle, a rack at each side.",
-	open = "Bars in the middle, a shelf at each end.",
+	console = "Chat, bars and the meter run together along the bottom.",
+	flanks = "Bars in the middle, with a rack at each side.",
+	open = "Bars in the middle, with a shelf at each end.",
 	stack = "Every bar in one block in the middle.",
-	center = "Your frames either side of your character, the bars under your feet. For damage and levelling.",
-	healer = "Your party or raid right under your character, your own frames out to the sides.",
-	tank = "The threat meter tall beside your target, your target's target over it.",
+	center = "Your frames sit either side of your character, with the bars under your feet. For damage and leveling.",
+	healer = "Your party or raid sits right under your character. Your own frames go out to the sides.",
+	tank = "A tall threat meter sits beside your target, with your target's target above it.",
 	minimal = "Only your main bar. The others show while you point at them, and the meter shows in a fight.",
 }
 P.STYLE_WORDS = STYLE_WORDS
@@ -81,7 +81,7 @@ local DIM, ACCENT = C.dim, Theme.Accent
 -- What the bars come to, said in a line: with `grow`, the step the abilities call for.
 local COUNT = { "One bar", "Two bars", "Three bars" }
 function P.BarsWords(grow)
-	if not grow then return "Every bar from the start: three rows and both side bars." end
+	if not grow then return "You get every bar from the start: three rows and both side bars." end
 	local L = ns.Layout
 	local step = L.STEPS[L.GrowStep()]
 	local sides = step.sides > 1 and "both side bars" or "a side bar for food and potions"
@@ -975,11 +975,12 @@ local function Leave() C_Timer.After(0, Left) end
 -- A pick of the console's layout, size or bars from outside the cards (the Settings list): as a card's. With the
 -- console in use and as laid out, on the screen at once, the reload it owes asked as the window closes. Not set up,
 -- or a layout you changed yourself: the console is laid out fresh with it, with a reload.
---   P.Wear(field, value)   field: "style", "size" or "grow"
+--   P.Wear(field, value)   field: "style" or "size"
 function P.Wear(field, value)
 	local L = ns.Layout
 	if InCombatLockdown() then return L.Report(false, "combat") end
-	local pick = { style = L.Style(), size = L.Size(), grow = L.Grows() }
+	-- (Every bar: a console whose bars still grow with the character gets them all at its next setting up.)
+	local pick = { style = L.Style(), size = L.Size(), grow = false }
 	pick[field] = value
 	local opts = {}
 	if pick.grow ~= L.Grows() then opts.grow = pick.grow end
@@ -1011,7 +1012,7 @@ function P.Section(parent, width)
 	-- Picks other than the console's: held for the button, or being worn (live). nil: the console's own.
 	local own
 	local function Picks()
-		return own or { style = L.Style(), size = L.Size(), grow = L.Grows() }
+		return own or { style = L.Style(), size = L.Size(), grow = false }
 	end
 	local function Live()
 		return L.IsActive() and not L.Custom()
@@ -1052,12 +1053,6 @@ function P.Section(parent, width)
 	end, function(i) f:Choose("size", Console.SIZE_ORDER[i]) end, { width = M.SIZE_W, height = M.ROW, tips = sizeTips })
 	local sizeX = Named("Size", 0)
 	sizes:SetPoint("TOPLEFT", sizeX, y)
-	local bars = UI.Segmented(f, { "Grow with me", "Every bar now" }, function() return Picks().grow and 1 or 2 end,
-		function(i) f:Choose("grow", i == 1) end, { width = M.BARS_W, height = M.ROW, tips = {
-			"You start with fewer bars and get more as you learn abilities.",
-			"Three rows and both side bars from the start.",
-		} })
-	bars:SetPoint("TOPLEFT", Named("Bars", sizeX + M.SIZE_W + M.PAIR), y)
 	y = y - M.ROW - M.ROW_GAP
 
 	-- The line, and the button at its right.
@@ -1081,7 +1076,7 @@ function P.Section(parent, width)
 	status:SetJustifyH("LEFT")
 	status:SetWordWrap(true)
 	f:SetSize(across, -y + M.LINE)
-	f.styles, f.sizes, f.bars, f.apply, f.status = styles, sizes, bars, apply, status
+	f.styles, f.sizes, f.apply, f.status = styles, sizes, apply, status
 
 	-- A click on a layout, a size or the bars.
 	function f:Choose(field, value)
@@ -1114,10 +1109,11 @@ function P.Section(parent, width)
 		self:Refresh()
 	end
 
-	-- Something the button would set up: not in use, out of date, picks held for it, or bars to grow.
+	-- Something the button would set up: not in use, out of date, picks held for it, or bars that still grow with
+	-- the character (it brings every bar).
 	local function Pending(change)
 		if not L.IsActive() or L.IsStale() or change then return true end
-		return L.Grows() and L.GrowStep() ~= L.StepNow()
+		return L.Grows()
 	end
 
 	local function Say(color, text)
@@ -1138,10 +1134,8 @@ function P.Section(parent, width)
 			b:Paint(p.style == key, active and style == key and used, fighting)
 		end
 		sizes:Refresh()
-		bars:Refresh()
 		local alpha = fighting and 0.4 or 1
 		sizes:SetAlpha(alpha)
-		bars:SetAlpha(alpha)
 		apply:SetAlpha(alpha)
 		local change = own ~= nil and not own.live
 			and (own.style ~= style or own.size ~= L.Size() or own.grow ~= L.Grows())
@@ -1154,20 +1148,19 @@ function P.Section(parent, width)
 		if fighting then
 			Say(C.dim, "You're in combat. You can change the console after the fight.")
 		elseif not active then
-			Say(C.dim, L.Exists() and "You're on your own Edit Mode layout. Set up switches back to the console, with a reload."
-				or ("Not set up on this character. Set up adds a layout named \"" .. L.NAME .. "\" and keeps yours, with a reload."))
+			Say(C.dim, L.Exists() and "You're on your own Edit Mode layout. Set up takes you back to the console, with a reload."
+				or ("This character isn't set up yet. Set up adds a layout named \"" .. L.NAME .. "\" and keeps yours, with a reload."))
 		elseif custom then
-			Say(C.alert, change and "You changed this layout yourself. Set up lays out your pick and your changes go, with a reload."
-				or "You changed this layout yourself. Put it back lays it out fresh and your changes go, with a reload.")
+			Say(C.alert, change and "You changed this layout yourself. Set up puts in your pick and drops your changes, with a reload."
+				or "You changed this layout yourself. Put it back starts it fresh and drops your changes, with a reload.")
 		elseif L.IsStale() then
-			Say(C.alert, "Your bars, frames or skins changed since the console was set up. Set up refits it, with a reload.")
+			Say(C.alert, "Your bars, frames or skins changed since the console was set up. Set up fits it again, with a reload.")
 		elseif pending then
-			Say(C.text, L.GrowStep() > L.StepNow() and "Your abilities have outgrown your bars. Set up adds what they need, with a reload."
-				or "Set up puts away the bars you don't need yet, with a reload. They keep their buttons.")
+			Say(C.text, "Some of your bars are still hidden. Set up turns them all on, with a reload.")
 		elseif owe.fresh and (own or L.Owed()) then
 			Say(C.good, "It's on now. You'll be asked to reload when you close this window.")
 		else
-			Say(C.good, "Pick a layout or size and it's on now. Put it back resets every piece, with a reload.")
+			Say(C.good, "Any layout or size you pick goes on right away. Put it back resets every piece, with a reload.")
 		end
 	end
 

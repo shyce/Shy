@@ -182,7 +182,7 @@ end
 
 Marks.Register({
 	id = "quality", channel = "border", title = "Quality",
-	desc = "A slot's border takes the color of the item's quality. Greys get a dull one.",
+	desc = "Each slot's border shows the item's quality color. Grays get a dull one.",
 	test = function(item)
 		local quality = item.quality
 		if quality and quality ~= Enum.ItemQuality.Common then return quality end
@@ -191,7 +191,7 @@ Marks.Register({
 
 Marks.Register({
 	id = "new", channel = "glow", title = "New items",
-	desc = "What you picked up since your bags were last open glows until you point at it.",
+	desc = "Anything new since you last opened your bags glows until you point at it.",
 	test = function(item)
 		return item.live and Marks.IsNew(item.bag, item.slot) or false
 	end,
@@ -218,7 +218,7 @@ Marks.Register({
 
 Marks.Register({
 	id = "quest", channel = "tr", title = "Quest marks",
-	desc = "Whatever a quest needs, or starts one, wears the quest mark. It's in outline on what can wait and broken on what you can drop.",
+	desc = "Items a quest needs or starts get the quest mark. It's in outline on what can wait and broken on what you can drop.",
 	test = function(item) return item.quest end,
 })
 

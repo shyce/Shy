@@ -1,7 +1,8 @@
 -- Your class's own quests as a row of their own: the ones that teach a spell, a stance, a form. They matter more
 -- than their XP, so they never fall away with the guide's place, nor for paying little.
 --   Which: every quest for your class you can take now (L.Missing: every rule but paying little), and not a pet's
---     (Pets.lua has those), a dungeon's or a raid's. One in the log is the route's own, like any quest.
+--     (Pets.lua has those), a dungeon's or a raid's. One in the log is the route's own, like any quest. Not a gray
+--     one while low-level quests aren't tracked, nor one its giver was seen not to list: L.Missing's rules.
 --   Where and when: by the road ahead, not by where you stand. The road is you, then the guide's next places
 --     (G.Places; with no guide, you alone). Taking a quest is two stops, who gives it and who takes it back, and
 --     each is fitted where on the road it adds the least walk (Fit), a little more for each place it waits past
@@ -251,17 +252,20 @@ local function Work()
 	return open
 end
 
--- The class quests open now, as Work has them. (Worked out again when the guide's road changes, and after a walk
--- of MOVED yards: the road begins where you stand.)
+-- The class quests open now, as Work has them. (Worked out again when the guide's road changes, when what's on
+-- offer changes (a giver's list read, low-level quests tracked or not: L.version), when your level is read anew (what's gray moves; the game has
+-- the new level a frame after it says so), and after a walk of MOVED yards: the road begins where you stand.)
 local MOVED = 200
-local workedAt, workedStamp
+local workedAt, workedStamp, workedOffers, workedLevel
 function Class.Open()
 	local G = ns.Guide
 	if not stale and workedAt and W.north and W.Between(workedAt[1], workedAt[2], W.north, W.west) > MOVED then stale = true end
 	if G and G.stamp ~= workedStamp then stale = true end
+	if L.version ~= workedOffers or L.Level() ~= workedLevel then stale = true end
 	if stale then
 		Work()
 		workedAt, workedStamp = W.north and { W.north, W.west } or nil, G and G.stamp
+		workedOffers, workedLevel = L.version, L.Level()
 	end
 	return open or {}
 end
@@ -283,8 +287,9 @@ local function Busy()
 end
 
 -- Whether the route has a stop to take it already (a class quest right here is picked up in passing).
-local function Taken(id)
-	for _, stop in ipairs(R.stops or {}) do
+-- route: the stops of the build that asks. The last route's may still hold a pickup this one left to the row.
+local function Taken(id, route)
+	for _, stop in ipairs(route or R.stops or {}) do
 		for _, action in ipairs(stop.actions or {}) do
 			if action.kind == "pickup" and action.id == id then return true end
 		end
@@ -301,7 +306,7 @@ local function Line(entry)
 end
 
 -- The class quest as a route errand (R.AddErrand), or nil.
-local function Find(lead)
+local function Find(lead, route)
 	if not T.db.classQuests.on or Busy() then return nil end
 	local list = Class.Open()
 	local entry = list[1]
@@ -310,7 +315,7 @@ local function Find(lead)
 		if entry and not entry.teaches and list[i].npc == entry.npc and list[i].teaches then entry = list[i] end
 	end
 	-- (Picked up from the route already: in the log, or a stop of its own when the row doesn't cover it.)
-	if not entry or Taken(entry.quest.id) then return nil end
+	if not entry or Taken(entry.quest.id, route) then return nil end
 	local quest, npc = entry.quest, entry.npc
 	-- Best done now: a row while it adds no more than LISTED, leading while it adds no more than WORTH. Best done
 	-- on the road's next SOON places: a row saying where. Otherwise none: "Take me to" has it.

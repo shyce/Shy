@@ -4,11 +4,13 @@
 --   B.Name()                          -> the family's own name, ShyUI ("UI" stands in for the suffix)
 --   B.Plain("Tip"), B.Plain()         -> the same names as plain words
 --   B.FAMILY, B.STEM, B.OLD           -> "ShyUI", "Shy", and the family's name before
+--   B.LINE                            -> what the family is, in a line
 --   B.Gradient(text)                  -> any text in the accent ramp, deep to light
 --   B.Ramp(u)                         -> r, g, b along the accent: 0 deep, 0.5 accent, 1 light
 --   B.Cycle(t)                        -> the ramp up and back as t counts cycles
 --   B.Icon(path, size)                -> inline icon markup, tinted with the accent
---   B.Chat(text)                      -> a line an addon says in chat by itself: "<ShyUI> text"
+--   B.Chat(text)                      -> a line an addon says in chat by itself: "«ShyUI» text"
+--   B.Lit(msg)                        -> such a line as Shy shows it (fox, lit name), or nil
 --   B.GetFont()                      -> the display font (Lilita One)
 --   B.CreateTitle(parent, "Tip", 32)  -> per-letter animated title
 --   B.CreateEmblem(parent, icon, 64)  -> icon over a pulsing glow, with a periodic sheen
@@ -61,6 +63,7 @@ end
 B.STEM = "Shy"                 -- the lit part every name starts with
 local FAMILY_SUFFIX = "UI"
 B.FAMILY = B.STEM .. FAMILY_SUFFIX
+B.LINE = "The All-in-One UI for WoW Forever"
 B.OLD = B.STEM                 -- the family's name before: what it wrote into the game's lists then is still its own
 
 -- What follows the stem: an addon's name, or the family's (with any words after it: " layout").
@@ -86,11 +89,34 @@ end
 B.Icon = Theme.IconMarkup
 
 -- A line an addon sends to other players by itself, marked as an addon's so nobody takes it for typed
--- words. Plain text: sent chat carries no color or icon.
-B.CHAT = "<" .. B.FAMILY .. "> "
+-- words. Plain text: sent chat carries no color or icon. The game's font draws « and ».
+B.CHAT = "\194\171" .. B.FAMILY .. "\194\187 "
 function B.Chat(text)
 	return B.CHAT .. text
 end
+
+-- Anyone running Shy sees that mark lit: the fox and the name in the accent. A copy from before « » still counts.
+local MARKS = { B.CHAT, "<" .. B.FAMILY .. "> " }
+local HEARD = { "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER",
+	"CHAT_MSG_INSTANCE_CHAT", "CHAT_MSG_INSTANCE_CHAT_LEADER", "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER",
+	"CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_SAY", "CHAT_MSG_YELL" }
+
+-- The line lit, or nil when it carries no mark.
+function B.Lit(msg)
+	if issecretvalue(msg) or type(msg) ~= "string" then return nil end
+	for _, mark in ipairs(MARKS) do
+		if msg:sub(1, #mark) == mark then
+			return B.Icon(Shy.core.mark, 14) .. " " .. B.Name() .. " " .. msg:sub(#mark + 1)
+		end
+	end
+end
+
+local function Light(_, _, msg, ...)
+	local lit = B.Lit(msg)
+	if lit then return false, lit, ... end
+	return false
+end
+for _, event in ipairs(HEARD) do ChatFrameUtil.AddMessageEventFilter(event, Light) end
 
 -- Preload the font so the first text measured with it has the right width.
 local preload = UIParent:CreateFontString(nil, "BACKGROUND")
@@ -380,14 +406,7 @@ function B.ShowSplash()
 	local sub = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	sub:SetPoint("TOP", line, "BOTTOM", 0, -8)
 	local core = Shy.core
-	local text = core.tagline
-	if not text then
-		local n = 0
-		for _, a in ipairs(Shy.order) do
-			if not a.internal then n = n + 1 end
-		end
-		text = n == 1 and "1 addon loaded" or (n .. " addons loaded")
-	end
+	local text = B.LINE
 	if core.version then text = text .. "  |cff888888v" .. core.version .. "|r" end
 	sub:SetText(text)
 

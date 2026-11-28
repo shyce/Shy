@@ -107,7 +107,8 @@ function R.FillRoles()
 		end
 		if not run.roles[m.name] then
 			local p = ns.People.Get(m.name)
-			local known = m.me and (ns.char.role or ns.Listing.SoloRole()) or (p and (p.role or p.said))
+			-- (yours: what you set here, what you ticked, else the role your build plays: Shy.Role)
+			local known = m.me and (ns.char.role or ns.Listing.SoloRole() or Shy.Role()) or (p and (p.role or p.said))
 			if known and D.CanFill(m.class, known) then
 				run.roles[m.name] = known
 			else
@@ -429,7 +430,8 @@ function R.MyRoles()
 	for _, role in ipairs(D.ROLES) do
 		if ticked[role] then words[#words + 1] = R.BARE[role] end
 	end
-	if #words == 0 and ns.char.role then words[1] = R.BARE[ns.char.role] end
+	local mine = ns.char.role or Shy.Role()
+	if #words == 0 and mine and R.BARE[mine] then words[1] = R.BARE[mine] end
 	return #words > 0 and R.Or(words) or "help"
 end
 

@@ -101,7 +101,7 @@ end
 ns.Module({
 	id = "alerts",
 	title = "Chat alerts",
-	desc = "Alerts that come up by the chat, like a friend coming online, wear your theme.",
+	desc = "Alerts that come up by the chat, like a friend coming online, match your theme.",
 	group = "screen",
 	words = "toast friend online",
 

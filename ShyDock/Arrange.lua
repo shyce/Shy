@@ -75,7 +75,7 @@ end
 
 -- The pings and markers' home, a piece of their own: by role, by your target's frames (Parts.lua, P.StripHome);
 -- in a classic layout a seam off the cooldown manager's plate on the side the tracked bars aren't (Layout.lua's
--- L.Beside), standing on its foot, so the two flank the plate as a pair. Returns a point, or nil.
+-- c.barsSide), standing on its foot. Returns a point, or nil.
 local function StripAt(g, now)
 	g = g or ns.Console.Build(now)
 	local c = ns.Layout.Cockpit(now)

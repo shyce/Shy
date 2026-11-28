@@ -504,7 +504,7 @@ ns.Module({
 	shown = function() return ns.Theirs(PlayerFrame, PetFrame, TargetFrame, FocusFrame, PartyFrame) end,
 	options = {
 		{ key = "portraits", label = "Portraits", default = true,
-			desc = "Each frame shows its portrait. Off, you get a slim frame with the name and bars." },
+			desc = "Each frame shows its portrait. With this off, you get a slim frame with the name and bars." },
 		{ key = "classHealth", label = "Class-colored health", default = false,
 			desc = "Players' health bars take their class color, yours too. NPCs stay green." },
 	},

@@ -414,11 +414,11 @@ end
 
 function K.Run(typed)
 	if not ns.isWarrior then
-		T:Print("your keys are laid out on a warrior only.")
+		T:Print("these keys are for warriors only.")
 		return
 	end
 	if not Shy.Keys then
-		T:Print("restart the game once: your keys need a file it only loads then.")
+		T:Print("restart the game once. Your keys need a file it only loads at startup.")
 		return
 	end
 	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)

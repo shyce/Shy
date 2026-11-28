@@ -2,8 +2,7 @@
 -- (Openings.lua), times your shout and lights it when it's due (Shout.lua), and a light round the screen in
 -- your look (Light.lua) for full rage and threat, with an alarm when a mob turns off you (Threat.lua), and lays
 -- your keys out once for every level (Keys.lua). Sunder Armor and your shouts' times are the
--- cooldown manager's tracked bars (ShyCore's lineups). Does nothing on other classes, and the core switches
--- it off for them from their next login.
+-- cooldown manager's tracked bars (ShyCore's lineups). Loaded for your class alone.
 
 local ADDON, ns = ...
 local MEDIA = "Interface\\AddOns\\ShyWarrior\\Media\\"

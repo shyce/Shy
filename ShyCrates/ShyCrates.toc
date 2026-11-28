@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffCrates|r
 ## Notes: Fill Waylaid Crates in one click, with what each bundle costs at the auction house |cff888888/shy crates|r
 ## Author: Shyce Cream
-## Version: 5.2.17
+## Version: 5.2.19
 ## X-Date: 2026-11-27
 ## IconTexture: Interface\AddOns\ShyCrates\Media\ShyCratesMarkColor
 ## Dependencies: ShyCore

@@ -1,9 +1,9 @@
 # Shy
 
 <p align="center">
-  <a href="CHANGELOG.md"><img alt="version 5.2.17" src="https://img.shields.io/badge/version-5.2.17-29b3ff"></a>
+  <a href="CHANGELOG.md"><img alt="version 5.2.19" src="https://img.shields.io/badge/version-5.2.19-29b3ff"></a>
   <img alt="released 27 Nov 2026" src="https://img.shields.io/badge/released-27_Nov_2026-4a5568">
-  <img alt="tests 38,912 passed" src="https://img.shields.io/badge/tests-38%2C912_passed-4ade80">
+  <img alt="tests 39,192 passed" src="https://img.shields.io/badge/tests-39%2C192_passed-4ade80">
   <img alt="WoW Forever 1.60.1" src="https://img.shields.io/badge/WoW_Forever-1.60.1-f4a623">
   <a href="https://www.curseforge.com/wow/addons/shy"><img alt="CurseForge get it" src="https://img.shields.io/badge/CurseForge-get_it-f16436?logo=curseforge&logoColor=white"></a>
   <a href="https://discord.gg/tuJ8EbDdSU"><img alt="Discord join us" src="https://img.shields.io/badge/Discord-join_us-5865F2?logo=discord&logoColor=white"></a>
@@ -93,17 +93,14 @@ Which recipes make money, which lose it, and how likely each one is to give you 
 
 <p align="center"><img src="media/cooking.jpg" alt="Cooking, with the profit on every recipe" width="60%"></p>
 
-## What's new in 5.2.17
-
-### Added
-- **ShyCore:** Shy spots addons doing a job it already does. A "Your addons" page lets you switch them off, and What's new lists each release's changes
-- **ShyKeys:** "/shy keys force" lays out every key, even the ones you kept or moved. Put back still brings yours home
+## What's new in 5.2.19
 
 ### Changed
-- **ShyCore:** Drag the head and the whole column at the top goes with it. The zone line drops its coordinates
-- **ShyGroup:** Your run, the replies waiting and the routes friends suggest sit in one row group under the head
-- **ShyQuest:** Running out of air shows in the head as blue bubbles. The time left stays put at the end of the bar
-- **ShyQuest:** Food and water come in whole stacks. A half stack took a bag slot all the same
+- **ShyDock:** Your target's target, focus and pet hang under your frames now. After an update, a card offers to move your console there
+- **ShyQuest:** Party lines from Shy start with ┬½ShyUI┬╗ now. If your group runs Shy too, they see it with the fox in color
+
+### Fixed
+- **ShyQuest:** The route could trade the tram for a rough guess at the walk and stick with it. It keeps the known way until the real one is worked out
 
 [Every release](CHANGELOG.md)
 

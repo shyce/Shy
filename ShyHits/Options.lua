@@ -27,13 +27,13 @@ T:Settings({
 	end,
 
 	{ key = "on", label = "Damage and healing numbers", words = "combat text floating scrolling hits",
-		desc = "Hits and heals show as numbers by nameplates and by you. Off, you get the default combat text back." },
+		desc = "Hits and heals show as numbers by nameplates and by you. Turn it off to get the game's combat text back." },
 	{ label = "Sample hits", button = "Play", words = "test preview try", enabled = On, run = function() T:Test() end,
 		desc = "Plays a short fight on your target and on you. Drag this window aside to see it." },
 
 	{ section = "Where they show" },
 	{ key = "plates", label = "On nameplates", enabled = On,
-		desc = "Damage and healing beside the nameplate of whatever takes it. Off, nameplates get the default numbers." },
+		desc = "Damage and healing beside the nameplate of whatever takes it. With this off, nameplates get the game's numbers." },
 	{ key = "place", label = "Nameplate position", sub = true, needs = "Plates", enabled = Plates,
 		items = {
 			{ value = "beside", text = "Beside the health bar" },
@@ -58,13 +58,13 @@ T:Settings({
 	{ key = "size", label = "Size", min = 0.7, max = 1.6, step = 0.05, format = Percent, settle = true, enabled = On,
 		desc = "How big every number is." },
 	{ key = "schools", label = "Color by damage type", words = "school fire frost nature shadow arcane holy", enabled = On,
-		desc = "Fire is orange, frost blue, shadow violet. Off, your hits are white and hits on you are red." },
+		desc = "Fire is orange, frost blue, shadow violet. With this off, your hits are white and hits on you are red." },
 	{ key = "weigh", label = "Bigger hits stand out", enabled = On,
 		desc = "A hit well over your usual one is drawn larger." },
 	{ key = "words", label = "Misses, dodges and parries", words = "block resist immune", enabled = On,
 		desc = "Miss, Dodge, Parry, Block, Resist and Immune show as small words." },
 	{ key = "lettering", label = "Theme lettering", words = "font", enabled = On,
-		desc = "Numbers wear your theme's font. Off, they use the plain rounded one." },
+		desc = "Numbers use your theme's font. With this off, they use the plain rounded one." },
 
 	{ section = "What you gain" },
 	{ key = "gainXP", label = "Experience", words = "xp", enabled = Plates,
@@ -72,7 +72,7 @@ T:Settings({
 	{ key = "gainRep", label = "Reputation", enabled = On,
 		desc = "Reputation you gain or lose, with the faction's name." },
 	{ key = "gainCoin", label = "Coin you loot", words = "money gold", enabled = On,
-		desc = "Money you loot, written by your character." },
+		desc = "Money you loot, shown by your character." },
 	{ key = "gainSkill", label = "Skill ups", enabled = On,
 		desc = "A weapon or profession skill going up, with its new level." },
 	{ key = "gainHonor", label = "Honor", enabled = On,
@@ -84,6 +84,6 @@ T:Settings({
 	{ key = "raid", label = "In a raid", items = WHOSE, enabled = Plates,
 		desc = "The same for a raid, where everyone's hits are a lot to look at." },
 	{ key = "gameFont", label = "Font on default numbers",
-		desc = "The default combat text wears the same rounded font. It changes the next time you log in." },
+		desc = "The game's combat text uses the same rounded font. It changes the next time you log in." },
 	{ note = "The game doesn't say whose hit is whose. \"Only yours\" is a close guess, and your pet's hits come from the default numbers." },
 })

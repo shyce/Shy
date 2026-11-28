@@ -128,15 +128,15 @@ T:Settings({
 		desc = "Hostile mobs and enemy players." },
 	{ key = "colors.neutral", label = "Neutral", color = true, enabled = Theming, desc = "Mobs that leave you alone until you hit them." },
 	{ key = "colors.friendly", label = "Friendly", color = true, enabled = Theming,
-		desc = "Friendly NPCs. Players wear their class color unless you color by reaction." },
-	{ key = "grayTapped", label = "Gray out tapped mobs", enabled = Theming, desc = "A mob someone else tagged first takes the Tapped color." },
+		desc = "Friendly NPCs. Players show their class color unless you color by reaction." },
+	{ key = "grayTapped", label = "Gray out tapped mobs", enabled = Theming, desc = "A mob someone else tagged first shows in the Tapped color." },
 	{ key = "colors.tapped", label = "Tapped", color = true, sub = true, enabled = Tapped },
 	{ label = "All unit colors", button = "Reset", confirm = true, words = "reaction elite rare boss default",
 		run = function()
 			for _, key in ipairs(UNIT_COLORS) do T.db.colors[key] = Shy.CopyTable(T.defaults.colors[key]) end
 			ns.Looks()
 		end,
-		desc = "Puts the reaction, elite, rare and boss colors back as they shipped." },
+		desc = "Puts the reaction, elite, rare and boss colors back to their defaults." },
 
 	{ section = "Menus and markers" },
 	{ key = "emotes", label = "Emotes in unit menus", words = "thank wave right-click", apply = Soon,

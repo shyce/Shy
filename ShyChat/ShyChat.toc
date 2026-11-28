@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffChat|r
 ## Notes: Cleaner chat with short channel names, whisper windows and saved history |cff888888/shy chat|r
 ## Author: Shyce Cream
-## Version: 5.2.17
+## Version: 5.2.19
 ## X-Date: 2026-11-27
 ## IconTexture: Interface\AddOns\ShyChat\Media\ShyChatMarkColor
 ## Dependencies: ShyCore

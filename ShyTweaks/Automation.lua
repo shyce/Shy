@@ -28,8 +28,8 @@ ns.Feature({
 	},
 })
 
--- Train all: buy one skill, wait for TRAINER_UPDATE, repeat.
-local trainButton, training
+-- Train all: everything you can afford, in the one click. The game takes a purchase only from a click.
+local trainButton
 
 local function Available()
 	local count, cost = 0, 0
@@ -43,15 +43,18 @@ local function Available()
 	return count, cost
 end
 
-local function TrainNext()
+-- From the top, as far as your gold goes; bought from the bottom up, so no skill's place moves under the rest.
+local function TrainAll()
+	local plan, left = {}, GetMoney()
 	for i = 1, GetNumTrainerServices() do
 		local _, kind = GetTrainerServiceInfo(i)
-		if kind == "available" and (GetTrainerServiceCost(i) or 0) <= GetMoney() then
-			BuyTrainerService(i)
-			return true
+		local cost = GetTrainerServiceCost(i) or 0
+		if kind == "available" and cost <= left then
+			plan[#plan + 1] = i
+			left = left - cost
 		end
 	end
-	training = false
+	for n = #plan, 1, -1 do BuyTrainerService(plan[n]) end
 end
 
 -- ShySkin's trainer window has its own "Train all": this button hides while it does, and the tweak's row
@@ -65,7 +68,6 @@ local function UpdateTrainButton()
 	if not trainButton then return end
 	local count, cost = Available()
 	local on = ns.Get("trainAll"):IsOn() and not SkinTrains()
-	if not on then training = false end
 	trainButton:SetShown(on and count > 0)
 	trainButton.text:SetText(("Train all (%d)"):format(count))
 	trainButton.cost = cost
@@ -73,10 +75,7 @@ end
 
 local function CreateTrainButton()
 	if trainButton or not ClassTrainerFrame then return end
-	trainButton = UI.Button(ClassTrainerFrame, "Train all", 120, function()
-		training = true
-		TrainNext()
-	end)
+	trainButton = UI.Button(ClassTrainerFrame, "Train all", 120, TrainAll)
 	trainButton:SetPoint("RIGHT", ClassTrainerTrainButton, "LEFT", -6, 0)
 	trainButton:SetFrameLevel(ClassTrainerTrainButton:GetFrameLevel() + 1)
 	trainButton:HookScript("OnEnter", function(self)
@@ -103,18 +102,13 @@ ns.Feature({
 		ADDON_LOADED = function(_, _, name)
 			if name == "Blizzard_TrainerUI" then CreateTrainButton() end
 		end,
-		TRAINER_UPDATE = function()
-			UpdateTrainButton()
-			if training then C_Timer.After(0.1, TrainNext) end
-		end,
-		TRAINER_CLOSED = function() training = false end,
+		TRAINER_UPDATE = UpdateTrainButton,
 	},
 	Enable = function()
 		CreateTrainButton()
 		UpdateTrainButton()
 	end,
 	Disable = function()
-		training = false
 		if trainButton then trainButton:Hide() end
 	end,
 })
@@ -163,7 +157,7 @@ if not Shy.addons.Bags then
 		id = "autoRepair",
 		category = "Loot & vendors",
 		title = "Repair gear",
-		desc = "Your gear is repaired when you open a vendor who can. Hold Shift to skip it.",
+		desc = "Your gear gets repaired when you open a vendor who can. Hold Shift to skip it.",
 		keywords = "repair auto automatic durability armor gear gold guild bank vendor",
 		default = true,
 		options = {
@@ -216,7 +210,7 @@ ns.Feature({
 	id = "lootConfirm",
 	category = "Loot & vendors",
 	title = "Skip loot confirmations",
-	desc = "The \"this will bind to you\" question answers itself when you loot or roll. You still pick what to roll.",
+	desc = "You won't be asked \"this will bind to you\" when you loot or roll. You still pick what to roll.",
 	keywords = "bind pickup bop confirm confirmation popup loot roll need greed",
 	default = false,
 	events = {

@@ -77,7 +77,7 @@ ns.FONTS = {
 
 ns.PRESETS = {
 	{
-		text = "Clean", desc = "Short tags, compact lines and timestamps. How it comes.",
+		text = "Clean", desc = "Short tags, compact lines and timestamps. It's the default.",
 		values = { channelStyle = "short", brackets = "square", nameBrackets = false, compact = true,
 			compactLoot = true, timestamps = "24", toolbar = "hover", sidebar = "hide", fade = true, fadeTime = 60, spacing = 1 },
 	},

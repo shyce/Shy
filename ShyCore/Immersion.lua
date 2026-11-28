@@ -1080,14 +1080,14 @@ end)
 -- The choices, for the setup window and the /shy window
 
 local QUESTING = {
-	{ value = "guide", glyph = "book", name = "Guide", say = "A levelling guide picks your next step." },
-	{ value = "zone", glyph = "go", name = "Zone", say = "Quests by zone. You choose where to go." },
+	{ value = "guide", glyph = "book", name = "Guide", say = "A leveling guide picks your next step." },
+	{ value = "zone", glyph = "go", name = "Zone", say = "You pick your own quests, zone by zone." },
 }
 -- What happens at a quest giver is one choice: quests taken in a click, or read, and then how their
 -- text comes. Instant turn-in and a kind of quest text are never picked together.
 -- Each `say` fits two lines of a tile a quarter of the setup page wide: a third line runs out of its foot.
 local GIVERS = {
-	{ value = "turnIn", glyph = "use", name = "Instant turn-in", say = "Accepts and hands in as you talk." },
+	{ value = "turnIn", glyph = "use", name = "Instant turn-in", say = "Talk to take and hand in quests." },
 	{ value = "instant", glyph = "fly", name = "Instant text", say = "Quest text shows all at once." },
 	{ value = "normal", glyph = "note", name = "Normal text", say = "Quest text fades in as you read." },
 	{ value = "immersive", glyph = "talk", name = "Immersive", say = "Talking heads tell the story." },
@@ -1223,7 +1223,7 @@ end
 -- Many CVars can't be set in combat; a refusal would be recorded as the game keeping it.
 local function CanWrite()
 	if not InCombatLockdown() then return true end
-	core:Print("game settings can't be changed in combat.")
+	core:Print("you can't change game settings in combat.")
 	return false
 end
 
@@ -1500,9 +1500,9 @@ local function Run(plan)
 end
 
 S.Step({
-	id = "immersion", order = 22, title = "Play", glyph = "book",
+	id = "immersion", order = 22, title = "Play", glyph = "book", guided = true,
 	ask = "How do you want to quest?",
-	lead = "How you pick up and hand in quests, and how much of the UI you see while you play.",
+	lead = "Pick how you take and hand in quests, and how much of the UI you see while you play.",
 	brief = function(plan)
 		local p = plan.immersion
 		local text = p.turnIn and "instant turn-in" or (WORD[p.text] .. " text")

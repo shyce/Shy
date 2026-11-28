@@ -192,7 +192,7 @@ end
 local m = ns.Module({
 	id = "castbars",
 	title = "Cast bars",
-	desc = "The game's cast bars fill in your color. A cast you can't interrupt is grey, an interrupted one red.",
+	desc = "The game's cast bars fill in your color. A cast you can't interrupt is gray, and an interrupted one is red.",
 	group = "screen",
 	words = "casting spell",
 

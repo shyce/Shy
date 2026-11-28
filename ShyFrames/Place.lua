@@ -1,7 +1,8 @@
 -- Frame positions: one Shy.HUD box per frame (the party and its pets share one).
 -- The HUD hides a secure box in combat, so each button is parented to UIParent and only anchored to its box.
--- Default positions: on ShyDock's housing when it is loaded, otherwise fixed offsets scaled by screen height.
--- The party is a row of four cells over the player's plate and the target's, exactly as wide as the two.
+-- Default positions: on ShyDock's housing while its console is in use; where the game's own frames stand while it
+-- isn't yet (GameHomes); without ShyDock, fixed offsets scaled by screen height.
+-- On the housing the party is a row of four cells over the player's plate and the target's, exactly as wide as the two.
 --
 -- The party's box is sized by its cells' width and height, not by a scale alone: in layout mode every corner and
 -- side of it makes the cells wider or taller, and its panel there has a Width and a Height (by scale
@@ -65,12 +66,55 @@ local function Meet()
 	return left + dockWidth / 2 - UIParent:GetWidth() / 2, bottom + dockHeight + seam, half, seam, dock
 end
 
--- Where ShyDock's layout by role stands these frames (Dock:UnitHomes), or nil: a classic layout, or no console.
+-- A game frame's rectangle on the screen, in UIParent units from its bottom left: left, bottom, right, top.
+-- nil while it can't be read.
+local function GameRect(name)
+	local left, bottom, width, height = _G[name]:GetScaledRect()
+	if ns.Units.Secret(left, bottom, width, height) or not (left and bottom and width and height) then return nil end
+	local originX, originY = UIParent:GetScaledRect()
+	local scale = UIParent:GetEffectiveScale()
+	return (left - originX) / scale, (bottom - originY) / scale, (left + width - originX) / scale, (bottom + height - originY) / scale
+end
+
+-- A console that isn't in use yet (ShyDock is on, the Edit Mode layout in use is the game's or the player's own):
+-- nothing was laid out round these frames, so each stands where that layout has the game's. Yours and your
+-- target's on the middle of the game's; your focus under your frame and your target's target under your target's,
+-- each at its outer end, so the two sides mirror; your pet under your focus; the party a column hung where the
+-- game's hangs. nil with the console in use, without ShyDock, or while the game's frames can't be read.
+local GAME = { player = "PlayerFrame", target = "TargetFrame", party = "PartyFrame" }
+
+local function GameHomes()
+	local dock = Shy.addons.Dock
+	if not (dock and dock.ConsoleActive) or dock:ConsoleActive() then return nil end
+	local size, half = T.db.size, UIParent:GetWidth() / 2
+	local homes = { partyShape = "column", partyWidth = L.CELL.squad[1] * size }
+	local ends = {}   -- by kind: the plate's left, bottom and right as it stands there
+	for _, kind in ipairs({ "player", "target" }) do
+		local left, bottom, right, top = GameRect(GAME[kind])
+		if not left or right <= left or top <= bottom then return nil end
+		local x, y = (left + right) / 2, (bottom + top) / 2
+		local width, height = L.Size(kind)
+		homes[kind] = { "CENTER", "BOTTOM", x - half, y }
+		ends[kind] = { x - width * size / 2, y - height * size / 2, x + width * size / 2 }
+	end
+	local left, _, _, top = GameRect(GAME.party)   -- (with nobody in it the game's has no size: its corner is enough)
+	if not left then return nil end
+	homes.party = { "TOPLEFT", "BOTTOM", left - half, top }
+	local _, focus = L.Size("focus")
+	homes.focus = { "TOPLEFT", "BOTTOM", ends.player[1] - half, ends.player[2] - P.SEAM }
+	homes.pet = { "TOPLEFT", "BOTTOM", ends.player[1] - half, ends.player[2] - 2 * P.SEAM - focus * size }
+	homes.targettarget = { "TOPRIGHT", "BOTTOM", ends.target[3] - half, ends.target[2] - P.SEAM }
+	return homes
+end
+
+-- Where every frame is stood by something that planned the whole screen: ShyDock's layout by role
+-- (Dock:UnitHomes), or the game's own places while the console isn't in use (GameHomes). nil in a classic
+-- layout, or with no console: the plates stand on the housing, or at their own place.
 local function RoleHomes()
 	-- (ShyDock builds its plan anew at every asking: while a handle is dragged, the one it began with serves.)
 	if held and HUD.Sizing and HUD.Sizing() then return held.role end
 	local dock = Shy.addons.Dock
-	return dock and dock.UnitHomes and dock:UnitHomes() or nil
+	return dock and dock.UnitHomes and dock:UnitHomes() or GameHomes()
 end
 
 -- A box's size in layout units, and each frame's offset in it (from its top left, y downward). The party is a row
@@ -150,7 +194,7 @@ function P.Lift()
 end
 
 -- Each box's default position: { boxPoint, screenPoint, x, y }. In ShyDock's layouts by role, where the role
--- stands each frame round your character.
+-- stands each frame round your character; with the console not in use yet, where the game's frames stand.
 function P.Homes()
 	local role = RoleHomes()
 	if role then
@@ -164,20 +208,22 @@ function P.Homes()
 	width, height = width * size, height * size
 	local x, y, half, seam, dock = Meet()
 	local out = half + width + seam
+	local _, small = L.Size("focus")
+	small = small * size
+	-- Beside the plates the small frames stand on their foot: your target's target down at your target's outer
+	-- end, your focus its mirror at yours, your pet over your focus.
 	local homes = {
 		player = { "BOTTOMRIGHT", "BOTTOM", x - half, y },
 		target = { "BOTTOMLEFT", "BOTTOM", x + half, y },
-		focus = { "TOPRIGHT", "BOTTOM", x - out, y + height },
-		pet = { "BOTTOMRIGHT", "BOTTOM", x - out, y + height + seam },
-		targettarget = { "TOPLEFT", "BOTTOM", x + out, y + height },
+		focus = { "BOTTOMRIGHT", "BOTTOM", x - out, y },
+		pet = { "BOTTOMRIGHT", "BOTTOM", x - out, y + small + seam },
+		targettarget = { "BOTTOMLEFT", "BOTTOM", x + out, y },
 		-- Centred over where your plate and your target's meet: as wide as the two as planned, and in the middle
 		-- whatever its cells' width (the grid's, or one the player gave them).
 		party = { "BOTTOM", "BOTTOM", x, y + height + P.Lift() },
 	}
 	-- When the console's wings reach the plates' height, the small frames go on its roof.
 	local roof = dock and dock.Roof and dock:Roof()
-	local _, small = L.Size("focus")
-	small = small * size
 	if roof and roof > y + height - small then
 		-- Flush with the wing they stand on, not with the plate beside it.
 		local leftEdge, rightEdge = x - half - width, x + half + width
@@ -401,6 +447,12 @@ function P.Start()
 	events:RegisterEvent("UI_SCALE_CHANGED")
 	events:RegisterEvent("DISPLAY_SIZE_CHANGED")
 	events:SetScript("OnEvent", function() P.Home() end)
+	-- Another Edit Mode layout came into use, or the one in use was changed: the game's frames may stand elsewhere,
+	-- and the console may be in use now or no longer. Next frame, once the game has laid its frames out.
+	local layouts = CreateFrame("Frame")
+	layouts:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+	local again = Shy.Clocked("frames: another layout", P.Apply)
+	layouts:SetScript("OnEvent", function() C_Timer.After(0, again) end)
 	-- Who stands where in the party's box, and whether it is the healing grid.
 	local roster = CreateFrame("Frame")
 	roster:RegisterEvent("GROUP_ROSTER_UPDATE")

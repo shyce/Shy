@@ -3,10 +3,11 @@
 ## Notes: The look, layout and setup every ShyUI addon shares |cff888888/shy|r
 ## Author: Shyce Cream
 ## Category: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffUI|r
-## Version: 5.2.17
+## Version: 5.2.19
 ## X-Date: 2026-11-27
 ## IconTexture: Interface\AddOns\ShyCore\Media\ShyCoreMarkColor
 ## SavedVariables: ShyCoreDB
+## SavedVariablesPerCharacter: ShyCoreCharDB
 ## AddonCompartmentFunc: ShyCore_OnCompartmentClick
 ## AddonCompartmentFuncOnEnter: ShyCore_OnCompartmentEnter
 ## AddonCompartmentFuncOnLeave: ShyCore_OnCompartmentLeave

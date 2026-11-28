@@ -923,6 +923,11 @@ local function Barred(quest, guide)
 	return L.Unoffered(quest) or (data ~= nil and (L.Lacks(data) or (not guide.run and L.Hidden(data))))
 end
 
+-- Whether a quest can be started now, as this guide asks: a dungeon run asks for its quests gray or not.
+local function Startable(data, guide)
+	return L.CanStart(data, false, false, guide.run ~= nil)
+end
+
 -- Whether the chain to `quest` (not in the log, not done) is let go: lost for good, not worth catching up, or an
 -- escort through elites your level or higher (Escort.Perilous: back once you outlevel them).
 -- A dungeon run asks for its quests gray or not, and only lets go of one that can't be had.
@@ -2272,7 +2277,7 @@ local function Lent(guide, at)
 			if not before then break end
 			local work = WorkOnQuest(guide, quest, LOOK.lent)
 			if work then return work end
-			local command = (L.Has(quest) and "turnin") or (L.CanStart(before) and "accept") or nil
+			local command = (L.Has(quest) and "turnin") or (Startable(before, guide) and "accept") or nil
 			if command then
 				local back = guide
 				for _ = 1, LOOK.lent do
@@ -2352,7 +2357,7 @@ local function First(guide, at)
 							return { step = step, parts = parts, manual = Manual(parts) }
 						elseif part.element.command == "accept" then
 							local data = D.Quest(behind[2])
-							if data and not L.CanStart(data) then break end
+							if data and not Startable(data, guide) then break end
 						end
 						return InsertBefore(step, parts, nil, behind[2])
 					end
@@ -2409,14 +2414,14 @@ local LOOSE = { "complete", "collect", "turnin" }   -- commands that act on a ca
 local caught = {}            -- step indexes that were on the way last time
 
 -- Returns the quest a part is about, and whether it can be acted on now.
-local function About(part)
+local function About(part, guide)
 	local command = part.element.command
 	local list = Ids(part.element)
 	if command == "accept" then
 		local quest = list[1]
 		local data = quest and D.Quest(quest)
 		return quest, quest ~= nil and not L.Holds(quest) and not L.Done(quest)
-			and (data == nil or L.CanStart(data))
+			and (data == nil or Startable(data, guide))
 	end
 	local quest = (command == "complete" or command == "turnin") and list[1] or command == "collect" and list[3]
 	if quest and quest > 0 then
@@ -2496,7 +2501,7 @@ local function Behind(guide, at)
 	for _, each in ipairs(found) do
 		-- (What a quest to take ahead needs first is offered only where it can be started now.)
 		local data = D.Quest(each[2])
-		if not (each[3] == "open" and data and not L.Has(each[2]) and not L.CanStart(data)) then
+		if not (each[3] == "open" and data and not L.Has(each[2]) and not Startable(data, guide)) then
 			Want(each[1], each[2], "ahead")
 		end
 	end
@@ -2504,7 +2509,7 @@ local function Behind(guide, at)
 	for quest, steps in pairs(asks.accept) do
 		if steps[#steps] < at and not L.Has(quest) and not L.Done(quest) and not saved.dropped[quest] then
 			local data = D.Quest(quest)
-			if data and L.CanStart(data) and not L.Outgrown(data) and ns.Route.WorthOffer(data) then
+			if data and Startable(data, guide) and not L.Outgrown(data) and ns.Route.WorthOffer(data) then
 				for _, index in ipairs(steps) do Want(index, quest, "easy") end
 			end
 		end
@@ -2534,14 +2539,14 @@ local function Catchup(guide, main, needed)
 			local state, parts = Evaluate(guide, step)
 			local why
 			for _, part in ipairs(state == "todo" and parts or NOTHING) do
-				local quest, open = About(part)
+				local quest, open = About(part, guide)
 				local reason = quest and open and part.can and not part.done and not part.dropped and wanted[index][quest]
 				if reason and (not why or CATCH.rank[reason] < CATCH.rank[why]) then why = reason end
 			end
 			if why then
 				-- Only the caught-up quest's parts stay; the step's other quest parts are dropped.
 				for _, part in ipairs(parts) do
-					local quest, open = About(part)
+					local quest, open = About(part, guide)
 					if quest and not part.dropped and not (open and wanted[index][quest]) then
 						part.dropped, part.can, part.done = ABSENT, false, false
 					end

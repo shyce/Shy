@@ -164,9 +164,11 @@ L.LAYOUTS = {
 		},
 		marks = {},
 	},
-	-- Target's target: health alone, as small as the game's, saying only what is missing.
+	-- Target's target: health alone, as small as the game's, saying only what is missing. Its picture stands at its
+	-- right end, as your target's does: it mirrors the focus frame across your plates.
 	tot = {
 		width = 120, height = 30,
+		portrait = true,
 		nameLimit = 10,
 		first = true,
 		short = true,
@@ -209,8 +211,8 @@ function L.Ring(across)
 	return best, inner * k, (out + L.RING.half) * k
 end
 -- Which setting (Portrait.lua) a kind's column follows, and the kinds whose column stands at the right end.
-L.PORTRAITS = { player = "pair", target = "pair", pet = "small", focus = "small", party = "party" }
-L.MIRRORED = { target = true }
+L.PORTRAITS = { player = "pair", target = "pair", pet = "small", focus = "small", targettarget = "small", party = "party" }
+L.MIRRORED = { target = true, targettarget = true }
 
 -- How tall your frame and your target's are (T.db.height): as the console was cut for, or as tall as the game's own
 -- (its portrait is 60 across). The console plans round whichever (T:Sizes); set out of combat only (Place.Apply).

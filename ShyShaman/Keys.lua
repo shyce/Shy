@@ -305,7 +305,7 @@ end
 
 function K.Run(typed)
 	if not ns.isShaman then
-		T:Print("your keys are laid out on a shaman only.")
+		T:Print("these keys are for shamans only.")
 		return
 	end
 	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)

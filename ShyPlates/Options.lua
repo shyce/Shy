@@ -63,7 +63,7 @@ T:Settings({
 	end,
 
 	{ key = "on", label = "Replace nameplates", words = "plates enemy health bars",
-		desc = "Nameplates get this look, with casts, your debuffs and threat. Off, you get the default ones back." },
+		desc = "Nameplates get this look, with casts, your debuffs and threat. Turn it off to get the game's back." },
 
 	{ section = "The plate" },
 	{ key = "scale", label = "Size", min = 0.7, max = 1.5, step = 0.05, format = Percent, settle = true, enabled = On,
@@ -97,10 +97,10 @@ T:Settings({
 
 	{ section = "On the plate" },
 	{ key = "level", label = "Level", enabled = On, apply = Names,
-		desc = "The level before the name of players and anything you can attack. Elites and rares always wear theirs in a seal." },
+		desc = "The level before the name of players and anything you can attack. Elites and rares always show theirs in a seal." },
 	{ key = "casts", label = "Cast bar", words = "casting interrupt kick", enabled = On,
 		apply = function() D.Tell(ns.Cast.Paint, "Berth") end,
-		desc = "What a mob is casting, under its plate. Your color means you can interrupt it, grey with a shield means you can't." },
+		desc = "Shows what a mob is casting, under its plate. It's in your color if you can interrupt it, or gray with a shield if you can't." },
 	{ key = "castTime", label = "Cast time left", sub = true, apply = CastTime,
 		enabled = With(function() return T.db.casts end, "The cast bar is off."),
 		desc = "Seconds left, at the right end of the cast bar." },
@@ -126,7 +126,7 @@ T:Settings({
 	{ key = "auraSize", label = "Icon size", min = 0.8, max = 1.4, step = 0.05, format = Percent, settle = true, apply = Relay,
 		enabled = With(function() return T.db.auras or T.db.control or T.db.steal end, "All three kinds of icon are off."),
 		desc = "How big the icons over the name are." },
-	{ note = "Changes to these made in a fight apply after it." },
+	{ note = "Changes you make in a fight kick in after it." },
 
 	{ section = "Your target" },
 	{ key = "target", label = "Target mark", words = "highlight line brackets corners", enabled = On, apply = Target,
@@ -139,7 +139,7 @@ T:Settings({
 		desc = "How your target's plate stands out. A line or brackets are in your color, gold for your focus." },
 	{ key = "dim", label = "Other plates", min = 0.4, max = 1, step = 0.05, words = "fade opacity dim", enabled = On,
 		apply = Target, format = function(v) return v >= 1 and "Not dimmed" or Percent(v) end,
-		desc = "How much of the other plates is left while you have a target." },
+		desc = "How visible the other plates stay while you have a target." },
 
 	{ section = "Name only" },
 	{ key = "friendNames", label = "Friendly units", words = "players npcs names", enabled = On,
@@ -155,10 +155,10 @@ T:Settings({
 		desc = "Enemies are just a name and level until you target them or they start fighting." },
 	{ key = "guild", label = "Guild", apply = Names,
 		enabled = With(function() return T.db.friendNames or T.db.calm end, "Nobody is just a name."),
-		desc = "A player's guild under their name while they're just a name. Your own guild is in your color." },
+		desc = "Shows a player's guild under their name while they're just a name. Your own guild is in your color." },
 	{ key = "pets", label = "Friendly pets", words = "minions totems guardians", enabled = On,
 		apply = function() D.Game() end,
-		desc = "Pets and totems on your side get a small nameplate, each one of the game's 40. Off, the game names them its own way." },
+		desc = "Pets and totems on your side get a small nameplate, out of the game's 40. With this off, the game names them its own way." },
 	{ note = "In dungeons, raids and battlegrounds the game draws friendly nameplates itself." },
 
 	{ section = "Colors" },
@@ -174,7 +174,7 @@ T:Settings({
 		desc = "In a group, health bars go green, orange, then red as you lose your hold. Solo, a neutral mob turns red once it attacks you." },
 	{ note = "Blue means another tank has that mob." },
 
-	{ note = "Who gets a nameplate at all, and whether they stack, is the game's to say. Those are under Game in this window." },
+	{ note = "The game decides who gets a nameplate and whether they stack. You'll find those under Game in this window." },
 })
 
 -- Your role picked or changed somewhere else: its row reads again.

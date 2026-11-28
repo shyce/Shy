@@ -160,7 +160,7 @@ function L.Refresh()
 	if not name then return end
 	if Marks()[P.Character()] == Mark(Layout(lineup)) then return end
 	if L.Write(build, name) then
-		Shy.Reload("Your cooldown manager is laid out for your build. Reload to see it.")
+		Shy.Reload("Your cooldown manager is laid out for your build. Reload to see it.", true)
 	end
 end
 

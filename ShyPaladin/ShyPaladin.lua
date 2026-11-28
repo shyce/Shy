@@ -1,5 +1,5 @@
 -- ShyPaladin: your seal on ShyDock's swing bar: the bar in the seal's color (Seal.lua) and seal twisting
--- (Twist.lua), and your keys laid out once for every level (Keys.lua). Does nothing on other classes, and the core switches it off for them from their next login.
+-- (Twist.lua), and your keys laid out once for every level (Keys.lua). Loaded for your class alone.
 
 local ADDON, ns = ...
 local MEDIA = "Interface\\AddOns\\ShyPaladin\\Media\\"

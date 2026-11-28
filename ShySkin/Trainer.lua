@@ -12,8 +12,8 @@
 -- Right, the lesson you picked: its picture, name and rank, Learn with its price and what it leaves you, what it
 -- needs ticked or crossed, and what it does in the game's own words.
 -- The foot: your gold (a pet's training points), and Train all with its sum: everything ready that you can afford,
--- from the top, one lesson per TRAINER_UPDATE, never spending more than you have, stopping when the window closes
--- or a purchase doesn't go through.
+-- from the top, never spending more than you have. The game takes a purchase only from a click, so the click buys
+-- them all; the button holds until the list shows them learned.
 --
 -- A first profession needs Blizzard's CONFIRM_PROFESSION popup, which reads the skill from Blizzard's window: it is
 -- selected there with ClassTrainer_SetSelection. Train all skips it.
@@ -67,7 +67,7 @@ local services = {}  -- the trainer's lessons, as last read
 local groups = {}    -- ... in their groups, in the plan's order: { key, name, order, list, cost }
 local opened = {}    -- a group's key -> folded open (true) or shut (false) by you, this session
 local picked         -- the picked lesson's key
-local run            -- Train all in progress: { last = last lesson asked for, at = when }
+local run            -- Train all in progress: { asked = { [key] = true }, at = when }
 local Refresh, Stale, Draw
 
 local function Text(parent, font, color)
@@ -207,26 +207,30 @@ local function Stop()
 	run = nil
 end
 
--- Buys one lesson; Refresh calls back here on TRAINER_UPDATE for the next.
-local function Step()
+-- Train all is done once nothing it asked for is still ready, or the game has taken too long to say.
+local function Settle()
 	if not run then return end
-	local s = PlanAll(Budget(IsPet()))[1]
-	if not s then return Stop() end
-	local key = Key(s)
-	if key == run.last then
-		-- Still available: not bought yet, or the purchase failed.
-		if GetTime() - run.at > L.patience then Stop() end
-		return
+	if GetTime() - run.at > L.patience then return Stop() end
+	for _, s in ipairs(services) do
+		if s.new and run.asked[Key(s)] then return end
 	end
-	run.last, run.at = key, GetTime()
-	BuyTrainerService(s.index)
-	C_Timer.After(L.patience + 0.1, function() Stale() end)   -- no update by then: stop
+	Stop()
 end
 
+-- Everything it can afford, in the one click. From the bottom of the list up, so no lesson's place moves under
+-- the ones still to buy.
 local function TrainAll()
 	if run then return end
-	run = { at = GetTime() }
-	Refresh()   -- takes the first step and holds the button while it runs
+	local plan = PlanAll(Budget(IsPet()))
+	if #plan == 0 then return end
+	run = { asked = {}, at = GetTime() }
+	table.sort(plan, function(a, b) return a.index > b.index end)
+	for _, s in ipairs(plan) do
+		run.asked[Key(s)] = true
+		BuyTrainerService(s.index)
+	end
+	C_Timer.After(L.patience + 0.1, function() Stale() end)   -- no update by then: the button comes back
+	Refresh()
 end
 
 local function LearnPicked()
@@ -647,8 +651,7 @@ end
 Draw = function()
 	local f = ClassTrainerFrame
 	Read()
-	-- Train all in progress: buy the next one now that the list is current.
-	Step()
+	Settle()
 	local pet = IsPet()
 	local budget = Budget(pet)
 	-- The lesson picked: yours while it is still listed, else the first that is ready, else the first there is.

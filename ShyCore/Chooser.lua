@@ -405,6 +405,26 @@ local function PresetCard(parent, width, preset)
 	return card
 end
 
+-- The welcome's picture of your theme (the step's Picture): a card's scene, as the gallery draws it, in what you
+-- wear, scaled to `height`. Picks go on as they are made, so what you wear is what the plan holds.
+function Chooser.Picture(parent, width, height)
+	local scale = height / CARD_SCENE
+	local card = UI.LookCard(parent, floor(width / scale + 0.5), nil, { scene = CARD_SCENE, short = true })
+	card:SetScale(scale)
+	card:EnableMouse(false)
+	card:SetPoint("TOPLEFT")
+	card.name:Hide()
+	card.words:Hide()
+	card.used:Hide()
+	function card:Refresh()
+		self.look = Theme.Look()
+		UI.SetLook(self.piece, nil)
+		self:SetBar(Skin.BarFile(Skin.Bar(), self.look))
+		self:SetSlots(Slot.Style())
+	end
+	return card
+end
+
 -- Your own card: the scene in what you wear (or wore before a preset), first in the gallery.
 local function OwnCard(parent, width)
 	local card = UI.LookCard(parent, width, nil, { scene = CARD_SCENE, short = true, onClick = function() Chooser.Pick("own") end })
@@ -579,7 +599,7 @@ function Parts.color(parent, width)
 	mode:SetPoint("TOPLEFT")
 	local hue = UI.Slider(solid, "Hue", 0, 359, 1, function() return (HSL()) end, function(v) Move(1, v) end,
 		{ width = COL, format = function(v) return v .. "\194\176" end, color = Making,
-			desc = "Hue of the accent color. " .. Theme.SAPPHIRE .. "\194\176 matches the " .. Shy.Brand.FAMILY .. " logo." })
+			desc = "Your accent color's hue. " .. Theme.SAPPHIRE .. "\194\176 matches the logo." })
 	hue:SetPoint("TOPLEFT", COL + COL_GAP, 0)
 	-- Under the hue, every hue at the saturation and lightness in use.
 	local strip = CreateFrame("Frame", nil, solid)
@@ -887,14 +907,28 @@ function Chooser.Room(parent, width, room, opts)
 	local gallery = Chooser.Gallery(f, width, { perRow = opts.perRow or 4, height = room - body })
 	gallery:SetPoint("TOPLEFT", 0, -body)
 	frames[1] = gallery
+	-- simple: the presets alone, with no tabs over them (f:Simple: the setup's guided walk), a little under the
+	-- room's top so a scrolled row is cut clear of the words over it.
+	local function Top() return f.simple and 8 or body end
 	function f:Refresh()
 		local shown = frames[open] or Made(open)
 		shown:Refresh()
-		self:SetSize(width, max(room, body + shown:GetHeight()))
+		self:SetSize(width, max(room, Top() + shown:GetHeight()))
 	end
 	function f:Fit(height)
 		room = height
-		gallery:Fit(height - body)
+		gallery:Fit(height - Top())
+		self:Refresh()
+	end
+	function f:Simple(on)
+		on = on and true or false
+		if (self.simple or false) == on then return end
+		self.simple = on
+		tabs:SetShown(not on)
+		if on and open ~= 1 then tabs:Select(1) end
+		gallery:ClearAllPoints()
+		gallery:SetPoint("TOPLEFT", 0, -Top())
+		gallery:Fit(room - Top())
 		self:Refresh()
 	end
 	f.tabs, f.gallery, f.parts = tabs, gallery, parts
@@ -939,9 +973,16 @@ end
 for _, event in ipairs(EVENTS) do Shy:On(event, Capture) end
 
 -- The page is the whole width: the screen behind the window shows every pick as it goes on.
+-- The setup's page: the room, its presets alone in the guided walk and every part with the advanced pages on show.
 local function ThemePage(parent, width, plan, room)
 	planned = plan
-	return Chooser.Room(parent, width, room or 494, { perRow = 5 })
+	local f = Chooser.Room(parent, width, room or 494, { perRow = 5 })
+	local refresh = f.Refresh
+	function f:Refresh()
+		self:Simple(not S.Advanced())
+		refresh(self)
+	end
+	return f
 end
 
 -- The plan's lines on the last page: the preset (or your own), the look, the color, and any part apart from them.
@@ -964,10 +1005,10 @@ local function Lines(plan)
 		local said = Named(Theme.Picks(), t.pick, "text")
 		if said then lines[#lines + 1] = { text = "In " .. said } end
 	end
-	if t.font and t.font ~= Theme.FONT and FontName(t.font) then lines[#lines + 1] = { text = "Lettered in " .. FontName(t.font) } end
+	if t.font and t.font ~= Theme.FONT and FontName(t.font) then lines[#lines + 1] = { text = "The " .. FontName(t.font) .. " font" } end
 	if t.bar ~= "auto" then
 		local said = Named(Skin.BARS, t.bar)
-		if said then lines[#lines + 1] = { text = "Bars filled with " .. said:lower(), sub = "on every look" } end
+		if said then lines[#lines + 1] = { text = said .. " bars", sub = "on every look" } end
 	end
 	if t.slot ~= "auto" then
 		local said = Named(Slot.STYLES, t.slot)
@@ -979,9 +1020,13 @@ local function Lines(plan)
 end
 
 S.Step({
-	id = "theme", order = 15, title = "Theme", glyph = "star",
+	id = "theme", order = 15, title = "Theme", glyph = "star", guided = true,
+	why = function(plan) return plan.theme.pick == "class" and "in your class color" or nil end,
 	ask = "Pick a theme",
-	lead = "Pick a ready-made theme, or change the parts you want. You'll see it on your screen right away.",
+	lead = function()
+		return S.Advanced() and "Pick a ready-made theme, or change the parts you want. You'll see it on your screen right away."
+			or "Pick one and you'll see it on your screen right away."
+	end,
 	brief = function(plan)
 		local t = plan.theme
 		local worn = Theme.PresetWorn({ look = t.look, accent = t.pick, bar = t.bar, slot = t.slot, health = t.health,
@@ -1003,6 +1048,8 @@ S.Step({
 		return false
 	end,
 	Later = Chooser.Wear,
+	Wear = function(plan) Chooser.Wear(plan.theme) end,
+	Picture = Chooser.Picture,
 	-- Live: what was worn before the window opened, put back when it closes without Finish.
 	Worn = Chooser.Snapshot,
 	PutBack = Chooser.Wear,

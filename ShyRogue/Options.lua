@@ -58,10 +58,10 @@ T:Settings({
 			ns.ResetLoot()
 			ns.Refresh()
 		end,
-		desc = "Starts your pick pocket totals from nothing. /shy rogue loot says them all in chat." },
+		desc = "Starts your pick pocket totals over. /shy rogue loot says them all in chat." },
 
 	{ section = "Keys", needs = "Keys", shown = Mine },
 	{ label = "Your keys", button = "Open", words = "hotkeys bindings macros bars layout abilities",
 		run = function() Shy.Hub.Open("keys") end,
-		desc = "See what each key does, lay them out, or put them back." },
+		desc = "See what each key does, set them up, or put them back." },
 })

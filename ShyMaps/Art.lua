@@ -7,6 +7,9 @@
 -- shows the land round it. When the view turns into another map of the world (Steps.lua) the art it
 -- leaves fades out over the new one coming in.
 --
+-- A city is a whole picture with no painting of its own, and it lies inside its zone's painting (Elwynn
+-- paints old Stormwind where the city stands). So a city's art is laid over all of that, not under it.
+--
 --   Art.New(canvas, level) -> painter   a painter lays art on a canvas of anyone's
 --   Art.Paint(painter, map, fog, bare, feather)   fog: "faded" | "clear" | "hidden"; bare: draw nothing
 --                                        (the terrain look draws the map); feather: its edges run out
@@ -441,13 +444,17 @@ local function LayRound(map, continent)
 	for i, r in ipairs(order) do round[i] = r end
 end
 
--- The zones drawn round the one shown: their map IDs.
+-- The zones drawn round the one shown: their map IDs, and each one's painter by its ID.
 function Art.Round()
-	local list = {}
+	local list, by = {}, {}
 	for i = 1, roundUsed do
-		if round[i].sheet:IsShown() then list[#list + 1] = round[i].painter.map end
+		local p = round[i].painter
+		if round[i].sheet:IsShown() then
+			list[#list + 1] = p.map
+			by[p.map] = p
+		end
 	end
-	return list
+	return list, by
 end
 
 -- How many times too large the continent's art under the zone shown is drawn (port units an art pixel of it).
@@ -579,6 +586,9 @@ local function Repaint(keep)
 	if not (painter and map) then return end
 	local bare = ns.Terrain and ns.Terrain.Draws(map) or false
 	local below = not bare and Continent(map)
+	-- (A city's art goes where a zone's painting does: over the painting of the zones round it.)
+	local level = base + (not bare and ns.cities and ns.cities[map] and 6 or 3)
+	if painter.level ~= level then Seat(painter, View.Land(), level, base + 6) end
 	Art.Paint(painter, map, T.db.fog, bare, below and true or false)
 	if not bare then Art.Detail(painter, View.Scale() / View.Fit()) end
 	if below then
@@ -608,6 +618,7 @@ local function Build()
 	-- The continent's wash (base - 1) under its art (base, its overlays base + 1); every zone's paper, the zones round
 	-- (base + 2) under the map's own (base + 3); the painted land (base + 4); then every zone's painting, theirs
 	-- (base + 5) under the map's (base + 6: the exploration level); the map left fading over all (base + 7, + 8).
+	-- A city's art is seated at base + 6, paper and all (Repaint).
 	base = View.Level("PIN_FRAME_LEVEL_MAP_EXPLORATION") - 6
 	painter = Art.New(View.Land(), base + 3, base + 6)
 	local port = View.Port()

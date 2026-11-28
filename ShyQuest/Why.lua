@@ -18,7 +18,7 @@ ns.Why = Why
 local STANDS = {
 	never = "skip", raid = "skip", side = "skip", race = "skip", class = "skip", log = "log", done = "done",
 	maxLevel = "missed", instead = "missed", past = "missed", led = "missed", ["until"] = "missed", giver = "missed",
-	repMax = "missed", learned = "missed", repeatable = "soft", hidden = "soft", outgrown = "soft",
+	repMax = "missed", learned = "missed", repeatable = "soft", hidden = "soft", outgrown = "soft", gray = "soft",
 }
 local RANK = { log = 1, done = 2, skip = 3, missed = 4, yet = 5, available = 6 }
 -- The reputation each standing starts at, Hated to Exalted (FACTION_STANDING_LABEL1 to 8).
@@ -100,6 +100,7 @@ function Why.Say(reason)
 	if what == "repeatable" then return Said("Repeatable quests are hidden", "repeatable") end
 	if what == "hidden" then return Said("Hidden by you", "hidden by you") end
 	if what == "outgrown" then return Said("Low-level quests are hidden", "too low to list") end
+	if what == "gray" then return Said("Gray: track low-level quests to see it", "gray, not listed", "talk") end
 	if what == "unoffered" then return Said(Giver(value) .. " didn't offer it", nil, "talk") end
 	if what == "level" then
 		return Said("Level " .. value, "needs level " .. value, "up", { right = ("%d to go"):format(value - L.Level()) })

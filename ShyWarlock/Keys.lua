@@ -164,7 +164,7 @@ local SHARD = { "Drain Soul", "as it dies, for a shard" }
 local TAP = { "Life Tap", "after the fight" }
 local HURT = { "Drain Life", "when you're hurt" }
 local WRONG = { "Stop", "when it goes wrong" }
-local LOW = { "Funnel", "your demon is low" }
+local LOW = { "Funnel", "when your demon is low" }
 local HARD = { "Curse", "on a hard hitter" }
 local SHIELD = { "Wall", "when it's too many" }
 local STONE = { "Healthstone", "under half health" }
@@ -271,7 +271,7 @@ end
 
 function K.Run(typed)
 	if not ns.isWarlock then
-		T:Print("your keys are laid out on a warlock only.")
+		T:Print("these keys are for warlocks only.")
 		return
 	end
 	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)

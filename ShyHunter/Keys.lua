@@ -215,19 +215,19 @@ local PLAY = {
 		single = { { "Hunter's Mark", "to open" }, { "Attack" }, { "Sting", "keep it up" }, { "Rapid Fire", "on a tough enemy" },
 			{ "Aimed" }, { "Arcane" }, { "Multi-Shot", "on the move" }, { "Concussive", "if it runs" }, { "Wing Clip", "when it reaches you" },
 			{ "Melee", "when it reaches you" }, PET },
-		cleave = { { "Stop", "on the extra enemy" }, { "Freezing Trap", "on the extra enemy" }, { "Fire Trap", "in their path" }, { "Multi-Shot" },
+		cleave = { { "Freezing Trap", "on the extra enemy" }, { "Stop", "on one hitting you" }, { "Fire Trap", "in their path" }, { "Multi-Shot" },
 			{ "Sting", "on each enemy" }, { "Arcane" }, { "Frost Trap", "to slow them all" }, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 	{ from = 40, tip = "Volley and Explosive Trap clear packs but pull them onto you. Let your pet hold them first.",
 		single = { { "Hunter's Mark", "to open" }, { "Attack" }, { "Sting", "keep it up" }, { "Rapid Fire", "on a tough enemy" },
 			{ "Aimed" }, { "Arcane" }, { "Multi-Shot", "on the move" }, { "Concussive", "if it runs" }, { "Wing Clip", "when it reaches you" },
 			{ "Melee", "when it reaches you" }, PET },
-		cleave = { { "Stop", "on the extra enemy" }, { "Freezing Trap", "on the extra enemy" }, { "Fire Trap", "under the pack" }, { "Volley", "on 3+ enemies" },
+		cleave = { { "Freezing Trap", "on the extra enemy" }, { "Stop", "on one hitting you" }, { "Fire Trap", "under the pack" }, { "Volley", "on 3+ enemies" },
 			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 	{ from = 50, tip = "Your gear carries you now. Keep the sting and the pet up, and pull two at a time when it feels safe.",
 		single = { { "Hunter's Mark", "to open" }, { "Attack" }, { "Sting", "keep it up" }, { "Rapid Fire", "on a tough enemy" },
 			{ "Aimed" }, { "Arcane" }, { "Multi-Shot", "on the move" }, { "Concussive", "if it runs" }, { "Wing Clip", "when it reaches you" },
 			{ "Melee", "when it reaches you" }, PET },
-		cleave = { { "Stop", "on the extra enemy" }, { "Freezing Trap", "on the extra enemy" }, { "Fire Trap", "under the pack" }, { "Volley", "on 3+ enemies" },
+		cleave = { { "Freezing Trap", "on the extra enemy" }, { "Stop", "on one hitting you" }, { "Fire Trap", "under the pack" }, { "Volley", "on 3+ enemies" },
 			{ "Multi-Shot" }, { "Sting", "on each enemy" }, { "Arcane" }, { "Monkey", "when they reach you" }, { "Wall", "if it goes bad" } } },
 	-- Survival fights in reach from the start: Raptor Strike on R, the Monkey (the Beast from 30) on 1.
 	{ from = 1, build = "survival", tip = "You fight in melee. Shoot as it comes, then hit it with Raptor Strike once it reaches you.",
@@ -324,7 +324,7 @@ end
 
 function K.Run(typed)
 	if not ns.isHunter then
-		T:Print("your keys are laid out on a hunter only.")
+		T:Print("these keys are for hunters only.")
 		return
 	end
 	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)

@@ -52,7 +52,7 @@ ns.Feature({
 	id = "muteSounds",
 	category = "System",
 	title = "Mute sounds",
-	desc = "The game sounds you switch on below go quiet.",
+	desc = "Pick the game sounds you want muted below.",
 	keywords = "mute sound silence quiet noise audio bell toll hourly horn drums fizzle interrupt train choo tram subway zeppelin mechanostrider gnome mount",
 	default = false,
 	options = options,

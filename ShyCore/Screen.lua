@@ -159,7 +159,7 @@ function Sc.Set(size)
 end
 
 local WHY = {
-	combat = "You're in combat. Try again after combat.",
+	combat = "You're in combat. Try again after the fight.",
 	refused = "The game won't let addons change this. Set it in the game's options, under Graphics.",
 }
 
@@ -321,7 +321,7 @@ local function Strip(parent, width, state)
 		if state.pick == "suggested" and suggested == 100 then
 			words = "Your screen has room for everything at its normal size."
 		elseif Sc.Fits(size) then
-			words = size == 100 and "Normal: the size the game picks for your screen. Everything has room."
+			words = size == 100 and "This is the size the game picks for your screen. Everything has room."
 				or "Everything has room at this size."
 		else
 			words = "Some pieces move aside to fit at this size. Go smaller to give them room."
@@ -345,14 +345,15 @@ end
 local function Lines(plan)
 	local s = plan.scale
 	local size = Wanted(s)
-	if size == 100 then return { { text = "Everything at normal size", sub = "the game's own for your " .. Screen() .. " screen" } } end
+	if size == 100 then return { { text = "Everything at normal size", sub = "what the game picks for your " .. Screen() .. " screen" } } end
 	return { { text = "Everything at " .. Percent(size), sub = s.pick == "suggested" and ("suggested for your " .. Screen() .. " screen")
-		or "your own size" } }
+		or "a size you picked" } }
 end
 
 Shy.Setup.Step({
 	id = "scale", order = 5, title = "Size", inside = "profile", atOpen = true, glyph = "size",
 	brief = function(plan) return Percent(Wanted(plan.scale)) end,
+	why = function(plan) return plan.scale.pick == "suggested" and ("fits your " .. Screen() .. " screen") or nil end,
 	-- Recommended: a size you chose stays as it is (setup opening never resizes your screen under you); on the
 	-- game's own size, the suggested one.
 	Plan = function(plan)

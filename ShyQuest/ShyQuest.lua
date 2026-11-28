@@ -600,6 +600,8 @@ local OTHER_EVENTS = {
 	"SUPER_TRACKING_CHANGED", "QUEST_POI_UPDATE", "QUEST_WATCH_LIST_CHANGED", "BAG_UPDATE_DELAYED",
 	-- A ghost is led back to its body (Death.lua).
 	"PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST",
+	-- Low-level quests tracked or not: gray ones come and go at their givers.
+	"MINIMAP_UPDATE_TRACKING",
 }
 
 function T:OnLoad()
@@ -694,6 +696,9 @@ function T:OnLogin()
 		elseif STANDING_EVENTS[event] then
 			staleStanding = true
 			return
+		elseif event == "MINIMAP_UPDATE_TRACKING" then
+			-- (Sent for herbs and ore too: only low-level quests change what is on offer.)
+			if not ns.Log.GrayChanged() then return end
 		elseif event == "QUEST_POI_UPDATE" then
 			-- New quest areas: the stops may be the same ones, but the maps draw them again and ask for
 			-- the areas that were a miss (Ground.AreasSent).

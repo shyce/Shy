@@ -47,14 +47,14 @@ T:Settings({
 			if v ~= "off" then T.db.look = v end
 		end,
 		desc = "How your buffs look. The one running out soonest sits next to the minimap." },
-	{ key = "debuffs", label = "Debuffs", desc = "Your debuffs go under your buffs, in the same style. Off, they stay in the game's own row." },
+	{ key = "debuffs", label = "Debuffs", desc = "Your debuffs go under your buffs, in the same style. With this off, they stay in the game's row." },
 	{ key = "size", label = "Size", min = 20, max = 44, step = 2, settle = true, enabled = Beside,
 		desc = "How big the icons are." },
 	{ key = "missing", label = "Missing buffs", words = "intellect fortitude spirit mark of the wild shadow protection",
 		enabled = Reminded,
-		desc = "Shows a grey icon for a buff someone in your group can cast and you don't have." },
+		desc = "Shows a gray icon for a buff someone in your group can cast and you don't have." },
 	position,
-	{ note = "A debuff's frame is the color of its type. Right-click a buff to remove it. Changes made in a fight apply after it." },
+	{ note = "A debuff's frame is the color of its type. Right-click a buff to remove it. Changes you make in a fight kick in after it." },
 
 	{ section = "On your frames", needs = "Frames" },
 	{ key = "frames", label = "On unit frames", words = "buffs debuffs target party",

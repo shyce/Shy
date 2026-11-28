@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffDock|r
 ## Notes: Your bars, chat and damage meter as one console along the bottom |cff888888/shy dock|r
 ## Author: Shyce Cream
-## Version: 5.2.17
+## Version: 5.2.19
 ## X-Date: 2026-11-27
 ## IconTexture: Interface\AddOns\ShyDock\Media\ShyDockMarkColor
 ## Dependencies: ShyCore
@@ -33,5 +33,6 @@ Swing.lua
 Offer.lua
 Picker.lua
 Grow.lua
+Update.lua
 Preview.lua
 Options.lua

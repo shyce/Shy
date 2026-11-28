@@ -28,7 +28,7 @@ T:Settings({
 
 	{ section = "Shouts", shown = Mine },
 	{ key = "shout.shown", label = "Light up your shout", words = "battle commanding reminder buff",
-		desc = "Your shout lights up when it's down or nearly out and you have the rage. Off your bars, it shows mid-screen." },
+		desc = "Your shout lights up when it's down or nearly out and you have the rage. If it's not on your bars, it shows mid-screen." },
 	{ key = "shout.battle", label = "Battle Shout", sub = true, enabled = Shouts },
 	{ key = "shout.commanding", label = "Commanding Shout", sub = true, enabled = Shouts, desc = "Once you know it." },
 	{ key = "shout.warnSeconds", label = "Remind when under", min = 5, max = 60, step = 5, sub = true, enabled = Shouts,
@@ -43,7 +43,7 @@ T:Settings({
 		enabled = function() return T.db.rage.shown end, format = function(v) return Percent(v) .. " rage" end,
 		desc = "How full your rage is when the light starts." },
 	{ key = "threat.glow", label = "Threat", words = "aggro edge border glow",
-		desc = "In a group, the light turns gold as threat slips and red once it's lost. Not tanking, it warns as you near pulling." },
+		desc = "In a group, the light turns gold as threat slips and red once it's lost. If you're not tanking, it warns as you near pulling." },
 	{ key = "threat.alarm", label = "Aggro alarm", words = "taunt",
 		desc = "When you're tanking and a mob turns to someone else, the light flashes and Taunt lights up red." },
 	{ key = "threat.strength", label = "Brightness", min = 0.2, max = 1, step = 0.1, format = Percent,
@@ -54,5 +54,5 @@ T:Settings({
 	{ section = "Keys", needs = "Keys", shown = Mine },
 	{ label = "Your keys", button = "Open", words = "hotkeys bindings macros bars layout abilities",
 		run = function() Shy.Hub.Open("keys") end,
-		desc = "See what each key does, lay them out, or put them back." },
+		desc = "See what each key does, set them up, or put them back." },
 })

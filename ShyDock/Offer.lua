@@ -51,12 +51,12 @@ function O.Lines(plan)
 	local style = pick.style or L.Style()
 	local sub
 	if L.IsActive() then
-		sub = L.Size() == pick.size and L.Style() == style and "The layout is rewritten so everything fits."
-			or "The layout is rewritten at this size, chat text too."
+		sub = L.Size() == pick.size and L.Style() == style and "Your layout is redone so everything fits."
+			or "Your layout is redone at this size. Chat text changes size too."
 	elseif ns.char.furnished or Grow(pick) then
-		sub = "Saved as a new Edit Mode layout. Yours is kept."
+		sub = "It's saved as a new Edit Mode layout. You keep yours."
 	else
-		sub = "Saved as a new Edit Mode layout. Turns on " .. MADE_OF .. "."
+		sub = "It's saved as a new Edit Mode layout. It turns on " .. MADE_OF .. "."
 	end
 	if Grow(pick) then sub = sub .. " Bars grow as you level." end
 	if pick.drawer then sub = sub .. " The menu goes in a drawer." end
@@ -89,8 +89,8 @@ function O.BandWords(pick)
 	if not ok then return title, L.Words(why), true end
 	if pick.custom == "own" then return title, "This replaces your layout. Yours stays in Edit Mode's list.", true end
 	if pick.custom then return title, "You'll lose the changes you made to your layout. Keep mine to hold on to them.", true end
-	if L.IsActive() then return title, "Your bars, chat and meter are laid out again with what you pick.", false end
-	return title, "Added as a new Edit Mode layout. You keep your own layout.", false
+	if L.IsActive() then return title, "Your bars, chat and meter move to fit what you pick.", false end
+	return title, "It's added as a new Edit Mode layout. You keep your own.", false
 end
 
 -- The page's measures. BAND: the band's height; RING, GLYPH: the dial at its left and the glyph in it; EDGE: its
@@ -103,8 +103,6 @@ local M = { GAP = 8, BAND = 54, RING = 38, GLYPH = 20, EDGE = 3, CHOICE = 196, S
 	WORDS = 6, SECTION = 16, COLUMNS = 28, LABEL = 6, PAIR = 18, SIZE = 252, BARS = 236, SIDE = 112, MENU = 148,
 	BAGS = 196, ONE_LINE = 420, CARDS_TOP = 12, OPTIONS_TOP = 18 }
 
-local BARS = { { key = true, text = "Grow with me" }, { key = false, text = "Every bar now" } }
-local ROWS = { "One bar", "Two bars", "Three bars" }
 local BAGS = { { key = "window", text = "In my bags" }, { key = "screen", text = "With the menu" } }
 
 -- ShyBags, while it has the bag buttons as one choice; nil without it: the default bar stays.
@@ -123,7 +121,7 @@ local function BagWords(keeper, where, drawer)
 			.. " Click a bag to open them all."
 	end
 	local key = keeper.BagsKey and keeper:BagsKey()
-	return "A slot for each bag beside your items. " .. (key and (key .. " opens your bags.") or "No key opens your bags yet.")
+	return "Each bag gets a slot beside your items. " .. (key and (key .. " opens your bags.") or "No key opens your bags yet.")
 end
 
 -- The side bars: each out beside the bars or tucked away in its drawer (Drawers.lua's racks), the picks in
@@ -258,7 +256,7 @@ end
 function O.Build(parent, width, plan)
 	local L, P = ns.Layout, ns.Preview
 	local f = CreateFrame("Frame", nil, parent)
-	local looking, lookingStyle, lookingBars   -- the size, the layout and the bars choice under the mouse
+	local looking, lookingStyle   -- the size and the layout under the mouse
 	local lookingBags, lookingSide             -- where the bag buttons are, and a side bar's choice, under the mouse
 	local lookingDrawer                        -- the menu's choice under the mouse
 	local cards = {}
@@ -267,6 +265,7 @@ function O.Build(parent, width, plan)
 	-- A pick: the screen is set up with it (picked over a screen kept as it is, it starts fresh).
 	local function Pick(field, value)
 		plan.screen.on, plan.screen[field] = true, value
+		if field == "style" then plan.screen.chosen = true end   -- (the player's own: a build picked later leaves it)
 		O.Wear(plan)
 		f:Refresh()
 	end
@@ -319,21 +318,8 @@ function O.Build(parent, width, plan)
 	size:Put(sizes, 1, 0)
 	size:Under(1)
 
-	-- The bars: grow with you, or every bar now (not while your keys are laid out: they stand on every bar).
-	local drawing = P.BarsDrawing(f, 4, 1)
-	local barsSection = Section(f, 0, 0, column, "Bars", drawing)
-	local bars = Choice(barsSection, { BARS[1].text, BARS[2].text }, min(M.BARS, column), function()
-		return Lit(Grow(plan.screen) and 1 or 2)
-	end, function(i)
-		if BARS[i].key and Keyed() then return end
-		Pick("grow", BARS[i].key)
-	end, function(i)
-		lookingBars = i and BARS[i] or nil
-		f:Refresh()
-	end)
-	barsSection:Put(bars, 1, 0)
-	barsSection:Under(1)
-
+	-- (Every bar is there from the start: bars that grew with the character left a one-row console, its chat and
+	-- its meter too small to read, and are no longer offered.)
 	-- The side bars: for each side, out or tucked away; only the sides the layout picked has.
 	local sideDrawing = P.SidesDrawing(f)
 	local sideSection = Section(f, right, top, column, "Side bars", sideDrawing)
@@ -388,19 +374,17 @@ function O.Build(parent, width, plan)
 	end
 	menuSection:Under(lines)
 
-	f.cards, f.band, f.sizes, f.bars, f.sides, f.menu, f.bags = cards, band, sizes, bars, sides, menu, bagChoice
-	f.words, f.barWords, f.sideWords, f.menuWords = size.words, barsSection.words, sideSection.words, menuSection.words
-	f.drawing, f.sideDrawing, f.bagDrawing = drawing, sideDrawing, bagDrawing
-	f.sections = { size, barsSection, sideSection, menuSection }
+	f.cards, f.band, f.sizes, f.sides, f.menu, f.bags = cards, band, sizes, sides, menu, bagChoice
+	f.words, f.sideWords, f.menuWords = size.words, sideSection.words, menuSection.words
+	f.sideDrawing, f.bagDrawing = sideDrawing, bagDrawing
+	f.sections = { size, sideSection, menuSection }
 
 	-- The sections down each column, each under the one before as tall as its words make it; the page as tall as
 	-- the taller column.
 	local function Stack()
-		barsSection:ClearAllPoints()
-		barsSection:SetPoint("TOPLEFT", 0, top - size:Tall() - M.SECTION)
 		menuSection:ClearAllPoints()
 		menuSection:SetPoint("TOPLEFT", right, top - sideSection:Tall() - M.SECTION)
-		local leftTall = size:Tall() + M.SECTION + barsSection:Tall()
+		local leftTall = size:Tall()
 		local rightTall = sideSection:Tall() + M.SECTION + menuSection:Tall()
 		hairline:SetHeight(max(leftTall, rightTall))
 		for _, s in ipairs(f.sections) do s:SetHeight(s:Tall()) end
@@ -412,10 +396,7 @@ function O.Build(parent, width, plan)
 		local active, inUse, sizeNow = L.IsActive(), L.Style(), L.Size()
 		local shown = looking or pick.size
 		local style = lookingStyle or pick.style or inUse
-		-- (The bars choice under the mouse, whichever it is: "every bar now" has `false` for its key.)
-		local keyed = Keyed()
 		local grow = Grow(pick)
-		if lookingBars and not keyed then grow = lookingBars.key end
 		band:Tell(pick)
 		-- Drawn with the bars the choice gives: the step the abilities call for, or every bar.
 		local barsDrawn = grow and true or "all"
@@ -435,32 +416,12 @@ function O.Build(parent, width, plan)
 		local quiet = pick.on and 1 or 0.55
 		for _, s in ipairs(f.sections) do s:SetAlpha(quiet) end
 		sizes:Refresh()
-		bars:Refresh()
 		menu:Refresh()
 		if bagChoice then bagChoice:Refresh() end
 
 		-- The size: what the one picked or pointed at is.
-		size.words:SetText(not pick.on and "Your screen keeps the size it has."
+		size.words:SetText(not pick.on and "Your screen stays the size it is."
 			or (P.WORDS[shown] .. (active and sizeNow == shown and " In use." or "")))
-
-		-- The bars.
-		bars.buttons[1]:SetAlpha(keyed and 0.4 or 1)
-		local step = grow and L.GrowStep() or #L.STEPS
-		drawing:Paint(nil, L.STEPS[step])
-		if not pick.on then
-			barsSection.words:SetText("Your bars stay as they are.")
-		elseif keyed then
-			barsSection.words:SetText("Your keys use every bar, so they're all there from the start, flyout included.")
-		elseif grow and step == #L.STEPS then
-			barsSection.words:SetText(("You know %d abilities or already use every bar, so they're all there from the start."):format(L.Abilities()))
-		elseif grow then
-			local have = L.STEPS[step]
-			local sideBars = have.sides > 1 and "both side bars" or "a side bar for food and potions"
-			barsSection.words:SetText(("%s and %s to start. You'll be offered more as you learn abilities. You know %d."):format(
-				ROWS[have.rows], sideBars, L.Abilities()))
-		else
-			barsSection.words:SetText("Three rows and both side bars from the start, like the default UI.")
-		end
 
 		-- The side bars: the ones the layout has, as picked or pointed at. A layout that shows its bars as you point
 		-- at them (the minimal one) has them show with the others: no choice there.
@@ -502,12 +463,10 @@ function O.Build(parent, width, plan)
 	return f
 end
 
--- A character the console has never been set up for starts with bars that grow;
--- one set up before keeps the bars it has unless the player picks otherwise.
+-- A setup gives every bar. (Bars that grew with the character were a choice once: one that still has them
+-- gets every bar the next time it is set up.)
 local function Grows()
-	local grow = ns.char.grow
-	if grow == nil then return not ns.Layout.IsActive() end
-	return grow
+	return false
 end
 
 -- The drawer and the bag buttons are profile settings: written now when the character stays on its
@@ -575,14 +534,109 @@ function O.Wear(plan)
 	end)
 end
 
+-- The layout a build's role has: a healer's, a tank's. Only once something says what you play: the build picked
+-- in this setup, or a talent point spent. Before that the build is just the one the class starts with.
+-- The screen as it stands when the plan is made: the console in use or not, laid out for this screen or not, and
+-- in which layout and size. (Read once: a preview put on later is not what you have.)
+local function Had()
+	local L = ns.Layout
+	local active = L.IsActive()
+	return { active = active, stale = active and L.IsStale(), size = L.Size(), style = L.Style() }
+end
+
+local function Named(style, size)
+	return ns.Preview.STYLES[style or ns.Layout.Style()] .. ", " .. ns.Preview.NAMES[size]:lower()
+end
+
+local function Suited(plan)
+	local Build = Shy.Build
+	if not Build then return nil end
+	local build
+	if plan.talents and plan.talents.picked and Build.Planned then
+		build = Build.Planned(plan)
+	elseif Build.Spent and Build.Spent() > 0 then
+		build = Build.Played()
+	end
+	local role = build and build.role
+	return (role == "healer" or role == "tank") and ns.Console.STYLES[role] and role or nil
+end
+
 S.Step({
-	id = "screen", order = 20, title = "Screen", glyph = "window",
+	id = "screen", order = 20, title = "Screen", glyph = "window", guided = true,
+	-- The welcome's picture of it: the bottom of your screen in the layout picked, as its page's cards draw it.
+	Picture = function(parent, width)
+		local P = ns.Preview
+		local look
+		local stage = P.Stage(parent, width, { band = true, look = function() return look end })
+		local f = stage.holder
+		f:SetPoint("CENTER")
+		function f:Refresh(plan)
+			local pick = plan.screen
+			-- (yours, laid out by hand: the console layout it is based on, what Reset brings back)
+			look = plan.theme and plan.theme.look
+			stage:Lay(pick.size, pick.style or ns.Layout.Style(), Grow(pick) and true or "all", P.From(look))
+		end
+		return f
+	end,
+	why = function(plan)
+		local pick = plan.screen
+		if not pick.on then
+			return pick.custom and ("based on " .. ns.Preview.STYLES[pick.style or ns.Layout.Style()] .. ", "
+				.. ns.Preview.NAMES[pick.size]:lower()) or nil
+		end
+		return pick.suited and pick.style == pick.suited and ("because you're a " .. pick.suited) or nil
+	end,
 	ask = "How do you want your screen laid out?",
-	lead = "Pick a layout and a size for your bars and chat. The pictures show how your screen will look.",
+	lead = function(plan)
+		local words = "Pick a layout and a size for your bars and chat. The pictures show how your screen will look."
+		local suited = plan.screen and plan.screen.suited
+		if suited and plan.screen.style == suited then
+			words = words .. " The " .. suited .. " layout is picked because you're a " .. suited .. "."
+		end
+		return words
+	end,
+	-- The build picked changed: a character the console was never set up for takes its role's layout, unless the
+	-- player picked a layout here already.
+	Follow = function(plan)
+		local pick = plan.screen
+		if not pick or pick.chosen or ns.char.style ~= nil then return end
+		local suited = Suited(plan)
+		pick.suited, pick.style = suited, suited or pick.base
+	end,
 	brief = function(plan)
 		local pick = plan.screen
-		if not pick.on then return pick.custom and "Your own" or "As it is" end
-		return ns.Preview.STYLES[pick.style or ns.Layout.Style()] .. ", " .. ns.Preview.NAMES[pick.size]:lower()
+		if not pick.on then return pick.custom and "Custom" or "As it is" end
+		return Named(pick.style, pick.size)
+	end,
+	-- What finishing replaces: the game's layout, one laid out for another screen, or the console in another layout
+	-- or size. Nothing when yours is kept or it stands as picked.
+	now = function(plan)
+		local pick, had = plan.screen, plan.screen.had
+		if not pick.on or not had then return nil end
+		if not had.active then return "the game's layout" end
+		if had.stale then return "a layout for another screen" end
+		if had.style ~= pick.style or had.size ~= pick.size then return Named(had.style, had.size) end
+		return nil
+	end,
+	-- Your layout changed by hand (Edit Mode, layout mode) since the plan was made: read again, unless a layout was
+	-- picked here, which stands.
+	Restate = function(plan)
+		local pick = plan.screen
+		if not pick or pick.chosen then return end
+		local custom, named = ns.Layout.Custom()
+		pick.custom, pick.named, pick.on = custom or nil, named, not custom
+		if not ns.Layout.Previewing() then pick.had = Had() end   -- (a preview is not what you have)
+	end,
+	-- Yours, or never set up: one click back to the console, in the layout your build's role has.
+	resets = function(plan)
+		local pick = plan.screen
+		if pick.on or not ns.Layout.CanSetUp() then return nil end
+		return pick.custom and "Reset" or "Set up"
+	end,
+	Reset = function(plan)
+		local pick = plan.screen
+		pick.on, pick.chosen = true, true
+		pick.style = pick.suited or pick.base
 	end,
 	last = true,   -- writing the layout ends in a reload, so every other step runs first
 	-- A screen the player made their own (Layout.Custom) is kept unless a layout is picked: the console laid out
@@ -590,7 +644,13 @@ S.Step({
 	Plan = function(plan)
 		local keeper = Keeper()
 		local custom, named = ns.Layout.Custom()
-		plan.screen = { on = not custom, custom = custom or nil, named = named, size = ns.Layout.Size(), style = ns.Layout.Style(), grow = Grows(), drawer = ns.T.db.menuDrawer ~= false,
+		-- A character the console was never set up for gets the layout its build's role has (Suited). base: the
+		-- layout it has otherwise, for a build picked later that has none of its own.
+		local suited
+		if ns.char.style == nil then suited = Suited(plan) end
+		local base = ns.Layout.Style()
+		plan.screen = { on = not custom, custom = custom or nil, named = named, size = ns.Layout.Size(), style = suited or base,
+			base = base, suited = suited, had = Had(), grow = Grows(), drawer = ns.T.db.menuDrawer ~= false,
 			bags = keeper and keeper:BagButtons() or nil,
 			sides = { left = ns.Drawers.RackOut("left"), right = ns.Drawers.RackOut("right") } }
 	end,
@@ -661,3 +721,17 @@ S.Step({
 		if changed then ns.T:Apply() end
 	end,
 })
+
+-- Edit Mode saved, or layout mode closed: setup's screen line reads your layout again (it says Custom once you've
+-- made it yours).
+local restate = CreateFrame("Frame")
+restate:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+local function Restate()
+	C_Timer.After(0, function()
+		if S.Restate then S.Restate("screen") end
+	end)
+end
+restate:SetScript("OnEvent", Restate)
+Shy:On("SHY_HUD_LAYOUT", function(on)
+	if not on then Restate() end
+end)

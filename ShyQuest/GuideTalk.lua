@@ -261,9 +261,15 @@ local function Giver()
 	if kind == "Creature" or kind == "Vehicle" then return "n", ns.Data.Npc(id) end
 end
 
--- Quests the live steps accept from this giver: { [quest] = true } or nil.
+-- Quests the live steps or the class quest row accept from this giver: { [quest] = true } or nil.
 local function Asked(kind, thing)
 	local asked
+	for _, entry in ipairs(kind == "n" and ns.ClassQuests and ns.ClassQuests.Open() or NONE) do
+		if entry.npc.id == thing.id then
+			asked = asked or {}
+			asked[entry.quest.id] = true
+		end
+	end
 	for _, list in ipairs({ G.active, G.behind }) do
 		for _, entry in ipairs(list) do
 			for _, part in ipairs(entry.parts) do

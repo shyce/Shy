@@ -360,7 +360,7 @@ end
 
 function K.Run(typed)
 	if not ns.isMage then
-		T:Print("your keys are laid out on a mage only.")
+		T:Print("these keys are for mages only.")
 		return
 	end
 	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)

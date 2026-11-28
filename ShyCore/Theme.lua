@@ -2557,16 +2557,17 @@ function Effect.All()
 end
 
 -- Lettered the next frame (once, however often it is asked).
+Effect.Late = Shy.Clocked("theme: words lettered", function()
+	Effect.waiting = false
+	local list = Effect.dirty
+	Effect.dirty = {}
+	for each in pairs(list) do Effect.Apply(each) end
+end)
 function Effect.Soon(fs)
 	Effect.dirty[fs] = true
 	if Effect.waiting then return end
 	Effect.waiting = true
-	C_Timer.After(0, function()
-		Effect.waiting = false
-		local list = Effect.dirty
-		Effect.dirty = {}
-		for each in pairs(list) do Effect.Apply(each) end
-	end)
+	C_Timer.After(0, Effect.Late)
 end
 
 -- (Shy's own strings only: their methods are wrapped where they stand, nothing of the game's is hooked.)

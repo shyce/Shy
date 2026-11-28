@@ -184,7 +184,7 @@ end
 ns.Module({
 	id = "questpage",
 	title = "Quest pages",
-	desc = "A quest's page opened from the tracker wears your theme, with light text.",
+	desc = "A quest's page opened from the tracker matches your theme, with light text.",
 	group = "window",
 	words = "quest log details",
 

@@ -304,11 +304,11 @@ end
 
 function K.Run(typed)
 	if not ns.isPaladin then
-		T:Print("your keys are laid out on a paladin only.")
+		T:Print("these keys are for paladins only.")
 		return
 	end
 	if not Shy.Keys then
-		T:Print("restart the game once: your keys need a file it only loads then.")
+		T:Print("restart the game once. Your keys need a file it only loads at startup.")
 		return
 	end
 	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)

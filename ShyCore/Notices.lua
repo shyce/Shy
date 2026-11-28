@@ -62,6 +62,8 @@
 --       menu = function(root) end,          -- optional: its right click
 --       hover = function(owner) end,        -- optional: its hover
 --   })                                      -- posted again it is updated in place; nil puts it away
+--   Shy.Notices.Share(id, share)            -- a voice's weave at another share, its words as they stand: nothing
+--                                           -- is laid again (for what counts many times a second)
 --   Shy.Notices.Speaking()                  -- the id of the voice up now
 --   Shy.Notices.Plate()                     -- the head's plate (a frame), for what floats beside it
 --   Shy.Notices.Fits(under)                 -- whether a line, as a voice's `under`, fits the plate's words
@@ -1552,6 +1554,13 @@ function N.Voice(id, def)
 		return
 	end
 	Speak()
+end
+
+function N.Share(id, share)
+	local def = voices[id]
+	if not def then return end
+	def.share = share
+	if medal and id == speaking and def.fill then strip.drain:Share(share or 1) end
 end
 
 function N.Speaking()

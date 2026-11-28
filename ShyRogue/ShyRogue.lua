@@ -1,6 +1,5 @@
 -- ShyRogue: poison reminders (Poisons.lua), combo points (Combo.lua), lockboxes and pick pocket totals
--- (Thief.lua), poison colors on ShyDock's swing bar (Swing.lua). Does nothing on other classes, and the
--- core switches it off for them from their next login.
+-- (Thief.lua), poison colors on ShyDock's swing bar (Swing.lua). Loaded for your class alone.
 
 local ADDON, ns = ...
 local MEDIA = "Interface\\AddOns\\ShyRogue\\Media\\"

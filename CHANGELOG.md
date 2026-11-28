@@ -1,5 +1,38 @@
 # Changelog
 
+## 5.2.19 (27 Nov 2026)
+
+### Changed
+- **ShyDock:** Your target's target, focus and pet hang under your frames now. After an update, a card offers to move your console there
+- **ShyQuest:** Party lines from Shy start with ┬½ShyUI┬╗ now. If your group runs Shy too, they see it with the fox in color
+
+### Fixed
+- **ShyQuest:** The route could trade the tram for a rough guess at the walk and stick with it. It keeps the known way until the real one is worked out
+
+## 5.2.18 (27 Nov 2026)
+
+### Added
+- **ShyCore:** Setup starts by asking what you want to play. Your layout, keys and gear advice follow the pick
+
+### Changed
+- **Settings:** Option descriptions read more plainly across the addons. Fewer stiff phrases, same choices
+- **ShyCore:** Setup's welcome says what finishing would replace, like the game's layout. Your character starts on a profile of its own
+- **ShyCore:** Asking for setup from /shy shows the welcome and brings you back after. A custom screen layout says Custom and has a Reset
+- **ShyCore:** Asking for setup brings the welcome even once you're set up. It says welcome back and saves your changes
+- **ShyCore:** Setup's welcome shows build cards with a role badge and the reset caveat. The steps up top are named and clickable. "Make it yours" is now "Customize"
+- **ShyCore:** With many addons doing the same job, the "Your addons" page groups them by who replaces them. Each group has one button to turn it off
+- **ShyCore:** Setup's welcome shows your picks as a card. Change one and a button takes you back to it
+
+### Fixed
+- **ShyGroup:** Your run offered nothing when you hadn't ticked a role. It offers what your build plays now
+- **ShyMaps:** Stormwind's map hid under Elwynn's old painting of the city. Every capital's map lies on top now
+- **ShyQuest:** Gray quests showed up in your route when nobody would hand them out. They wait until you track low-level quests
+- **ShyQuest:** From the Dwarven District the tram sent you round by the Keep. The way ends in the tram hall now
+- **ShyQuest:** The breath warning could start without knowing how much air you had. It reads it as the bar starts
+- **ShyQuest:** The quest window sat on top of your map or your side bars. It finds a free spot under the map now
+- **ShyQuest:** The class quest row sent you to givers that showed nothing. It skips gray quests the game hides and givers that don't list it
+- **ShySkin:** Train all bought one lesson and left the rest. One click buys everything you can afford now
+
 ## 5.2.17 (27 Nov 2026)
 
 ### Added

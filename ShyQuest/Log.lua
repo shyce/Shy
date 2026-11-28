@@ -608,9 +608,21 @@ function L.Ignored(quest)
 end
 
 -- Gray, and the giver lists none such: the game filters out trivial quests (its default) until the
--- player tracks them.
+-- player tracks them. A rule of what is on offer (Rules, "gray"): whoever asks that need not ask this.
 function L.Hidden(quest)
 	return L.Trivial(quest.level) and C_Minimap.IsFilteredOut(Enum.MinimapTrackingFilter.TrivialQuests)
+end
+
+-- Whether the player began or stopped tracking low-level quests (MINIMAP_UPDATE_TRACKING is sent for every
+-- kind of tracking). Then what is on offer is asked again. (The first one of a session counts: what it was
+-- before isn't known.)
+local filtered
+function L.GrayChanged()
+	local now = C_Minimap.IsFilteredOut(Enum.MinimapTrackingFilter.TrivialQuests)
+	if now == filtered then return false end
+	filtered = now
+	L.ForgetOffers()
+	return true
 end
 
 -- A preGroup prerequisite not turned in. Unless strict, a done quest that excludes it satisfies it.
@@ -759,7 +771,7 @@ end
 
 -- Every rule a quest is offered by. `out` nil: false at the first one failed (L.CanStart). A table:
 -- each one failed is added to it as { what, id, value } and the walk goes on (L.Missing).
-local function Rules(quest, inHand, byData, out)
+local function Rules(quest, inHand, byData, out, gray)
 	local flags, id = quest.flags, quest.id
 	if flags:find("h", 1, true) then return Stop(out, "never") end
 	if flags:find("g", 1, true) then return Stop(out, "raid") end
@@ -775,6 +787,8 @@ local function Rules(quest, inHand, byData, out)
 	if me.level < quest.minLevel and not Miss(out, "level", nil, quest.minLevel) then return false end
 	if quest.maxLevel and me.level > quest.maxLevel and not Miss(out, "maxLevel", nil, quest.maxLevel) then return false end
 	if not T.db.lowLevel and L.Outgrown(quest) and not Miss(out, "outgrown") then return false end
+	-- (Gray, and its giver lists no gray quest. An item in your bags starts its quest all the same.)
+	if not gray and not inHand and L.Hidden(quest) and not Miss(out, "gray") then return false end
 
 	if not Mine(quest, out) and not out then return false end
 	-- What a class quest teaches is known already (L.Taught).
@@ -840,13 +854,15 @@ end
 
 -- inHand: the quest starts from an item the player holds, so no giver is needed.
 -- byData: the data's rules only, ignoring what a giver was seen to offer.
-function L.CanStart(quest, inHand, byData)
-	return Rules(quest, inHand, byData)
+-- gray: gray or not (a dungeon run asks for its quests either way).
+function L.CanStart(quest, inHand, byData, gray)
+	return Rules(quest, inHand, byData, nil, gray)
 end
 
 -- Why a quest isn't offered: every rule it fails, as { what, id, value }, by the same walk as
 -- L.CanStart (empty when it is offered). A start item in the bags counts as its giver.
 --   never, raid, log, done   the walk ended there        repeatable, hidden, outgrown   a setting or your pick
+--   gray                     its giver lists no gray quest until you track low-level quests (L.Hidden)
 --   unoffered (value: the giver who didn't list it)       level, maxLevel (value)        side, race, class (value)
 --   oneOf (value: the quests, any one), before, instead, past, led, crumb, parent, until, disabled (id: a quest)
 --   spec, giver                                           skill, rep, repMax (id, value)
@@ -874,7 +890,8 @@ end
 -- Worked out once for each change of availability (L.version), level or the game's gray filter.
 local CHAIN_DEEP = 25        -- links followed back: no chain is longer
 local FOR_GOOD = { maxLevel = true, instead = true, past = true, led = true, ["until"] = true, hidden = true,
-	outgrown = true, unoffered = true, learned = true }
+	outgrown = true, gray = true, unoffered = true, learned = true }
+local LOW = { outgrown = true, gray = true }   -- (what a dungeon run asks for all the same)
 local chains = { key = nil, lost = {}, kept = {}, links = {}, owed = {} }
 local NO_LINKS = {}
 
@@ -892,9 +909,8 @@ end
 
 -- Whether the quest itself can't be had, for good. (`gray`: as for L.Lost.)
 local function Barred(quest, gray)
-	if not gray and L.Hidden(quest) then return true end
 	for _, miss in ipairs(L.Missing(quest)) do
-		if FOR_GOOD[miss.what] and not (gray and miss.what == "outgrown") then return true end
+		if FOR_GOOD[miss.what] and not (gray and LOW[miss.what]) then return true end
 	end
 	return false
 end

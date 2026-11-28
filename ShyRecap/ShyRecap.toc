@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffRecap|r
 ## Notes: Who killed you and how, still there after you release |cff888888/shy recap|r
 ## Author: Shyce Cream
-## Version: 5.2.17
+## Version: 5.2.19
 ## X-Date: 2026-11-27
 ## IconTexture: Interface\AddOns\ShyRecap\Media\ShyRecapMarkColor
 ## Dependencies: ShyCore

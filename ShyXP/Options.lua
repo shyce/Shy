@@ -84,7 +84,7 @@ local list = {
 		desc = "Keeps the game's own XP numbers on its bar." },
 	{ key = "barText", label = "Progress text",
 		items = { { value = "hover", text = "On hover" }, { value = "always", text = "Always" }, { value = "off", text = "Never" } },
-		desc = "How far along you are and the time to level, written on the bars." },
+		desc = "Shows how far along you are and the time to level on the bars." },
 
 	{ section = "Stats window", shown = Window },
 	{ key = "box.style", label = "Style", words = "card compact box",
@@ -113,7 +113,7 @@ if ns.Rep then
 	Add({
 		{ section = "Reputation" },
 		{ key = "repAtTop", label = "Reputation at max level", set = function(v) ns.Rep.SetAtTop(v) end,
-			desc = "At max level, tracks the next reputation you gain when you track none. The stats window shows it." },
+			desc = "At max level, the next reputation you gain gets tracked if you aren't tracking one. It shows in the stats window." },
 		{ label = "Tracked reputation", button = "Pick one", run = function(button) T:TrackMenu(button) end,
 			says = function()
 				local data = ns.Rep.Watched()
@@ -136,15 +136,15 @@ Add({
 	{ key = "paceWindow", label = "XP per hour over", min = 5, max = 60, step = 5, format = function(v) return v .. " min" end,
 		apply = function() ns.Update() end,
 		desc = "Shorter follows how you're playing right now. Longer is steadier." },
-	{ key = "levelSummary", label = "Level-up recap", desc = "Says in chat how long the level took, with its kills and quests." },
+	{ key = "levelSummary", label = "Level-up recap", desc = "When you level, chat tells you how long it took, with your kills and quests." },
 	{ key = "compare", label = "Splits against", items = Runs,
 		shown = function() return ns.Splits ~= nil and #ns.Splits.Others() > 0 end,
-		desc = "Sets each level's time beside another character's on this account." },
+		desc = "Compares each level's time with another character's on this account." },
 	{ label = "Your progress", button = "Share", run = function() ns.Share() end, desc = "Puts your progress in the chat box." },
 	{ label = "This level's stats", button = "Reset", confirm = true, run = function()
 		S.ResetLevel()
 		ns.Refresh()
-	end, desc = "Starts this level's time, kills and quests from nothing." },
+	end, desc = "Starts this level's time, kills and quests over." },
 })
 
 T:Settings(list)
@@ -155,7 +155,7 @@ T:Settings(list)
 local PLACE = {
 	quest = { glyph = "book", brief = "Quest window", say = "Your XP and reputation sit on the quest window, with your next step." },
 	under = { glyph = "up", brief = "Under the bars", say = "Thin bars under your action bars, where the game puts its own." },
-	box = { glyph = "note", brief = "Stats window", say = "A small window with all your levelling stats. Move it anywhere." },
+	box = { glyph = "note", brief = "Stats window", say = "A small window with all your leveling stats. Move it anywhere." },
 }
 local TILE = { H = 76, GAP = 8 }
 
@@ -189,7 +189,7 @@ if not (Shy.Setup and Shy.Setup.Step) then return end
 Shy.Setup.Step({
 	id = "xp", order = 21.5, title = "XP bar", glyph = "up", tab = "screen",
 	ask = "Where do you want your XP bar?",
-	lead = "Your XP and the reputation you track. You'll see it move on your screen as you pick.",
+	lead = "Pick where your XP and tracked reputation go. You'll see them move as you pick.",
 	brief = function(plan) return (PLACE[plan.xp.place] or PLACE.under).brief end,
 	Plan = function(plan) plan.xp = { place = ns.Place() } end,
 	Build = function(parent, width, plan)

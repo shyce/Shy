@@ -319,7 +319,8 @@ end
 
 local function Seconds()
 	if not timer then return nil end
-	local left = GetMirrorTimerProgress(timer.name)
+	-- (As it starts, what its event said, as the game's own bar takes it: asked then, the game may not say yet.)
+	local left = timer.first or GetMirrorTimerProgress(timer.name)
 	if left == nil then return nil end
 	return left / 1000
 end
@@ -363,9 +364,19 @@ function Safety.Apply()
 	Health()
 end
 
+-- The count down is looked at while a timer runs, WATCH seconds apart.
+local WATCH = 0.1
+local since = 0
+local Watch = Shy.Clocked("safety: air counting down", function(_, elapsed)
+	since = since + elapsed
+	if since < WATCH then return end
+	since = 0
+	Air()
+end)
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function(self, event, name, value, maxValue, scale, _, label)
+events:SetScript("OnEvent", Shy.Clocked("safety: an event", function(self, event, name, value, maxValue, scale, _, label)
 	if event == "PLAYER_LOGIN" then
 		Build()
 		for _, each in ipairs({ "BAG_UPDATE_DELAYED", "BAG_UPDATE_COOLDOWN", "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST",
@@ -384,25 +395,20 @@ events:SetScript("OnEvent", function(self, event, name, value, maxValue, scale, 
 	end
 	if event == "BAG_UPDATE_DELAYED" then carried = nil end
 	if event == "MIRROR_TIMER_START" then
-		timer = { name = name, label = label or name, max = math.max(1, maxValue or 1), scale = scale or -1 }
+		timer = { name = name, label = label or name, max = math.max(1, maxValue or 1), scale = scale or -1, first = value }
 	elseif event == "MIRROR_TIMER_STOP" then
 		if timer and timer.name == name then timer = nil end
 	elseif event == "MIRROR_TIMER_PAUSE" then
 		if timer and timer.name == name then timer.scale = value and value > 0 and 0 or -1 end
 	end
-	-- The count down is looked at while a timer runs.
 	if event:find("^MIRROR_TIMER") then
-		local since = 0
-		self:SetScript("OnUpdate", timer and function(_, elapsed)
-			since = since + elapsed
-			if since < 0.1 then return end
-			since = 0
-			Air()
-		end or nil)
+		since = 0
+		self:SetScript("OnUpdate", timer and Watch or nil)
 	end
 	Air()
+	if timer then timer.first = nil end
 	Health()
-end)
+end))
 
 ns.OnApply(function() Safety.Apply() end)
 
@@ -443,8 +449,6 @@ T:Settings({
 	{ section = "Done for you" },
 	{ key = "supplies.auto", label = "Buy what you need", words = "vendor auto buy food water reagents", apply = AtUse,
 		desc = "Opening a vendor buys what your quests need and the food, water and reagents you're short on. Hold Shift to skip it." },
-	{ key = "train.auto", label = "Train at your trainer", words = "auto learn spells", apply = AtUse,
-		desc = "Opening your class trainer learns every spell you can afford. Hold Shift to skip it." },
 	{ key = "stash.auto", label = "Take quest items out", words = "bank withdraw",
 		desc = "Opening your bank takes out what your quests need. Hold Shift to skip it." },
 	{ key = "stash.autoAway", label = "Store what can wait", words = "bank deposit",

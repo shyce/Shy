@@ -36,8 +36,8 @@ local SHOWN = {
 
 local list = {
 	{ key = "enabled", label = "Rewrite chat lines", apply = Lines, words = "format formatting",
-		desc = "Chat lines get short tags, tidy names and the rest below. Off leaves them as the game writes them." },
-	{ note = "Lines the game hides from addons, in some instances and boss fights, keep the game's look." },
+		desc = "Chat lines get short tags, tidy names and the rest below. Turn it off to keep them as the game writes them." },
+	{ note = "In some instances and boss fights the game hides lines from addons. Those keep the game's look." },
 
 	{ section = "Presets" },
 }
@@ -72,10 +72,10 @@ Add({
 		desc = "How a channel is named on a line: [Gen], [1], [1" .. DOT .. "Gen] or [General]." },
 	{ key = "brackets", label = "Brackets", enabled = Rewriting, apply = Lines,
 		items = { { value = "square", text = "[G]" }, { value = "round", text = "(G)" }, { value = "none", text = "G" } },
-		desc = "What goes round a tag." },
+		desc = "What goes around a tag." },
 
 	{ section = "Your own tags" },
-	{ note = "Leave one empty for the usual tag. A row is dimmed while its tag is not in use." },
+	{ note = "Leave one empty for the usual tag. A dimmed row's tag isn't in use right now." },
 })
 
 -- A channel you are in, by its number.
@@ -130,7 +130,7 @@ Add({
 	{ key = "hideRealm", label = "Hide realms", enabled = Rewriting, apply = Lines,
 		desc = "Drops the realm after the name of someone from another realm." },
 	{ key = "nameBrackets", label = "Brackets round names", enabled = Rewriting, apply = Lines,
-		desc = "Names read [Thrall], as the game writes them." },
+		desc = "Names show as [Thrall], like the game writes them." },
 
 	{ section = "Wording" },
 	{ key = "compact", label = "Short speech", enabled = Rewriting, apply = Lines, words = "compact says whisper",
@@ -150,7 +150,7 @@ Add({
 			{ value = "12", text = "2:05 PM" },
 			{ value = "12s", text = "2:05:09 PM" },
 		},
-		desc = "The time before each line. Off gives you the game's own back, if you had them on." },
+		desc = "Shows the time before each line. With this off, you get the game's back if you had them on." },
 	{ key = "timeColor", label = "Timestamp color", color = true, sub = true, enabled = Stamped, apply = Lines },
 	{ key = "timeCopy", label = "Click to copy", sub = true, enabled = Stamped, apply = Lines,
 		desc = "Click a timestamp to copy its line." },
@@ -169,7 +169,7 @@ Add({
 	{ key = "font", label = "Font", items = ns.FONTS, desc = "The font of chat, whisper windows and chat bubbles." },
 	{ key = "outline", label = "Outline",
 		items = { { value = "", text = "None" }, { value = "OUTLINE", text = "Outline" }, { value = "THICKOUTLINE", text = "Thick" } },
-		desc = "A dark edge round the letters, in chat and on bubbles." },
+		desc = "A dark edge around the letters, in chat and on bubbles." },
 	{ key = "shadow", label = "Text shadow", desc = "A shadow under the letters in chat." },
 	{ key = "spacing", label = "Line spacing", min = 0, max = 8, step = 1, settle = true, apply = Text,
 		desc = "The gap between lines." },
@@ -177,15 +177,15 @@ Add({
 
 	{ section = "Windows" },
 	{ key = "windowSkin", label = "Restyle windows", words = "tabs skin panel",
-		desc = "Chat windows wear the console's panel, with tab names in the title bar." },
+		desc = "Chat windows get the console's panel, with tab names in the title bar." },
 	{ key = "editSkin", label = "Restyle the typing row", words = "edit box",
 		desc = "While you type, chat moves up for a typing row in the channel's color." },
 	{ key = "move", label = "Move and resize", enabled = Restyled,
-		desc = "Drag chat by its title bar and size it from any edge. Off leaves both to Edit Mode." },
+		desc = "Drag chat by its title bar and size it from any edge. With this off, Edit Mode does both." },
 	{ key = "toolbar", label = "Chat buttons", items = SHOWN, words = "toolbar copy channels friends",
-		desc = "Copy, channels, friends and settings, at the end of the tab bar." },
+		desc = "Buttons for copy, channels, friends and settings at the end of the tab bar." },
 	{ key = "sidebar", label = "Default button column", items = SHOWN, words = "sidebar menu social voice",
-		desc = "The game's own column beside chat: chat menu, channels, social and voice." },
+		desc = "The game's column of chat menu, channels, social and voice buttons beside chat." },
 	Shy.Settings.Layout("Move chat and the whisper dock."),
 
 	{ section = "Reading" },
@@ -226,7 +226,7 @@ Add({
 	{ key = "whisperFight", label = "Hide in a fight", enabled = Windowed,
 		desc = "The windows hide while you fight and come back after, with what you missed." },
 	{ key = "whisperLines", label = "Lines per person", min = 10, max = 200, step = 10, enabled = Windowed, apply = Nothing,
-		desc = "How many lines of each conversation are kept, reloads included." },
+		desc = "How many lines of each conversation you keep, even after a reload." },
 	{ note = "Drop a tab on another window's tabs to join it, or anywhere else for a window of its own. Right-click a tab to invite, add a friend or close it. Tab moves between conversations while you type." },
 
 	{ section = "History" },

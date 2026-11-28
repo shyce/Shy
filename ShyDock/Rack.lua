@@ -3,8 +3,9 @@
 --
 -- Like the housing, a rack follows its bar by reading its rectangle: never
 -- anchored to it (the bar is protected) and never drawn on it (a bar measures
--- its regions to lay out). It shows only while the console layout is active and
--- the bar is in its slot; a bar the player moved elsewhere gets none.
+-- its regions to lay out). With the console's layout in use it shows only while
+-- the bar is in its slot; a bar the player moved elsewhere gets none. Until then
+-- a side bar gets a rack wherever it stands (Loose).
 --
 -- Docking. A rack stands beside its host, the outermost piece of the console that
 -- is really there on its side. In the console the plan has that as the wing
@@ -24,7 +25,7 @@
 local ADDON, ns = ...
 local T = ns.T
 local UI, Theme, Console = Shy.UI, Shy.Theme, ns.Console
-local abs, floor, max = math.abs, math.floor, math.max
+local abs, floor, max, min = math.abs, math.floor, math.max, math.min
 
 local R = {}
 ns.Rack = R
@@ -254,9 +255,63 @@ local function Measure(def, g)
 	rack:Show()
 end
 
+-- Until the console's layout is in use the side bars stand as the game's layout or the player's own has them:
+-- upright at the screen's edge, side by side. Each gets a rack round it where it stands, the two one rack while
+-- they stand together; a bar that is part of the bottom block wears the housing instead.
+local TOGETHER = 12   -- side bars no further apart than this share a rack
+
+local function Together(a, b)
+	local across = min(a[3], b[3]) - max(a[1], b[1])
+	local down = min(a[4], b[4]) - max(a[2], b[2])
+	local aside = max(a[1] - b[3], b[1] - a[3], 0)
+	local apart = max(a[2] - b[4], b[2] - a[4], 0)
+	return (down > 0 and aside <= TOGETHER) or (across > 0 and apart <= TOGETHER)
+end
+
+local function Loose()
+	local rects = {}
+	local housed = ns.Housing.rect
+	if T.db.housing then
+		for _, name in ipairs(SIDE_BARS) do
+			local left, bottom, right, top = Console.Rect(_G[name])
+			if left == false then return end   -- secret rect: keep the last position
+			-- (Inside the housing: one of its rows.)
+			local inside = left and housed and left < housed[3] and right > housed[1] and bottom < housed[4] and top > housed[2]
+			if left and not inside then rects[#rects + 1] = { left, bottom, right, top } end
+		end
+	end
+	if #rects == 2 and Together(rects[1], rects[2]) then
+		local a, b = rects[1], rects[2]
+		rects = { { min(a[1], b[1]), min(a[2], b[2]), max(a[3], b[3]), max(a[4], b[4]) } }
+	end
+	for i, def in ipairs(RACKS) do
+		local rack, rect = racks[def.key], rects[i]
+		if rect then
+			local left, bottom, right, top = Console.Wrap(rect[1], rect[2], rect[3], rect[4])
+			-- Beside the housing (a side bar laid down there) it is as tall as the housing: one line along
+			-- the top, one along the foot.
+			if housed and bottom < housed[4] and top > housed[2]
+				and max(left - housed[3], housed[1] - right) <= 2 * Console.SEAM and abs(top - housed[4]) <= Console.LIP then
+				bottom, top = housed[2], housed[4]
+			end
+			rack:ClearAllPoints()
+			rack:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left, bottom)
+			rack:SetSize(right - left, top - bottom)
+			UI.LookContent(rack.shyLook, { Console.PAD, top - rect[4], Console.PAD, rect[2] - bottom })
+			rack:Show()
+		else
+			rack:Hide()
+		end
+	end
+end
+
 function R.Measure()
 	local g = ns.Layout.IsActive() and ns.Layout.Plan() or nil
-	for _, def in ipairs(RACKS) do Measure(def, g) end
+	if g then
+		for _, def in ipairs(RACKS) do Measure(def, g) end
+	else
+		Loose()
+	end
 	Lights(g)
 	if ns.Drawers then ns.Drawers.Sync() end   -- the racks' drawers follow their racks
 end

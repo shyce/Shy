@@ -490,7 +490,7 @@ Shy.Setup.Step({
 	Lines = function(plan)
 		local p = plan.cooldowns
 		return { { text = ("Cooldown manager: %s"):format(SizeWords(p.scale)),
-			sub = "under your character; drag it, size it or take it apart in layout mode" } }
+			sub = "under your character. You can move it or take it apart in layout mode" } }
 	end,
 	Run = function(plan)
 		local p = plan.cooldowns
@@ -513,7 +513,7 @@ Shy.Setup.Step({
 -- The /shy window's Screen room, under the console.
 Shy.HubSection("screen", function(page, top)
 	local head = Shy.HubHead(page, top, "Cooldown manager")
-	local words = UI.Text(page, "Its size and the bars' side. Changes apply now. Drag it or take it apart in layout mode.", 12, false, C.dim)
+	local words = UI.Text(page, "Pick its size and which side the bars go on. To move it, use layout mode.", 12, false, C.dim)
 	words:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -10)
 	words:SetWidth(page.width)
 	words:SetWordWrap(false)

@@ -63,7 +63,7 @@ T:Settings({
 	{ key = "worse", label = "Worse gear too", sub = true, apply = Nothing, enabled = function() return T.db.tooltip end,
 		desc = "Gear that's worse or about the same says so too." },
 	{ key = "bags", label = "In your bags", apply = ns.Tell, shown = DefaultBags, words = "arrow mark",
-		desc = "An arrow on the upgrades in your bags." },
+		desc = "Upgrades in your bags get an arrow." },
 
 	{ section = "Quest rewards" },
 	{ key = "reward", label = "Reward choices", apply = ns.Tell, words = "arrow coin mark select sell vendor",
@@ -72,10 +72,10 @@ T:Settings({
 			{ value = "mark", text = "Mark the best" },
 			{ value = "select", text = "Mark and select the best" },
 		},
-		desc = "An arrow on the best upgrade and a coin on what sells for the most, in the quest log and the default quest window." },
-	{ note = "Your quest page suggests a reward by itself. This only marks rewards in your quest log.", alert = true, shown = QuestPage },
+		desc = "In the quest log and the default quest window, the best upgrade gets an arrow and the best seller a coin." },
+	{ note = "Your quest page already suggests a reward. This only marks rewards in your quest log.", alert = true, shown = QuestPage },
 	{ key = "take", label = "Pick obvious rewards", needs = "Quest", apply = Nothing, words = "auto turn in hand",
-		desc = "Takes the reward when one upgrade clearly wins, or what sells for most when none is one. Needs auto turn-in on." },
+		desc = "Takes the reward when one upgrade clearly wins, or the best seller when none is an upgrade. Needs auto turn-in on." },
 	{ note = "You still choose between potions, bags, items with effects and upgrades for later levels.", needs = "Quest" },
 	{ note = "A filled arrow is an upgrade. An outlined arrow is one for a few levels on. A coin is the reward that sells for the most." },
 })

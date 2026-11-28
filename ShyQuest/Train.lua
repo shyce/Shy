@@ -15,9 +15,7 @@
 --     and ones it lists but won't sell wait for a class quest turn-in (ns.char.train.blocked).
 --   Not every trainer teaches every level: the starting areas' stop at 6 or 8. The trainer chosen
 --     teaches the spells due (Train.Teaches: the data's D.Teaches, over what its window showed).
--- Nothing is bought unless "Train at your trainer" is on (off by default): then a class trainer's
--- window teaches everything it offers that the gold covers, one at a time, as the window updates.
--- Holding Shift as it opens leaves it to the player.
+-- Nothing is bought here: the game takes a purchase only from a click.
 
 local ADDON, ns = ...
 local T = ns.T
@@ -27,8 +25,7 @@ local UI = Shy.UI
 local Train = {}
 ns.Train = Train
 
-T.defaults.train = { on = true,      -- the trainer as a stop on the card
-	auto = false }                   -- learn what a class trainer offers on opening its window
+T.defaults.train = { on = true }    -- the trainer as a stop on the card
 T.defaults.trainers = {}             -- trainer prices: class -> { whole, spells = { ["Rend|Rank 2"] = { level, copper } } }
 T.keep.trainers = true               -- read from the game: per account, not per profile
 T.defaults.taught = {}               -- what a class trainer's window showed: npc -> { levels = "1,4,6", whole, cap }
@@ -470,42 +467,6 @@ local function Read()
 	if id then Note(id, shown, open and GetTrainerServiceTypeFilter("used") == true, open, level) end
 end
 
--- Learning at the window (T.db.train.auto): one service at a time, the next once the window has updated.
--- A service is tried once a visit (by name and rank: the list's order moves as spells are learned).
-local teaching               -- { count, cost, tried } while learning
-
-local function Taught()
-	local done = teaching
-	teaching = nil
-	if done and done.count > 0 then
-		T:Print(("learned %d spell%s for %s."):format(done.count, done.count == 1 and "" or "s", Coins(done.cost)))
-	end
-end
-
-local function TeachNext()
-	if not teaching then return end
-	if InCombatLockdown() or not AtMine() then return Taught() end
-	for index = 1, GetNumTrainerServices() do
-		local name, kind, _, _, rank = GetTrainerServiceInfo(index)
-		local cost = GetTrainerServiceCost(index) or 0
-		local key = name and Key(name, rank)
-		if kind == "available" and key and not teaching.tried[key] and cost <= GetMoney() then
-			teaching.tried[key] = true
-			teaching.count, teaching.cost = teaching.count + 1, teaching.cost + cost
-			BuyTrainerService(index)
-			return
-		end
-	end
-	Taught()
-end
-
--- Whether the window that just opened is to be learned from now.
-local function Teach()
-	if not T.db.train.auto or IsShiftKeyDown() or InCombatLockdown() or not AtMine() then return end
-	teaching = { count = 0, cost = 0, tried = {} }
-	TeachNext()
-end
-
 local shown = false          -- a trainer's window is open
 local events = CreateFrame("Frame")
 for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "QUEST_TURNED_IN",
@@ -516,7 +477,6 @@ events:SetScript("OnEvent", function(_, event, id)
 	if not ns.char then return end
 	if event == "TRAINER_CLOSED" then
 		shown = false
-		Taught()
 	elseif event == "TRAINER_SERVICE_INFO_NAME_UPDATE" then
 		-- (a rank that showed late: the list is read again, while the window is still there to read)
 		if not shown then return end
@@ -524,11 +484,6 @@ events:SetScript("OnEvent", function(_, event, id)
 	elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
 		if event == "TRAINER_SHOW" then shown = true end
 		Read()
-		if event == "TRAINER_SHOW" then
-			Teach()
-		elseif teaching then
-			C_Timer.After(0.1, TeachNext)
-		end
 	elseif event == "QUEST_TURNED_IN" then
 		-- A class quest turn-in may unlock a blocked spell.
 		local quest = id and D.Quest(id)

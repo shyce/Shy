@@ -78,8 +78,16 @@ local back                         -- going home: where it was, { x, y, scale }
 local unseen = false               -- a quiet alert at no strength at all (your health whole): it stands unseen, and still
 local quiet = { fresh = true, at = 0, RATE = 30 }   -- a quiet alert's beat: looked at RATE times a second (Tick)
 
+-- What an alert says, but for its share: kept as it was last laid (a card's `laid`, the head's voice), to tell
+-- a new share from new words. Words the game keeps secret can't be compared: taken as new.
+local SAID = { "title", "under", "right", "icon", "sign", "dim" }
+local function Same(a, b)
+	if issecretvalue(a) or issecretvalue(b) then return false end
+	return a == b
+end
+
 -- The alert as drawn: a frame as wide as the plate and the circle's half either side, so it is centred on
--- the plate. Card(parent) -> c; c:Set(def) lays it to fit its words.
+-- the plate. Card(parent) -> c; c:Set(def) lays it to fit its words (c.laid = nil: again, whatever it says).
 local function Card(parent)
 	local Make = Shy.Top.Make
 	local c = CreateFrame("Frame", nil, parent)
@@ -158,6 +166,21 @@ local function Card(parent)
 
 	function c:Set(def)
 		local tone = def.warn and (def.color or AMBER) or CRIMSON
+		-- Raised again saying what it said (air counts ten times a second, health at its every change): only the
+		-- weave moves, nothing is laid again.
+		local laid = self.laid
+		local same = laid ~= nil and laid.tone == tone
+		for _, key in ipairs(SAID) do
+			if not same then break end
+			same = Same(laid[key], def[key])
+		end
+		if same then
+			self.drain:Share(def.share or 1)
+			return
+		end
+		laid = laid or {}
+		self.laid, laid.tone = laid, tone
+		for _, key in ipairs(SAID) do laid[key] = def[key] end
 		UI.Tint(self.drain.fill, tone, 1)
 		UI.Tint(self.halo, tone, 1)
 		UI.Tint(self.glow, tone, 1)
@@ -264,15 +287,29 @@ local function Sweep(along)
 	Alpha(sweep, 0.55 * math.sin(math.pi * along))
 end
 
--- The head's voice: the alarm in the head (a warning, or urgent before it leaves), or none.
+-- The head's voice: the alarm in the head (a warning, or urgent before it leaves), or none. Said again with
+-- only its share changed, the head moves its weave and lays nothing (Shy.Notices.Share).
+local voiced                       -- the voice the head has for it now
+local revoice = false              -- said whole the next time, whatever it says (the look or the font changed)
 local function Voice(def, tone)
 	if not def then
-		Shy.Notices.Voice("alarm", nil)
+		if voiced then
+			voiced = nil
+			Shy.Notices.Voice("alarm", nil)
+		end
 		return
 	end
+	local glyph = def.sign or ALERT
+	if voiced and not revoice and voiced.color == tone and voiced.glyph == glyph and Same(voiced.title, def.title)
+		and Same(voiced.under, def.under) and Same(voiced.right, def.right) then
+		Shy.Notices.Share("alarm", def.share)
+		return
+	end
+	revoice = false
 	-- (The plate is a bar: as long as its own words, whatever was said before it.)
-	Shy.Notices.Voice("alarm", { priority = VOICE, glyph = def.sign or ALERT, color = tone, fill = tone, share = def.share, pulse = true, title = def.title, titleColor = WHITE,
-		under = def.under, right = def.right })
+	voiced = { priority = VOICE, glyph = glyph, color = tone, fill = tone, share = def.share, pulse = true, title = def.title, titleColor = WHITE,
+		under = def.under, right = def.right }
+	Shy.Notices.Voice("alarm", voiced)
 end
 
 -- Every frame while there is one (its own clock: the alert is hidden while the head speaks for it).
@@ -470,7 +507,14 @@ local function Build()
 	driver = CreateFrame("Frame")
 	driver:SetScript("OnUpdate", Shy.Clocked("alarm: frame", Tick))
 	Shy:On("SHY_HUD_LAYOUT", Show)
-	Shy:On("SHY_THEME", function() Shy.Top.Make.Look(card.p) end)
+	-- (Another look or font: the alert up is laid again, its words measured anew.)
+	local function Again()
+		Shy.Top.Make.Look(card.p)
+		card.laid, revoice = nil, true
+		Show()
+	end
+	Shy:On("SHY_THEME", Again)
+	Shy:On("SHY_FONT", Again)
 	Show()
 end
 

@@ -57,7 +57,7 @@ end
 T:Settings({
 	apply = function() ns.Apply() end,
 	{ key = "on", label = "Show while you farm", words = "window session loot gold hour",
-		desc = "Your loot and gold an hour sit on screen while a session runs. Off, your sessions still count." },
+		desc = "Your loot and gold an hour sit on screen while a session runs. With this off, your sessions still count." },
 	Shy.Settings.Layout("Move the farm window, or drag its corner to size it."),
 
 	{ section = "Your session" },
@@ -65,13 +65,13 @@ T:Settings({
 		desc = "Counts what you loot, kill and catch from now on." },
 	{ label = "End the session", button = "End", confirm = true, says = Made, enabled = CanEnd,
 		run = function() ns.Session.Stop() end,
-		desc = "Saves it with your past sessions. A fresh one waits for your next loot." },
+		desc = "Saves it with your past sessions. A new one starts with your next loot." },
 	{ key = "fishing", label = "Start when you fish", apply = Quiet, desc = "Casting your line starts a session." },
 	{ key = "idle", label = "Stop the clock after", min = 0, max = 15, step = 1, apply = Quiet, words = "idle afk break rest",
 		format = function(v) return v == 0 and "Never" or (v .. " min") end,
 		desc = "The clock stops after this long with no loot, kill or cast. A break won't lower your gold an hour." },
 	{ key = "sound", label = "Sounds", apply = Quiet, words = "chime",
-		desc = "A chime when a session starts or pauses by itself, and when you have as many as you wanted." },
+		desc = "You hear a chime when a session starts or pauses by itself, and when you have as many as you wanted." },
 
 	{ section = "What loot is worth" },
 	{ key = "value", label = "Count loot at", items = VALUE, words = "auction vendor price",

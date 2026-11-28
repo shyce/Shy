@@ -348,7 +348,7 @@ T:Command("share", "put your progress in the chat box", function() ns.Share() en
 T:Command("reset", "start this level's time, kills and quests from nothing", function()
 	S.ResetLevel()
 	ns.Refresh()
-	T:Print("this level's time, kills and quests start from nothing.")
+	T:Print("this level's time, kills and quests start over.")
 end)
 T:Command("splits", "every level's time, against another character", function()
 	if ns.Splits then Shy.UI.ShowCopyBox("ShyXP: levels", ns.Splits.Report()) end

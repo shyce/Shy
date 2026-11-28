@@ -28,9 +28,7 @@ local K = {
 	TITLE = 13, TEXT = 12, SMALL = 11, ICON = 16, STAR = 10, BOX = 16, BUTTON = 24, LEAST_BUTTON = 110,
 	CHANGES = 250,     -- the tallest the notes stand before they scroll
 	RELEASES = 3,      -- the most releases /shy news shows
-	WAIT = 4,          -- seconds after logging in before it is asked
-	AGAIN = 10,        -- seconds before asking again, while a fight or setup is in the way
-	TRIES = 30,
+	WAIT = 4,          -- seconds after logging in before a fresh install's notes are noted as read
 }
 
 local function Book()
@@ -370,31 +368,34 @@ local function Fresh()
 	return true
 end
 
--- As you log in: once the game has settled, out of a fight, with the setup window and Your addons shut. A character
--- not set up yet is told nothing. On a fresh install the notes and stories are noted as read: it is all new to them.
-local tries = 0
-local function Try()
+-- As you log in, in its turn (Shy.Queue): out of a fight, setup put away or done, after the send-off and Your
+-- addons. A character not set up yet is told nothing. On a fresh install the notes and stories are noted as read:
+-- it is all new to them.
+-- True on a fresh install, its notes and stories noted as read (once the game has settled, whatever else waits).
+local function Mark()
 	local book = Book()
-	if not book then return end
-	local setup = Shy.Setup
+	if not book then return true end
 	if not book.started and Fresh() then
 		book.started = true
 		for _, item in ipairs(News.items) do book.seen[item.id] = true end
 		book.saw = Running("ShyCore")
-		return
+		return true
 	end
 	book.started = true
-	if setup and not setup.Done() then return end
-	local others = Shy.Others and Shy.Others.IsOpen()
-	if InCombatLockdown() or (setup and setup.IsOpen()) or others then
-		tries = tries + 1
-		if tries < K.TRIES then C_Timer.After(K.AGAIN, Try) end
-		return
-	end
-	News.Open()
+	return false
 end
 
-Shy:On("SHY_LOGIN", function() C_Timer.After(K.WAIT, Try) end)
+local function Try()
+	if Mark() then return false end
+	local setup = Shy.Setup
+	if setup and not setup.Done() then return false end
+	return News.Open()
+end
+
+Shy:On("SHY_LOGIN", function()
+	C_Timer.After(K.WAIT, Mark)
+	Shy.Queue.Ask("news", 30, Try, function() return open == true end)
+end)
 -- /shy news: this release's news, told or not. /shy news 5.2.6: that release's, whatever
 -- runs (to look over news before its release ships).
 Shy.Command("news", "what's new in this release", function(rest)
@@ -402,5 +403,5 @@ Shy.Command("news", "what's new in this release", function(rest)
 	local ok, opened = pcall(News.Open, true)
 	asking = nil
 	if not ok then error(opened, 0) end
-	if not opened then core:Print(("nothing new to tell in %s."):format(rest ~= "" and rest or "this release")) end
+	if not opened then core:Print(("there's nothing new in %s."):format(rest ~= "" and rest or "this release")) end
 end)

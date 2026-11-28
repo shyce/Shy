@@ -45,7 +45,7 @@
 -- UI.Money, UI.PlainText
 -- Hover text: UI.Tip, UI.TipHide, UI.Help, UI.Lines (Hover.lua)
 -- Also: UI.Button, UI.Press, UI.Menu, UI.ContextMenu, UI.TellMenu, UI.Tabs, UI.Rail, UI.GlyphArt, UI.ScrollArea, UI.PageHeader, UI.Spinner,
--- UI.ShowCopyBox, UI.OpenColorPicker, UI.Themed, UI.SecureOver, UI.Glimmer, Shy.Reload. Each is documented where it is defined.
+-- UI.ShowCopyBox, UI.OpenColorPicker, UI.Themed, UI.SecureOver, UI.Glimmer, Shy.Reload, Shy.Queue. Each is documented where it is defined.
 -- UI.Showing(region, on): shown or not, told only when that changes (for what is asked at every frame: asking a
 -- region whether it shows is itself a call into the game). Whatever shows or hides it goes through here.
 
@@ -10590,6 +10590,80 @@ do
 	end
 end
 
+-- Steps in a header: a numbered dot and a name each, a rule between. Those done are checked in a ring (and, with
+-- onClick, a way back to them), the one up is lit, those to come dim. The welcome's and the guided walk's.
+--   UI.Stepper(parent)   st:Set(names, at, onClick)  names: { "Play as", ... }; none hides it. st.items: one a step
+UI.STEPPER = { DOT = 18, GAP = 6, RULE = 18, BETWEEN = 30 }
+function UI.Stepper(parent)
+	local K = UI.STEPPER
+	local st = CreateFrame("Frame", nil, parent)
+	st:SetSize(1, K.DOT)
+	st.items = {}
+	function st:Set(names, at, onClick)
+		names = names or {}
+		local x = 0
+		for i, name in ipairs(names) do
+			local item = self.items[i]
+			if not item then
+				item = CreateFrame("Button", nil, self)
+				item:SetHeight(K.DOT)
+				item.dot = item:CreateTexture(nil, "ARTWORK")
+				item.dot:SetTexture(Shy.Skin.GLYPH.dot)
+				item.dot:SetSize(K.DOT, K.DOT)
+				item.dot:SetPoint("LEFT")
+				item.ring = item:CreateTexture(nil, "ARTWORK", nil, 1)
+				item.ring:SetTexture(Shy.Skin.GLYPH.dot)
+				item.ring:SetSize(K.DOT - 3, K.DOT - 3)
+				item.ring:SetPoint("CENTER", item.dot)
+				item.num = UI.Text(item, "", 10, true, C.bg)
+				item.num:SetPoint("CENTER", item.dot)
+				item.check = item:CreateTexture(nil, "OVERLAY")
+				item.check:SetTexture(Shy.MEDIA .. "GlyphCheck")
+				item.check:SetSize(10, 10)
+				item.check:SetPoint("CENTER", item.dot)
+				item.name = UI.Text(item, "", 12, false, C.text)
+				item.name:SetPoint("LEFT", item.dot, "RIGHT", K.GAP, 0)
+				item.rule = item:CreateTexture(nil, "ARTWORK")
+				item.rule:SetSize(K.RULE, 1)
+				item.rule:SetPoint("RIGHT", item, "LEFT", -K.GAP, 0)
+				UI.Paint(item.rule, C.border, 1)
+				item:SetScript("OnClick", function(b)
+					if b.back and b.onClick then
+						PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+						b.onClick(b.index)
+					end
+				end)
+				self.items[i] = item
+			end
+			local done, up = i < at, i == at
+			item.index, item.onClick, item.back, item.done = i, onClick, done and onClick ~= nil, done
+			item.name:SetText(name)
+			UI.Ink(item.name, up and C.head or done and C.text or C.dim)
+			item.num:SetText(i)
+			item.num:SetShown(not done)
+			UI.Ink(item.num, up and C.bg or C.dim)
+			-- (done: a mint ring round the check, the dot's middle dark; up: the dot lit; to come: a dim dot)
+			UI.Tint(item.dot, done and C.good or up and C.hot or C.border)
+			item.ring:SetShown(done)
+			UI.Tint(item.ring, C.bg)
+			item.check:SetShown(done)
+			UI.Tint(item.check, C.good)
+			item.rule:SetShown(i > 1)
+			if i > 1 then x = x + K.BETWEEN end
+			item:ClearAllPoints()
+			item:SetPoint("LEFT", self, "LEFT", x, 0)
+			local w = K.DOT + K.GAP + math.ceil(item.name:GetStringWidth())
+			item:SetWidth(w)
+			x = x + w
+			item:Show()
+		end
+		for i = #names + 1, #self.items do self.items[i]:Hide() end
+		self:SetWidth(math.max(x, 1))
+		self:SetShown(#names > 0)
+	end
+	return st
+end
+
 -- Shy.Reload("Why, in a sentence.")
 --
 -- This client blocks C_UI.Reload() from addon code, even on a hardware click ("Interface action failed
@@ -10600,29 +10674,66 @@ end
 -- of its own (the setup window's Finish). Meanwhile Shy.Reload only notes it was asked; the second call
 -- returns whether it was.
 -- From a button, a timer or an event, call this. ReloadUI() does work from a typed slash command (/rl).
+--
+-- Every reason asked for is kept until the reload, and the panel says them all: one reload answers them together.
+-- Shy.Reload(words, true): one that can wait. A character about to be offered setup (Shy.Setup.Pending) is shown
+-- no panel for it: setup's own reload is that reload.
+--   Shy.ReloadOwed()   whether a reason waits       Shy.ReloadAsk()   the panel now, if one does (setup put away)
 
-local reload = { frame = nil, waiting = nil }
+local reload = { frame = nil, waiting = nil, reasons = {} }
+
+-- The panel: its headline under a line, how many changes wait, a line each in a box, and its foot: Later, and
+-- Reload (a secure macro button: the click runs /reload). W: its width; LINE: a reason's line; BAND: the foot.
+local RELOAD = { W = 440, PAD = 16, LINE = 32, BAND = 48, WELL = 22 }
+local NUMBER = { "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine" }
 
 local function BuildReload()
+	local K = RELOAD
 	local f = CreateFrame("Frame", "ShyReloadPrompt", UIParent)
-	f:SetSize(360, 100)
 	f:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
 	f:SetFrameStrata("DIALOG")
 	f:EnableMouse(true)   -- so clicks don't fall through to the world
 	f:Hide()
-	UI.Head(f, { title = "Reload to finish" })
+	UI.Head(f, { size = "window", brand = "" })
 	-- Its words and buttons on its body: clear of the look's work round the edge, the prompt that much bigger.
 	local body = UI.Body(f)
-	UI.BodyFit(f, 360, 100)
-	f.words = UI.Text(body, "", 12)
-	f.words:SetPoint("TOPLEFT", 10, -30)
-	f.words:SetWidth(340)
-	f.words:SetWordWrap(true)
+	local inner = K.W - 2 * K.PAD
+	local top = 36
+	f.title = UI.Text(body, "Reload to finish", 20, true, C.hot)
+	f.title:SetPoint("TOPLEFT", K.PAD, -top)
+	f.rule = B.CreateLine(body, 72, 2, 16, true)
+	f.rule:SetPoint("TOPLEFT", K.PAD, -(top + 28))
+	f.lead = UI.Text(body, "", 13, false, C.text)
+	f.lead:SetPoint("TOPLEFT", K.PAD, -(top + 40))
+	f.top = top + 66
+	f.box = CreateFrame("Frame", nil, body)
+	f.box:SetPoint("TOPLEFT", K.PAD, -f.top)
+	f.box:SetWidth(inner)
+	UI.Skin(f.box, C.row, C.border)
+	f.lines = {}
 
-	-- A secure macro button: the click runs /reload.
-	local go = CreateFrame("Button", nil, f, "SecureActionButtonTemplate")
-	go:SetSize(110, 24)
-	go:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -8, 8)
+	f.band = CreateFrame("Frame", nil, body)
+	f.band:SetPoint("BOTTOMLEFT")
+	f.band:SetPoint("BOTTOMRIGHT")
+	f.band:SetHeight(K.BAND)
+	local fill = f.band:CreateTexture(nil, "BACKGROUND")
+	fill:SetAllPoints()
+	UI.Paint(fill, C.bg, 0.55)
+	local seam = f.band:CreateTexture(nil, "BORDER")
+	seam:SetPoint("TOPLEFT")
+	seam:SetPoint("TOPRIGHT")
+	seam:SetHeight(1)
+	UI.Paint(seam, C.border, 0.9)
+	f.later = UI.Button(f.band, "Later", 86, function()
+		if InCombatLockdown() then return end
+		f:Hide()
+	end)
+	f.later:SetPoint("LEFT", K.PAD, 0)
+	f.when = UI.Text(f.band, "Takes a few seconds.", 11, false, C.dim)
+	f.when:SetPoint("LEFT", f.later, "RIGHT", 12, 0)
+	local go = CreateFrame("Button", nil, f.band, "SecureActionButtonTemplate")
+	go:SetSize(120, 24)
+	go:SetPoint("RIGHT", -K.PAD, 0)
 	go:RegisterForClicks("AnyUp", "AnyDown")
 	go:SetAttribute("type", "macro")
 	go:SetAttribute("macrotext", SLASH_RELOAD1)
@@ -10630,33 +10741,85 @@ local function BuildReload()
 	go:SetScript("OnEnter", function(self) UI.SetBorder(self, C.hot) end)
 	go:SetScript("OnLeave", function(self) UI.SetBorder(self, C.border) end)
 	f.go = go
-
-	f.later = UI.Button(f, "Not now", 80, function()
-		if InCombatLockdown() then return end
-		f:Hide()
-	end)
-	f.later:SetPoint("RIGHT", go, "LEFT", -8, 0)
 	return f
 end
 
-local function ShowReload(words)
-	reload.frame = reload.frame or BuildReload()
-	reload.frame.words:SetText(words)
-	reload.frame:Show()
+-- The panel, a line a reason, as tall as they make it.
+local function ShowReload()
+	local K = RELOAD
+	local f = reload.frame or BuildReload()
+	reload.frame = f
+	local n = #reload.reasons
+	f.lead:SetText(n == 1 and "One change needs a quick reload." or ((NUMBER[n] or n) .. " changes need a quick reload."))
+	for i, words in ipairs(reload.reasons) do
+		local line = f.lines[i]
+		if not line then
+			line = CreateFrame("Frame", nil, f.box)
+			line:SetSize(f.box:GetWidth() - 2, K.LINE)
+			line:SetPoint("TOPLEFT", 1, -(1 + (i - 1) * K.LINE))
+			line.well = CreateFrame("Frame", nil, line)
+			line.well:SetSize(K.WELL, K.WELL)
+			line.well:SetPoint("LEFT", 8, 0)
+			UI.Skin(line.well, C.bg, C.border)
+			line.glyph = line.well:CreateTexture(nil, "ARTWORK")
+			UI.GlyphArt(line.glyph, "reset")
+			line.glyph:SetSize(12, 12)
+			line.glyph:SetPoint("CENTER")
+			UI.Tint(line.glyph, C.text)
+			line.text = UI.Text(line, "", 12, false, C.text)
+			line.text:SetPoint("LEFT", line.well, "RIGHT", 10, 0)
+			line.text:SetPoint("RIGHT", -8, 0)
+			line.text:SetJustifyH("LEFT")
+			line.rule = line:CreateTexture(nil, "BORDER")
+			line.rule:SetPoint("BOTTOMLEFT", 6, 0)
+			line.rule:SetPoint("BOTTOMRIGHT", -6, 0)
+			line.rule:SetHeight(1)
+			UI.Paint(line.rule, C.border, 0.5)
+			f.lines[i] = line
+		end
+		line.text:SetText(words)
+		line.rule:SetShown(i < n)
+		line:Show()
+	end
+	for i = n + 1, #f.lines do f.lines[i]:Hide() end
+	f.box:SetHeight(n * K.LINE + 2)
+	UI.BodyFit(f, K.W, f.top + n * K.LINE + 2 + 18 + K.BAND)
+	f:Show()
 end
 
-function Shy.Reload(words)
+-- What the panel says, a reason a line (for whoever asks what it holds).
+function Shy.ReloadSaid()
+	local f = reload.frame
+	if not (f and f:IsShown()) then return nil end
+	return table.concat(reload.reasons, "\n")
+end
+
+function Shy.ReloadOwed() return #reload.reasons > 0 end
+
+function Shy.ReloadAsk()
+	if #reload.reasons == 0 or reload.held then return end
+	if InCombatLockdown() then
+		if not reload.waiting then Shy.core:Print("you need to reload to finish. The Reload button shows up after combat.") end
+		reload.waiting = true
+		return
+	end
+	ShowReload()
+end
+
+function Shy.Reload(words, patient)
 	words = words or "A reload is needed to apply this."
+	local known = false
+	for _, reason in ipairs(reload.reasons) do
+		if reason == words then known = true end
+	end
+	if not known then reload.reasons[#reload.reasons + 1] = words end
 	if reload.held then
 		reload.asked = true
 		return
 	end
-	if InCombatLockdown() then
-		if not reload.waiting then Shy.core:Print("a reload is needed to finish. The Reload button appears after combat.") end
-		reload.waiting = words
-		return
-	end
-	ShowReload(words)
+	local setup = Shy.Setup
+	if patient and setup and setup.Pending and setup.Pending() then return end
+	Shy.ReloadAsk()
 end
 
 function Shy.HoldReload(on)
@@ -10668,8 +10831,81 @@ end
 local reloadWait = CreateFrame("Frame")
 reloadWait:RegisterEvent("PLAYER_REGEN_ENABLED")
 reloadWait:SetScript("OnEvent", function()
-	local words = reload.waiting
-	if not words then return end
+	if not reload.waiting then return end
 	reload.waiting = nil
-	ShowReload(words)
+	Shy.ReloadAsk()
+end)
+
+-- Shy.Queue: the windows that come up by themselves once you're in (the send-off, Your addons, What's new), one
+-- at a time. Each asks for its turn; the next comes when the one up is closed, never in a fight.
+--   Shy.Queue.Ask(key, order, open, isOpen)   lower order first. open(): show it, true when it did (false: it has
+--                                             nothing to show, and its turn is over). isOpen(): whether it is up
+--   Shy.Queue.Hold(fn)                        nothing comes up while fn() says so (setup about to be offered, or open)
+--   Shy.Queue.Up()                            the key of the one up, or nil
+-- WAIT: seconds after logging in before the first. STEP: how often it looks, while one waits.
+local queue = { list = {}, holds = {}, run = 0, WAIT = 4, STEP = 0.5 }
+Shy.Queue = {}
+
+local Serve
+local function Arm(after)
+	queue.run = queue.run + 1
+	local mine = queue.run
+	C_Timer.After(after or queue.STEP, function()
+		if mine == queue.run then Serve() end
+	end)
+end
+
+local function Held()
+	if InCombatLockdown() then return true end
+	for _, held in ipairs(queue.holds) do
+		if held() then return true end
+	end
+	return false
+end
+
+-- (Rests while nothing waits: the one up is looked at again when the next asks.)
+Serve = Shy.Clocked("ShyCore queue", function()
+	if #queue.list == 0 then return end
+	local up = queue.up
+	if (up and up.isOpen()) or not queue.from or GetTime() < queue.from or Held() then return Arm() end
+	queue.up = nil
+	-- (One with nothing to show gives its turn to the next at once.)
+	while #queue.list > 0 and not queue.up do
+		local entry = table.remove(queue.list, 1)
+		local ok, shown = pcall(entry.open)
+		if not ok then geterrorhandler()(shown) end
+		if ok and shown then queue.up = entry end
+	end
+	if #queue.list > 0 then Arm() end
+end)
+
+function Shy.Queue.Ask(key, order, open, isOpen)
+	for i = #queue.list, 1, -1 do
+		if queue.list[i].key == key then table.remove(queue.list, i) end
+	end
+	queue.list[#queue.list + 1] = { key = key, order = order, open = open, isOpen = isOpen }
+	table.sort(queue.list, function(a, b) return a.order < b.order end)
+	Arm(queue.from and math.max(queue.from - GetTime(), queue.STEP) or queue.STEP)
+end
+
+function Shy.Queue.Hold(fn) queue.holds[#queue.holds + 1] = fn end
+
+function Shy.Queue.Up()
+	local up = queue.up
+	return up and up.isOpen() and up.key or nil
+end
+
+Shy:On("SHY_LOGIN", function()
+	queue.from = GetTime() + queue.WAIT
+	if #queue.list > 0 then Arm(queue.WAIT) end
+end)
+
+-- (A new session owes nothing, and nothing waits.)
+Shy:On("SHY_ADDON_LOADED", function(a)
+	if a == Shy.core then
+		wipe(reload.reasons)
+		reload.waiting = nil
+		wipe(queue.list)
+		queue.up, queue.from = nil, nil
+	end
 end)

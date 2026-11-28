@@ -14,10 +14,14 @@
 --   Shy.Others.On(entry)   switched on for this character (as the game will load it)
 --   Shy.Others.Switch(entry, on)   on or off for this character now, every folder of it, the game's list saved
 --   Shy.Others.Moved(entry)   switched since this session began: the reload brings it in or takes it away
---   Shy.Others.Keep(entry)   left on: yours, never put forward again
+--   Shy.Others.Keep(entry)   left on: yours, never put forward again;  Kept(entry)  whether it is
 --   Shy.Others.Pending()   anything switched this session
 --   Shy.Others.Open(all)   the window: those due, or with `all` every one Shy does, kept or off (/shy addons)
 --   Shy.Others.IsOpen()
+-- For whoever shows them itself (setup's welcome), the window's own parts:
+--   Shy.Others.Lines(parent, pad, y, list, keep, changed, width)   a line an addon; Tell(lines) says how each stands
+--   Shy.Others.Asks(list)    "decide", "reload" or "done";  KeepOn(list)  keeps those left on
+--   Shy.Others.Settle()      looked at: the reload asked for if one was switched, SHY_OTHERS fired
 --
 -- Account-wide, by character: ShyCoreDB.addons[character] = { off = { [folder] = true } turned off here,
 -- kept = { [name] = true } kept on with a Shy addon doing its job }.
@@ -41,7 +45,7 @@ local JOBS = {
 	{ by = "ShyBags", words = { "bag", "inventory", "bank" }, phrases = { "your bags", "all bags", "all your bags", "one bag", "bags and bank", "bag and bank" } },
 	{ by = "ShyAuction", words = { "auction" }, phrases = { "auction house" } },
 	{ by = "ShyMaps", words = { "map", "world ?map", "atlas" }, phrases = { "world map", "fog of war", "dungeon maps?" } },
-	{ by = "ShyCore", words = { "minimap button", "button bag" }, phrases = { "minimap buttons" } },
+	{ by = "ShyCore", what = "Minimap", words = { "minimap button", "button bag" }, phrases = { "minimap buttons" } },
 	{ by = "ShyChat", words = { "chat" }, phrases = { "chat frames?", "chat windows?", "chat tabs?", "channel names", "chat history" } },
 	{ by = "ShyPlates", words = { "plate", "nameplate", "name plate" }, phrases = { "name ?plates?" } },
 	{ by = "ShyFrames", words = { "unit ?frames?", "party ?frames?" }, phrases = { "unit frames?", "player frame", "target frame", "party frames?" } },
@@ -62,6 +66,13 @@ local JOBS = {
 	{ by = "ShySkin", words = { "skins?%f[%W]" }, phrases = { "reskins?", "skins? the game", "restyles?" } },
 	{ by = "ShyKeys", words = { "keybind", "key ?binding" }, phrases = { "key ?bindings?", "keybinds?" } },
 }
+
+-- The job each Shy addon does, in a word or two, for an addon's line.
+local WHAT = { ShyCore = "Whole UI", ShyQuest = "Quests", ShyBags = "Bags", ShyAuction = "Auction", ShyMaps = "Maps",
+	ShyChat = "Chat", ShyPlates = "Nameplates", ShyFrames = "Unit frames", ShyTip = "Tooltips", ShyThreat = "Threat",
+	ShyDock = "Action bars", ShyBuffs = "Buffs", ShyXP = "XP bar", ShyHits = "Combat text", ShyGear = "Gear",
+	ShyGroup = "Groups", ShyRecap = "Death recap", ShyMonitor = "Performance", ShyTweaks = "Small tweaks",
+	ShyWay = "Waypoints", ShyFarm = "Farming", ShySkin = "Skins", ShyKeys = "Keys" }
 
 local beside = {}   -- folder -> what it works with
 local loaded = {}   -- folder -> its switch as the session began
@@ -97,7 +108,7 @@ function O.Hash(name)
 end
 
 -- A folder Shy knows by name: the job, while the Shy addon that does it is here.
-local ALL = { by = "ShyCore", say = "Shy does all of this" }
+local ALL = { by = "ShyCore", say = "Already covered" }
 local function Known(name)
 	local by = Shy.OTHERS and Shy.OTHERS[O.Hash(name)]
 	if by == "all" then return ALL end
@@ -184,7 +195,7 @@ function O.List()
 		end
 		job = job or entry.job
 		entry.job = nil
-		if job then entry.by, entry.say = job.by, job.say end
+		if job then entry.by, entry.say, entry.what = job.by, job.say, job.what or WHAT[job.by] end
 	end
 	-- Who is there for whom, by group: one needs another to load, or is named for it (one of its parts in a folder of
 	-- its own: "Bars_Skins" for "Bars").
@@ -344,6 +355,7 @@ end
 function O.Keep(entry)
 	Book().kept[entry.name] = true
 end
+function O.Kept(entry) return Book().kept[entry.name] == true end
 
 function O.Pending()
 	for name in pairs(touched) do
@@ -354,58 +366,217 @@ end
 
 -- The window
 
+-- LINE: an addon's line, its icon ICON, its name NAME and job JOB wide; HEAD: a group's heading, past GROUP lines.
 local K = {
-	WIDTH = 460, PAD = 14, GAP = 6, TEXT = 12, SMALL = 11, ROW = 24, SWITCH = 76, BUTTON = 24, LEAST_BUTTON = 110,
-	WAIT = 4,          -- seconds after logging in before it is asked
-	AGAIN = 10,        -- seconds before asking again, while a fight or setup is in the way
-	TRIES = 30,
+	WIDTH = 680, PAD = 14, GAP = 6, TEXT = 12, SMALL = 11, LINE = 34, HEAD = 28, GROUP = 7, ICON = 22, NAME = 120, JOB = 96, SWITCH = 76,
+	BUTTON = 24, LEAST_BUTTON = 110,
 }
 
 local win, open, shown
 local rows, made = {}, {}
 
--- Those left on are the player's: never put forward again.
-local function KeepOn()
-	for _, entry in ipairs(shown or {}) do
+-- Those of `list` left on are the player's: never put forward again.
+function O.KeepOn(list)
+	for _, entry in ipairs(list or {}) do
 		if O.On(entry) then O.Keep(entry) end
 	end
 end
 
--- Closed, a reload is asked for when an addon was switched: it comes or goes then.
+-- Looked at from the welcome, before the character is set up: setup's own reload is the one that switches them.
+local function Waits()
+	local setup = Shy.Setup
+	return setup ~= nil and setup.Pending ~= nil and setup.Pending()
+end
+
+-- Looked at and put away: a reload is asked for when an addon was switched, since it comes or goes then. (One that
+-- can wait: before setup it goes with setup's.) Whoever shows them is told (the welcome).
+function O.Settle()
+	if O.Pending() then Shy.Reload("Reload to finish switching your addons.", true) end
+	Shy:Fire("SHY_OTHERS")
+end
+
 local function Close()
 	open = false
 	if win then Shy.HUD.Update(win) end
-	if O.Pending() then Shy.Reload("Reload to finish switching your addons.") end
+	O.Settle()
 end
 
--- What the foot asks: keep them or turn them all off; the reload once one was switched; nothing left to decide.
-local function Foot()
+-- What is asked of `list`: keep them or turn them all off; the reload once one was switched; nothing left to decide.
+function O.Asks(list)
 	if O.Pending() then return "reload" end
-	for _, entry in ipairs(shown or {}) do
+	for _, entry in ipairs(list or {}) do
 		if O.On(entry) and not Book().kept[entry.name] then return "decide" end
 	end
 	return "done"
 end
 local FEET = { decide = { "Keep these", "Turn all off" }, reload = { nil, "Reload" }, done = { nil, "Got it" } }
 
-local function Refresh()
-	for _, row in ipairs(rows) do
+-- A line an addon down `parent` from y, `pad` in from its sides, `width` across: the Shy addon's icon that does its
+-- job, its name, the job, who does it, how it stands, and its button. More than GROUP of them stand in groups, a
+-- job each: its heading says the job, how many, who does it, and turns them all off (or back on). keep(region):
+-- given every region made. changed(): after a switch. Returns the lines (lines.heads: the groups' headings) and
+-- where they end.
+function O.Lines(parent, pad, y, list, keep, changed, width)
+	width = width or parent:GetWidth()
+	local lines, heads = {}, {}
+	lines.heads = heads
+	-- (In groups: by who does each, in the order they first come.)
+	local order, groups, at = {}, {}, {}
+	for _, entry in ipairs(list) do
+		local key = entry.by or ""
+		if not groups[key] then
+			groups[key] = {}
+			order[#order + 1] = key
+		end
+		table.insert(groups[key], entry)
+	end
+	local grouped = #list > K.GROUP and #order > 1
+	local sorted = list
+	if grouped then
+		sorted = {}
+		for _, key in ipairs(order) do
+			local members = groups[key]
+			local first = members[1]
+			local head = { entries = members }
+			local mid = -y - K.HEAD / 2
+			head.icon = keep(parent:CreateTexture(nil, "ARTWORK"))
+			head.icon:SetSize(14, 14)
+			head.icon:SetPoint("LEFT", parent, "TOPLEFT", pad + 4, mid)
+			local shy = first.by and Shy.addons[first.by:sub(4)]
+			head.icon:SetTexture(shy and shy.icon or Shy.ICON)
+			head.name = keep(UI.Text(parent, first.what or "Others", K.TEXT, true, C.head))
+			head.name:SetPoint("LEFT", head.icon, "RIGHT", 8, 0)
+			head.count = keep(UI.Text(parent, tostring(#members), K.SMALL, true, C.dim))
+			head.count:SetPoint("LEFT", head.name, "RIGHT", 8, 0)
+			head.by = keep(UI.Text(parent, first.say or first.by and (UI.Wrap(C.head, first.by) .. " does this") or "", K.SMALL, false, C.dim))
+			head.by:SetPoint("LEFT", head.count, "RIGHT", 10, 0)
+			head.all = keep(CreateFrame("Button", nil, parent))
+			head.all:SetSize(90, K.HEAD - 6)
+			head.all:SetPoint("RIGHT", parent, "TOPLEFT", width - pad, mid)
+			head.all.text = UI.Text(head.all, "", K.SMALL, true, C.head)
+			head.all.text:SetPoint("RIGHT")
+			head.all:SetScript("OnClick", function()
+				PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+				local any = false
+				for _, entry in ipairs(members) do any = any or O.On(entry) end
+				for _, entry in ipairs(members) do
+					if any and O.On(entry) then O.Switch(entry, false)
+					elseif not any and O.Moved(entry) then O.Switch(entry, true) end
+				end
+				changed()
+			end)
+			head.fill = keep(parent:CreateTexture(nil, "BACKGROUND", nil, 1))
+			head.fill:SetPoint("TOPLEFT", parent, "TOPLEFT", pad - 4, -y)
+			head.fill:SetPoint("TOPRIGHT", parent, "TOPLEFT", width - pad + 4, -y)
+			head.fill:SetHeight(K.HEAD)
+			UI.Paint(head.fill, C.bg, 0.5)
+			heads[#heads + 1] = head
+			y = y + K.HEAD
+			for _, entry in ipairs(members) do
+				sorted[#sorted + 1] = entry
+				at[entry] = y
+				y = y + K.LINE
+			end
+		end
+	end
+	for _, entry in ipairs(sorted) do
+		if grouped then y = at[entry] end
+		local mid = -y - K.LINE / 2
+		local well = keep(CreateFrame("Frame", nil, parent))
+		well:SetSize(K.ICON, K.ICON)
+		well:SetPoint("LEFT", parent, "TOPLEFT", pad, mid)
+		UI.Skin(well, C.bg, C.border)
+		local icon = well:CreateTexture(nil, "ARTWORK")
+		icon:SetPoint("TOPLEFT", 2, -2)
+		icon:SetPoint("BOTTOMRIGHT", -2, 2)
+		local shy = entry.by and Shy.addons[entry.by:sub(4)]
+		icon:SetTexture(shy and shy.icon or Shy.ICON)
+		local name = keep(UI.Text(parent, entry.title, K.TEXT, true, C.text))
+		name:SetPoint("LEFT", well, "RIGHT", 8, 0)
+		name:SetWidth(K.NAME)
+		name:SetJustifyH("LEFT")
+		name:SetWordWrap(false)
+		local job = keep(UI.Text(parent, not grouped and entry.what or "", K.SMALL, false, C.dim))
+		job:SetPoint("LEFT", name, "RIGHT", 8, 0)
+		job:SetWidth(K.JOB)
+		job:SetJustifyH("LEFT")
+		job:SetWordWrap(false)
+		local by = keep(UI.Text(parent, not grouped and (entry.say or entry.by and (UI.Wrap(C.head, entry.by) .. " does this")) or "", K.SMALL, false, C.dim))
+		by:SetPoint("LEFT", job, "RIGHT", 8, 0)
+		local button = keep(UI.Button(parent, "Turn off", K.SWITCH, function()
+			O.Switch(entry, not O.On(entry))
+			changed()
+		end))
+		button:SetPoint("RIGHT", parent, "TOPLEFT", width - pad, mid)
+		local state = keep(UI.Text(parent, "", K.SMALL, false, C.dim))
+		state:SetPoint("RIGHT", button, "LEFT", -10, 0)
+		local mark = keep(parent:CreateTexture(nil, "ARTWORK"))
+		mark:SetSize(10, 10)
+		mark:SetPoint("RIGHT", state, "LEFT", -5, 0)
+		by:SetPoint("RIGHT", mark, "LEFT", -8, 0)
+		by:SetJustifyH("LEFT")
+		by:SetWordWrap(false)
+		local rule = keep(parent:CreateTexture(nil, "BORDER"))
+		rule:SetPoint("TOPLEFT", parent, "TOPLEFT", pad - 4, -(y + K.LINE))
+		rule:SetPoint("TOPRIGHT", parent, "TOPLEFT", width - pad + 4, -(y + K.LINE))
+		rule:SetHeight(1)
+		UI.Paint(rule, C.border, 0.45)
+		lines[#lines + 1] = { well = well, name = name, job = job, by = by, state = state, mark = mark, button = button, entry = entry }
+		y = y + K.LINE
+	end
+	return lines, y
+end
+
+-- Each group's heading as its addons stand: turn them all off while one is on, else bring them back.
+local function TellHeads(heads)
+	for _, head in ipairs(heads or {}) do
+		local on = 0
+		for _, entry in ipairs(head.entries) do
+			if O.On(entry) then on = on + 1 end
+		end
+		head.all.text:SetText(on > 0 and ("Turn off " .. on) or "Undo all")
+		head.all:SetWidth(math.ceil(head.all.text:GetStringWidth()) + 4)
+	end
+end
+
+-- Each line as its addon stands: yours to decide, kept, off, or switched and waiting for the reload. One off
+-- steps back.
+function O.Tell(lines)
+	for _, row in ipairs(lines) do
 		local entry = row.entry
 		local on, moved = O.On(entry), O.Moved(entry)
+		local glyph, color, words
 		if moved then
-			row.by:SetText(on and "On after you reload" or "Off after you reload")
-			UI.Ink(row.by, C.alert)
+			glyph, color = Shy.MEDIA .. "GlyphCheck", C.good
+			words = (on and "On " or "Off ") .. (Waits() and "when you finish setup" or "after you reload")
+		elseif not on then
+			words, color = "Off", C.dim
+		elseif O.Kept(entry) then
+			glyph, color, words = Shy.MEDIA .. "GlyphCheck", C.dim, "Kept"
 		else
-			row.by:SetText(on and (entry.say or (entry.by .. " does this")) or "Off")
-			UI.Ink(row.by, C.dim)
+			glyph, color, words = Shy.Skin.GLYPH.dot, C.alert, "Your call"
 		end
-		UI.Ink(row.name, on and C.text or C.dim)
+		row.state:SetText(words)
+		UI.Ink(row.state, color)
+		row.mark:SetShown(glyph ~= nil)
+		if glyph then
+			row.mark:SetTexture(glyph)
+			UI.Tint(row.mark, color)
+		end
+		local a = on and 1 or 0.45
+		for _, part in ipairs({ row.well, row.name, row.job, row.by }) do part:SetAlpha(a) end
 		row.button:SetLabel(moved and "Undo" or on and "Turn off" or "Turn on")
 	end
-	local words = FEET[Foot()]
+	TellHeads(lines.heads)
+end
+
+local function Refresh()
+	O.Tell(rows)
+	local foot = O.Asks(shown)
+	local words = FEET[foot]
 	win.keep:SetShown(words[1] ~= nil)
 	if words[1] then win.keep:SetLabel(words[1]) end
-	win.go:SetLabel(words[2])
+	win.go:SetLabel(foot == "reload" and Waits() and "Done" or words[2])
 end
 
 local function Create()
@@ -422,15 +593,15 @@ local function Create()
 	})
 	win.body = UI.Body(win)
 	win.keep = UI.Button(win.body, "Keep these", K.LEAST_BUTTON, function()
-		KeepOn()
+		O.KeepOn(shown)
 		Close()
 	end)
 	win.keep:HookScript("OnEnter", function(self)
-		UI.Tip(self, "Keep these", "Shy won't ask about them again. Type /shy addons to see them.", { side = "TOP" })
+		UI.Tip(self, "Keep these", "You won't be asked about them again. Type /shy addons to see them.", { side = "TOP" })
 	end)
 	win.keep:HookScript("OnLeave", function(self) UI.TipHide(self) end)
 	win.go = UI.Button(win.body, "Turn all off", K.LEAST_BUTTON, function()
-		local foot = Foot()
+		local foot = O.Asks(shown)
 		if foot == "decide" then
 			for _, entry in ipairs(shown) do
 				if O.On(entry) then O.Switch(entry, false) end
@@ -439,7 +610,7 @@ local function Create()
 			return
 		end
 		-- (Reloading after switching some: those left on were looked at, and kept.)
-		if foot == "reload" then KeepOn() end
+		if foot == "reload" then O.KeepOn(shown) end
 		Close()
 	end)
 	win.go:SetPrimary(true)
@@ -462,22 +633,12 @@ local function Lay()
 	say:SetJustifyV("TOP")
 	say:SetWordWrap(true)
 	say:SetWidth(inner)
-	say:SetText("Shy already does what these do. Two addons doing one job can clash.")
+	say:SetText("Your UI already does what these do. Two addons doing one job can clash.")
 	say:SetPoint("TOPLEFT", K.PAD, -y)
 	y = y + math.ceil(say:GetStringHeight()) + K.GAP + 2
-	for _, entry in ipairs(shown) do
-		local name = Keep(UI.Text(body, entry.title, K.TEXT, false, C.text))
-		name:SetPoint("LEFT", body, "TOPLEFT", K.PAD, -y - K.ROW / 2)
-		local button = Keep(UI.Button(body, "Turn off", K.SWITCH, function()
-			O.Switch(entry, not O.On(entry))
-			Refresh()
-		end))
-		button:SetPoint("RIGHT", body, "TOPRIGHT", -K.PAD, -y - K.ROW / 2)
-		local by = Keep(UI.Text(body, "", K.SMALL, false, C.dim))
-		by:SetPoint("RIGHT", button, "LEFT", -K.GAP - 2, 0)
-		rows[#rows + 1] = { name = name, button = button, by = by, entry = entry }
-		y = y + K.ROW + 2
-	end
+	local lines
+	lines, y = O.Lines(body, K.PAD, y, shown, Keep, Refresh, K.WIDTH)
+	for i, line in ipairs(lines) do rows[i] = line end
 	UI.BodyFit(win, K.WIDTH, y + K.GAP + K.BUTTON + K.PAD)
 	Refresh()
 end
@@ -498,26 +659,12 @@ end
 function O.IsOpen() return open == true end
 function O.Window() return win, rows end
 
--- As you log in, every time while one is due: once the game has settled, out of a fight, the setup window put away
--- or done.
-local tries = 0
-local function Try()
-	local setup = Shy.Setup
-	local waiting = setup and (setup.IsOpen() or not (setup.Done() or (setup.Away and setup.Away())))
-	if InCombatLockdown() or waiting then
-		tries = tries + 1
-		if tries < K.TRIES then C_Timer.After(K.AGAIN, Try) end
-		return
-	end
-	O.Open()
-end
-
 -- At login, the switches as the game loaded them, and those turned off here that have left the folder forgotten.
--- Then the window, when one is due.
+-- Then the window in its turn (Shy.Queue), every time while one is due: out of a fight, setup put away or done,
+-- after the send-off.
 Shy:On("SHY_LOGIN", function()
 	wipe(loaded)
 	wipe(touched)
-	tries = 0
 	local book = Book()
 	for name in pairs(book.off) do
 		if not C_AddOns.DoesAddOnExist(name) then book.off[name] = nil end
@@ -528,9 +675,9 @@ Shy:On("SHY_LOGIN", function()
 		if not entry.on and book.off[entry.name] then swept = Sweep(entry, book, Me()) or swept end
 	end
 	if swept then C_AddOns.SaveAddOns() end
-	C_Timer.After(K.WAIT, Try)
+	Shy.Queue.Ask("addons", 20, function() return O.Open() end, O.IsOpen)
 end)
 
-Shy.Command("addons", "the addons Shy already does, to turn off", function()
-	if not O.Open(true) then core:Print("none of your addons do what Shy does.") end
+Shy.Command("addons", "other addons doing jobs your UI already does", function()
+	if not O.Open(true) then core:Print("none of your other addons do a job your UI already does.") end
 end)

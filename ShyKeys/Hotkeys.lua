@@ -474,7 +474,7 @@ end
 -- You are sure: the key Hot.Free asked about is yours to pick. What it does now may be bound over (put back
 -- whenever the pick or the hotkeys go), or the pick it had lets it go. Then pick it again.  -> true, or false and why
 function Hot.TakeOver(key, ask, defer)
-	if InCombatLockdown() then return false, "Your keys can be changed once the fight is over." end
+	if InCombatLockdown() then return false, "You can change your keys once the fight is over." end
 	if ask.over then
 		Hot.Choices().over[key] = ask.over
 	elseif ask.standIn then
@@ -792,7 +792,7 @@ function Hot.SetHome(key, command, at, defer)
 	end
 	local state = HotState()
 	local set = not defer and state ~= nil and state.on == true and Keys.Mode() == "shy"
-	if set and InCombatLockdown() then return false, "Your keys can be changed once the fight is over." end
+	if set and InCombatLockdown() then return false, "You can change your keys once the fight is over." end
 	local book = Hot.Choices()
 	local was = book.homeAt[command]
 	if was and was ~= at then book.over[was] = nil end   -- (a key you let go of is asked about again)
@@ -823,9 +823,9 @@ function Hot.SetStandIn(key, at, defer)
 	end
 	local state = HotState()
 	local set = not defer and state ~= nil and state.on == true and Keys.Mode() == "shy"
-	if set and InCombatLockdown() then return false, "Your keys can be changed once the fight is over." end
+	if set and InCombatLockdown() then return false, "You can change your keys once the fight is over." end
 	-- (an ability on another key: its own key is one you keep, back as you had it)
-	if not Hot.Keeps(key) and not Hot.Keep(key, true, defer) then return false, "Your keys can be changed once the fight is over." end
+	if not Hot.Keeps(key) and not Hot.Keep(key, true, defer) then return false, "You can change your keys once the fight is over." end
 	local book = Hot.Choices()
 	local mine = watched[1]
 	local laid = set and mine ~= nil and Keys.Has(mine.addon)

@@ -25,6 +25,9 @@ local CROSS = 0.15          -- seconds between looks at what the middle is in
 local RING = 0.85           -- how far out a city's ground is sampled, in its half sizes past its middle
 local BIGGER = 4            -- the zone round a city is at least this many times its ground
 local AROUND = 5            -- ... has at least this many of the eight samples round it (a zone's neighbours share them)
+-- A capital is known for a city (ns.cities), so its zone needs neither: only to be the larger, with the most samples.
+-- Stormwind with its harbor is a quarter of Elwynn, and the sea takes half the samples round it.
+local CITY = { BIGGER = 1, AROUND = 2 }
 
 local ZONE, CONTINENT = Enum.UIMapType.Zone, Enum.UIMapType.Continent
 
@@ -90,19 +93,21 @@ function Steps.Up(id)
 		local _, n0, w0, n1, w1 = View.World(id)
 		local votes, best, most = {}, nil, 0
 		local mine = size[1] * size[2]
+		local city = ns.cities ~= nil and ns.cities[id] == true
+		local bigger, least = city and CITY.BIGGER or BIGGER, city and CITY.AROUND or AROUND
 		local north, west = (n0 + n1) / 2, (w0 + w1) / 2
 		for i = 0, 7 do
 			local a = i * math.pi / 4
 			local x, y = 0.5 + RING * math.cos(a), 0.5 + RING * math.sin(a)
 			local found = At(continent, n0 + y * (n1 - n0), w0 + x * (w1 - w0))
 			local around = found and found ~= id and Yards(found)
-			if around and around[1] * around[2] >= mine * BIGGER then
+			if around and around[1] * around[2] >= mine * bigger then
 				votes[found] = (votes[found] or 0) + 1
 				if votes[found] > most then best, most = found, votes[found] end
 			end
 		end
 		-- The zone round a city has it all round and holds its middle.
-		if best and most >= AROUND then
+		if best and most >= least then
 			local _, b0, v0, b1, v1 = View.World(best)
 			local x, y = (west - v0) / (v1 - v0), (north - b0) / (b1 - b0)
 			if x < 0 or x > 1 or y < 0 or y > 1 then best = nil end

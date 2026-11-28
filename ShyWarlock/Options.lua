@@ -7,6 +7,6 @@ T:Settings({
 	{ label = "Your keys", button = "Open", needs = "Keys", words = "hotkeys bindings macros bars layout abilities",
 		shown = function() return ns.isWarlock end,
 		run = function() Shy.Hub.Open("keys") end,
-		desc = "See what each key does, lay them out, or put them back." },
+		desc = "See what each key does, set them up, or put them back." },
 	{ note = "This one is for warlocks. It does nothing on this character.", shown = function() return not ns.isWarlock end },
 })

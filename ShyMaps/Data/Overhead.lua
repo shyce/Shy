@@ -255,3 +255,5 @@ ns.overhead = {
 		[2206] = 7253501,
 	},
 }
+-- The capital cities' maps
+ns.cities = { [1453] = true, [1454] = true, [1455] = true, [1456] = true, [1457] = true, [1458] = true }

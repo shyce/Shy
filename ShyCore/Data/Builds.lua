@@ -8,6 +8,7 @@ Shy.TalentBuilds = {
 build = "1.60.1.71139",
 DRUID = {
 	tree = 1089, tabs = { 11328, 11347, 11340 },   -- Druid: Balance, Feral Combat, Restoration
+	icons = { 136096, 132276, 136041 },   -- each tab's own icon
 	nodes = {   -- [node] = { tab, row, ranks }
 		[104923] = { 1, 1, 5 },   -- Starlight Wrath
 		[104924] = { 1, 1, 5 },   -- Genesis
@@ -183,6 +184,7 @@ DRUID = {
 },
 HUNTER = {
 	tree = 1091, tabs = { 11372, 11371, 11370 },   -- Hunter: Beast Mastery, Marksmanship, Survival
+	icons = { 132164, 132222, 132215 },   -- each tab's own icon
 	nodes = {   -- [node] = { tab, row, ranks }
 		[104960] = { 1, 1, 5 },   -- Deadly Aspects
 		[104976] = { 1, 1, 5 },   -- Endurance Training
@@ -349,6 +351,7 @@ HUNTER = {
 },
 MAGE = {
 	tree = 1112, tabs = { 11582, 11594, 11601 },   -- Mage: Arcane, Fire, Frost
+	icons = { 135932, 135810, 135846 },   -- each tab's own icon
 	nodes = {   -- [node] = { tab, row, ranks }
 		[105815] = { 1, 1, 2 },   -- Wand Specialization
 		[105813] = { 1, 1, 5 },   -- Improved Channeling
@@ -536,6 +539,7 @@ MAGE = {
 },
 PALADIN = {
 	tree = 1100, tabs = { 11486, 11541, 11559 },   -- Paladin: Holy, Protection, Retribution
+	icons = { 135920, 135893, 135873 },   -- each tab's own icon
 	nodes = {   -- [node] = { tab, row, ranks }
 		[105335] = { 1, 1, 5 },   -- Spiritual Focus
 		[113630] = { 1, 1, 5 },   -- Divine Strength
@@ -688,6 +692,7 @@ PALADIN = {
 },
 PRIEST = {
 	tree = 1114, tabs = { 11608, 11615, 11622 },   -- Priest: Discipline, Holy, Shadow Magic
+	icons = { 135987, 237542, 136207 },   -- each tab's own icon
 	nodes = {   -- [node] = { tab, row, ranks }
 		[110853] = { 1, 1, 5 },   -- Power in Light
 		[105850] = { 1, 1, 2 },   -- Wand Specialization
@@ -870,6 +875,7 @@ PRIEST = {
 },
 ROGUE = {
 	tree = 1111, tabs = { 11580, 11573, 11572 },   -- Rogue: Assassination, Combat, Subtlety
+	icons = { 132292, 132090, 132320 },   -- each tab's own icon
 	nodes = {   -- [node] = { tab, row, ranks }
 		[105742] = { 1, 1, 3 },   -- Improved Gouge
 		[105723] = { 1, 1, 2 },   -- Remorseless Attacks
@@ -1035,6 +1041,7 @@ ROGUE = {
 },
 SHAMAN = {
 	tree = 1082, tabs = { 11326, 11363, 11362 },   -- Shaman: Elemental Combat, Enhancement, Restoration
+	icons = { 136048, 136051, 136052 },   -- each tab's own icon
 	nodes = {   -- [node] = { tab, row, ranks }
 		[104773] = { 1, 1, 5 },   -- Convection
 		[104772] = { 1, 1, 5 },   -- Concussion
@@ -1208,6 +1215,7 @@ SHAMAN = {
 },
 WARLOCK = {
 	tree = 1116, tabs = { 11629, 11636, 11637 },   -- Warlock: Affliction, Demonology, Destruction
+	icons = { 136145, 136172, 136186 },   -- each tab's own icon
 	nodes = {   -- [node] = { tab, row, ranks }
 		[105921] = { 1, 1, 2 },   -- Improved Life Tap
 		[105925] = { 1, 1, 5 },   -- Suppression
@@ -1354,6 +1362,7 @@ WARLOCK = {
 },
 WARRIOR = {
 	tree = 1117, tabs = { 11650, 11657, 11670 },   -- Warrior: Arms, Fury, Protection
+	icons = { 132292, 132347, 134952 },   -- each tab's own icon
 	nodes = {   -- [node] = { tab, row, ranks }
 		[105958] = { 1, 1, 3 },   -- Improved Heroic Strike
 		[105957] = { 1, 1, 5 },   -- Deflection

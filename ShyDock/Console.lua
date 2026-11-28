@@ -98,11 +98,10 @@ C.STYLE = "console"
 -- The layouts by role, as the design board has them on a screen 1080 tall (offsets from the screen's middle, y up;
 -- the board's offsets anchored to the middle grow with the screen, by its height over 1080, never under ROLE_LEAST):
 --   bars      the housing's top edge (the bars hang under it, the pet bar and the experience bar under them)
---   unitX, unitY   your frame's and your target's centres (mirrors)
---   small     where your target's target and your focus stand: "beside" (outside them, level with them) or
---             "over" (over them, centred)
---   threat    the threat meter: under = the frame it hangs under ("targettarget" or "target"), its left edge on that
---             frame's; or beside = "target" (a seam outside it, its top on the target's target's); w its width;
+--   unitX, unitY   your frame's and your target's centres (mirrors). Your target's target hangs under your target
+--             at its outer end, your focus under you at yours, your pet under your focus (Parts.lua, P.Role).
+--   threat    the threat meter: under = the frame it hangs under ("targettarget" or "target"), its right edge on that
+--             frame's; or beside = "target" (a seam outside it, its top on your target's); w its width;
 --             rows the most it shows
 --   group     the party and raid: { x, y, w, h } its centre and size, or { left = true, y, w, h } on the group
 --             column's left edge (the screen's left, past the raid manager's tab), or { under = true, w, h } right
@@ -116,17 +115,17 @@ C.STYLE = "console"
 --   reveal    every bar but the main one shows only while you point at the bars (Drawers.lua): faded, never
 --             hidden, so their keys work all the while
 C.ROLE = {
-	center = { bars = -249, unitX = 290, unitY = -150, small = "beside", chat = 190,
-		threat = { under = "targettarget", w = 200, rows = 4 },
+	center = { bars = -249, unitX = 290, unitY = -150, chat = 190,
+		threat = { beside = "target", w = 200, rows = 4 },
 		group = { left = true, y = -40, w = 300, h = 280, near = 165, party = "column", raid = "SeparateGroupsHorizontal" } },
-	healer = { bars = -345, unitX = 460, unitY = -150, small = "over", chat = 190,
-		threat = { under = "target", w = 220, rows = 3 },
+	healer = { bars = -345, unitX = 460, unitY = -150, chat = 190,
+		threat = { under = "targettarget", w = 220, rows = 3 },
 		group = { under = true, w = 640, h = 190, party = "row", raid = "SeparateGroupsVertical" } },
-	tank = { bars = -264, unitX = 280, unitY = -140, small = "over", chat = 190,
+	tank = { bars = -264, unitX = 280, unitY = -140, chat = 190,
 		threat = { beside = "target", w = 220, rows = 8 },
 		group = { left = true, y = -60, w = 300, h = 280, near = 165, party = "column", raid = "SeparateGroupsHorizontal" } },
-	minimal = { bars = -244, unitX = 230, unitY = -170, small = "over", chat = 150,
-		threat = { under = "target", w = 190, rows = 2 },
+	minimal = { bars = -244, unitX = 230, unitY = -170, chat = 150,
+		threat = { under = "targettarget", w = 190, rows = 2 },
 		group = { x = -470, y = -90, w = 200, h = 260, near = 165, party = "column", raid = "SeparateGroupsHorizontal" },
 		combat = true, order = { "main", "bar2", "bar3" }, reveal = true },
 }

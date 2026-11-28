@@ -144,12 +144,12 @@ local function Turn()
 					local result = Keys.Apply(entry.addon, entry.jobs, opts)
 					if result then
 						entry.waiting = result.waiting
-						entry.addon:Print(("your keys are laid out for %s now."):format(name or "your talents"))
+						entry.addon:Print(("your keys are set up for %s now."):format(name or "your talents"))
 					end
 				elseif entry.told ~= (build or "") then
 					-- (said once a change: your keys stay as they are until you lay them out)
 					entry.told = build or ""
-					entry.addon:Print(("your talents are %s now. Lay out your keys again to match, or turn on Follow my talents in /shy Keys."):format(
+					entry.addon:Print(("your talents are %s now. Set up your keys again to match, or turn on Follow my talents in /shy Keys."):format(
 						name or "another build"))
 				end
 			end

@@ -321,7 +321,7 @@ end
 
 function K.Run(typed)
 	if not ns.isPriest then
-		T:Print("your keys are laid out on a priest only.")
+		T:Print("these keys are for priests only.")
 		return
 	end
 	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)

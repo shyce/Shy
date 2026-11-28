@@ -456,7 +456,7 @@ function Keys.Run(addon, jobs, opts, asked, typed)
 	opts = opts or {}
 	local word = strtrim(tostring(typed or "")):lower():gsub("^%-+", "")
 	if word ~= "" and word ~= "force" then
-		addon:Print(("nothing is changed: \"%s\" isn't a word the keys know. Add force to lay out every key, even ones you kept or moved."):format(
+		addon:Print(("nothing is changed: \"%s\" isn't a word the keys know. Add force to set up every key, even ones you kept or moved."):format(
 			strtrim(tostring(typed))))
 		return
 	end
@@ -485,15 +485,15 @@ function Keys.Run(addon, jobs, opts, asked, typed)
 	Keys.asked, Keys.forced = nil, nil
 	if not ok then error(result, 0) end
 	if why == "macros" then
-		addon:Print(("your keys aren't laid out: they need %d macros and there is room for %d. Delete %d you don't use, this character's or the account's, then lay them out. Nothing was changed."):format(
+		addon:Print(("your keys aren't set up: they need %d macros and there's room for %d. Delete %d you don't use, on this character or the account, then try again. Nothing changed."):format(
 			space.need, space.need - space.short, space.short))
 		return
 	end
 	if not result then
-		addon:Print("your keys can be laid out once the fight is over.")
+		addon:Print("you can set up your keys once the fight is over.")
 		return
 	end
-	addon:Print(("%d keys laid out%s%s.%s"):format(result.placed,
+	addon:Print(("%d keys set up%s%s.%s"):format(result.placed,
 		result.buildName and (" for " .. result.buildName) or "", result.bound > 0 and (", %d bound"):format(result.bound) or "",
 		result.waiting > 0 and (" %d more come as you learn what they do."):format(result.waiting) or ""))
 	local changed = result.hot and (result.hot.bound + result.hot.cleared) or 0
@@ -551,7 +551,7 @@ end
 function Keys.Back(addon)
 	local result = Keys.Unlay(addon)
 	if not result then
-		addon:Print("your keys can be put back once the fight is over.")
+		addon:Print("you can put your keys back once the fight is over.")
 		return
 	end
 	addon:Print(("your keys are as they were%s."):format(result.lost > 0

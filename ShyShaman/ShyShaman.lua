@@ -1,5 +1,4 @@
--- ShyShaman: a shaman's keys laid out once for every level (Keys.lua). Does nothing on other classes, and
--- the core switches it off for them from their next login.
+-- ShyShaman: a shaman's keys laid out once for every level (Keys.lua). Loaded for your class alone.
 
 local ADDON, ns = ...
 local MEDIA = "Interface\\AddOns\\ShyShaman\\Media\\"

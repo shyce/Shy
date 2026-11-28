@@ -2292,7 +2292,7 @@ end)
 
 function HUD.SetUnlocked(on)
 	if on and InCombatLockdown() then
-		core:Print("layout mode isn't available in combat.")
+		core:Print("you can't use layout mode in combat.")
 		return
 	end
 	if on and EditModeManagerFrame:IsEditModeActive() then return end   -- open alongside it already

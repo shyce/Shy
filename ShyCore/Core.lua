@@ -1618,37 +1618,69 @@ end
 
 -- Lifecycle
 
--- An addon for one class (its TOC's "X-Shy-Class: ROGUE") is switched off for a character of another, from
--- its next login: it does nothing for them and needn't load. Quietly: nothing to do about it, and the
--- addon list shows it. The game keeps a change to its addon list only once it is saved.
--- Your own class's, installed but off for you (a character the game had kept another addon list for), is
--- switched on once, and a reload offered; switched off by you after that, it stays off (ShyCoreDB.woken).
-local function Classed()
-	local class, guid, changed = UnitClassBase("player"), UnitGUID("player"), false
-	for _, a in ipairs(Shy.order) do
-		local only = GetMeta(a.name, "X-Shy-Class")
-		if only and only ~= "" and only ~= class then
-			C_AddOns.DisableAddOn(a.name, guid)
-			changed = true
+-- An addon's files have run: its saved settings are poured into its profile and it is told (OnLoad).
+local fresh = {}   -- loaded on demand just now, by name, until taken in
+local function Adopt(a)
+	fresh[a.name] = nil
+	if a.savedVariables then
+		a.isNew = _G[a.savedVariables] == nil   -- nothing was ever saved for it on this account
+		_G[a.savedVariables] = _G[a.savedVariables] or {}
+		if ShyCoreDB then Store().seen[a.name] = true end
+		-- (Before any profile is picked: what was kept under a name with no realm is this character's.)
+		if a == Shy.core then
+			local folded, why = pcall(P.Fold)
+			if not folded then geterrorhandler()(why) end
 		end
+		-- Must run before a.db is set; under pcall so a profile error can't stop the addon loading.
+		local ok, err = pcall(Pour, a)
+		if not ok then geterrorhandler()(err) end
+		a.db = Shy.MergeDefaults(_G[a.savedVariables], a.defaults or {})
 	end
+	-- (The census, asked for before this reload: on before the core's own OnLoad and every addon after it,
+	-- for this session alone.)
+	if a == Shy.core and a.db and a.db.census then
+		a.db.census = nil
+		census.Start()
+	end
+	SafeCall(a, "OnLoad")
+	Shy:Fire("SHY_ADDON_LOADED", a)
+end
+
+-- An addon for one class (its TOC's "X-Shy-Class: ROGUE") loads on demand. Yours is loaded here as you log in,
+-- before any addon hears of the login; another class's never loads. Nothing reloads and the addon list is left
+-- alone. Off for you in that list (a character the game had kept another list for), yours is switched on once;
+-- switched off by you after that, it stays off (ShyCoreDB.woken).
+local function Classed()
+	local class, guid = UnitClassBase("player"), UnitGUID("player")
 	local me = P.Character()
 	ShyCoreDB.woken = ShyCoreDB.woken or {}
 	local woken = ShyCoreDB.woken[me] or {}
-	local named = {}
+	local late = {}
 	for i = 1, C_AddOns.GetNumAddOns() do
 		local name = C_AddOns.GetAddOnInfo(i)
-		if name and GetMeta(name, "X-Shy-Class") == class and not C_AddOns.IsAddOnLoaded(name) and not woken[name] then
-			C_AddOns.EnableAddOn(name, guid)
-			woken[name] = true
-			named[#named + 1] = name
-			changed = true
+		if name and GetMeta(name, "X-Shy-Class") == class and not C_AddOns.IsAddOnLoaded(name) then
+			local on = C_AddOns.GetAddOnEnableState(name, guid) > Enum.AddOnEnableState.None
+			if not on and not woken[name] then
+				C_AddOns.EnableAddOn(name, guid)
+				C_AddOns.SaveAddOns()
+				woken[name] = true
+				on = true
+			end
+			if on then
+				fresh[name] = true
+				local loaded = C_AddOns.LoadAddOn(name)
+				-- (The game tells of a load as it happens. Should it not have yet, the addon is taken in here.)
+				local a = byName[name]
+				if loaded and a and fresh[name] then Adopt(a) end
+				fresh[name] = nil
+				if not loaded then late[#late + 1] = name end
+			end
 		end
 	end
 	if next(woken) then ShyCoreDB.woken[me] = woken end
-	if changed then C_AddOns.SaveAddOns() end
-	if #named > 0 then
-		Shy.Reload(("%s was off for this character. Reload to turn it on."):format(table.concat(named, ", ")))
+	-- Refused this session (one the game won't load until the interface does): a reload brings it.
+	if #late > 0 then
+		Shy.Reload(("%s was off for this character. Reload to turn it on."):format(table.concat(late, ", ")), true)
 	end
 end
 
@@ -1661,35 +1693,14 @@ events:RegisterEvent("BN_CHAT_MSG_ADDON")
 events:SetScript("OnEvent", function(_, event, ...)
 	if event == "ADDON_LOADED" then
 		local a = byName[...]
-		if not a then return end
-		if a.savedVariables then
-			a.isNew = _G[a.savedVariables] == nil   -- nothing was ever saved for it on this account
-			_G[a.savedVariables] = _G[a.savedVariables] or {}
-			if ShyCoreDB then Store().seen[a.name] = true end
-			-- (Before any profile is picked: what was kept under a name with no realm is this character's.)
-			if a == Shy.core then
-				local folded, why = pcall(P.Fold)
-				if not folded then geterrorhandler()(why) end
-			end
-			-- Must run before a.db is set; under pcall so a profile error can't stop the addon loading.
-			local ok, err = pcall(Pour, a)
-			if not ok then geterrorhandler()(err) end
-			a.db = Shy.MergeDefaults(_G[a.savedVariables], a.defaults or {})
-		end
-		-- (The census, asked for before this reload: on before the core's own OnLoad and every addon after it,
-		-- for this session alone.)
-		if a == Shy.core and a.db and a.db.census then
-			a.db.census = nil
-			census.Start()
-		end
-		SafeCall(a, "OnLoad")
-		Shy:Fire("SHY_ADDON_LOADED", a)
+		if a then Adopt(a) end
 	elseif event == "PLAYER_LOGIN" then
+		-- (Your class's addon first: it logs in with the others.)
+		local ok, err = pcall(Classed)
+		if not ok then geterrorhandler()(err) end
 		for _, a in ipairs(Shy.order) do SafeCall(a, "OnLogin") end
 		Shy:Fire("SHY_LOGIN")
-		local ok, err = pcall(Settle)
-		if not ok then geterrorhandler()(err) end
-		ok, err = pcall(Classed)
+		ok, err = pcall(Settle)
 		if not ok then geterrorhandler()(err) end
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		local ok, err = pcall(P.Fold)

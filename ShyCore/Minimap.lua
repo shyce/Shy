@@ -42,7 +42,7 @@ function Shy.WriteMenu(root, done)
 	end
 	-- The setup window first, on its own: the quick way back to every choice made in it.
 	if Shy.Setup then
-		root:CreateButton("Set up", Then(function() Shy.Setup.Open() end)):SetIcon({ Theme.MarkArt(Shy.MEDIA .. "SetupMark", UI.MENU_ROW.icon) })
+		root:CreateButton("Set up", Then(function() Shy.Setup.Start() end)):SetIcon({ Theme.MarkArt(Shy.MEDIA .. "SetupMark", UI.MENU_ROW.icon) })
 	end
 	-- What's new again, told or not.
 	if Shy.News then

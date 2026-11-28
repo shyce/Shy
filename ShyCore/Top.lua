@@ -225,7 +225,8 @@ local function Along(g, now)
 	return g.from + (g.to - g.from) * (1 - (1 - u) ^ 3), u
 end
 
-local function Glide()
+local Glide
+Glide = Shy.Clocked("top: pieces gliding", function()
 	local now, any = GetTime(), false
 	local quiet = InCombatLockdown()
 	for box, g in pairs(gliding) do
@@ -235,7 +236,7 @@ local function Glide()
 		if u >= 1 then gliding[box] = nil else any = true end
 	end
 	if not any then glider:SetScript("OnUpdate", nil) end
-end
+end)
 
 -- Every piece on its way is put where it is going (tests; drawings of the screen).
 function Top.Settle()
@@ -308,13 +309,14 @@ end
 
 -- Next frame, once: a box made or sized is often touched several times in a frame.
 local soon = false
+local Arranged = Shy.Clocked("top: the column arranged", function()
+	soon = false
+	Top.Apply()
+end)
 function Soon()
 	if soon then return end
 	soon = true
-	C_Timer.After(0, function()
-		soon = false
-		Top.Apply()
-	end)
+	C_Timer.After(0, Arranged)
 end
 
 -- A home given by anyone else: theirs, unless it is the place the box was made with or the one the column

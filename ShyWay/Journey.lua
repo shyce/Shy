@@ -315,10 +315,17 @@ local function Timed()
 end
 
 -- No ride takes less than this share of its line at a transport's speed (ride.aboard): a time under it was
--- no ride's (a ride joined short of its end), and is neither kept nor used.
+-- no ride's (a ride joined short of its end). Nor more than RIDE.most times the ride and a whole round of
+-- waiting: a time over that had something else in it (a stand in the tram's hall, a logout aboard). Neither
+-- is kept or used.
 local SHORTEST = 0.4
+local RIDE = {
+	most = 2,                -- times the ride and a round of waiting
+	least = 60,              -- seconds any ride may take: a portal's loading screen
+}
 local function Plausible(ride, seconds)
-	return seconds ~= nil and seconds >= (ride.aboard or 0) * SHORTEST
+	if seconds == nil or seconds < (ride.aboard or 0) * SHORTEST then return false end
+	return not ride.aboard or seconds <= math.max(RIDE.least, (ride.aboard + 2 * (ride.wait or 0)) * RIDE.most)
 end
 
 -- A ride's seconds, its wait in them (aboard: from setting off), and whether that was timed.
@@ -727,13 +734,14 @@ end
 -- A journey as it is now from `from` to `goal`: the same legs, each timed again (its first walk from here,
 -- its last to the goal as it stands now, a ride as it is now kept); nil where it ended elsewhere (the place
 -- moved: LEAD_NEAR), or one of its legs is gone, not known now, or no longer to be taken (another side's, or
--- a way left out).
+-- a way left out). Then whether a walk on it is too long to work out: its seconds are the least it can take.
 local function Again(from, goal, journey, opts)
 	local last = journey[journey.n]
 	if not goal or not last or last.to.world ~= goal.world or Straight(last.to, goal) > LEAD_NEAR then return nil end
 	local m = Made()
 	local known, side, by = Known(), Side(), opts and opts.by
 	local out = { goal = journey.goal, key = journey.key, n = journey.n, seconds = 0 }
+	local least = false
 	for index = 1, journey.n do
 		local leg = {}
 		for key, value in pairs(journey[index]) do leg[key] = value end
@@ -744,6 +752,7 @@ local function Again(from, goal, journey, opts)
 				local seconds, state = Walk(leg.from, leg.to, opts and opts.now)
 				if not seconds then return nil end
 				leg.seconds, leg.far = seconds, state == "far" or nil
+				if leg.far then least = true end
 			end
 		elseif leg.by == "flight" then
 			if not (Flight and leg.from.node and known[leg.to.node]) or (by and by.flight == false)
@@ -764,7 +773,7 @@ local function Again(from, goal, journey, opts)
 		out[index] = leg
 		out.seconds = out.seconds + leg.seconds
 	end
-	return out
+	return out, least
 end
 
 -- A path that takes a ride, against walking all the way: the walk wins unless the ride is clearly quicker.
@@ -807,8 +816,9 @@ function T.Journey(from, to, opts)
 	-- The journey being followed, while it is about as quick.
 	local lead = opts and opts.lead
 	if lead and lead.key ~= journey.key and lead.n and lead.n > 0 then
-		local held = Again(from, goals[lead.goal or 1], lead, opts)
-		if held and held.seconds <= journey.seconds * STAY then journey = held end
+		local held, least = Again(from, goals[lead.goal or 1], lead, opts)
+		-- (The least a walk can take is no time to hold against a journey that is known.)
+		if held and held.seconds <= journey.seconds * STAY and (far or not least) then journey = held end
 	end
 	local state = (working and "working") or (far and "far") or nil
 	return journey, state

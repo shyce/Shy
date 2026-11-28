@@ -52,7 +52,6 @@ local function Sizes()
 	for i, key in ipairs(ns.Console.SIZE_ORDER) do items[i] = { value = key, text = ns.Preview.NAMES[key] } end
 	return items
 end
-local GROW = { { value = "grow", text = "Grow with me" }, { value = "all", text = "Every bar now" } }
 local function Vessel(keys)
 	local items = {}
 	for i, key in ipairs(keys) do items[i] = { value = key, text = ns.Vessel.NAMES[key] } end
@@ -79,18 +78,14 @@ T:Settings({
 		L.CooldownsInCombat()
 	end,
 
-	{ note = "Not set up on this character yet. Pick a layout and it's set up, with a reload.", alert = true,
+	{ note = "This character isn't set up yet. Pick a layout to set it up, with a reload.", alert = true,
 		shown = function() return not Active() end },
 	{ label = "Layout", items = Styles, default = function() return ns.Console.STYLE end, get = function() return L.Style() end, set = function(v) ns.Preview.Wear("style", v) end,
 		apply = Picked, words = "console flanks open stack center healer tank minimal by role classic set up",
-		desc = "Where your bars, frames, chat and meter stand. A pick goes on at once, with a reload as you close." },
+		desc = "Where your bars, frames, chat and meter go. You see your pick right away, then reload when you close." },
 	{ label = "Size", items = Sizes, default = function() return ns.Console.DEFAULT end, get = function() return L.Size() end, set = function(v) ns.Preview.Wear("size", v) end,
 		apply = Picked, enabled = Active, words = "compact roomy grand big small",
 		desc = "How much room the console takes along the bottom of your screen." },
-	{ label = "Bars", items = GROW, default = "all", get = function() return L.Grows() and "grow" or "all" end,
-		set = function(v) ns.Preview.Wear("grow", v == "grow") end, apply = Picked, enabled = Active,
-		words = "grow with me every bar level abilities",
-		desc = "Grow with me starts you with fewer bars and adds them as you learn abilities." },
 	{ label = "Cooldown size", items = Vessel(ns.Vessel.SIZES), enabled = Active, words = "cooldown manager icons bars small medium large",
 		default = function() return ns.Vessel.SizeOf(T.defaults.cockpitScale) end,
 		get = function() return ns.Vessel.SizeOf(L.Scale()) end,
@@ -113,18 +108,18 @@ T:Settings({
 		desc = "The guide and group status stack in one panel under the minimap, with a tab each. Right-click it to take one out." },
 	{ key = "menuDrawer", label = "Menu in a drawer", sub = true, enabled = Arranged, words = "micro menu bags tray pull",
 		desc = "The micro menu and bags tuck away under the guide. Point at the pull to slide them out, or click it to keep them out." },
-	{ note = "Change these in a fight and they apply when it ends." },
+	{ note = "If you change these in a fight, they kick in when it ends." },
 
 	{ section = "Cooldown manager" },
 	{ key = "cockpitFollow", label = "See-through", enabled = Active, words = "opacity transparent solid background",
-		desc = "The cooldown manager is as see-through as the Background you set in Theme. Off, it's solid." },
+		desc = "The cooldown manager is as see-through as the Background you set in Theme. With this off, it's solid." },
 	-- (On, but the layout in use was written without it: off is the truth, and switching it on writes it.)
 	{ key = "cooldownsInCombat", label = "Cooldowns in combat only", enabled = Active, words = "hide out of combat essential utility fight",
 		get = function() return T.db.cooldownsInCombat and not L.CooldownsWaiting() end,
 		apply = function() L.CooldownsInCombat() end,
 		desc = "Your cooldowns show only in a fight, and tracked buffs stay up. You'll be asked to reload." },
 	{ key = "swing", label = "Swing timer", enabled = Active, words = "weapon speed auto attack next swing",
-		desc = "A bar for each weapon takes your cast bar's spot while you swing. Off, the game's own swing timer shows if you have it on." },
+		desc = "A bar for each weapon takes your cast bar's spot while you swing. With this off, you get the game's swing timer if it's on." },
 	{ note = "The swing bar turns gold with a next-swing ability queued, and red when your target is out of reach." },
 	-- (A layout by role keeps the bars by your frames: there it is the pings' alone, if there are any.)
 	{ key = "joined", label = "Bars and pings attached", enabled = Arranged, words = "tracked bars markers joined flap bay",
@@ -133,7 +128,7 @@ T:Settings({
 	-- (A rogue's, and only while ShyRogue's combo points are a piece on screen.)
 	{ key = "blades", label = "Combo points on it", needs = "Rogue", enabled = Arranged, words = "blades rogue",
 		shown = function() return UnitClassBase("player") == "ROGUE" and Shy.HUD.Find("shyrogue-combo") ~= nil end,
-		desc = "Your combo points sit in the cooldown manager's top edge and move with it. Off, they're a box of their own." },
+		desc = "Your combo points sit in the cooldown manager's top edge and move with it. With this off, they get their own box." },
 	{ label = "Pieces", button = "Take apart", enabled = Active, words = "loose socket handle separate",
 		run = function()
 			if not Calm() then return end

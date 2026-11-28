@@ -30,5 +30,5 @@ T:Settings({
 	{ section = "Keys", needs = "Keys", shown = Mine },
 	{ label = "Your keys", button = "Open", words = "hotkeys bindings macros bars layout abilities",
 		run = function() Shy.Hub.Open("keys") end,
-		desc = "See what each key does, lay them out, or put them back." },
+		desc = "See what each key does, set them up, or put them back." },
 })

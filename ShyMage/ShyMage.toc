@@ -2,7 +2,7 @@
 ## Title: |cff3373ffS|r|cff29b3ffh|r|cff73f2ffy|r|cffffffffMage|r
 ## Notes: Every ability on a key near your hand, each new one as you learn it |cff888888/shy mage|r
 ## Author: Shyce Cream
-## Version: 5.2.17
+## Version: 5.2.19
 ## X-Date: 2026-11-27
 ## IconTexture: Interface\AddOns\ShyMage\Media\ShyMageMarkColor
 ## Dependencies: ShyCore
@@ -10,6 +10,7 @@
 ## Group: ShyCore
 ## SavedVariables: ShyMageDB
 ## X-Shy-Class: MAGE
+## LoadOnDemand: 1
 
 ShyMage.lua
 Keys.lua

@@ -59,7 +59,9 @@ P.COCKPIT = {
 
 -- ShyFrames' plates over the housing, and what goes with them: the party row over the plates
 -- (Place.lua, P.Lift), the small frames (focus and pet left, the target's target right) on the
--- wings' roofs in the console, beside the plates in the corner layouts. In the plates' proportions.
+-- wings' roofs in the console, beside the plates in the corner layouts. Beside them they stand on the
+-- plates' foot: the target's target down at your target's right, your focus its mirror, your pet over it.
+-- In the plates' proportions.
 function P.Plates(g, now)
 	local SEAM = Console.SEAM
 	local h = g.housing
@@ -84,11 +86,25 @@ function P.Plates(g, now)
 		p.pet = { l - small.w, roof + small.h + SEAM, l, roof + 2 * small.h + SEAM }
 		p.tot = { r, roof, r + small.right, roof + small.h }
 	else
-		p.focus = { h.left - SEAM - small.w, top - small.h, h.left - SEAM, top }
-		p.pet = { h.left - SEAM - small.w, top + SEAM, h.left - SEAM, top + SEAM + small.h }
-		p.tot = { h.right + SEAM, top - small.h, h.right + SEAM + small.right, top }
+		p.focus = { h.left - SEAM - small.w, foot, h.left - SEAM, foot + small.h }
+		p.pet = { h.left - SEAM - small.w, foot + small.h + SEAM, h.left - SEAM, foot + 2 * small.h + SEAM }
+		p.tot = { h.right + SEAM, foot, h.right + SEAM + small.right, foot + small.h }
 	end
 	return p
+end
+
+-- The small frames on one side of the plates in a classic layout ("left": focus and pet; "right": your target's
+-- target), as one rect { l, b, r, t }; nil with none there.
+function P.Small(g, now, side)
+	if (now.plates or 0) <= 0 then return nil end
+	local p = P.Plates(g, now)
+	if side == "right" then
+		local r = p.tot
+		return r[3] > r[1] and { r[1], r[2], r[3], r[4] } or nil
+	end
+	local f, e = p.focus, p.pet
+	if f[3] <= f[1] then return nil end
+	return { min(f[1], e[1]), min(f[2], e[2]), max(f[3], e[3]), max(f[4], e[4]) }
 end
 
 -- The armor stand (ShySkin's): a seam left of the minimap column, its top on the line the guide hangs from
@@ -201,6 +217,8 @@ function P.Role(g, now, c, piece, strip)
 	x = max(x, vesselHalf + U + half)
 	if wide and not cell then x = max(x, wide / 2 + U + half) end
 	local y = now.height / 2 + role.unitY * k
+	-- Your target's target hangs a gap under your target, flush with its outer end; your focus is its mirror under
+	-- you, and your pet hangs under your focus. Nothing stands over your frames' auras.
 	local function Lay(dy)
 		local cy = y + dy
 		out.player = Centred(-x, cy, pw, ph)
@@ -208,20 +226,23 @@ function P.Role(g, now, c, piece, strip)
 		local p, t = out.player, out.target
 		local sw, sh = Size("targettarget")
 		local fw, fh = Size("focus")
-		if role.small == "beside" then
-			out.targettarget = { t[3] + U, cy - sh / 2, t[3] + U + sw, cy + sh / 2 }
-			out.focus = { p[1] - U - fw, cy - fh / 2, p[1] - U, cy + fh / 2 }
-		else
-			out.targettarget = Centred(x, t[4] + U + sh / 2, sw, sh)
-			out.focus = Centred(-x, p[4] + U + fh / 2, fw, fh)
-		end
 		local ew, eh = Size("pet")
-		out.pet = Centred(-x, p[2] - U - eh / 2, ew, eh)
+		out.targettarget = { t[3] - sw, t[2] - U - sh, t[3], t[2] - U }
+		out.focus = { p[1], p[2] - U - fh, p[1] + fw, p[2] - U }
+		local f = out.focus
+		out.pet = { p[1], f[2] - U - eh, p[1] + ew, f[2] - U }
 	end
 	Lay(0)
-	-- The pet frame, the lowest of them, stays a gap over the bars and their racks.
-	local low = math.min(out.pet[2], out.target[2])
-	if low < floorTop + U then Lay(floorTop + U - low) end
+	-- The lowest of them (your pet, your target's target) stay a gap over the bars and their racks, and over chat
+	-- and the meter where they stand over them (a short screen).
+	local lift = 0
+	for _, r in ipairs({ out.pet, out.targettarget }) do
+		lift = max(lift, floorTop + U - r[2])
+		for _, under in ipairs({ g.chat and g.chat.art or false, g.meter and g.meter.art or false }) do
+			if under and under[1] < r[3] + U and under[3] > r[1] - U then lift = max(lift, under[4] + U - r[2]) end
+		end
+	end
+	if lift > 0 then Lay(lift) end
 
 	-- The group: on the group column's left edge, at its own place, or (the healer's) under your character over
 	-- the cooldown manager.
@@ -322,16 +343,17 @@ function P.Role(g, now, c, piece, strip)
 			end
 			return l, top
 		end
-		-- Where it may hang, in order: under its frame, beside your target (when the screen has room), under your
-		-- target. The first with THREAT_LEAST rows' room wins.
+		-- Where it may hang, in order: under its frame, flush with its outer end as your target's target is (the
+		-- right side one column); beside your target (when the screen has room); under your target. The first with
+		-- THREAT_LEAST rows' room wins.
 		local tries = {}
 		if not T.beside then
 			local over = out[T.under]
-			tries[#tries + 1] = { OnScreen(over[1], over[2] - U) }
+			tries[#tries + 1] = { OnScreen(over[3] - T.w, over[2] - U) }
 		end
-		local side = (role.small == "beside" and out.targettarget or out.target)[3] + P.SIDE_GAP
-		if side + T.w <= edge then tries[#tries + 1] = { side, max(out.target[4], out.targettarget[4]) } end
-		tries[#tries + 1] = { OnScreen(out.target[1], out.target[2] - U) }
+		local side = out.target[3] + P.SIDE_GAP
+		if side + T.w <= edge then tries[#tries + 1] = { side, out.target[4] } end
+		tries[#tries + 1] = { OnScreen(out.target[3] - T.w, out.target[2] - U) }
 		for _, at in ipairs(tries) do
 			local rows = Rows(at[1], at[2])
 			if rows >= P.THREAT_LEAST then
@@ -418,10 +440,10 @@ local function Pick(g, now, c, out, floorTop, w, Tall, want, tries, more)
 end
 
 -- Where the tracked bars live in a layout by role: the home { l, b, r, t }, how many rows it holds, and which way
--- they grow ("down" from its top edge, "up" from its foot). Tried in order: the threat meter's mirror on your side
--- (its width, its top, so the two read as a pair); under your frames (the pet's place
--- counted, there or not), flush with your frame's left edge, hung from a gap under them; beside them outward, hung
--- from your frame's top; standing a gap over the highest of them (on a narrow screen slid in clear of the group);
+-- they grow ("down" from its top edge, "up" from its foot). Tried in order: standing a gap over your frame, flush
+-- with its outer end, growing up (the pings and markers stand so over your target: P.StripHome); the threat
+-- meter's mirror on your side (its width, its top); under your frames, flush with your frame's left edge, hung
+-- from a gap under them; beside them outward, hung from your frame's top; over them slid in clear of the group;
 -- over your target's; over the cooldown manager.
 function P.BarsHome(g, now, c, out, floorTop, vesselTop)
 	local U, m = P.UNIT_GAP, c.m
@@ -433,13 +455,11 @@ function P.BarsHome(g, now, c, out, floorTop, vesselTop)
 	for _, r in ipairs({ out.player, out.pet, out.focus }) do
 		left, foot, high = min(left, r[1]), min(foot, r[2]), max(high, r[4])
 	end
-	local tries = {}
-	-- First the threat meter's mirror: where it stands by your target, the bars stand by you (its width, its top).
+	local tries = { { p[1], high + U, "up" } }
 	local th = out.threat
-	if th then tries[1] = { -th[3], th[4], "down" } end
+	if th then tries[#tries + 1] = { -th[3], th[4], "down" } end
 	tries[#tries + 1] = { p[1], foot - U, "down" }
 	tries[#tries + 1] = { left - P.SIDE_GAP - bw, p[4], "down" }
-	tries[#tries + 1] = { p[1], high + U, "up" }
 	for _, G in ipairs({ out.group or false, out.partyAt ~= out.group and out.partyAt or false }) do
 		if G and G[3] + U > p[1] and G[3] + U < p[3] and G[1] < p[1] then
 			tries[#tries + 1] = { G[3] + U, high + U, "up" }
@@ -451,11 +471,11 @@ function P.BarsHome(g, now, c, out, floorTop, vesselTop)
 end
 
 -- Where the pings and markers stand in a layout by role (`size` their block's { w, h }): by your target's frames,
--- since they act on your target. Tried in order: your pet frame's mirror, hung a gap under your target as the pet
--- hangs under you (target, target's target and pings mirror focus, you and your pet); standing a gap over the highest of what
--- is over your target (your target's target, the threat meter), flush with your target's outer edge, then with your
--- target's target's; beside them outward, hung from your target's top; hung a gap under your target's; over the
--- cooldown manager. Clear of everything P.BarsHome keeps clear of, and the bars.
+-- since they act on your target. Tried in order: standing a gap over the highest of what is over your target (the
+-- threat meter, where it stands there), flush with your target's outer edge: the tracked bars' mirror over you;
+-- then flush with your target's target's; hung a gap under your target where your pet hangs under you; beside them
+-- outward, hung from your target's top; hung a gap under your target's; over the cooldown manager. Clear of
+-- everything P.BarsHome keeps clear of, and the bars.
 function P.StripHome(g, now, c, out, size, floorTop, vesselTop)
 	local U, w, h = P.UNIT_GAP, size[1], size[2]
 	local t, tt = out.target, out.targettarget
@@ -467,12 +487,11 @@ function P.StripHome(g, now, c, out, size, floorTop, vesselTop)
 		end
 		return top + U
 	end
-	-- First the pet frame's mirror: hung a gap under your target as your pet hangs under you, centred as it is.
 	local pet = out.pet
 	local tries = {
-		{ -(pet[1] + pet[3]) / 2 - w / 2, pet[4], "down" },
 		{ t[3] - w, Over(t[3] - w), "up" },
 		{ tt[3] - w, Over(tt[3] - w), "up" },
+		{ -(pet[1] + pet[3]) / 2 - w / 2, pet[4], "down" },
 		{ max(t[3], tt[3]) + P.SIDE_GAP, t[4], "down" },
 		{ t[3] - w, t[2] - U, "down" },
 		{ -w / 2, vesselTop + U, "up" },
@@ -575,7 +594,7 @@ function P.List(g, now, c, s)
 	-- By role: your frames round your character, the group where the role wants it, the threat meter by your target.
 	local role = P.Role(g, now, c, s.threat)
 	if role then
-		Add("plates", role.focus[1], role.pet[2], role.targettarget[3], max(role.focus[4], role.targettarget[4]),
+		Add("plates", role.player[1], role.pet[2], role.target[3], max(role.player[4], role.target[4]),
 			{ label = "Unit frames", group = true })
 		Rect("plate", role.player, { color = "health" })
 		Rect("plate", role.target, { color = "bad" })

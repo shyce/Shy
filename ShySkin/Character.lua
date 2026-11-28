@@ -1028,7 +1028,7 @@ M = ns.Module({
 	words = "paper doll gear stats reputation skills",
 	options = {
 		{ key = "home", label = "Your race's home", default = true,
-			desc = "A painting of your race's home hangs behind your character. Off, the background is plain." },
+			desc = "A painting of your race's home hangs behind your character. With this off, the background is plain." },
 	},
 
 	Ready = function()

@@ -23,7 +23,7 @@ ns.Dungeons = Dungeons
 -- (Each way's line fits a tile's one line.)
 local WAYS = {
 	{ value = "ready", name = "At my level", glyph = "up", say = "Each one at its level, plus any you tick" },
-	{ value = "ticked", name = "The ones I pick", glyph = "star", say = "Only the dungeons ticked below" },
+	{ value = "ticked", name = "The ones I pick", glyph = "star", say = "Only the ones you tick below" },
 	{ value = "never", name = "None", glyph = "go", say = "No dungeon quests in your guide" },
 }
 local TILE_H, GAP, BREAK = 58, 8, 10   -- a way's tile (the immersion step's); between tiles and cards; ways to gallery
@@ -219,7 +219,7 @@ local function Lines(plan)
 		if named ~= "" then lines[2] = { text = "At any level: " .. named } end
 		return lines
 	end
-	if named == "" then return { { text = "No dungeon ticked", sub = "tick some in the options any time" } } end
+	if named == "" then return { { text = "No dungeons ticked", sub = "you can tick some in Settings any time" } } end
 	return { { text = "Dungeon quests: " .. named } }
 end
 

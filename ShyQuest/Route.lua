@@ -3134,6 +3134,8 @@ local function RideStop(leg)
 		-- (Half a round is the wait on average: a boat leaves each dock once a round.)
 		local every = leg.every and math.max(1, math.floor(leg.every / 60 + 0.5)) or nil
 		stop.ferry, stop.leg, stop.crossing, stop.aloft = leg.by, "ferry" .. leg.ride, leg.ride, leg.seconds
+		-- (Its own height: a road runs over Stormwind's tram hall, and the way must end in the hall.)
+		stop.up = from.up
 		stop.heading, stop.strip, stop.mark = RIDE.headings[leg.by], RIDE.strips[leg.by], select(2, RideLook(leg.by))
 		stop.note = every and ("Leaves about every %d min"):format(every) or nil
 	end
@@ -3213,7 +3215,7 @@ local function WithJourneys(route)
 			-- point is learned or what you can do changes (SHY_TERRAIN, below).
 			local fromN, fromW = here.north or W.north, here.west or W.west
 			local kept = R.journeyKept[key]
-			local journey
+			local journey, state
 			-- (Walking along it only brings you nearer; farther from the stop than when it was worked out, you
 			-- were carried off or went the other way, and it is worked out again.)
 			local away = W.Between(fromN, fromW, stop.north, stop.west)
@@ -3230,7 +3232,6 @@ local function WithJourneys(route)
 				and kept.origin == origin and away <= (kept.away or 0) + R.JOURNEY_SLACK and not strayed then
 				journey = kept.journey
 			else
-				local state
 				journey, state = Way.Journey(here, Way.Place(stop.continent, stop.north, stop.west, { level = level, up = up }),
 					{ lead = journeys[key] })
 				-- (One still being worked out is the quickest known so far, not yet the journey: never kept, and
@@ -3247,7 +3248,8 @@ local function WithJourneys(route)
 			end
 			Shy.Clock("route: journeys"):Lap(debugprofilestop() - from)
 			if journey then
-				now[key] = journey
+				-- (One still being worked out is no way followed yet: the last one known stays the lead.)
+				now[key] = state ~= "working" and journey or journeys[key]
 				for i = 1, journey.n do
 					if journey[i].by ~= "walk" then
 						local ride = RideStop(journey[i])
@@ -3297,7 +3299,7 @@ end)
 -- Stops that aren't quests (trainer, vendor, talents), found at run time by Train.lua, Bags.lua
 -- and Spec.lua. An errand never blocks the guide and can't be singled out.
 --
---   R.AddErrand(id, find)    find(lead) runs on every build and returns a stop or nil:
+--   R.AddErrand(id, find)    find(lead, route) runs on every build and returns a stop or nil:
 --         title         row title, one line
 --         lines         lines under it when it leads the card: { text, ... }
 --         caption       card heading when it leads
@@ -3329,7 +3331,7 @@ end)
 --                       and found: what the card and the arrow say then
 --         strip         its hover's heading, in place of "On your way"
 --         tip(tip), menu(root), click()    tooltip extras, menu extras, row click (default: point the way)
---       lead: the stop that would lead otherwise.
+--       lead: the stop that would lead otherwise. route: the stops of this build, its errands aside.
 --     name: what it is called where it can be turned back on ("Class trainer"); one with no name (getting
 --       back to life) can't be put away.
 local ERRAND_NEAR = 120      -- yards: an errand this near is done now
@@ -3554,7 +3556,7 @@ end
 -- on top, then the nearest. R.held: the route is chosen again only for a walk (ShyQuest.lua). Then what
 -- was worth doing now still is, so two near ones don't trade places at every step.
 -- Without levelling help only the ALWAYS errands are asked for.
-local function Errands(lead)
+local function Errands(lead, route)
 	local first, rest, now, urgent = {}, {}, {}, {}
 	local was, held = ranFirst, R.held and ranFirst ~= nil
 	local stepTaken = R.StepTaken() ~= nil   -- (a step you took goes before what leads only for being worth it)
@@ -3564,7 +3566,7 @@ local function Errands(lead)
 		-- pcall: one finder's error must not break the route. (Each timed on its own: the task manager names the slow one.)
 		local tick = debugprofilestop()
 		local ok, stop = true, nil
-		if not R.Hushed(id) and not R.errandAside[tostring(id)] and (levelling or ALWAYS[id]) then ok, stop = pcall(errands[id], lead) end
+		if not R.Hushed(id) and not R.errandAside[tostring(id)] and (levelling or ALWAYS[id]) then ok, stop = pcall(errands[id], lead, route) end
 		Shy.Clock("errand: " .. tostring(id)):Lap(debugprofilestop() - tick)
 		if not ok then
 			geterrorhandler()(stop)
@@ -4043,7 +4045,7 @@ function R.Build()
 	-- or without a guide after the lead stop.
 	local head = (route[1] and route[1].chosen) and 2 or 1
 	tick = debugprofilestop()
-	local now, later, urgent = Errands(route[head])
+	local now, later, urgent = Errands(route[head], route)
 	if run then now, later = {}, {} end
 	Shy.Clock("route: errands"):Lap(debugprofilestop() - tick)
 	-- (After the guide's steps, wherever they stand now. Kept so a fight or a loot can put the errands
@@ -4167,7 +4169,7 @@ function R.RefitErrands()
 	after = after and after + 1 or math.min(#route + 1, head + 1)
 	if ownLast and after <= ownLast then after = ownLast + 1 end
 	errandsFound = false
-	local now, later, urgent = Errands(route[head])
+	local now, later, urgent = Errands(route[head], route)
 	if R.Running() then now, later = {}, {} end
 	local ahead = {}
 	if ownFirst then now, ahead = YourWay(now, route[ownFirst]) end

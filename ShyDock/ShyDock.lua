@@ -20,6 +20,7 @@
 --   Offer.lua     the console's step in the setup window (ShyCore's Setup.lua)
 --   Picker.lua    the cockpit's size and bars' side: its setup step, /shy section and drawing
 --   Grow.lua      offers another bar when the abilities known outgrow the bars
+--   Update.lua    offers a console set up before the new places a release gives what setup wrote (Layout.lua, L.SHAPE)
 --   Preview.lua   scaled drawing of the screen with the layouts and sizes to pick from
 --
 -- ShyDockDB is account-wide; ShyDockCharDB is per character, matching Edit

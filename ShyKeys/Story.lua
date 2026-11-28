@@ -481,7 +481,7 @@ function Keys.Rescheme()
 	local result = laid and Keys.Apply(mine.addon, mine.jobs, mine.opts)
 	if result then
 		mine.waiting = result.waiting
-		mine.addon:Print(("your keys are laid out for %s now."):format(Scheme().name))
+		mine.addon:Print(("your keys are set up for %s now."):format(Scheme().name))
 	end
 	return true
 end

@@ -110,7 +110,7 @@ local HOTVIEW = {
 		shy = { title = "Set it up for me", name = "your new keys", brief = "set up", tag = "Recommended", act = "Set up my keys",
 			say = "Every ability gets its own key. What a key did before moves to Ctrl + that key." },
 		own = { title = "Keep my hotkeys", name = "your own hotkeys", brief = "on my hotkeys", tag = "Not recommended", act = "Keep my hotkeys",
-			say = "Abilities go on the keys you already use. Any whose key is taken is left off." },
+			say = "Abilities go on the keys you already use. If a key's taken, that ability is left off." },
 		off = { title = "How I had it", name = "how you had it", brief = "left alone", tag = "Yours", act = "Put it all back",
 			say = "Your buttons and hotkeys, exactly as you had them." },
 	},
@@ -146,15 +146,15 @@ function Hot.Says(pick, plan)
 	-- The macros a layout comes to: among the account's when the character's are full, and no layout without room.
 	local space = mine and Keys.Space(mine.addon, mine.jobs, mine.opts)
 	if space and space.short > 0 then
-		says.block = ("Not enabled yet. Your keys need %d macros and there's room for %d. Delete %d you don't use, character or account, and they can be laid out. Your own macros are never touched here."):format(
+		says.block = ("Can't set them up yet. Your keys need %d macros and there's room for %d. Delete %d you don't use, on this character or the account, and they'll fit. Nothing here touches your own macros."):format(
 			space.need, space.need - space.short, space.short)
 	elseif space and space.spill > 0 then
-		says.notes[1] = ("This character has room for %d of your keys' %d macros, so %d go among the account's, which every character sees. They're removed when you go back. Your own macros are never touched."):format(
+		says.notes[1] = ("This character has room for %d of your keys' %d macros, so %d go with the account's macros, which every character sees. They're removed when you go back. Nothing here touches your own macros."):format(
 			math.max(0, space.character), space.need, space.spill)
 	end
 	if pick == "own" then
 		says.safe = Hot.On() and "Your own hotkeys come back, each as it was before."
-			or "Your hotkeys stay as they are. Only a key that does nothing now may be given a button."
+			or "Your hotkeys stay as they are. Only keys that do nothing now might get a button."
 		-- (the abilities that wait, their keys doing something else: listed on the page, a row each)
 		local stuck = mine and not Hot.On() and Stuck(mine) or {}
 		if #stuck > 0 then says.waits = stuck end
@@ -289,7 +289,7 @@ function Hot.Panel(parent, width, plan, onPick, part)
 		local pick = self:Pending()
 		if not pick or not mine then return true end
 		if InCombatLockdown() then
-			Shy.core:Print("your keys can be changed once the fight is over.")
+			Shy.core:Print("you can change your keys once the fight is over.")
 			return false
 		end
 		HOT.viewing = nil
@@ -507,7 +507,7 @@ function Hot.Panel(parent, width, plan, onPick, part)
 			if listening == row then
 				Stop()
 			elseif InCombatLockdown() then
-				errs[row.entry.key] = "Your keys can be changed once the fight is over."
+				errs[row.entry.key] = "You can change your keys once the fight is over."
 			else
 				Stop()
 				errs[row.entry.key] = nil
@@ -541,7 +541,7 @@ function Hot.Panel(parent, width, plan, onPick, part)
 			local entry = row.entry
 			if entry then
 				errs[entry.key] = nil
-				if not Hot.Keep(entry.key, i == 2, Noting()) then errs[entry.key] = "Your keys can be changed once the fight is over." end
+				if not Hot.Keep(entry.key, i == 2, Noting()) then errs[entry.key] = "You can change your keys once the fight is over." end
 			end
 			Again()
 		end, { width = HOTVIEW.choice, height = HOTVIEW.plate })
@@ -1184,7 +1184,7 @@ function Keys.Movement(parent, width)
 		if not Keys.SetScheme(scheme) then Shy.core:Print("you can switch how you move once the fight is over.") end
 		f:Refresh()
 	end
-	choices.wasd = Choice(f, half, "wasd", "W forward, S back. The game's own.", Pick)
+	choices.wasd = Choice(f, half, "wasd", "W forward, S back. The game's default.", Pick)
 	choices.asdf = Choice(f, half, "asdf", "S forward, F back. Your hand rests a key to the right.", Pick)
 	choices.wasd:SetPoint("TOPLEFT")
 	choices.asdf:SetPoint("LEFT", choices.wasd, "RIGHT", MINI.apart, 0)

@@ -44,7 +44,7 @@ end
 
 local LAYER = {
 	zones = { words = "names levels seas",
-		desc = "Each zone's name and levels on a continent, colored by your level. The terrain names the seas too." },
+		desc = "Each zone's name and levels on a continent, colored by your level. The terrain view names the seas too." },
 	flights = { words = "flight master taxi", desc = "Flight masters. The ones you haven't found yet are faded." },
 	routes = { words = "flight paths lines", desc = "Faint lines along the flight paths between the flight points you know." },
 	travel = { words = "tram ships docks", desc = "Where to catch boats, zeppelins and the tram, and where each goes." },

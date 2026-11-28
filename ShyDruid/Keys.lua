@@ -332,7 +332,7 @@ end
 
 function K.Run(typed)
 	if not ns.isDruid then
-		T:Print("your keys are laid out on a druid only.")
+		T:Print("these keys are for druids only.")
 		return
 	end
 	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)

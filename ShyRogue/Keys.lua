@@ -343,7 +343,7 @@ end
 
 function K.Run(typed)
 	if not ns.isRogue then
-		T:Print("your keys are laid out on a rogue only.")
+		T:Print("these keys are for rogues only.")
 		return
 	end
 	Shy.Keys.Run(T, JOBS, OPTS, nil, typed)

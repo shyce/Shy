@@ -30,7 +30,7 @@ T:Settings({
 	end,
 	{ key = "window", label = "Auction window", words = "auction house ah buy sell default replace",
 		apply = function() ns.Window.Apply() end,
-		desc = "One window to buy, sell, watch your auctions and find farms. Off gives you the default one." },
+		desc = "One window to buy, sell, watch your auctions and find farms. Turn it off to get the game's back." },
 	{ key = "spacePosts", label = "Space posts", sub = true, words = "spacebar key sell stack",
 		enabled = function() return T.db.window end, apply = Keys,
 		desc = "On the Sell tab, each press of Space posts your next stack." },

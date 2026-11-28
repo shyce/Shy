@@ -3,9 +3,10 @@
 -- The bars are protected, so the housing is never anchored to them (it would
 -- become protected in combat): it reads their rectangles and is placed by
 -- coordinates. A rect can be secret; then the last good one is kept.
--- Only bars forming one block with the main bar are wrapped. Bars lay out a
--- frame late, so each trigger measures next frame and again after SETTLE; in
--- Edit Mode it measures every frame.
+-- Only bars forming one block with the main bar are wrapped. Until the console's
+-- layout is in use that block is the game's own row: bars side by side, the menu
+-- and the bags beside them. Bars lay out a frame late, so each trigger measures
+-- next frame and again after SETTLE; in Edit Mode it measures every frame.
 --
 -- API:
 --   Shy.addons.Dock:HousingRect() -> left, bottom, width, height  (UIParent units; nil with no bottom bar)
@@ -13,6 +14,7 @@
 --                                  racks; else nil (the other corner layouts have nothing beside the bars)
 --   Shy.addons.Dock:WingEdges() -> x, x   inner edges of the left and right wings (or racks), from the screen's center
 --   Shy.addons.Dock:Seam() -> the gap between any two pieces
+--   Shy.addons.Dock:Reach() -> how far a housing reaches past its bar's sides
 --   Shy.addons.Dock:UnderSpan() -> left, right, top   the room kept under the floor (ShyXP's bars), UIParent units
 --   "SHY_CONSOLE" on the bus       fired only when the rect or the roof changed
 
@@ -27,7 +29,9 @@ ns.Housing = H
 -- The side bars count only where they are stacked with the others (the stack layout).
 local BARS = { "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft" }
 local MAIN = { "MainActionBar" }
+local ROW = { "MicroMenuContainer", "BagsBar" }   -- in the bars' row in the game's own layout
 local NEAR = 12        -- bars no further apart than this are one block
+local BESIDE = 24      -- side by side in the game's own layout (its two upper bars stand 22 apart)
 local SETTLE = 0.3     -- bars have finished laying out by now
 
 local EVENTS = {
@@ -61,17 +65,24 @@ local function Rect(bar, originX, originY, scale)
 	}
 end
 
--- Stacked on the block: overlapping horizontally and within NEAR vertically.
-local function Touches(rect, block)
+-- Stacked on the block: overlapping horizontally and within NEAR vertically. `row`: or beside it in one row,
+-- overlapping vertically and within BESIDE horizontally.
+local function Touches(rect, block, row)
 	local across = min(rect[3], block[3]) - max(rect[1], block[1])
 	local narrower = min(rect[3] - rect[1], block[3] - block[1])
 	local apart = max(rect[2] - block[4], block[2] - rect[4], 0)
-	return across >= narrower / 2 and apart <= NEAR
+	if across >= narrower / 2 and apart <= NEAR then return true end
+	if not row then return false end
+	local down = min(rect[4], block[4]) - max(rect[2], block[2])
+	local shorter = min(rect[4] - rect[2], block[4] - block[2])
+	local aside = max(rect[1] - block[3], block[1] - rect[3], 0)
+	return down >= shorter / 2 and aside <= BESIDE
 end
 
 -- The block around the main bar (or the lowest bar); `main` alone: the main bar's own. nil with no bar on screen;
--- false when a rect was secret.
-local function Block(main)
+-- false when a rect was secret. `loose`: the console's layout isn't the one in use, so the bars stand as the game's
+-- layout or the player's own has them: side by side too, the menu and the bags in the row with them, one block.
+local function Block(main, loose)
 	local originX, originY = UIParent:GetScaledRect()
 	local scale = UIParent:GetEffectiveScale()
 	local rects = {}
@@ -80,6 +91,7 @@ local function Block(main)
 		if secret then return false end
 		if rect then
 			rect.main = i == 1
+			rect.side = i > 3   -- a side bar: beside the block it is a rack of its own, never one of its rows
 			rects[#rects + 1] = rect
 		end
 	end
@@ -93,12 +105,24 @@ local function Block(main)
 		if rect[2] < rects[seed][2] then seed = i end
 	end
 	local block = table.remove(rects, seed)
+	-- (The menu and the bags only join a block of bars: with no bar on screen there is none.)
+	if loose and not main then
+		for _, name in ipairs(ROW) do
+			local frame = _G[name]
+			-- (One stood down by its rolesets is shown still, and off the screen: ShyBags' way with the bags.)
+			if not frame:IsRolesetFiltered() then
+				local rect, secret = Rect(frame, originX, originY, scale)
+				if secret then return false end
+				rects[#rects + 1] = rect
+			end
+		end
+	end
 	local grew = true
 	while grew do
 		grew = false
 		for i = #rects, 1, -1 do
 			local rect = rects[i]
-			if Touches(rect, block) then
+			if Touches(rect, block, loose and not rect.side) then
 				block[1], block[2] = min(block[1], rect[1]), min(block[2], rect[2])
 				block[3], block[4] = max(block[3], rect[3]), max(block[4], rect[4])
 				table.remove(rects, i)
@@ -112,8 +136,9 @@ end
 -- With ShyFrames' plates over the housing, `head` raises its top so the plates meet
 -- the roof (Console.Build). `alone`: the layout shows the main bar alone and fades the others in while you point
 -- at them (the minimal one): the housing is the main bar's, the others have one of their own that fades with them
--- (Drawers.lua). Never recomputed in combat.
-local head, alone
+-- (Drawers.lua). `loose`: the console's layout isn't the one in use, so the housing goes round the bars as they
+-- stand (Block). Never recomputed in combat.
+local head, alone, loose
 
 local function Head()
 	if InCombatLockdown() then return end
@@ -121,6 +146,7 @@ local function Head()
 	local active = L.IsActive()
 	head = L.Plates() > 0 and active and L.Plan().head or nil
 	alone = active and L.Plan().role ~= nil and L.Plan().role.reveal == true
+	loose = not active
 end
 
 local function Tell(changed)
@@ -134,7 +160,7 @@ end
 -- following = true while Edit Mode is open and this runs every frame.
 function H.Measure(following)
 	if following ~= true then Head() end
-	local bars = Block(alone)
+	local bars = Block(alone, loose)
 	if bars == false then return end   -- secret rect: keep the last position
 	if not bars then
 		dock:Hide()
@@ -195,6 +221,12 @@ end
 -- The gap between any two pieces of the console.
 function T:Seam()
 	return Console.SEAM
+end
+
+-- How far a housing reaches past its bar's sides (the bars' own, a rack's): what stands beside a bar keeps that
+-- clear of it, and a seam. 0 with the housings off.
+function T:Reach()
+	return T.db.housing and Console.PAD or 0
 end
 
 -- Where the wings begin, from the screen's center: the left wing's right edge, the right wing's left edge.

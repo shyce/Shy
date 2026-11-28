@@ -37,7 +37,7 @@ end
 -- picked at the top of a long list is saved without hunting for the button.
 local ROOM_PARTS = {
 	{ label = "How they work", ask = "How your keys work", order = 10,
-		lead = "Laid out for your class, your own hotkeys kept, or neither. Pick one, then press the button under them.",
+		lead = "Set them up for your class, keep your own hotkeys, or leave them alone. Pick one, then press the button under them.",
 		build = function(page) return Keys.Panel(page, page.width, nil, "choose") end },
 	{ label = "How you move", ask = "How do you move?", order = 20,
 		lead = "Your keys are laid out around the hand you move with.",
@@ -45,7 +45,7 @@ local ROOM_PARTS = {
 	-- (the room's own heading says Keys and the column over the plates says KEY: this one says what the list
 	-- is for, not the same word a third time)
 	{ label = "What changes", ask = "What changes", order = 30,
-		lead = "Every key that changes, and where its old job goes.",
+		lead = "Here's every key that changes, and where its old job goes.",
 		build = function(page)
 			local panel = Keys.Panel(page, page.width, nil, "changes")
 			panel.hot.foot = function(bar) Shy.HubFoot(page, bar) end
@@ -55,7 +55,7 @@ local ROOM_PARTS = {
 		lead = "Drag the level to see what comes when. Point at a key to see what it does.",
 		build = function(page) return Keys.Panel(page, page.width, nil, "board") end },
 	{ label = "How to play", ask = "How to play", order = 50,
-		lead = "What to press, and when, at the level the keys show.",
+		lead = "What to press and when, at the level the keys show.",
 		build = function(page)
 			-- (in a plain frame of its own: the guide's Show draws it at a level, and the room shows a part by its frame)
 			local holder = CreateFrame("Frame", nil, page)
@@ -137,7 +137,7 @@ local Settle = Hot.Settle
 -- Answered, the answer stays lit and a line under it says what it comes to; Yes again walks through it again.
 --   Keys.Ask(parent, width, plan, room) -> f: f:Refresh(), f:Fit(room)
 local ASK = { width = 460, gap = 16, button = 136, board = 22, pad = 40 }
-Keys.QUESTION = "Do you want me to interactively set up your key binds, macros and bars as you level?"
+Keys.QUESTION = "Want your key binds, macros and bars set up for you as you level?"
 function Keys.Ask(parent, width, plan, room)
 	local f = CreateFrame("Frame", nil, parent)
 	f.room = room or 400
@@ -151,7 +151,7 @@ function Keys.Ask(parent, width, plan, room)
 	f.board:SetPoint("TOP")
 	f.question = UI.Text(column, Keys.QUESTION, 18, true, C.head)
 	f.question:SetPoint("TOP", f.board, "BOTTOM", 0, -ASK.board)
-	f.say = UI.Text(column, "Every ability gets a key close to your hand. Your bars and macros are laid out for you, and each new ability lands on its key when you learn it. You see everything before anything changes, and one click puts it all back.", 12, false, C.dim)
+	f.say = UI.Text(column, "Every ability gets a key close to your hand. Your bars and macros are set up for you. Each new ability goes on its key when you learn it. You'll see it all before anything changes, and one click puts it all back.", 12, false, C.dim)
 	f.say:SetPoint("TOP", f.question, "BOTTOM", 0, -10)
 	f.answer = UI.Text(column, "", 12, false, C.text)
 	for _, text in ipairs({ f.question, f.say, f.answer }) do
@@ -233,7 +233,7 @@ function Keys.Review(parent, width, plan)
 	f.moving = Part(2, "How you move", "keys.move")
 	f.changes = Part(3, "What changes", "keys.changes")
 	f.board = Part(4, "Your new keys", "keys.board")
-	f.foot = UI.Text(f, "Finish in setup does all of this. Until then nothing changes, and later one click in /shy keys puts it all back.", 12, false, C.alert)
+	f.foot = UI.Text(f, "Nothing changes until you press Finish. Later, one click in /shy keys puts it all back.", 12, false, C.alert)
 	f.foot:SetWidth(width)
 	f.foot:SetJustifyH("LEFT")
 	function f:Refresh()
@@ -244,8 +244,8 @@ function Keys.Review(parent, width, plan)
 			or "WASD: W forward, S back, as the game has it.")
 		local line = Keys.STEP.Lines(plan)[1]
 		self.changes.say:SetText(line.sub and line.sub ~= "" and line.sub or line.text)
-		self.board.say:SetText(pick == "shy" and "Every ability on its own key, from your first level to your last. Each new one lands on its key when you learn it."
-			or pick == "own" and "Your abilities on the keys you already use. Any whose key does something else waits."
+		self.board.say:SetText(pick == "shy" and "Every ability gets its own key, from your first level to your last. Each new one goes on its key when you learn it."
+			or pick == "own" and "Your abilities go on the keys you already use. If a key does something else, its ability waits."
 			or "Your keys as you have them now.")
 		local y = 0
 		for _, part in ipairs(parts) do
@@ -296,17 +296,17 @@ Keys.STEP = {
 		local mine = Keys.Mine()
 		local pick = plan.keys and plan.keys.pick
 		if pick == "skip" then
-			return { { text = "Your keys stay as they are", sub = "your key binds, macros and bars are left alone" } }
+			return { { text = "Your keys stay as they are", sub = "your key binds, macros and bars don't change" } }
 		end
 		if not mine or not pick then return { { text = Brief() } } end
 		local laid = Keys.Has(mine.addon)
 		local says = Hot.Says(pick, plan)
 		if pick == "off" then
 			return { { text = laid and "Your keys are put back" or "Your keys stay as they are",
-				sub = laid and "every button and hotkey as it was before" or "lay them out any time from /shy keys" } }
+				sub = laid and "every button and hotkey as it was before" or "set them up any time from /shy keys" } }
 		end
 		if says.block and not laid then
-			return { { text = "Your keys aren't laid out yet", sub = "there is no room for their macros: see the Keys page" } }
+			return { { text = "Your keys aren't set up yet", sub = "there's no room for their macros. See the Keys page" } }
 		end
 		-- (set up stands only where the hotkeys are set: not on a character's own key bindings, until Finish)
 		local stands = laid and pick == Keys.Mode() and (pick ~= "shy" or Hot.On())

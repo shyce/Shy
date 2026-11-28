@@ -97,11 +97,11 @@ local ROOMS = {
 	{ key = "screen", label = "Screen", glyph = "window", ask = "Your screen",
 		lead = "Change how big everything is, and move things where you want them." },
 	{ key = "play", label = "Play", glyph = "book", ask = "How you play",
-		lead = "How you pick up and hand in quests, and how much of the UI you see while you play." },
+		lead = "Pick how you take and hand in quests, and how much of the UI you see while you play." },
 	-- (owned: an addon's room, not the core's. Without that addon nothing fills it, so the rail leaves it out.)
 	-- (not paged: you come here to change a key, not to walk through setting them up again)
 	{ key = "keys", label = "Keys", glyph = "action", owned = true, ask = "Keys",
-		lead = "Your class laid out on your keys. Change any of them here. Nothing is bound until you save." },
+		lead = "Your class's abilities on your keys. Change any of them here. Nothing changes until you save." },
 	{ key = "game", label = "Game", glyph = "log", ask = "Game settings",
 		lead = "Tick one and it changes right away. Untick it and you get back what you had. They're all in the game's own options too." },
 	{ key = "profiles", label = "Profile", glyph = "group", ask = "Profiles",
@@ -469,12 +469,19 @@ end
 -- whatever width the room on show is laid out at, so its bar stands at the edge. (Placed again only where it stands
 -- otherwise: every room hangs from it, and all of them are laid out again by the game for a place it is given
 -- anew, the same one too.)
+-- (A guest walking a few pages one at a time has no rail: its page stands in the middle. See Focus.)
+local function Focused() return win.guest ~= nil and win.guest.focus == true end
+
 local function Place(down, room)
 	local scroll = win.box.scroll
-	if scroll.shyDown == down and scroll.shyRoom == room then return end
-	scroll.shyDown, scroll.shyRoom = down, room
+	local left = W.EDGE + W.RAIL + W.PAD - W.IN
+	if Focused() then
+		left = max(W.PAD - W.IN, math.floor(((win.bodyW or W.WIDTH) - (W.IN + win.pageW + W.SCROLL)) / 2))
+	end
+	if scroll.shyDown == down and scroll.shyRoom == room and scroll.shyLeft == left then return end
+	scroll.shyDown, scroll.shyRoom, scroll.shyLeft = down, room, left
 	scroll:ClearAllPoints()
-	scroll:SetPoint("TOPLEFT", win.body, "TOPLEFT", W.EDGE + W.RAIL + W.PAD - W.IN, down)
+	scroll:SetPoint("TOPLEFT", win.body, "TOPLEFT", left, down)
 	scroll:SetPoint("TOPRIGHT", win.body, "TOPRIGHT", -W.RIGHT, down)
 	scroll:SetHeight(room)
 end
@@ -632,6 +639,7 @@ end
 -- The step is what a room's width is rounded down to, and so what it leaves unused at its right edge. It is
 -- small: a room built for a width is kept, and there are only as many as the widths you rest the corner at.
 local function Lay(_, width, height)
+	win.bodyW = width or win.bodyW
 	win.pageH = height - (W.HEADER + W.TOP + W.FOOT)
 	-- (While a corner is dragged the page keeps its width: a room is built for another, and that waits for the
 	-- corner to be let go.)
@@ -845,6 +853,7 @@ end
 
 -- Lent to a guest: our rooms put away, the rail the guest's, the foot open, the header saying what it does.
 -- Solid whatever the screen under it does (the guest may hold the screen up: the setup does).
+local Focus   -- (made below, with the pips)
 function Hub.Lend(guest)
 	if not win.box then Create() end
 	local box = win.box
@@ -865,6 +874,7 @@ function Hub.Lend(guest)
 		box:SetIgnoreParentAlpha(true)
 	end
 	win.open = true
+	Focus()
 	Shy.HUD.Update(box)
 	Lay(box, UI.BodySize(box))
 	return box
@@ -872,12 +882,38 @@ end
 
 function Hub.Lent() return win.guest end
 
+-- Lent to a guest that walks a few pages one at a time (its `focus`): no rail, the sheet from edge to edge, the
+-- page in the middle (Place), and where the walk is as named steps in the header (UI.Stepper, as the welcome's).
+--   Hub.Pips(names, at, onClick)   the steps, the one at `at` lit, those before it done (onClick(i): back to one);
+--                                  none: put away. box.pips: a step each
+function Hub.Pips(names, at, onClick)
+	local box = win.box
+	if not box then return end
+	if not box.steps then
+		box.steps = UI.Stepper(box.head)
+		box.steps:SetPoint("LEFT", box.mode, "RIGHT", 24, 0)
+		box.pips = box.steps.items
+	end
+	box.steps:Set(type(names) == "table" and names or nil, at or 0, onClick)
+end
+
+function Focus()
+	local box, on = win.box, Focused()
+	if box.focused == on then return end
+	box.focused = on
+	box.rail:SetShown(not on)
+	box.rule:SetShown(not on)
+	UI.BodySheet(box, true, { on and 0 or W.EDGE + W.RAIL, W.HEADER, 0, 0 })
+	if not on then Hub.Pips(0) end
+end
+
 -- The guest's rail and header told again (its own walk within its walk: other rows, another title).
 function Hub.Retell(guest)
 	local box = win.box
 	if not box or win.guest ~= guest then return end
 	box.rail:SetItems(guest.items)
 	box.mode:SetText(UI.Wrap(C.dim, guest.words or "") .. " " .. UI.Wrap(C.head, guest.name or ""))
+	Focus()
 	Lay(box, UI.BodySize(box))
 end
 
@@ -898,6 +934,7 @@ function Hub.Return(shut)
 	box.foot:Hide()
 	box.mode:Hide()
 	box:SetIgnoreParentAlpha(false)
+	Focus()
 	-- (Home again: where the walk began)
 	win.at = "home"
 	Lay(box, UI.BodySize(box))
@@ -1071,7 +1108,7 @@ function Build.home(page)
 	Help(arrange, "Layout mode", "Move the game's pieces and the addons' in one editor. Click a piece for its settings.")
 	local setup
 	if S and S.Open then
-		setup = UI.Button(banner, "Set up " .. First(), 150, function() S.Open() end)
+		setup = UI.Button(banner, "Set up " .. First(), 150, function() S.Start() end)
 		setup:SetHeight(30)
 		setup:SetPoint("RIGHT", arrange, "LEFT", -8, 0)
 	end
@@ -1183,7 +1220,7 @@ function Build.profiles(page, top)
 
 	uses = group:Dropdown(page, "This character uses", Items(), P.Current, function(name)
 		if P.Use(name) then
-			Shy.Reload("Profile switched. Reload to apply it.")
+			Shy.Reload("You've switched profiles. Reload to finish.")
 		else
 			Relist()   -- the character's own profile, created from current settings: no reload
 		end
@@ -1207,7 +1244,7 @@ function Build.profiles(page, top)
 			core:Print(why == "empty" and "enter a name for the new profile." or ("there is already a profile called " .. wanted .. "."))
 			return
 		end
-		core:Print("now using profile " .. wanted .. ", a copy of your current settings.")
+		core:Print("you're on profile " .. wanted .. " now, a copy of your current settings.")
 		typed = ""
 		Relist()
 	end)
@@ -1223,7 +1260,7 @@ function Build.profiles(page, top)
 	Help(copy, "Copy it here", "Replaces this profile's settings with the picked profile's, then asks for a reload.")
 	UI.Twice(copy, function()
 		if picked and P.CopyFrom(picked) then
-			Shy.Reload("Settings copied. Reload to apply them.")
+			Shy.Reload("The settings are copied. Reload to use them.")
 		end
 	end)
 	function copy:Refresh() self:SetUsable(picked ~= nil) end
@@ -1315,7 +1352,7 @@ core:Settings({
 	{ label = "Game's error window", default = false, words = "lua errors popup bug",
 		shown = function() return Shy.Errors ~= nil end,
 		get = function() return Shy.Errors.Popup() end, set = function(v) Shy.Errors.SetPopup(v) end,
-		desc = "Addon errors also pop up the game's own error window. Off, they're only kept in Errors caught." },
+		desc = "Addon errors also open the game's error window. With this off, they only go to Errors caught." },
 
 	-- How threat is read for you: one pick for the meter, the nameplates and a class's own warnings. Told here,
 	-- once, and only while something of yours shows threat.
@@ -1356,7 +1393,7 @@ do
 	Door("play", "Voices", "People speak their lines aloud.", "voice over spoken quest text")
 	Door("play", "Quest text size", "How big a quest giver's words are.", "font size dialog")
 	Door("play", "Camera", "How the camera follows you.", "slopes map fade tilt")
-	Door("keys", "Your keys", "Your class laid out on your keys.", "keybinds hotkeys bindings action bars")
+	Door("keys", "Your keys", "Your class's abilities on your keys.", "keybinds hotkeys bindings action bars")
 	Door("profiles", "Profile", "Which settings this character uses, and copies of them.", "profile character global copy delete create")
 	Door("tools", "Task manager", "What each addon costs your game.", "performance fps memory cpu monitor")
 	Door("tools", "Errors caught", "The addon errors kept so far.", "lua error bug report")

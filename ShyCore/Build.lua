@@ -1,7 +1,9 @@
 -- Your talent build: which of your class's leveling builds you play (Data/Builds.lua, from the client's trees),
 -- read from the talents you have bought, and the one you picked to follow. Every addon asks here.
 --
---   Shy.Build.Played()     the build your talents are now: { id, name, role, goal }, or nil for a class with none.
+--   Shy.Build.Played()     the build your talents are now: { id, name, role, goal, tab }, or nil for a class with none.
+--   Shy.Build.Spent()      how many talent points are spent: with none, Played is only the build the class starts with
+--   Shy.Build.Planned(plan)   the build a setup's plan holds, as Played gives one: what the player picked there
 --                          Your pick while your talents still fit it (or none are bought yet), else the build
 --                          they fit best: what your keys, your role and your gear go by.
 --   Shy.Build.Followed()   the build the talent suggestions follow: your pick, else the one your talents fit best
@@ -12,6 +14,7 @@
 --                          over[node]: the ranks you hold there past it.
 --   Shy.Build.Class()      this class's tree and builds: { tree, tabs, nodes, builds }, or nil
 --   Shy.Build.Tabs()       the tree's three tabs as the talent window names them: { { name, icon }, ... }, or nil
+--   Shy.Build.Icon(build)  its tab's icon (Holy's, Retribution's), from the start
 --   Shy.Build.Find(id)     one of the class's builds by id
 --   Shy.Build.Picked()     the id you picked, or nil (follow what your talents fit)
 --   Shy.Build.Choose(id)   picks one to follow (nil: whatever your talents fit)
@@ -24,7 +27,8 @@
 --                          the window has a Reset of its own
 --   Shy.Build.OverRing(parent, out)   the crimson frame such a talent wears on the game's window, out past its edge
 -- SHY_BUILD is said when the build you play changes, and when you pick one ("picked").
--- Picking one is here too: the setup window's Talents step, and Leveling build in the core's settings.
+-- Picking one is here too: setup's first question (its "Play as" step), the /shy window's Play room, and
+-- Leveling build in the core's settings.
 --
 -- C_Traits has no data until the spellbook is first read (SHY_SPELLS) or a trait event has fired.
 
@@ -95,6 +99,12 @@ local function Named(config, node)
 	if not name or name == "" then return nil end
 	names[node] = { name, icon }
 	return name, icon
+end
+
+-- A build's tab icon: the client's own for that tab (Data/Builds.lua), there from the start.
+function B.Icon(build)
+	local spec = build and B.Class()
+	return spec and spec.icons and spec.icons[build.tab] or nil
 end
 
 function B.Tabs()
@@ -289,12 +299,25 @@ function B.Followed()
 end
 
 local function Plain(build)
-	if build then return { id = build.id, name = build.name, role = build.role, goal = build.goal } end
+	if build then return { id = build.id, name = build.name, role = build.role, goal = build.goal, tab = build.tab } end
 end
 
 function B.Played()
 	local now = B.Now()
 	return Plain(now and now.played or B.Followed())
+end
+
+-- How many talent points are spent: 0 for a character with none yet, whose build (B.Played) is then only the one
+-- its class starts with, not anything its talents say.
+function B.Spent()
+	local now = B.Now()
+	return now and now.spent or 0
+end
+
+-- The build a setup's plan holds: what setup's other steps go by (the layout a healer or a tank gets), before it
+-- is chosen for good.
+function B.Planned(plan)
+	return Plain(B.Find(plan and plan.talents and plan.talents.build))
 end
 
 -- Says SHY_BUILD when the build you play isn't the one last said, or (why: "picked") whatever it is.
@@ -399,40 +422,93 @@ Shy.core:Settings({
 			return build and build.id
 		end,
 		set = function(v) B.Pick(v) end,
-		desc = "How you want to play while leveling. Your keys, role and gear follow it. A build your talents don't fit needs a reset at a class trainer." },
+		desc = "How you'll play while leveling. Your keys, role and gear advice go by it. If your talents don't fit, a class trainer can reset them." },
 })
 
--- The setup window's step: what to play. The class's builds as its choice tiles, two to a row, each with its
--- tree's icon, what it is for, why, and its caution. The pick is kept in plan.talents.build.
-local TILE, GAP = 96, 8      -- a tile's height (a why of two lines and a caution of two), and between tiles
+-- What to play: the class's builds as choice tiles, each with its tree's icon, what it is for, why, and its
+-- caution. In setup (a plan) the pick is kept in plan.talents.build, and the steps that go by it are told
+-- (Setup.Follow). With no plan (the /shy window's Play room) a click picks it at once.
+--   B.Tiles(parent, width, plan, opts)   opts.per: tiles to a row (2); opts.caption: a caption over them;
+--                                        opts.picked(build): after a click; opts.asked: a question still open
+--                                        (the welcome), so none is lit until one is picked or a point is spent
+-- TILE: a tile's height (a why of two lines and a caution of two); GAP: between tiles; CAPTION: a caption's room.
+local TILE, GAP, CAPTION = 96, 8, 22
 
-local function Page(parent, width, plan)
+-- A build your talents don't fit: said as a catch on its card.
+local RESET = "Needs a talent reset at your trainer."
+-- A build's kind, the game's own role icon for it and its word: what it does in a fight.
+local ROLE = { damage = { "roleicon-tiny-dps", "Damage" }, healer = { "roleicon-tiny-healer", "Healer" },
+	tank = { "roleicon-tiny-tank", "Tank" } }
+
+function B.Tiles(parent, width, plan, opts)
+	opts = opts or {}
 	local spec = B.Class()
 	local builds = spec and spec.builds or {}
-	local half = (width - GAP) / 2
+	local per = opts.per or math.max(1, math.min(#builds, 4))
+	local each = (width - (per - 1) * GAP) / per
+	local top = opts.caption and CAPTION or 0
 	local f = CreateFrame("Frame", nil, parent)
-	f:SetSize(width, math.ceil(#builds / 2) * (TILE + GAP) - GAP)
-	local tiles = {}
+	f:SetSize(width, top + math.ceil(#builds / per) * (TILE + GAP) - GAP)
+	if opts.caption then
+		f.caption = UI.Text(f, opts.caption:upper(), 11, true, C.dim)
+		f.caption:SetPoint("TOPLEFT")
+	end
+	local function Held()
+		if plan then
+			local talents = plan.talents
+			if opts.asked and B.Spent() == 0 and not (talents and talents.picked) then return nil end
+			return talents and talents.build
+		end
+		local build = B.Followed()
+		return build and build.id
+	end
+	f.tiles = {}
 	for index, build in ipairs(builds) do
-		local tile = Shy.Setup.Tile(f, half, nil, build.name, function()
-			plan.talents.build = build.id
+		local tile = Shy.Setup.Tile(f, each, nil, build.name, function()
+			if plan then
+				plan.talents = plan.talents or {}
+				plan.talents.build, plan.talents.picked = build.id, true
+				if Shy.Setup.Follow then Shy.Setup.Follow(plan) end
+			else
+				B.Pick(build.id)
+			end
 			f:Refresh()
-		end, TILE, true)
-		tile:SetPoint("TOPLEFT", ((index - 1) % 2) * (half + GAP), -math.floor((index - 1) / 2) * (TILE + GAP))
+			if opts.picked then opts.picked(build) end
+		end, TILE, true, true)
 		tile.say:SetText(build.why)
-		tile.note:SetText(build.note or "")
-		tiles[index] = tile
+		local role = ROLE[build.role]
+		if role and tile.SetKind then tile:SetKind(role[1], role[2]) end
+		f.tiles[index] = tile
+	end
+	-- Cards stand as tall as the tallest one's words, a row of them a line (again as their catches change).
+	local function Lay()
+		local tall = TILE
+		for _, tile in ipairs(f.tiles) do
+			if tile.Fit then tall = math.max(tall, tile:Fit()) end
+		end
+		for index, tile in ipairs(f.tiles) do
+			tile:SetHeight(tall)
+			tile:ClearAllPoints()
+			tile:SetPoint("TOPLEFT", ((index - 1) % per) * (each + GAP), -top - math.floor((index - 1) / per) * (tall + GAP))
+		end
+		f:SetHeight(top + math.ceil(#builds / per) * (tall + GAP) - GAP)
 	end
 	function f:Refresh()
-		-- The trees' icons, once the game has its talents (a moment after login).
-		local shown = spec and ready and B.Tabs()
+		local held = Held()
 		for index, one in ipairs(B.Builds()) do
-			local tile = tiles[index]
-			tile:SetIcon(shown and shown[one.build.tab].icon or nil)
-			tile:Paint(one.build.id == plan.talents.build, one.reset and (one.tag .. "  \194\183  needs a talent reset") or one.tag, false,
-				one.reset and C.alert or index == 1 and C.good or nil)
+			local tile = self.tiles[index]
+			tile:SetIcon(B.Icon(one.build))
+			-- Its tag is its own word; that it takes a talent reset is a catch, said with the others.
+			local note = one.build.note
+			if one.reset then note = RESET .. (note and ("\n" .. note) or "") end
+			tile.note:SetText(note or "")
+			tile:Paint(one.build.id == held, one.tag, false, index == 1 and C.hot or nil)
+			-- (asked on the welcome: once one is picked, the others step back)
+			if opts.asked and held and one.build.id ~= held then tile:SetAlpha(0.5) end
 		end
+		Lay()
 	end
+	Lay()
 	return f
 end
 
@@ -442,25 +518,38 @@ local function Picked(plan)
 	end
 end
 
--- After the step on how to quest, so what to play follows it.
+-- Setup's first question, before the theme and the screen: the layout, the keys and the gear advice go by it.
 B.Step = {
-	id = "talents", order = 23, title = "Talents", glyph = "up",
-	ask = function() return ("Pick what to play, %s"):format(UnitName("player")) end,
+	id = "talents", order = 12, title = "Play as", glyph = "up", guided = true,
+	ask = "What do you want to play?",
 	brief = function(plan)
 		local build = Picked(plan)
 		return build and build.name
+	end,
+	-- (Told once there is something to tell: a point spent, or a pick made in this setup. Before that the build
+	-- is only the one the class starts with.)
+	told = function(plan) return B.Spent() > 0 or (plan.talents ~= nil and plan.talents.picked == true) end,
+	why = function(plan)
+		local build, played = Picked(plan), B.Played()
+		if not build or (plan.talents and plan.talents.picked) then return nil end
+		return B.Spent() > 0 and played and played.id == build.id and "based on your talents" or nil
 	end,
 	-- When the talent points start: level 10, or sooner with the account's Talented (ShyQuest knows it).
 	lead = function()
 		local quest = Shy.addons.Quest
 		local from = quest and quest.TalentsFrom and quest:TalentsFrom() or 10
-		return ("Talent points start at level %d. Change your mind any time in Settings."):format(from)
+		if UnitLevel("player") >= from then return "Your layout, keys and gear advice go by it. You can change it any time in /shy." end
+		return ("Your layout, keys and gear advice go by it. Talent points start at level %d."):format(from)
 	end,
+	-- (picked: the player chose it in this setup, so it counts whatever the talents say yet. A plan filled again
+	-- keeps such a pick.)
 	Plan = function(plan)
+		local was = plan.talents
+		if was and was.picked and B.Find(was.build) then return end
 		local build = B.Followed()
 		plan.talents = { build = build and build.id }
 	end,
-	Build = Page,
+	Build = function(parent, width, plan) return B.Tiles(parent, width, plan) end,
 	Lines = function(plan)
 		local build = Picked(plan)
 		if not build then return {} end
@@ -480,9 +569,20 @@ B.Step = {
 	-- shows after the reload that ends the setup.
 	Run = function(plan)
 		if not Picked(plan) then return false end
+		plan.talents.picked = nil   -- (chosen for good now: the next plan reads it as any other)
 		B.Choose(plan.talents.build)
 		return B.Lineup(plan.talents.build)
 	end,
 }
 -- (The tests load the core without its setup window.)
 if Shy.Setup then Shy.Setup.Step(B.Step) end
+
+-- The /shy window's Play room: the same tiles first, a click picking the build at once.
+if Shy.Setup and Shy.HubSection then
+	Shy.HubSection("play", function(page, top)
+		if #B.Builds() < 2 then return nil end
+		local section = B.Tiles(page, page.width, nil, { caption = "What you play" })
+		Shy.HubPlace(page, section, top)
+		return section, function() section:Refresh() end
+	end, 5)
+end

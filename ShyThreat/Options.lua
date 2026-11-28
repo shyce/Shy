@@ -28,6 +28,6 @@ T:Settings({
 	{ key = "hover", label = "Follow your mouseover", enabled = On, words = "nameplate hover mouse",
 		desc = "In a fight, mouse over an enemy's nameplate to see its threat. The meter goes back to your target after." },
 	{ key = "warn", label = "Warn near the pull", enabled = On, words = "header light gold red",
-		desc = "The meter's header lights gold, then red, as you get close to pulling. Tanking, it lights as the next player catches up." },
+		desc = "The meter's header lights gold, then red, as you get close to pulling. When you're tanking, it lights as the next player catches up." },
 	{ note = "Your nameplates turn the same colors on the same mob.", needs = "Plates" },
 })

@@ -1188,14 +1188,30 @@ function L.Flap(c, now)
 	c.rects.bars = { c.barsLeft, c.barsFoot, c.barsLeft + m.barW, c.barsFoot + barsH }
 end
 
--- The tracked bars' home in a classic layout: a seam off the plate on their side (c.barsSide), standing on its
--- foot and growing up, a bar wide and as tall as every bar tracked (c.barsUp); the pings and markers take the
--- plate's other side (Arrange.lua), so the two flank the cooldown manager as a pair.
-function L.Beside(c)
+-- The tracked bars' home in a classic layout, a bar wide and as tall as every bar tracked (c.barsUp), growing up.
+-- With ShyFrames' small frames on their side (c.barsSide), it stands a seam over them, flush with their inner end:
+-- your focus and pet at the left, your target's target at the right (over the threat meter where that stands
+-- there). Without them, a seam off the plate on that side, on its foot; the pings and markers take the plate's
+-- other side (Arrange.lua).
+function L.Beside(c, now)
 	local m, box = c.m, c.rects.box
 	local w = m.barW + 2 * m.pad
 	local h = c.barsUp * (m.barH + m.barGap) - m.barGap + 2 * m.pad
-	local l = c.barsSide == "right" and box[3] + Console.SEAM or box[1] - Console.SEAM - w
+	local right = c.barsSide == "right"
+	local g = now and (now.plates or 0) > 0 and Console.Build(now)
+	local small = g and ns.Parts.Small(g, now, c.barsSide)
+	if small then
+		local l = right and small[1] or small[3] - w
+		local foot = small[4]
+		local piece = right and ns.Parts.ThreatPiece()
+		if piece then
+			local tl, _, tr, tt = ns.Parts.Threat(g, now, piece)
+			if tl < l + w and tr > l then foot = max(foot, tt) end
+		end
+		foot = foot + Console.SEAM
+		return { l, foot, l + w, foot + h }
+	end
+	local l = right and box[3] + Console.SEAM or box[1] - Console.SEAM - w
 	return { l, box[2], l + w, box[2] + h }
 end
 
@@ -1362,8 +1378,9 @@ local function Cockpit(now, top)
 		local party = Console.Build(now).housing.top + now.rise + now.plates + CLEAR
 		if abs(c.low - party) > 0.5 then c = Make(c.top + party - c.low) end
 	end
-	-- The tracked bars have a home of their own here too, beside the plate (L.Beside); joined (a setting), its flap.
-	if c.rects.barsWing and not T.db.joined then L.Home(c, L.Moved(L.Beside(c), now), "up") end
+	-- The tracked bars have a home of their own here too, over the small frames on their side (L.Beside); joined (a
+	-- setting), its flap.
+	if c.rects.barsWing and not T.db.joined then L.Home(c, L.Moved(L.Beside(c, now), now), "up") end
 	return c
 end
 
@@ -1816,10 +1833,27 @@ local function StillOurs(info, was)
 		and abs(anchor.offsetX - was[2]) < 0.5 and abs(anchor.offsetY - was[3]) < 0.5
 end
 
+-- Is this system as the last setup left it: where it put it (or at the game's default, when it put it nowhere),
+-- and every setting it wrote still the value it wrote? A system the player moved or changed in Edit Mode isn't.
+local function Untouched(info, key)
+	local at = ns.char.placed and ns.char.placed[key]
+	if at then
+		if not StillOurs(info, at) then return false end
+	elseif not info.isInDefaultPosition then
+		return false
+	end
+	for setting, value in pairs(ns.char.written and ns.char.written[key] or {}) do
+		local now = Value(info, setting)
+		if type(now) == "number" and type(value) == "number" and abs(now - value) > 0.5 then return false end
+	end
+	return true
+end
+
 -- Write the console into a layout. again: the layout is ours from an earlier
--- run, so what that run placed may be placed again. Returns where each system
+-- run, so what that run placed may be placed again. keep: only what is untouched
+-- since that run is written (a layout update: L.Update). Returns where each system
 -- was placed and the settings written for it, by Key (L.Custom reads both).
-local function Write(layout, g, now, again)
+local function Write(layout, g, now, again, keep)
 	local was = again and ns.char.placed or {}
 	local placed, written, taken = {}, {}, {}
 	for _, def in ipairs(PLACES) do
@@ -1831,6 +1865,7 @@ local function Write(layout, g, now, again)
 		local info = index ~= false and Find(layout, def.system, index) or nil
 		local key = Key(def.system, index)
 		local mine = info and (def.ours or info.isInDefaultPosition or StillOurs(info, was[key]))
+		if keep then mine = info and Untouched(info, key) end
 		if mine and def.when and not def.when(info, g, now) then mine = false end
 		if mine and def.with and not taken[def.with] then mine = false end
 		if mine then
@@ -1935,9 +1970,18 @@ function L.Exists()
 	return Mine(Layouts().layouts) ~= nil
 end
 
+-- Our layout in use as the starter (`ns.char.starter`): the game's arrangement with only its side bars laid
+-- beside the bottom bars. The console is not in use then, and every piece stands as it does before a setup; a
+-- setup writes the console over it in place, and "back" returns to what stood before it.
+function L.Started()
+	if not (ns.char and ns.char.starter) then return false end
+	local info = Layouts()
+	return IsMine(info.layouts[info.activeLayout - Presets()]) == true
+end
+
 function L.IsActive()
 	local info = Layouts()
-	return IsMine(info.layouts[info.activeLayout - Presets()])
+	return IsMine(info.layouts[info.activeLayout - Presets()]) and not (ns.char and ns.char.starter)
 end
 
 -- Is this system still where the console's setup put it, in the layout in use? (A piece the player moved
@@ -2257,7 +2301,7 @@ function L.CooldownsInCombat()
 	C_EditMode.SaveLayouts(info)
 	Forget()
 	Shy.Settings.Refresh()
-	Shy.Reload("The cooldown setting is saved. Reload to apply it.")
+	Shy.Reload("Your cooldown setting is saved. Reload to see it.")
 end
 
 -- The option is on but the console's layout in use was written without it. The layout is never
@@ -2517,7 +2561,9 @@ function L.SetUp(size, style, opts)
 	local info = C_EditMode.GetLayouts()
 	local saved, presets, active = info.layouts, Presets(), info.activeLayout
 	local mine = Mine(saved)
-	local again = mine ~= nil and active == presets + mine
+	-- (Over the starter the console is written fresh, in the starter's place: nothing in it was the console's.)
+	local starter = mine ~= nil and ns.char.starter == true
+	local again = mine ~= nil and active == presets + mine and not starter
 
 	local layout, index
 	if again then
@@ -2536,9 +2582,13 @@ function L.SetUp(size, style, opts)
 			layoutName = L.NAME, layoutType = Character, interfaceStyle = source.interfaceStyle,
 			systems = Shy.CopyTable(source.systems),
 		}
-		ns.char.previous = active <= presets and { preset = active }
-			or { name = source.layoutName, type = source.layoutType }
+		-- (The starter kept what stood before it: that is still where "back" goes.)
+		if not (starter and active == presets + mine) then
+			ns.char.previous = active <= presets and { preset = active }
+				or { name = source.layoutName, type = source.layoutType }
+		end
 	end
+	ns.char.starter = nil
 
 	if Console.SIZES[size] then ns.char.size = size end
 	if Console.STYLES[style] then ns.char.style = style end
@@ -2583,6 +2633,7 @@ function L.SetUp(size, style, opts)
 	Visibility(layout, not again)
 	ns.char.built = Signature(now)
 	ns.char.settle = true
+	ns.char.shape, ns.char.skipped, ns.char.undo, ns.char.updated = L.SHAPE, nil, nil, nil
 	ns.Arrange.TakeIn()
 	-- The menu's drawer goes back to its default (tucked) for the layout being written; not while setup's picks
 	-- go on live (or are kept), where it stays as the player left it (pinned out stays out).
@@ -2675,7 +2726,7 @@ end
 -- Switch back to the previous layout. Ours stays in Edit Mode's list.
 function L.GoBack()
 	if InCombatLockdown() then return false, "combat" end
-	if not L.IsActive() then return false, "elsewhere" end
+	if not (L.IsActive() or L.Started()) then return false, "elsewhere" end
 	local info = C_EditMode.GetLayouts()
 	local was, target = ns.char.previous, nil
 	if was and was.preset then
@@ -2689,7 +2740,116 @@ function L.GoBack()
 	target = target or C_EditMode.GetEditModeDefaultLayout() + 1
 	C_EditMode.SetActiveLayout(target)
 	Forget()
-	Shy.Reload("Switched back to your previous layout. Reload to apply it.")
+	Shy.Reload("You're back on your old layout. Reload to finish.")
+	return true
+end
+
+-- Layout updates
+--
+-- A release can move what a setup writes into the layout (where the game's own unit frames, the group or the bars
+-- stand). L.SHAPE is the arrangement's version: raised with such a change, a console set up before is offered the
+-- new places (Update.lua). Only systems as the last setup left them move (Untouched); what the player moved or
+-- changed in Edit Mode stays theirs, and so do the pieces of ours they moved (those follow their homes live). The
+-- layout as it was is kept, so the update can be put back in one press (L.UndoUpdate).
+L.SHAPE = 1
+
+-- Our layout in use, and its index in the saved list: nil while the console isn't in use.
+local function InUse()
+	local info = C_EditMode.GetLayouts()
+	local mine = Mine(info.layouts)
+	if not (mine and info.activeLayout == Presets() + mine and not ns.char.starter) then return nil end
+	return info, mine
+end
+
+-- How many systems stand or are set otherwise in `b` than in `a` (two copies of a layout).
+local function Moved(a, b)
+	local count = 0
+	for i, was in ipairs(a.systems) do
+		local now, differs = b.systems[i], false
+		local p, q = was.anchorInfo or {}, now.anchorInfo or {}
+		if p.point ~= q.point or p.relativePoint ~= q.relativePoint or abs((p.offsetX or 0) - (q.offsetX or 0)) >= 0.5
+			or abs((p.offsetY or 0) - (q.offsetY or 0)) >= 0.5 then
+			differs = true
+		end
+		for _, entry in ipairs(now.settings) do
+			local before = Value(was, entry.setting)
+			if before == nil or (type(before) == "number" and abs(before - entry.value) >= 0.5) then differs = true end
+		end
+		if differs then count = count + 1 end
+	end
+	return count
+end
+
+-- The layout as an update would write it, and how many of its systems would move. nil while the console isn't in use.
+local function Updated()
+	local info, mine = InUse()
+	if not info then return nil end
+	local layout = info.layouts[mine]
+	local now = Now()
+	now.column.menu.stands, now.bagsRow.stands = nil, nil
+	local g = Console.Build(now)
+	local copy = Shy.CopyTable(layout)
+	local placed, written = Write(copy, g, now, true, true)
+	return Moved(layout, copy), info, mine, copy, placed, written
+end
+
+-- Does this character's console wait for an update it hasn't skipped? The number of systems it would move: 0 when
+-- it is current (an update that moves nothing marks it so), nil while the console isn't in use or set up.
+function L.UpdateWaiting()
+	if not (ns.char.built and L.IsActive()) then return nil end
+	if (ns.char.shape or 0) >= L.SHAPE or (ns.char.skipped or 0) >= L.SHAPE then return 0 end
+	local moved = Updated()
+	if moved == 0 then ns.char.shape = L.SHAPE end
+	return moved
+end
+
+-- Writes the update: the untouched systems in their new places, the rest left as they are. Ends in the reload panel
+-- when anything moved.
+function L.Update()
+	if InCombatLockdown() then return false, "combat" end
+	Forget()
+	local moved, info, mine, copy, placed, written = Updated()
+	if not moved then return false, "elsewhere" end
+	if moved > 0 then
+		local layout = info.layouts[mine]
+		ns.char.undo = { systems = Shy.CopyTable(layout.systems), placed = ns.char.placed, written = ns.char.written,
+			shape = ns.char.shape, settle = ns.char.settle }
+		-- (What it left alone keeps its record from the setup: still the player's own to L.Custom.)
+		local kept, set = Shy.CopyTable(ns.char.placed or {}), Shy.CopyTable(ns.char.written or {})
+		for key, at in pairs(placed) do kept[key] = at end
+		for key, values in pairs(written) do set[key] = values end
+		-- (A console that fit the screen as set up is measured again after the reload, as a setup's is.)
+		if not L.IsStale() then ns.char.settle = true end
+		ns.char.placed, ns.char.written = kept, set
+		info.layouts[mine] = copy
+		C_EditMode.SaveLayouts(info)
+		Forget()
+		ns.char.updated = true
+	end
+	ns.char.shape, ns.char.skipped = L.SHAPE, nil
+	if moved > 0 then Shy.Reload("Your layout is updated. Reload to finish.") end
+	return true, moved
+end
+
+-- Not asked for this update again (a later one is).
+function L.SkipUpdate()
+	ns.char.skipped = L.SHAPE
+end
+
+-- Puts the layout back as it was before the update, and asks for this update no more.
+function L.UndoUpdate()
+	if InCombatLockdown() then return false, "combat" end
+	local undo = ns.char.undo
+	if not undo then return false, "undone" end
+	Forget()
+	local info, mine = InUse()
+	if not info then return false, "elsewhere" end
+	info.layouts[mine].systems = undo.systems
+	ns.char.placed, ns.char.written, ns.char.shape, ns.char.settle = undo.placed, undo.written, undo.shape, undo.settle
+	ns.char.skipped, ns.char.undo, ns.char.updated = L.SHAPE, nil, nil
+	C_EditMode.SaveLayouts(info)
+	Forget()
+	Shy.Reload("Your layout is back as it was. Reload to finish.")
 	return true
 end
 
@@ -2698,6 +2858,7 @@ local WHY = {
 	full = "this character has no free Edit Mode layout slots. Delete a layout in Edit Mode, then set up again.",
 	none = "couldn't read your current layout. Open and close Edit Mode once, then try again.",
 	elsewhere = "you aren't using the console layout, so there is nothing to go back from.",
+	undone = "there's no layout update to put back.",
 }
 
 function L.Report(ok, why)

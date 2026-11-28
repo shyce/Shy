@@ -3331,6 +3331,70 @@ function ns.ApplyCard()
 	Shy.HUD.Update(box)
 end
 
+-- The card's own place, while nothing else arranges the screen (ShyDock's deck takes it once its console is in
+-- use): under the minimap, where the game's tracker stands. Under the map's panel where ShySkin draws one (its
+-- square map is taller than the game's), a seam off it, and left of a bar standing down the screen's edge there.
+local OWN = { x = -40, y = -230, seam = 4, bars = { "MultiBarRight", "MultiBarLeft" } }
+
+-- A game bar's left, bottom and right on the screen, in UIParent units; nil while it is off the screen or the
+-- game keeps its place to itself.
+local function BarEdges(bar)
+	local visible = bar:IsVisible()
+	if issecretvalue(visible) or not visible then return nil end
+	local left, bottom, width, height = bar:GetScaledRect()
+	if not (left and bottom and width and height) then return nil end
+	if issecretvalue(left) or issecretvalue(bottom) or issecretvalue(width) or issecretvalue(height) then return nil end
+	local originX, originY = UIParent:GetScaledRect()
+	local scale = UIParent:GetEffectiveScale()
+	return (left - originX) / scale, (bottom - originY) / scale, (left + width - originX) / scale
+end
+
+-- Returns its point, and the map panel's width while it hangs right under the panel: it is that wide then, the
+-- two one column.
+local function OwnHome()
+	local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+	local right, top = sw + OWN.x, sh + OWN.y
+	local column
+	local skin = Shy.addons.Skin
+	if skin and skin.MinimapPanel then
+		local left, bottom, panelRight = skin:MinimapPanel()
+		if left then right, top, column = panelRight, bottom - OWN.seam, panelRight - left end
+	end
+	local wide = box and box:GetWidth() * box:GetScale() or WIDTH
+	-- (ShyDock stands a bar in a housing that reaches past its sides.)
+	local dock = Shy.addons.Dock
+	local reach = dock and dock.Reach and dock:Reach() or 0
+	for _, name in ipairs(OWN.bars) do
+		local left, bottom, barRight = BarEdges(_G[name])
+		-- (A bar the card would lie on: under its top, across its width.)
+		if left and bottom < top and left - reach < right and barRight > right - wide then
+			right, column = left - reach - OWN.seam, nil   -- beside a bar it is no part of the map's column
+		end
+	end
+	return { "TOPRIGHT", "TOPRIGHT", right - sw, top - sh }, column
+end
+
+-- The card at its own place again: the map's panel or a bar may have come, gone or moved. Nothing while the deck
+-- holds it, and nothing is set that already stands.
+local function Rehome()
+	if not box or (card and card.docked) then return end
+	local dock = Shy.addons.Dock
+	if dock and dock.ConsoleActive and dock:ConsoleActive() then return end
+	local point, column = OwnHome()
+	local was = box.defaultPoint
+	if not (was and was[1] == point[1] and was[2] == point[2] and math.abs(was[3] - point[3]) < 0.5 and math.abs(was[4] - point[4]) < 0.5) then
+		Shy.HUD.SetHome(box, point)
+	end
+	-- As wide as the map's panel while it hangs under it; its own width again beside a bar, or where you put it.
+	if column and not Shy.HUD.IsPlaced(box) then
+		OWN.fitted = true
+		Shy.HUD.Fit(box, column)
+	elseif OWN.fitted then
+		OWN.fitted = nil
+		Shy.HUD.Fit(box, WIDTH, true)
+	end
+end
+
 function ns.SetupCard()
 	-- The card's size is yours: a side sets how wide it is, the foot (or the top) how tall it may get, and what
 	-- it can't hold then scrolls (card.room, Body). It flows; its scale is left to its menu. Both
@@ -3421,8 +3485,8 @@ function ns.SetupCard()
 		title = "ShyQuest: quests",
 		width = WIDTH,
 		height = 120,
-		-- Under the minimap, where the game's tracker stands
-		point = { "TOPRIGHT", "TOPRIGHT", -40, -230 },
+		-- Under the minimap, where the game's tracker stands (OwnHome)
+		point = (OwnHome()),
 		shown = Shown,
 		-- Its options' "Show the quest window".
 		switch = {
@@ -3466,6 +3530,25 @@ function ns.SetupCard()
 			if grip then grip:Follow() end
 		end,
 	})
+	-- Its own place follows the map's panel and the bars at the screen's edge: looked at again once the screen has
+	-- laid out, and whenever a layout, the screen's size or a bar changes.
+	local due = false
+	local rehome = Shy.Clocked("card: its own place", function()
+		due = false
+		Rehome()
+	end)
+	local function RehomeSoon()
+		if due then return end
+		due = true
+		C_Timer.After(0.5, rehome)
+	end
+	local placer = CreateFrame("Frame")
+	for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "EDIT_MODE_LAYOUTS_UPDATED", "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED" }) do
+		placer:RegisterEvent(event)
+	end
+	placer:SetScript("OnEvent", RehomeSoon)
+	hooksecurefunc("MultiActionBar_Update", RehomeSoon)   -- a bar turned on or off
+	Shy:On("SHY_HUD_LAYOUT", RehomeSoon)
 	-- The card keeps watch while the HUD is faded: the next step stays readable.
 	local immersion = Shy.Immersion
 	if immersion and immersion.Watch then immersion.Watch("quest", box) end
